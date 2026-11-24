@@ -266,11 +266,11 @@ Target pool: `0.30.0`（[`docs/plans/lucy-20261102-lucy-0-30-0-requirement-pool-
 ### Feedback
 UAT：左栏「待发布变更」无勾选，不知道如何发布；希望先勾选再发布。同页条目卡片阴影深浅不一致（视觉 polish，本版一并不做）。
 
-### Expected（池内草案，未开 Spec）
-真·分文件勾选发布：仅勾选文件生效，未勾选仍留待发布；确认面与索引实际影响一致。详见需求池 REQ-030-001。
+### Expected（已开 Spec，待评审、未授权实现）
+真·分文件勾选发布：仅勾选文件生效，未勾选仍留待发布；确认面与索引实际影响一致。详见需求池 REQ-030-001，以及 Spec [`lucy-20261107-publish-workbench-per-file-selection-spec.md`](../../specs/lucy-20261107-publish-workbench-per-file-selection-spec.md)／[Plan](../../plans/lucy-20261107-publish-workbench-per-file-selection-plan.md)（v0.1-draft，待评审；未授权实现）。
 
 ### Browser Check
-（Deferred；`0.30.0` 开 Spec 后补。）当前本版验收仍按整批同步：中栏「校验变更」→「同步索引并生效」。
+（Deferred；`0.30.0` 已开 Spec，待评审、未授权实现。）当前本版验收仍按整批同步：中栏「校验变更」→「同步索引并生效」。
 
 ### Notes
-2026-11-02 产品决定：不进 `0.25.0`；纳入 `0.30.0` 需求池；本版不优化、不改代码。现行仍整批同步（Spec 123 / 20261030）。
+2026-11-02 产品决定：不进 `0.25.0`；纳入 `0.30.0` 需求池。2026-11-07：**已开独立 Spec 与 Plan**（v0.1-draft，待评审；**未授权实现**，本版不改代码）。现行仍整批同步（Spec 123 / 20261030）。

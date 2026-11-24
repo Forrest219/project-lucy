@@ -1,0 +1,277 @@
+{
+  "suite": "UAT-SUITE-REBUILD-PROBE-BUDGET",
+  "image": "project-lucy:p147-pause",
+  "label": "2026-11-18-p147-pause-on",
+  "revision": "6cc0029cfda213270dfee3b797681d542430a663-dirty",
+  "rig": {
+    "readMBps": 30,
+    "writeMBps": 30,
+    "readIops": 300,
+    "writeIops": 100,
+    "cpus": 2
+  },
+  "extraEnv": {},
+  "r0": {
+    "id": "UAT-RPB-R0",
+    "pass": true,
+    "checks": [
+      {
+        "name": "cold snap exists",
+        "pass": true,
+        "actual": "lucy-uat-cold-snap-old",
+        "limit": "present"
+      },
+      {
+        "name": "image readable",
+        "pass": true,
+        "actual": "6cc0029cfda213270dfee3b797681d542430a663",
+        "limit": "BUILD_REVISION"
+      },
+      {
+        "name": "throttle params",
+        "pass": true,
+        "actual": {
+          "readMBps": 30,
+          "writeMBps": 30,
+          "readIops": 300,
+          "writeIops": 100,
+          "cpus": 2
+        },
+        "limit": "blkio"
+      }
+    ]
+  },
+  "UAT-RPB-01": {
+    "id": "UAT-RPB-01",
+    "pass": false,
+    "checks": [
+      {
+        "name": "ready within budget",
+        "pass": true,
+        "actual": 24.6,
+        "limit": "≤180s"
+      },
+      {
+        "name": "livez max",
+        "pass": false,
+        "actual": 2662,
+        "limit": "≤1000"
+      },
+      {
+        "name": "livez p99",
+        "pass": false,
+        "actual": 2662,
+        "limit": "≤400"
+      },
+      {
+        "name": "readyz p99",
+        "pass": true,
+        "actual": 15,
+        "limit": "≤1500"
+      },
+      {
+        "name": "all 200",
+        "pass": true,
+        "actual": {
+          "livez": 0,
+          "readyz": 0
+        },
+        "limit": 0
+      }
+    ],
+    "readyS": 24.6,
+    "stats": {
+      "livezMaxMs": 2662,
+      "livezP99Ms": 2662,
+      "readyzMaxMs": 15,
+      "readyzP99Ms": 15,
+      "livezNon200": 0,
+      "readyzNon200": 0
+    },
+    "injected": {
+      "users": 67,
+      "injected": 67,
+      "ts": "2026-11-18T08:53:02.505Z"
+    }
+  },
+  "UAT-RPB-02": {
+    "id": "UAT-RPB-02",
+    "pass": true,
+    "checks": [
+      {
+        "name": "customer fail streak",
+        "pass": true,
+        "actual": 0,
+        "limit": "<6"
+      }
+    ],
+    "customer": [
+      {
+        "t": 0.01,
+        "ms": 3,
+        "code": 200,
+        "fail": false
+      },
+      {
+        "t": 6.39,
+        "ms": 4,
+        "code": 200,
+        "fail": false
+      },
+      {
+        "t": 13.34,
+        "ms": 9,
+        "code": 200,
+        "fail": false
+      },
+      {
+        "t": 16.89,
+        "ms": 4,
+        "code": 200,
+        "fail": false
+      },
+      {
+        "t": 22.32,
+        "ms": 6,
+        "code": 200,
+        "fail": false
+      },
+      {
+        "t": 28.36,
+        "ms": 4,
+        "code": 200,
+        "fail": false
+      },
+      {
+        "t": 31.74,
+        "ms": 9,
+        "code": 200,
+        "fail": false
+      },
+      {
+        "t": 35.09,
+        "ms": 3,
+        "code": 200,
+        "fail": false
+      },
+      {
+        "t": 41.17,
+        "ms": 4,
+        "code": 200,
+        "fail": false
+      },
+      {
+        "t": 46.51,
+        "ms": 4,
+        "code": 200,
+        "fail": false
+      },
+      {
+        "t": 50.19,
+        "ms": 5,
+        "code": 200,
+        "fail": false
+      },
+      {
+        "t": 56.51,
+        "ms": 5,
+        "code": 200,
+        "fail": false
+      },
+      {
+        "t": 61.94,
+        "ms": 4,
+        "code": 200,
+        "fail": false
+      },
+      {
+        "t": 68.07,
+        "ms": 6,
+        "code": 200,
+        "fail": false
+      },
+      {
+        "t": 71.44,
+        "ms": 3,
+        "code": 200,
+        "fail": false
+      },
+      {
+        "t": 77.67,
+        "ms": 3,
+        "code": 200,
+        "fail": false
+      },
+      {
+        "t": 80.43,
+        "ms": 4,
+        "code": 200,
+        "fail": false
+      },
+      {
+        "t": 86.46,
+        "ms": 5,
+        "code": 200,
+        "fail": false
+      },
+      {
+        "t": 93.21,
+        "ms": 18,
+        "code": 200,
+        "fail": false
+      },
+      {
+        "t": 96.28,
+        "ms": 6,
+        "code": 200,
+        "fail": false
+      },
+      {
+        "t": 102,
+        "ms": 2,
+        "code": 200,
+        "fail": false
+      },
+      {
+        "t": 105.08,
+        "ms": 5,
+        "code": 200,
+        "fail": false
+      },
+      {
+        "t": 111.1,
+        "ms": 6,
+        "code": 200,
+        "fail": false
+      },
+      {
+        "t": 116.84,
+        "ms": 5,
+        "code": 200,
+        "fail": false
+      }
+    ]
+  },
+  "UAT-RPB-03": {
+    "id": "UAT-RPB-03",
+    "pass": true,
+    "checks": [
+      {
+        "name": "readyz burst all 200",
+        "pass": true,
+        "actual": {
+          "n": 20,
+          "maxMs": 3161
+        },
+        "limit": "all 200"
+      }
+    ]
+  },
+  "UAT-RPB-04": {
+    "id": "UAT-RPB-04",
+    "pass": null,
+    "status": "BLOCKED",
+    "reason": "real K8s EndpointSlice not in this Docker run"
+  },
+  "pass": false
+}

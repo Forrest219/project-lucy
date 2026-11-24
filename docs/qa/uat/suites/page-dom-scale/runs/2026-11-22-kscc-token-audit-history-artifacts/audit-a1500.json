@@ -1,0 +1,68 @@
+{
+  "at": "2026-11-22T10:19:02.786Z",
+  "stage": "a1500",
+  "target": 1500,
+  "offset": 300,
+  "design": "20 fixed credentials across two agents, one request in flight, real successful read-only tools/call",
+  "intervalMs": 500,
+  "tools": {
+    "connection_list": 900,
+    "lucy_catalog": 300
+  },
+  "successful": 1200,
+  "byUser": {
+    "demo_agent": 600,
+    "demo_ops": 600
+  },
+  "errors": [],
+  "before": {
+    "at": "2026-11-22T10:19:02.840Z",
+    "all": 300,
+    "toolRows": 300,
+    "ok": 300,
+    "protocol": 0,
+    "byUser": {
+      "demo_agent": {
+        "total": 150,
+        "ok": 150
+      },
+      "demo_ops": {
+        "total": 150,
+        "ok": 150
+      }
+    },
+    "recent7d": 300,
+    "recent30d": 300,
+    "tokens": 202,
+    "inventorySha256": "2dc73f1a80047278db874c056de7a5fd095388a62b0e94ba45bb8abe2f2623a5"
+  },
+  "sessionClose": {
+    "200": 20
+  },
+  "settledCounts": [
+    1500,
+    1500
+  ],
+  "after": {
+    "at": "2026-11-22T10:29:20.595Z",
+    "all": 1500,
+    "toolRows": 1500,
+    "ok": 1500,
+    "protocol": 0,
+    "byUser": {
+      "demo_agent": {
+        "total": 750,
+        "ok": 750
+      },
+      "demo_ops": {
+        "total": 750,
+        "ok": 750
+      }
+    },
+    "recent7d": 1500,
+    "recent30d": 1500,
+    "tokens": 202,
+    "inventorySha256": "2dc73f1a80047278db874c056de7a5fd095388a62b0e94ba45bb8abe2f2623a5"
+  },
+  "completed": "2026-11-22T10:29:20.608Z"
+}

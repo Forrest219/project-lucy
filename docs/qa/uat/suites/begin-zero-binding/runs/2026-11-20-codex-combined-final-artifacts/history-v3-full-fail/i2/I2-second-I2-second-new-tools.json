@@ -1,0 +1,440 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 115.346,
+  "body": {
+    "result": {
+      "tools": [
+        {
+          "name": "connection_list",
+          "description": "List only the database connections available to this agent. This proxy-local response is already filtered by effective permissions.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "lucy_catalog",
+          "description": "List only the connections and semantic sources available to this agent, with safe query examples for the visible domain. Call this before choosing a database or source.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "lucy_read_source",
+          "description": "Read one authorized semantic source through Lucy. This is the stable Lucy wrapper for sl_read_source and is filtered by role/source policy.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "connectionId": {
+                "type": "string"
+              },
+              "sourceName": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "connectionId",
+              "sourceName"
+            ],
+            "additionalProperties": true
+          }
+        },
+        {
+          "name": "lucy_query",
+          "description": "Run an authorized semantic query through Lucy guardrails. This is the primary tool for factual data retrieval. Use source-qualified measures, dimensions, filters, segments, and order fields. dimensions/order_by must be arrays of objects, never strings.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "connectionId": {
+                "type": "string"
+              },
+              "measures": {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "expr": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": [
+                        "expr"
+                      ],
+                      "additionalProperties": true
+                    }
+                  ]
+                }
+              },
+              "dimensions": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "granularity": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "field"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "filters": {
+                "anyOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "field": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "op": {
+                            "type": "string"
+                          },
+                          "value": {},
+                          "values": {
+                            "type": "array"
+                          }
+                        },
+                        "required": [
+                          "field"
+                        ],
+                        "additionalProperties": true
+                      }
+                    ]
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "field": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "op": {
+                              "type": "string"
+                            },
+                            "value": {},
+                            "values": {
+                              "type": "array"
+                            }
+                          },
+                          "required": [
+                            "field"
+                          ],
+                          "additionalProperties": true
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              "segments": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "order_by": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "direction": {
+                      "type": "string",
+                      "enum": [
+                        "asc",
+                        "desc"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "field"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "orderBy": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "direction": {
+                      "type": "string",
+                      "enum": [
+                        "asc",
+                        "desc"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "field"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "limit": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 1000
+              }
+            },
+            "required": [
+              "connectionId"
+            ],
+            "additionalProperties": true
+          }
+        },
+        {
+          "name": "lucy_explain_query",
+          "description": "Diagnostic tool: explain how Lucy would authorize and guardrail a semantic query without executing it. Use after a query is denied or when debugging permissions/guardrails; do not use as a routine dry-run before simple factual queries. dimensions/order_by must be arrays of objects, never strings.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "connectionId": {
+                "type": "string"
+              },
+              "measures": {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "expr": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": [
+                        "expr"
+                      ],
+                      "additionalProperties": true
+                    }
+                  ]
+                }
+              },
+              "dimensions": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "granularity": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "field"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "filters": {
+                "anyOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "field": {
+                            "type": "string",
+                            "minLength": 1
+                          },
+                          "op": {
+                            "type": "string"
+                          },
+                          "value": {},
+                          "values": {
+                            "type": "array"
+                          }
+                        },
+                        "required": [
+                          "field"
+                        ],
+                        "additionalProperties": true
+                      }
+                    ]
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "field": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "op": {
+                              "type": "string"
+                            },
+                            "value": {},
+                            "values": {
+                              "type": "array"
+                            }
+                          },
+                          "required": [
+                            "field"
+                          ],
+                          "additionalProperties": true
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              "segments": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "order_by": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "direction": {
+                      "type": "string",
+                      "enum": [
+                        "asc",
+                        "desc"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "field"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "orderBy": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "direction": {
+                      "type": "string",
+                      "enum": [
+                        "asc",
+                        "desc"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "field"
+                  ],
+                  "additionalProperties": true
+                }
+              },
+              "limit": {
+                "type": "number",
+                "minimum": 1,
+                "maximum": 1000
+              }
+            },
+            "required": [
+              "connectionId"
+            ],
+            "additionalProperties": true
+          }
+        },
+        {
+          "name": "lucy_continue_question",
+          "description": "Continue the current question after question_budget_exhausted. Pass the continueToken from that response. This does not start a new question and does not require a database connection.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "token": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "token"
+            ],
+            "additionalProperties": false
+          }
+        }
+      ]
+    },
+    "jsonrpc": "2.0",
+    "id": 38
+  }
+}

@@ -1,4 +1,12 @@
-# Lucy 配置作者 Skills（分析师）
+# `.cursor/skills` 索引
+
+## 开发辅助
+
+| Skill | 用途 |
+|---|---|
+| `explain-diff` | 轻量讲解刚完成的改动（背景 → 直觉 → 走读 → 五题自测）；跨设备靠 git 范围重跑，默认只写对话 |
+
+## 配置作者（分析师）
 
 面向分析师：拿着 **Skill + 数据库连接**，生成可导入 Lucy 的 YAML / MD，无需手写全套配置。
 
@@ -47,5 +55,13 @@ domain = chatbi_intl
 
 | 路径 | 角色 |
 |---|---|
+| `.cursor/skills/explain-diff` | **开发理解**（讲 diff + 自测；随仓） |
 | `.cursor/skills/lucy-*-author` | **配置生成**（作者工具） |
 | 仓库根 `skills/` | **问答运行时** Skill（Agent 查数时用） |
+
+## explain-diff 用法
+
+```text
+explain 这次改动
+按 main...HEAD 再 explain / 再考我
+```

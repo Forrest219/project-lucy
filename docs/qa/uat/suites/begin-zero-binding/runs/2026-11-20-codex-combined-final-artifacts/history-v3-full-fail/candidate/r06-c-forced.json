@@ -1,0 +1,17 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 12.221,
+  "body": {
+    "jsonrpc": "2.0",
+    "id": 132,
+    "result": {
+      "isError": true,
+      "content": [
+        {
+          "type": "text",
+          "text": "Access denied: tool_forbidden"
+        }
+      ]
+    }
+  }
+}

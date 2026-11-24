@@ -1,0 +1,1856 @@
+{
+  "fixture": "BAL-1",
+  "candidate": "b",
+  "startedAt": "2026-11-20T05:07:50.959Z",
+  "browser": "157.0.8103.79",
+  "headed": true,
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "samples": [
+    {
+      "kind": "cold-navigation",
+      "n": 0,
+      "primaryReadyMs": 414.3999999985099,
+      "statsReadyMs": 1318.2999999970198,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "cold-navigation",
+      "n": 1,
+      "primaryReadyMs": 327.6000000014901,
+      "statsReadyMs": 390.6000000014901,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "cold-navigation",
+      "n": 2,
+      "primaryReadyMs": 347,
+      "statsReadyMs": 495.1000000014901,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "cold-navigation",
+      "n": 3,
+      "primaryReadyMs": 270.6000000014901,
+      "statsReadyMs": 342.70000000298023,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "cold-navigation",
+      "n": 4,
+      "primaryReadyMs": 249.69999999552965,
+      "statsReadyMs": 253,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 0,
+      "primaryReadyMs": 387.40000000596046,
+      "statsReadyMs": 490.40000000596046,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 1,
+      "primaryReadyMs": 148.19999999552965,
+      "statsReadyMs": 245.69999999552965,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 2,
+      "primaryReadyMs": 155.89999999850988,
+      "statsReadyMs": 255.29999999701977,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 3,
+      "primaryReadyMs": 236.5,
+      "statsReadyMs": 1731.7999999970198,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 4,
+      "primaryReadyMs": 236.70000000298023,
+      "statsReadyMs": 314.79999999701977,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 5,
+      "primaryReadyMs": 161.90000000596046,
+      "statsReadyMs": 266.6000000014901,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 6,
+      "primaryReadyMs": 159.30000000447035,
+      "statsReadyMs": 260.8999999985099,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 7,
+      "primaryReadyMs": 339.6000000014901,
+      "statsReadyMs": 671.2000000029802,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 8,
+      "primaryReadyMs": 388.59999999403954,
+      "statsReadyMs": 1327.5999999940395,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 9,
+      "primaryReadyMs": 178,
+      "statsReadyMs": 279,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 10,
+      "primaryReadyMs": 168.79999999701977,
+      "statsReadyMs": 267,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 11,
+      "primaryReadyMs": 284.20000000298023,
+      "statsReadyMs": 458.6000000014901,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 12,
+      "primaryReadyMs": 308.8999999985099,
+      "statsReadyMs": 604.1000000014901,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 13,
+      "primaryReadyMs": 236,
+      "statsReadyMs": 395,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 14,
+      "primaryReadyMs": 260.40000000596046,
+      "statsReadyMs": 1175.5,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 15,
+      "primaryReadyMs": 131.69999999552965,
+      "statsReadyMs": 225.79999999701977,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 16,
+      "primaryReadyMs": 165,
+      "statsReadyMs": 254.5,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 17,
+      "primaryReadyMs": 144,
+      "statsReadyMs": 246.10000000149012,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 18,
+      "primaryReadyMs": 222.60000000149012,
+      "statsReadyMs": 297.20000000298023,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 19,
+      "primaryReadyMs": 159.39999999850988,
+      "statsReadyMs": 266,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "hot-spa",
+      "n": 0,
+      "primaryReadyMs": 179.5,
+      "statsReadyMs": 202.69999999552965,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "hot-spa",
+      "n": 1,
+      "primaryReadyMs": 166.5,
+      "statsReadyMs": 177.79999999701977,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "hot-spa",
+      "n": 2,
+      "primaryReadyMs": 158.29999999701977,
+      "statsReadyMs": 163.89999999850988,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "hot-spa",
+      "n": 3,
+      "primaryReadyMs": 144.60000000149012,
+      "statsReadyMs": 154,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "hot-spa",
+      "n": 4,
+      "primaryReadyMs": 597.1999999955297,
+      "statsReadyMs": 609.8999999985099,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "hot-spa",
+      "n": 5,
+      "primaryReadyMs": 228.70000000298023,
+      "statsReadyMs": 233.5,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "hot-spa",
+      "n": 6,
+      "primaryReadyMs": 153.60000000149012,
+      "statsReadyMs": 163.20000000298023,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "hot-spa",
+      "n": 7,
+      "primaryReadyMs": 148.60000000149012,
+      "statsReadyMs": 154.60000000149012,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "hot-spa",
+      "n": 8,
+      "primaryReadyMs": 143.39999999850988,
+      "statsReadyMs": 152.19999999552965,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "hot-spa",
+      "n": 9,
+      "primaryReadyMs": 144.60000000149012,
+      "statsReadyMs": 150.5,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "hot-spa",
+      "n": 10,
+      "primaryReadyMs": 140.79999999701977,
+      "statsReadyMs": 152.60000000149012,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "hot-spa",
+      "n": 11,
+      "primaryReadyMs": 170.59999999403954,
+      "statsReadyMs": 178.29999999701977,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "hot-spa",
+      "n": 12,
+      "primaryReadyMs": 142.39999999850988,
+      "statsReadyMs": 147.39999999850988,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "hot-spa",
+      "n": 13,
+      "primaryReadyMs": 154.69999999552965,
+      "statsReadyMs": 161.09999999403954,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "hot-spa",
+      "n": 14,
+      "primaryReadyMs": 229.59999999403954,
+      "statsReadyMs": 246.39999999850988,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "hot-spa",
+      "n": 15,
+      "primaryReadyMs": 303.8999999985099,
+      "statsReadyMs": 320.20000000298023,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "hot-spa",
+      "n": 16,
+      "primaryReadyMs": 200.89999999850988,
+      "statsReadyMs": 212.89999999850988,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "hot-spa",
+      "n": 17,
+      "primaryReadyMs": 258.6000000014901,
+      "statsReadyMs": 275,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "hot-spa",
+      "n": 18,
+      "primaryReadyMs": 164.69999999552965,
+      "statsReadyMs": 175.69999999552965,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "hot-spa",
+      "n": 19,
+      "primaryReadyMs": 161,
+      "statsReadyMs": 173.5,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "refresh",
+      "n": 0,
+      "primaryReadyMs": 738.5,
+      "statsReadyMs": 752,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "refresh",
+      "n": 1,
+      "primaryReadyMs": 132.20000000298023,
+      "statsReadyMs": 144.20000000298023,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "refresh",
+      "n": 2,
+      "primaryReadyMs": 908.0999999940395,
+      "statsReadyMs": 916.2999999970198,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "refresh",
+      "n": 3,
+      "primaryReadyMs": 1275.5,
+      "statsReadyMs": 1285.5999999940395,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "refresh",
+      "n": 4,
+      "primaryReadyMs": 127.5,
+      "statsReadyMs": 139.20000000298023,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "refresh",
+      "n": 5,
+      "primaryReadyMs": 898.5,
+      "statsReadyMs": 906.6000000014901,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "refresh",
+      "n": 6,
+      "primaryReadyMs": 916.8000000044703,
+      "statsReadyMs": 928.3000000044703,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "refresh",
+      "n": 7,
+      "primaryReadyMs": 1269.2999999970198,
+      "statsReadyMs": 1275.8999999985099,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "refresh",
+      "n": 8,
+      "primaryReadyMs": 125.19999999552965,
+      "statsReadyMs": 133.10000000149012,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "refresh",
+      "n": 9,
+      "primaryReadyMs": 1312.1999999955297,
+      "statsReadyMs": 1318.8999999985099,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "refresh",
+      "n": 10,
+      "primaryReadyMs": 507.6000000014901,
+      "statsReadyMs": 511.90000000596046,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "refresh",
+      "n": 11,
+      "primaryReadyMs": 526.8999999985099,
+      "statsReadyMs": 531.3999999985099,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "refresh",
+      "n": 12,
+      "primaryReadyMs": 131,
+      "statsReadyMs": 142.59999999403954,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "refresh",
+      "n": 13,
+      "primaryReadyMs": 1282.3000000044703,
+      "statsReadyMs": 1296.6000000014901,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "refresh",
+      "n": 14,
+      "primaryReadyMs": 134.10000000149012,
+      "statsReadyMs": 142.80000000447035,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "refresh",
+      "n": 15,
+      "primaryReadyMs": 1365,
+      "statsReadyMs": 1374,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "refresh",
+      "n": 16,
+      "primaryReadyMs": 151.5,
+      "statsReadyMs": 166.59999999403954,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "refresh",
+      "n": 17,
+      "primaryReadyMs": 913.8999999985099,
+      "statsReadyMs": 928.0999999940395,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "refresh",
+      "n": 18,
+      "primaryReadyMs": 1276.7000000029802,
+      "statsReadyMs": 1286.4000000059605,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "refresh",
+      "n": 19,
+      "primaryReadyMs": 525.1000000014901,
+      "statsReadyMs": 530.1000000014901,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "drawer",
+      "n": 0,
+      "primaryReadyMs": 577.3000000044703,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "drawer",
+      "n": 1,
+      "primaryReadyMs": 262.70000000298023,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "drawer",
+      "n": 2,
+      "primaryReadyMs": 240.69999999552965,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "drawer",
+      "n": 3,
+      "primaryReadyMs": 254.80000000447035,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "drawer",
+      "n": 4,
+      "primaryReadyMs": 236.5,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "drawer",
+      "n": 5,
+      "primaryReadyMs": 359.1000000014901,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "drawer",
+      "n": 6,
+      "primaryReadyMs": 289.20000000298023,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "drawer",
+      "n": 7,
+      "primaryReadyMs": 306.8999999985099,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "drawer",
+      "n": 8,
+      "primaryReadyMs": 241.79999999701977,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "drawer",
+      "n": 9,
+      "primaryReadyMs": 292.20000000298023,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "drawer",
+      "n": 10,
+      "primaryReadyMs": 281.6000000014901,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "drawer",
+      "n": 11,
+      "primaryReadyMs": 272.1000000014901,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "drawer",
+      "n": 12,
+      "primaryReadyMs": 261.19999999552965,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "drawer",
+      "n": 13,
+      "primaryReadyMs": 259.70000000298023,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "drawer",
+      "n": 14,
+      "primaryReadyMs": 238.69999999552965,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "drawer",
+      "n": 15,
+      "primaryReadyMs": 231.29999999701977,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "drawer",
+      "n": 16,
+      "primaryReadyMs": 237.10000000149012,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "drawer",
+      "n": 17,
+      "primaryReadyMs": 279.1000000014901,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "drawer",
+      "n": 18,
+      "primaryReadyMs": 378.5,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "drawer",
+      "n": 19,
+      "primaryReadyMs": 343.1000000014901,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "editor",
+      "n": 0,
+      "primaryReadyMs": 933.6000000014901,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "editor",
+      "n": 1,
+      "primaryReadyMs": 193.5,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "editor",
+      "n": 2,
+      "primaryReadyMs": 188.10000000149012,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "editor",
+      "n": 3,
+      "primaryReadyMs": 447.5,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "editor",
+      "n": 4,
+      "primaryReadyMs": 464.29999999701977,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "editor",
+      "n": 5,
+      "primaryReadyMs": 558.2000000029802,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "editor",
+      "n": 6,
+      "primaryReadyMs": 494.20000000298023,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "editor",
+      "n": 7,
+      "primaryReadyMs": 494.3999999985099,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "editor",
+      "n": 8,
+      "primaryReadyMs": 474.5,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "editor",
+      "n": 9,
+      "primaryReadyMs": 464.29999999701977,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "editor",
+      "n": 10,
+      "primaryReadyMs": 613.5999999940395,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "editor",
+      "n": 11,
+      "primaryReadyMs": 480.69999999552965,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "editor",
+      "n": 12,
+      "primaryReadyMs": 497.6000000014901,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "editor",
+      "n": 13,
+      "primaryReadyMs": 467.8999999985099,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "editor",
+      "n": 14,
+      "primaryReadyMs": 535.7000000029802,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "editor",
+      "n": 15,
+      "primaryReadyMs": 542,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "editor",
+      "n": 16,
+      "primaryReadyMs": 556.8000000044703,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "editor",
+      "n": 17,
+      "primaryReadyMs": 522,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "editor",
+      "n": 18,
+      "primaryReadyMs": 508.8999999985099,
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "kind": "editor",
+      "n": 19,
+      "primaryReadyMs": 494.29999999701977,
+      "visible": "visible",
+      "focused": true
+    }
+  ],
+  "requests": [
+    {
+      "at": "2026-11-20T05:07:51.539Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:07:52.308Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:07:52.904Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:07:53.043Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:07:53.551Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:07:53.706Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:07:54.121Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:07:54.227Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:07:54.559Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:07:54.639Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:07:55.361Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:07:55.485Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:07:55.878Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:07:55.987Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:07:56.441Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:07:56.556Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:07:57.097Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:07:58.143Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:07:59.136Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:07:59.244Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:07:59.670Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:07:59.793Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:00.390Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:00.472Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:01.214Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:01.484Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:02.523Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:03.420Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:03.931Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:04.073Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:04.489Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:04.603Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:05.138Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:05.328Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:05.927Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:06.152Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:06.887Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:07.060Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:07.709Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:08.444Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:09.036Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:09.151Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:09.561Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:09.663Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:10.056Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:10.149Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:10.669Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:10.767Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:11.182Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:11.307Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:11.676Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:11.773Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:12.004Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:12.007Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:12.226Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:12.227Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:12.435Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:12.438Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:12.633Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:12.636Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:13.275Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:13.279Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:13.547Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:13.550Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:13.739Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:13.739Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:13.948Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:13.949Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:14.137Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:14.138Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:14.329Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:14.330Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:14.518Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:14.521Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:14.738Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:14.741Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:14.923Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:14.926Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:15.126Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:15.126Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:15.397Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:15.403Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:15.745Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:15.748Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:15.972Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:15.975Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:16.300Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:16.303Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:16.518Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:16.521Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:16.726Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:16.729Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:17.481Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:17.486Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:17.636Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:18.086Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:18.560Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:18.959Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:19.847Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:19.847Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:19.991Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:20.356Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:20.903Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:21.314Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:21.837Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:22.208Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:23.124Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:23.133Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:23.270Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:23.728Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:24.588Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:24.589Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:25.106Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:25.114Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:25.642Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:25.642Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:25.790Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:26.166Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:27.097Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:27.102Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:27.246Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:27.631Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:28.628Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:28.631Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:28.802Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:29.230Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:29.731Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:30.108Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:31.034Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:31.034Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:31.571Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:31.574Z",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:32.164Z",
+      "path": "/api/admin/agents/ars_00_a00?range=7d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:32.492Z",
+      "path": "/api/admin/agents/ars_00_a00?range=7d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:32.800Z",
+      "path": "/api/admin/agents/ars_00_a00?range=7d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:33.118Z",
+      "path": "/api/admin/agents/ars_00_a00?range=7d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:33.425Z",
+      "path": "/api/admin/agents/ars_00_a00?range=7d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:33.890Z",
+      "path": "/api/admin/agents/ars_00_a00?range=7d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:34.235Z",
+      "path": "/api/admin/agents/ars_00_a00?range=7d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:34.591Z",
+      "path": "/api/admin/agents/ars_00_a00?range=7d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:34.891Z",
+      "path": "/api/admin/agents/ars_00_a00?range=7d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:35.254Z",
+      "path": "/api/admin/agents/ars_00_a00?range=7d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:35.602Z",
+      "path": "/api/admin/agents/ars_00_a00?range=7d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:35.931Z",
+      "path": "/api/admin/agents/ars_00_a00?range=7d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:36.257Z",
+      "path": "/api/admin/agents/ars_00_a00?range=7d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:36.592Z",
+      "path": "/api/admin/agents/ars_00_a00?range=7d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:36.889Z",
+      "path": "/api/admin/agents/ars_00_a00?range=7d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:37.187Z",
+      "path": "/api/admin/agents/ars_00_a00?range=7d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:37.486Z",
+      "path": "/api/admin/agents/ars_00_a00?range=7d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:37.832Z",
+      "path": "/api/admin/agents/ars_00_a00?range=7d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:38.274Z",
+      "path": "/api/admin/agents/ars_00_a00?range=7d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:38.691Z",
+      "path": "/api/admin/agents/ars_00_a00?range=7d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:39.267Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:41.022Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:41.431Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:42.411Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:43.362Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:43.907Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:44.778Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:46.372Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:47.091Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:47.767Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:48.656Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:49.349Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:50.345Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:51.768Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T05:08:52.760Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    }
+  ],
+  "failures": [
+    {
+      "kind": "refresh",
+      "error": "p95 1312.1999999955297 > 1000"
+    }
+  ],
+  "consoleErrors": [],
+  "p95": {
+    "cold-navigation": {
+      "n": 5,
+      "primaryReadyMs": 414.3999999985099,
+      "statsReadyMs": 1318.2999999970198
+    },
+    "no-cache-spa": {
+      "n": 20,
+      "primaryReadyMs": 387.40000000596046,
+      "statsReadyMs": 1327.5999999940395
+    },
+    "hot-spa": {
+      "n": 20,
+      "primaryReadyMs": 303.8999999985099,
+      "statsReadyMs": 320.20000000298023
+    },
+    "refresh": {
+      "n": 20,
+      "primaryReadyMs": 1312.1999999955297,
+      "statsReadyMs": 1318.8999999985099
+    },
+    "drawer": {
+      "n": 20,
+      "primaryReadyMs": 378.5,
+      "statsReadyMs": null
+    },
+    "editor": {
+      "n": 20,
+      "primaryReadyMs": 613.5999999940395,
+      "statsReadyMs": null
+    }
+  }
+}

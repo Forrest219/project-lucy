@@ -1,0 +1,36 @@
+{
+  "_comment": "UAT-SUITE-PAGE-SWEEP 基线。tracked＝已登记越线（挂整改条目）；unmeasured*＝夹具覆盖不到的已知未测。只减不增：整改落地或夹具补齐后删除对应条目；新增条目须先入总账。2026-11-15 P1-32／P1-33 整改落地，tracked 清零；export-v2／export-pack-v2 整改后不再撞 SQLite 变量上限，改为夹具缺派生列导致的 409 integrity_or_relation_failed，归入未测（须补完整性合法的夹具后转为已测）。",
+  "tracked": {},
+  "unmeasuredRoutes": [
+    "/api/admin/audit/export-pack",
+    "/api/admin/audit/export-pack-v2",
+    "/api/admin/audit/export-v2",
+    "/api/admin/audit/query-artifacts",
+    "/api/admin/notifications/:id",
+    "/api/admin/notifications/status",
+    "/api/branding/logo",
+    "/api/catalog/assets/schema-manifest",
+    "/api/connections/:connId/table-structure-diff",
+    "/api/eval/runs/:runId",
+    "/api/eval/runs/:runId/artifact",
+    "/api/eval/runs/:runId/compare",
+    "/api/eval/runs/:runId/results",
+    "/api/help/diagrams/:id",
+    "/api/publish-workbench/evidence",
+    "/api/semantic-assets/exports/:exportId/download",
+    "/api/semantic-assets/operations/:id",
+    "/api/semantic-assets/operations/:id/report.csv",
+    "/api/semantic-assets/plans/:validationId",
+    "/api/semantic-assets/releases/:id/restore-index-scope",
+    "/api/semantic-assets/releases/:id/restore-package",
+    "/api/semantic-assets/releases/:id/status",
+    "/api/sources/:conn/:schema/:table/versions/:versionId",
+    "/api/wiki/:key/versions/:versionId",
+    "/api/wiki/access/batches/:operationId"
+  ],
+  "unmeasuredPages": [
+    "/connections",
+    "/eval/runs/:runId",
+    "/publish/workbench"
+  ]
+}

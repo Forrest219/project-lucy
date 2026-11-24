@@ -1,0 +1,16 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 10.927,
+  "body": {
+    "jsonrpc": "2.0",
+    "id": 124,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"ok\":true,\"idempotent\":false,\"declared\":true}"
+        }
+      ]
+    }
+  }
+}

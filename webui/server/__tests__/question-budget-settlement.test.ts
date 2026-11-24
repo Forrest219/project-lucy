@@ -3,11 +3,11 @@
  *
  * 合同来源：
  *   - Spec §6.2 统一结算与窗口票据（D1 / R02 / R04）：结算点、票据、归档、并发上限、绝对执行时限。
- *   - Spec §6.1 稳定预算身份与状态模型：MAX_CALLS=20 / MAX_BUSY_MS=120_000 / MAX_INFLIGHT=4 / ABS_EXEC_MS=120_000。
+ *   - Spec §6.1 稳定预算身份与状态模型：MAX_CALLS / MAX_BUSY_MS 以 question-experience 常量为准（现行 60 / 300_000）；MAX_INFLIGHT=4 / ABS_EXEC_MS=120_000。
  *   - Spec §7.2 墙钟口径与结算：SC-11 / SC-12 / SC-13 / SC-14。
  *
  * 单元级边界：只驱动 `QuestionBudget`（`new QuestionBudget()` + 内存 persistence），
- * 不起真实代理、不连数据库；单调时钟由 `setMonoClock` 注入，不真实等待 120 秒。
+ * 不起真实代理、不连数据库；单调时钟由 `setMonoClock` 注入，不真实等待上限秒数。
  *
  * 代理层边界（本文件无法直接断言的部分）：
  *   - SC-13 的「触发取消上游 / 取消确认」由代理层负责（`webui/server/proxy/mcp-proxy.ts`），

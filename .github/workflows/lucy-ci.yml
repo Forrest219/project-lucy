@@ -68,6 +68,12 @@ jobs:
             cp webui/config/access.yaml.example webui/config/access.yaml
           fi
       - run: npm run lint:spec
+      - run: npm run lint:status-vocab
+      # P1-73 Wave B（SC-15）：status-funnel 经导出入口进 PR CI；与 Wave A 同实现库。
+      # P1-73 v1.1：总账跟进状态 ↔ Spec「阶段」一致性（委托人 2026-11-22 授权 MIG＋lint）。
+      # 全量 lint:spec-docs 另有 prepack 存量红，故取导出入口而非全量（见 test-layers §8）。
+      - run: npm run lint:status-funnel
+      - run: npm run lint:inventory-stage
       - run: npm run security:baseline
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -196,6 +202,12 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+      # Root deps (yaml) are required if LUCY_MCP_COMPAT=1 enables the post-H3 hook.
+      - run: npm ci
       - uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
         with:
           version: v3.16.4

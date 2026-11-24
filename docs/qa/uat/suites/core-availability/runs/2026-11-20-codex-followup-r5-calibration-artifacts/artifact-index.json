@@ -1,0 +1,44 @@
+{
+  "scope": "Exact small metadata copies plus full raw archives migrated by M; original summaries/status unchanged",
+  "copied": [
+    {
+      "file": "summary.json",
+      "source": "/Users/zhangxingchen/Projects/project-lucy/inbox/core-availability-followup/20261120-execution/01-tools/calibration-r5-contract/summary.json",
+      "bytes": 5385,
+      "sha256": "e921b4131baebad5ff59d4655de846e1e54fd1895aaa7aa232af3601fa7ed9f7",
+      "exactBytes": true
+    },
+    {
+      "file": "source-freeze.json",
+      "source": "/Users/zhangxingchen/Projects/project-lucy/inbox/core-availability-followup/20261120-execution/01-tools/calibration-r5-contract/source-freeze.json",
+      "bytes": 456,
+      "sha256": "100a442f98eb901900507e9e09797f48fc5f6f0bcdac4756379a04bce83bae4c",
+      "exactBytes": true
+    },
+    {
+      "file": "controlled-stop-request.json",
+      "source": "/Users/zhangxingchen/Projects/project-lucy/inbox/core-availability-followup/20261120-execution/01-tools/calibration-r5-contract/controlled-stop-request.json",
+      "bytes": 182,
+      "sha256": "f5baacff220f0eeee3230fb85c87c35b331e1cb5e845b8690fb4e980d3f302d3",
+      "exactBytes": true
+    },
+    {
+      "file": "recovery-terminal-extract.json",
+      "bytes": 1335,
+      "sha256": "4ccfbd9b9f51917426c4dd4a468d15392c672f89e753c56068e50e1a1f0a1234",
+      "derived": true
+    }
+  ],
+  "largeRawAndSqlCopied": true,
+  "fullEvidenceMigration": "Completed by M: full raw-evidence.tar.gz archived; r6 also retains audit-evidence.sqlite.gz. This metadata update did not read or rehash large archives.",
+  "originalRawSource": "/Users/zhangxingchen/Projects/project-lucy/inbox/core-availability-followup/20261120-execution/01-tools/calibration-r5-contract",
+  "archivedEvidence": [
+    {
+      "file": "raw-evidence.tar.gz",
+      "bytes": 1410355,
+      "sha256": "213f71a5cf55b364c21e64e3abf1005273861c9c39db2d2b077f410edbc8a670",
+      "archivedBy": "M",
+      "hashProvenance": "Existing M-generated files.sha256; no archive payload read/rehashed by this text update"
+    }
+  ]
+}

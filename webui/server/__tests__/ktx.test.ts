@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { KtxCliError, testConnection, validateSource } from "../ktx";
+import { KtxCliError, runSql, testConnection, validateSource } from "../ktx";
 
 function fakeExecFile(
   impl: (command: string, args: readonly string[], options: { cwd?: string; timeout?: number; env?: NodeJS.ProcessEnv }) => { error: Error | null; stdout: string; stderr: string }
@@ -64,6 +64,24 @@ describe("validateSource", () => {
         fakeExecFile(() => ({ error, stdout: "", stderr: "" }))
       )
     ).rejects.toBeInstanceOf(KtxCliError);
+  });
+});
+
+describe("runSql", () => {
+  it("waits 120 seconds for one ktx sql statement", async () => {
+    await runSql(
+      "/project",
+      "demo-mysql",
+      "SELECT 1",
+      {
+        execFileImpl: fakeExecFile((command, args, options) => {
+          expect(command).toBe("ktx");
+          expect(args.slice(0, 2)).toEqual(["sql", "-c"]);
+          expect(options.timeout).toBe(120_000);
+          return { error: null, stdout: "{\"rows\":[]}", stderr: "" };
+        })
+      }
+    );
   });
 });
 

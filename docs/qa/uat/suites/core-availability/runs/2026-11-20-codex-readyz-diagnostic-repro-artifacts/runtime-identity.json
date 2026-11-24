@@ -1,0 +1,12 @@
+{
+  "dependencyImage": "sha256:c1cd67a0df3dffd33b7c9d0c3914ca4a759bb5a6e4e8af3f9fe6b8c66323a218",
+  "node": "v22.23.5",
+  "ktx": "0.16.0",
+  "labCookieProfile": true,
+  "criticalCandidateHashes": {
+    "webui/server/index.ts": "f724b05921916641848ef073e2eaf4c16bce3920b8d2e23188e25d327e42e8b3",
+    "webui/server/runtime/diagnostic-snapshot.ts": "d209950f6a290b7557ee9e5eec0611d79c21b3fc944b778b3dbd14e2485945dc",
+    "webui/server/runtime/process-drain.ts": "8c4e425334ded9a0e449f86139c33f0c89fcd7dddf34a3f76b84a0196c94f0b4",
+    "scripts/runtime/docker-entrypoint.sh": "25e248b0af0142de184680ebc4de0f4dd33756170216f25f747b9c3e76cbd59f"
+  }
+}

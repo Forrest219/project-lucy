@@ -36,17 +36,41 @@ export function trustProxyEnabled(): boolean {
  * so the entry is visible as a forged-XFF attempt at review time.
  */
 export function extractClientIp(req: IncomingMessage): string | undefined {
+  return resolveClientIp(req).ip;
+}
+
+/** Which input actually produced `client_ip` (P1-36 D8). */
+export type ClientIpSource = "socket" | "xff" | "real_ip";
+
+function resolveClientIp(req: IncomingMessage): { ip: string | undefined; source: ClientIpSource } {
   if (trustProxyEnabled()) {
     const xff = firstHeaderValue(req.headers["x-forwarded-for"]);
     if (xff) {
       const first = xff.split(",")[0]?.trim();
-      if (first) return first;
+      if (first) return { ip: first, source: "xff" };
     }
     const realIp = firstHeaderValue(req.headers["x-real-ip"]);
-    if (realIp) return realIp;
+    if (realIp) return { ip: realIp, source: "real_ip" };
   }
-  const remote = req.socket?.remoteAddress;
-  return remote || undefined;
+  return { ip: req.socket?.remoteAddress || undefined, source: "socket" };
+}
+
+/**
+ * The source `extractClientIp` actually used. Without `LUCY_TRUST_PROXY` this is
+ * always `socket` (the gateway address, not the end client).
+ */
+export function clientIpSource(req: IncomingMessage): ClientIpSource {
+  return resolveClientIp(req).source;
+}
+
+/** `client_ip`, where it came from, and how far to trust it — one consistent reading. */
+export function resolveClientIpEvidence(req: IncomingMessage): {
+  clientIp: string | undefined;
+  ipSource: ClientIpSource;
+  trustedSource: RequestClientMeta["trustedSource"];
+} {
+  const { ip, source } = resolveClientIp(req);
+  return { clientIp: ip, ipSource: source, trustedSource: classifyTrustedSource(req) };
 }
 
 export function extractUserAgent(req: IncomingMessage): string | undefined {
@@ -213,8 +237,8 @@ export type RequestClientMeta = {
    * Spec 173 v0.3 / 2026-10-19 audit-trust:可信来源分类。
    *  - `local_admin`    : 进程内本地管理面（无 socket）
    *  - `customer`       : 直接 socket peer，无可信代理介入
-   *  - `trusted_proxy`  : socket peer 在 `LUCY_TRUSTED_PROXY_CIDRS` 内，XFF 头被采纳
-   *  - `untrusted_peer` : socket peer 不在白名单或 XFF 头被伪造（仍写链但不参与 ACL）
+   *  - `trusted_proxy`  : socket peer 在 `LUCY_TRUSTED_PROXY_CIDRS` 内，且实际采用了其 XFF / X-Real-IP 头
+   *  - `untrusted_peer` : socket peer 不在白名单却带 XFF 或 X-Real-IP（伪造风险，仍写链但不参与 ACL）
    *  - `unknown`        : 无法判断
    */
   trustedSource?: "local_admin" | "customer" | "trusted_proxy" | "untrusted_peer" | "unknown";
@@ -269,8 +293,10 @@ export function classifyTrustedSource(req: IncomingMessage): RequestClientMeta["
     }
   }
   const peerIsTrusted = list.check(peer, version === 6 ? "ipv6" : "ipv4");
-  if (peerIsTrusted) return "trusted_proxy";
-  // peer 不可信 + 携带 XFF = 疑似伪造，记录为 untrusted_peer，不影响 ACL。
-  const xff = firstHeaderValue(req.headers["x-forwarded-for"]);
-  return xff ? "untrusted_peer" : "customer";
+  // 可信 peer：仅当实际采用了转发头（ipSource 非 socket）才算 trusted_proxy。
+  if (peerIsTrusted) return resolveClientIp(req).source === "socket" ? "customer" : "trusted_proxy";
+  // peer 不可信 + 携带 XFF 或 X-Real-IP = 疑似伪造，记录为 untrusted_peer，不影响 ACL。
+  const forwarded =
+    firstHeaderValue(req.headers["x-forwarded-for"]) ?? firstHeaderValue(req.headers["x-real-ip"]);
+  return forwarded ? "untrusted_peer" : "customer";
 }

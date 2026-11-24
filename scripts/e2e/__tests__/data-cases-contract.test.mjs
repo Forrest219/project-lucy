@@ -33,7 +33,7 @@ import { AGENTS, CONNECTION_ID, REGIONS, TABLES } from "../lib/row-policy-pack.m
 
 const { cases } = loadCatalog();
 
-const POSITIVE_CONTROL_IDS = new Set(["SEC-09-V01", "SEC-09-V04", "SEC-11-BY01", "SEC-11-BY10"]);
+const POSITIVE_CONTROL_IDS = new Set(["SEC-09-V01", "SEC-09-V04", "SEC-11-BY01", "SEC-11-BY05", "SEC-11-BY09", "SEC-11-BY10"]);
 const isPositiveControl = (id) => POSITIVE_CONTROL_IDS.has(id);
 
 const dataCaseIds = [
@@ -295,39 +295,22 @@ describe("C1 review #4: byOutcome must accept positive controls (BY-01) without 
   });
 });
 
-describe("BY-09 is phase-off and only accepts row_policy_upstream_unproven", () => {
-  it("phase-off unproven deny passes the deny assertion", async () => {
-    const ctx = fakeRefusingCtx();
-    const result = await rowPolicyHandlers["SEC-11-BY09"](ctx);
-    assert.equal(assertionPassed(result, "deny"), true);
-    assert.equal(result.denyReason, "row_policy_upstream_unproven");
+describe("BY-09 requires automatic scoped execution", () => {
+  it("rejects the old unproven denial rather than accepting it as success", async () => {
+    const result = await rowPolicyHandlers["SEC-11-BY09"](fakeRefusingCtx());
+    assert.equal(assertionPassed(result, "allow_control"), false);
   });
-
-  it("an allowed query does not pass BY-09", async () => {
+  it("requires an actual successful response with the exact authorized region", async () => {
     const ctx = fakeAllowingCtx();
+    ctx.lucyQuery = async () => regionQueryResponse([[REGIONS.A, 4]]);
     const result = await rowPolicyHandlers["SEC-11-BY09"](ctx);
-    assert.equal(assertionPassed(result, "deny"), false);
+    assert.equal(assertionPassed(result, "allow_control"), true);
   });
-
-  it("a different allowlisted reason does not pass BY-09", async () => {
+  it("legacy env false is not an alternative passing refusal", async () => {
     const ctx = fakeRefusingCtx();
-    ctx.lucyQuery = async () => ({
-      status: 200,
-      headers: {},
-      setCookies: [],
-      cookie: null,
-      json: { jsonrpc: "2.0", id: 1, result: { content: [{ type: "text", text: "Access denied: row_policy_requires_wrapped_tool" }], isError: true } },
-      text: "Access denied: row_policy_requires_wrapped_tool"
-    });
+    ctx.run.instance.env = { LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN: "false" };
     const result = await rowPolicyHandlers["SEC-11-BY09"](ctx);
-    assert.equal(assertionPassed(result, "deny"), false);
-  });
-
-  it("phase-on proven env cannot pass BY-09 even with the unproven reason", async () => {
-    const ctx = fakeRefusingCtx();
-    ctx.run.instance.env = { LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN: "1" };
-    const result = await rowPolicyHandlers["SEC-11-BY09"](ctx);
-    assert.equal(assertionPassed(result, "deny"), false);
+    assert.equal(assertionPassed(result, "allow_control"), false);
   });
 });
 

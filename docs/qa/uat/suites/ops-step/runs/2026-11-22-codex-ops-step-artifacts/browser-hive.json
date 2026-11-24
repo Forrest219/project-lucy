@@ -1,0 +1,796 @@
+{
+  "engine": "hive",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "startedAt": "2026-11-22T10:28:19.672Z",
+  "headless": false,
+  "cases": [
+    {
+      "name": "connections-read-columns",
+      "result": "PASS",
+      "operationId": "ops_a8a5458a53565468c5b5a8f8d760f5dc",
+      "errorText": "有 1 张表没有读到字段：表「uat_ops_step_sentinel」没有读到字段。\n\n表「uat_ops_step_sentinel」操作号：ops_a8a5458a53565468c5b5a8f8d760f5dc",
+      "stdout": [
+        {
+          "ts": "2026-11-22T10:28:27.765Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_a8a5458a53565468c5b5a8f8d760f5dc",
+          "step": "read_columns",
+          "phase": "enter",
+          "elapsed_ms": 0,
+          "result": "running",
+          "reason_code": ""
+        },
+        {
+          "ts": "2026-11-22T10:28:27.785Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_a8a5458a53565468c5b5a8f8d760f5dc",
+          "step": "read_columns",
+          "phase": "fail",
+          "elapsed_ms": 19,
+          "result": "error",
+          "reason_code": "missing"
+        }
+      ],
+      "file": [
+        {
+          "ts": "2026-11-22T10:28:27.765Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_a8a5458a53565468c5b5a8f8d760f5dc",
+          "step": "read_columns",
+          "phase": "enter",
+          "elapsed_ms": 0,
+          "result": "running",
+          "reason_code": ""
+        },
+        {
+          "ts": "2026-11-22T10:28:27.785Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_a8a5458a53565468c5b5a8f8d760f5dc",
+          "step": "read_columns",
+          "phase": "fail",
+          "elapsed_ms": 19,
+          "result": "error",
+          "reason_code": "missing"
+        }
+      ]
+    },
+    {
+      "name": "wizard-read-columns",
+      "result": "PASS",
+      "operationId": "ops_a1ccc005802306e0297ca336902f766f",
+      "errorText": "有 1 张表没有读到字段：表「uat_ops_step_sentinel」没有读到字段。\n表「uat_ops_step_sentinel」操作号：ops_a1ccc005802306e0297ca336902f766f",
+      "stdout": [
+        {
+          "ts": "2026-11-22T10:28:32.180Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_a1ccc005802306e0297ca336902f766f",
+          "step": "read_columns",
+          "phase": "enter",
+          "elapsed_ms": 0,
+          "result": "running",
+          "reason_code": ""
+        },
+        {
+          "ts": "2026-11-22T10:28:32.195Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_a1ccc005802306e0297ca336902f766f",
+          "step": "read_columns",
+          "phase": "fail",
+          "elapsed_ms": 15,
+          "result": "error",
+          "reason_code": "missing"
+        }
+      ],
+      "file": [
+        {
+          "ts": "2026-11-22T10:28:32.180Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_a1ccc005802306e0297ca336902f766f",
+          "step": "read_columns",
+          "phase": "enter",
+          "elapsed_ms": 0,
+          "result": "running",
+          "reason_code": ""
+        },
+        {
+          "ts": "2026-11-22T10:28:32.195Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_a1ccc005802306e0297ca336902f766f",
+          "step": "read_columns",
+          "phase": "fail",
+          "elapsed_ms": 15,
+          "result": "error",
+          "reason_code": "missing"
+        }
+      ]
+    },
+    {
+      "name": "connections-list-tables",
+      "result": "PASS",
+      "operationId": "ops_a94c9f3b6b5722ddcd59ac4597a4c933",
+      "errorText": "读取表结构超时，请稍后重试。\n\n操作号：ops_a94c9f3b6b5722ddcd59ac4597a4c933",
+      "stdout": [
+        {
+          "ts": "2026-11-22T10:28:34.865Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_a94c9f3b6b5722ddcd59ac4597a4c933",
+          "step": "list_tables",
+          "phase": "enter",
+          "elapsed_ms": 0,
+          "result": "running",
+          "reason_code": ""
+        },
+        {
+          "ts": "2026-11-22T10:28:53.866Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_a94c9f3b6b5722ddcd59ac4597a4c933",
+          "step": "list_tables",
+          "phase": "fail",
+          "elapsed_ms": 18999,
+          "result": "error",
+          "reason_code": "timeout"
+        }
+      ],
+      "file": [
+        {
+          "ts": "2026-11-22T10:28:34.865Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_a94c9f3b6b5722ddcd59ac4597a4c933",
+          "step": "list_tables",
+          "phase": "enter",
+          "elapsed_ms": 0,
+          "result": "running",
+          "reason_code": ""
+        },
+        {
+          "ts": "2026-11-22T10:28:53.866Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_a94c9f3b6b5722ddcd59ac4597a4c933",
+          "step": "list_tables",
+          "phase": "fail",
+          "elapsed_ms": 18999,
+          "result": "error",
+          "reason_code": "timeout"
+        }
+      ]
+    },
+    {
+      "name": "wizard-list-tables",
+      "result": "PASS",
+      "operationId": "ops_cbe19c9ad8d526f3707df897d23d50d7",
+      "errorText": "读取表结构失败：无法列出 Schema「p168_hive」下的表。\n\n操作号：ops_cbe19c9ad8d526f3707df897d23d50d7",
+      "stdout": [
+        {
+          "ts": "2026-11-22T10:28:54.310Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_cbe19c9ad8d526f3707df897d23d50d7",
+          "step": "list_tables",
+          "phase": "enter",
+          "elapsed_ms": 0,
+          "result": "running",
+          "reason_code": ""
+        },
+        {
+          "ts": "2026-11-22T10:29:08.599Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_cbe19c9ad8d526f3707df897d23d50d7",
+          "step": "list_tables",
+          "phase": "fail",
+          "elapsed_ms": 14288,
+          "result": "error",
+          "reason_code": "unreadable"
+        }
+      ],
+      "file": [
+        {
+          "ts": "2026-11-22T10:28:54.310Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_cbe19c9ad8d526f3707df897d23d50d7",
+          "step": "list_tables",
+          "phase": "enter",
+          "elapsed_ms": 0,
+          "result": "running",
+          "reason_code": ""
+        },
+        {
+          "ts": "2026-11-22T10:29:08.599Z",
+          "op": "schema_structure_read",
+          "op_id": "ops_cbe19c9ad8d526f3707df897d23d50d7",
+          "step": "list_tables",
+          "phase": "fail",
+          "elapsed_ms": 14288,
+          "result": "error",
+          "reason_code": "unreadable"
+        }
+      ]
+    },
+    {
+      "name": "ops-before-restart",
+      "result": "PASS",
+      "opId": "ops_5cf3942d24771db1cfbc59429fef532e"
+    },
+    {
+      "name": "ops-after-503-and-restart",
+      "result": "PASS",
+      "opId": "ops_5cf3942d24771db1cfbc59429fef532e",
+      "checkedIds": [
+        "ops_a8a5458a53565468c5b5a8f8d760f5dc",
+        "ops_a1ccc005802306e0297ca336902f766f",
+        "ops_a94c9f3b6b5722ddcd59ac4597a4c933",
+        "ops_cbe19c9ad8d526f3707df897d23d50d7"
+      ]
+    }
+  ],
+  "samples": [
+    {
+      "name": "connections-table-names",
+      "clock": "click",
+      "start": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      },
+      "api": {
+        "method": "POST",
+        "path": "/api/connections/p168-hive/schema-structure",
+        "status": 200,
+        "ms": 60,
+        "body": {
+          "schema": "p168_hive"
+        },
+        "operationId": null,
+        "requestId": null
+      },
+      "pageMs": 111.4,
+      "end": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      }
+    },
+    {
+      "name": "connections-read_columns",
+      "clock": "click",
+      "start": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      },
+      "api": {
+        "method": "POST",
+        "path": "/api/connections/p168-hive/schema-structure",
+        "status": 400,
+        "ms": 28.5,
+        "body": {
+          "schema": "p168_hive",
+          "tables": [
+            "uat_ops_step_sentinel"
+          ]
+        },
+        "operationId": "ops_a8a5458a53565468c5b5a8f8d760f5dc",
+        "message": "表「uat_ops_step_sentinel」没有读到字段。",
+        "requestId": null
+      },
+      "pageMs": 62.2,
+      "end": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      }
+    },
+    {
+      "name": "wizard-table-names",
+      "clock": "click",
+      "start": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      },
+      "api": {
+        "method": "POST",
+        "path": "/api/connections/p168-hive/schema-structure",
+        "status": 200,
+        "ms": 17,
+        "body": {
+          "schema": "p168_hive"
+        },
+        "operationId": null,
+        "requestId": null
+      },
+      "pageMs": 44.7,
+      "end": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      }
+    },
+    {
+      "name": "wizard-read_columns",
+      "clock": "click",
+      "start": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      },
+      "api": {
+        "method": "POST",
+        "path": "/api/connections/p168-hive/schema-structure",
+        "status": 400,
+        "ms": 20.7,
+        "body": {
+          "schema": "p168_hive",
+          "tables": [
+            "uat_ops_step_sentinel"
+          ]
+        },
+        "operationId": "ops_a1ccc005802306e0297ca336902f766f",
+        "message": "表「uat_ops_step_sentinel」没有读到字段。",
+        "requestId": null
+      },
+      "pageMs": 61.1,
+      "end": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      }
+    },
+    {
+      "name": "connections-list_tables",
+      "clock": "click",
+      "start": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      },
+      "api": {
+        "method": "POST",
+        "path": "/api/connections/p168-hive/schema-structure",
+        "status": 400,
+        "ms": 19061.1,
+        "body": {
+          "schema": "p168_hive"
+        },
+        "operationId": "ops_a94c9f3b6b5722ddcd59ac4597a4c933",
+        "message": "读取表结构超时，请稍后重试。",
+        "requestId": null
+      },
+      "pageMs": 19097.3,
+      "end": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      }
+    },
+    {
+      "name": "wizard-list_tables",
+      "clock": "click",
+      "start": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      },
+      "api": {
+        "method": "POST",
+        "path": "/api/connections/p168-hive/schema-structure",
+        "status": 400,
+        "ms": 14293.7,
+        "body": {
+          "schema": "p168_hive"
+        },
+        "operationId": "ops_cbe19c9ad8d526f3707df897d23d50d7",
+        "message": "读取表结构失败：无法列出 Schema「p168_hive」下的表。",
+        "requestId": null
+      },
+      "pageMs": 14330.8,
+      "end": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      }
+    },
+    {
+      "name": "ops-inflight-navigation",
+      "clock": "navigation",
+      "start": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      },
+      "api": {
+        "method": "GET",
+        "path": "/api/admin/ops-steps",
+        "status": 200,
+        "ms": 3.4,
+        "operationId": null,
+        "requestId": null
+      },
+      "pageMs": 108.5,
+      "end": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      }
+    },
+    {
+      "name": "ops-after-restart-navigation",
+      "clock": "navigation",
+      "start": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      },
+      "api": {
+        "method": "GET",
+        "path": "/api/admin/ops-steps",
+        "status": 200,
+        "ms": 7.9,
+        "operationId": null,
+        "requestId": null
+      },
+      "pageMs": 178.8,
+      "end": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      }
+    }
+  ],
+  "captures": [
+    "hive-connections-read_columns.png",
+    "hive-wizard-read_columns.png",
+    "hive-connections-list_tables.png",
+    "hive-wizard-list_tables.png",
+    "hive-inflight.png",
+    "hive-previous-incomplete.png",
+    "hive-failed-history.png"
+  ],
+  "browser": "157.0.8103.79",
+  "anonymous": {
+    "status": 401,
+    "code": "AUTH_REQUIRED"
+  },
+  "restart": {
+    "opId": "ops_5cf3942d24771db1cfbc59429fef532e",
+    "beforeFile": [
+      {
+        "ts": "2026-11-22T10:29:09.189Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_5cf3942d24771db1cfbc59429fef532e",
+        "step": "read_project",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:29:09.189Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_5cf3942d24771db1cfbc59429fef532e",
+        "step": "read_ktx_yaml",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:29:09.189Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_5cf3942d24771db1cfbc59429fef532e",
+        "step": "read_catalog_reloads",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:29:09.190Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_5cf3942d24771db1cfbc59429fef532e",
+        "step": "probe_execution",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:29:09.190Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_5cf3942d24771db1cfbc59429fef532e",
+        "step": "probe_execution",
+        "phase": "leave",
+        "elapsed_ms": 0,
+        "result": "ok",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:29:09.190Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_5cf3942d24771db1cfbc59429fef532e",
+        "step": "read_catalog_reloads",
+        "phase": "leave",
+        "elapsed_ms": 1,
+        "result": "ok",
+        "reason_code": ""
+      }
+    ],
+    "beforeStdout": [
+      {
+        "ts": "2026-11-22T10:29:09.189Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_5cf3942d24771db1cfbc59429fef532e",
+        "step": "read_project",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:29:09.189Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_5cf3942d24771db1cfbc59429fef532e",
+        "step": "read_ktx_yaml",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:29:09.189Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_5cf3942d24771db1cfbc59429fef532e",
+        "step": "read_catalog_reloads",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:29:09.190Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_5cf3942d24771db1cfbc59429fef532e",
+        "step": "probe_execution",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:29:09.190Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_5cf3942d24771db1cfbc59429fef532e",
+        "step": "probe_execution",
+        "phase": "leave",
+        "elapsed_ms": 0,
+        "result": "ok",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:29:09.190Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_5cf3942d24771db1cfbc59429fef532e",
+        "step": "read_catalog_reloads",
+        "phase": "leave",
+        "elapsed_ms": 1,
+        "result": "ok",
+        "reason_code": ""
+      }
+    ],
+    "failedSchemaIds": [
+      "ops_a8a5458a53565468c5b5a8f8d760f5dc",
+      "ops_a1ccc005802306e0297ca336902f766f",
+      "ops_a94c9f3b6b5722ddcd59ac4597a4c933",
+      "ops_cbe19c9ad8d526f3707df897d23d50d7"
+    ],
+    "gateway": {
+      "upBefore": {
+        "http": 200,
+        "origin": "upstream",
+        "body": "Upstream responded",
+        "ms": 22.1
+      },
+      "during": {
+        "http": 503,
+        "origin": "local-gateway",
+        "body": "Upstream unavailable",
+        "ms": 6.4
+      },
+      "upAfter": {
+        "http": 200,
+        "origin": "upstream",
+        "body": "Upstream responded",
+        "ms": 6.7
+      }
+    },
+    "container": {
+      "id": "dc84073fc9526cc96cbc8f7faca2ab9cbfc64f2b2218b74b8f6c0dd285d9300b",
+      "volume": "lucy-uat-ops-front-1122_lucy-demo-data",
+      "startedBefore": "2026-11-22T10:27:58.190002172Z",
+      "startedAfter": "2026-11-22T10:29:10.125401969Z"
+    },
+    "afterFile": [
+      {
+        "ts": "2026-11-22T10:28:27.765Z",
+        "op": "schema_structure_read",
+        "op_id": "ops_a8a5458a53565468c5b5a8f8d760f5dc",
+        "step": "read_columns",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:28:27.785Z",
+        "op": "schema_structure_read",
+        "op_id": "ops_a8a5458a53565468c5b5a8f8d760f5dc",
+        "step": "read_columns",
+        "phase": "fail",
+        "elapsed_ms": 19,
+        "result": "error",
+        "reason_code": "missing"
+      },
+      {
+        "ts": "2026-11-22T10:28:32.180Z",
+        "op": "schema_structure_read",
+        "op_id": "ops_a1ccc005802306e0297ca336902f766f",
+        "step": "read_columns",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:28:32.195Z",
+        "op": "schema_structure_read",
+        "op_id": "ops_a1ccc005802306e0297ca336902f766f",
+        "step": "read_columns",
+        "phase": "fail",
+        "elapsed_ms": 15,
+        "result": "error",
+        "reason_code": "missing"
+      },
+      {
+        "ts": "2026-11-22T10:28:34.865Z",
+        "op": "schema_structure_read",
+        "op_id": "ops_a94c9f3b6b5722ddcd59ac4597a4c933",
+        "step": "list_tables",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:28:53.866Z",
+        "op": "schema_structure_read",
+        "op_id": "ops_a94c9f3b6b5722ddcd59ac4597a4c933",
+        "step": "list_tables",
+        "phase": "fail",
+        "elapsed_ms": 18999,
+        "result": "error",
+        "reason_code": "timeout"
+      },
+      {
+        "ts": "2026-11-22T10:28:54.310Z",
+        "op": "schema_structure_read",
+        "op_id": "ops_cbe19c9ad8d526f3707df897d23d50d7",
+        "step": "list_tables",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:29:08.599Z",
+        "op": "schema_structure_read",
+        "op_id": "ops_cbe19c9ad8d526f3707df897d23d50d7",
+        "step": "list_tables",
+        "phase": "fail",
+        "elapsed_ms": 14288,
+        "result": "error",
+        "reason_code": "unreadable"
+      },
+      {
+        "ts": "2026-11-22T10:29:09.189Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_5cf3942d24771db1cfbc59429fef532e",
+        "step": "read_project",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:29:09.189Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_5cf3942d24771db1cfbc59429fef532e",
+        "step": "read_ktx_yaml",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:29:09.189Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_5cf3942d24771db1cfbc59429fef532e",
+        "step": "read_catalog_reloads",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:29:09.190Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_5cf3942d24771db1cfbc59429fef532e",
+        "step": "probe_execution",
+        "phase": "enter",
+        "elapsed_ms": 0,
+        "result": "running",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:29:09.190Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_5cf3942d24771db1cfbc59429fef532e",
+        "step": "probe_execution",
+        "phase": "leave",
+        "elapsed_ms": 0,
+        "result": "ok",
+        "reason_code": ""
+      },
+      {
+        "ts": "2026-11-22T10:29:09.190Z",
+        "op": "diagnostic_collect",
+        "op_id": "ops_5cf3942d24771db1cfbc59429fef532e",
+        "step": "read_catalog_reloads",
+        "phase": "leave",
+        "elapsed_ms": 1,
+        "result": "ok",
+        "reason_code": ""
+      }
+    ],
+    "afterHistory": {
+      "orphan": {
+        "key": "history:97",
+        "op": "diagnostic_collect",
+        "opId": "ops_5cf3942d24771db1cfbc59429fef532e",
+        "step": "read_ktx_yaml",
+        "phase": "enter",
+        "ts": "2026-11-22T10:29:09.189Z",
+        "elapsedMs": 0,
+        "result": "running",
+        "reasonCode": "",
+        "state": "previous_incomplete",
+        "enteredAt": "2026-11-22T10:29:09.189Z",
+        "durationMs": null
+      },
+      "matchedSchemaIds": [
+        "ops_a8a5458a53565468c5b5a8f8d760f5dc",
+        "ops_a1ccc005802306e0297ca336902f766f",
+        "ops_a94c9f3b6b5722ddcd59ac4597a4c933",
+        "ops_cbe19c9ad8d526f3707df897d23d50d7"
+      ]
+    }
+  },
+  "result": "PASS",
+  "finishedAt": "2026-11-22T10:29:16.935Z"
+}

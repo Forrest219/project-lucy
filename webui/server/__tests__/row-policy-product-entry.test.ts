@@ -20,12 +20,10 @@ import { buildForcedFiltersPayload, resetRowPolicyCatalogCacheForTests, type Row
  * V15 stays out of this file: the full fault-injection matrix is blocked here.
  */
 
+import { createEmptyAuditDbStub } from "./helpers/audit-db-stub.js";
+
 vi.mock("../admin/audit.js", () => ({
-  getAuditDb: vi.fn(() => ({
-    prepare: vi.fn(() => ({ get: vi.fn(() => undefined), all: vi.fn(() => []), run: vi.fn() })),
-    exec: vi.fn(),
-    pragma: vi.fn()
-  })),
+  getAuditDb: vi.fn(() => createEmptyAuditDbStub()),
   recordConfigChange: vi.fn(async () => 1),
   updateConfigChangeStatus: vi.fn(async () => {}),
   registerAgentAuditRoutes: vi.fn(),
@@ -419,7 +417,7 @@ describe("V12 / V16 / V18 — preview, runtime filters, and policy version", () 
     expect(await accessText()).toContain("South");
   });
 
-  it("V18: a successful preview does not relax an unproven upstream predicate", async () => {
+  it("V18: successful preview preserves mandatory predicates without an operator flag", async () => {
     useProject(await makeProject());
     const app = await startApp();
     const preview = await request(app.server)
@@ -433,7 +431,7 @@ describe("V12 / V16 / V18 — preview, runtime filters, and policy version", () 
         connectionId: "warehouse",
         measures: ["fin_ledger.total_sales"]
       })
-    ).resolves.toEqual({ allowed: false, reason: "row_policy_upstream_unproven" });
+    ).resolves.toMatchObject({ allowed: true, forcedFilters: { or: expect.any(Array) } });
   });
 });
 

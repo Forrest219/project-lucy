@@ -22,8 +22,21 @@ export function prepare({ workDir, mcpUrl }) {
   return { env: {}, files: [path.join(dir, "mcp.json")] };
 }
 
-export function buildInvocation({ binaryPath, question, workDir, env, secrets = [] }) {
+export const supportsContinuation = true;
+
+export function buildInvocation({
+  binaryPath,
+  question,
+  workDir,
+  env,
+  secrets = [],
+  sessionId = null,
+  continueSession = false
+}) {
   const args = ["-p", "--output-format", "json", "--force", "--approve-mcps", question];
+  if ((continueSession || sessionId) && sessionId) {
+    args.push("--resume", String(sessionId));
+  }
   assertNoSecretInArgv(args, secrets);
   return { command: binaryPath, args, cwd: workDir, env: { CURSOR_API_KEY: env.CURSOR_API_KEY ?? "" } };
 }

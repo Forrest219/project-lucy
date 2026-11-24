@@ -21,6 +21,7 @@ import { assembleEvidence, loadResults } from "../e2e/lib/assemble.mjs";
 import { expectedExecutions } from "../e2e/lib/catalog.mjs";
 import { automatedRequiredClients } from "../e2e/lib/clients.mjs";
 import { EXIT_CODES, fail, loadRun, parseArgv } from "../e2e/lib/common.mjs";
+import { applyMcpCompatibilityReleaseGate } from "../e2e/lib/mcp-compatibility-wiring.mjs";
 import { fileReaderFor, loadVerifyInputs, verifyRelease } from "../e2e/verify-evidence.mjs";
 
 export const READINESS_STEPS = [
@@ -30,6 +31,7 @@ export const READINESS_STEPS = [
   "candidate deployed to an isolated single-replica K8s (results/deployment.json)",
   "security-integration + real management journey (results/security.json, results/management.json)",
   "all required real product clients (results/agent.json + server-evidence.json)",
+  "MCP upgrade-compatibility evidence re-verified (mcp-compatibility-candidate.json; CI subset never releaseReady)",
   "evidence collected, leakage scanned, verifier decision",
   "promote exactly the tested digest only after this gate passed"
 ];
@@ -49,8 +51,35 @@ function readJsonIfExists(file) {
   return existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : null;
 }
 
+/**
+ * P1-53 Task 5: fold MCP compatibility evidence into the release verdict.
+ * Missing candidate evidence / FAIL / BLOCKED / ci-subset ⇒ releaseReady=false.
+ * Injectable for unit tests.
+ */
+export function gateReadinessWithMcpCompatibility({
+  runDir,
+  verdict,
+  ciSubset = false,
+  applyGate = applyMcpCompatibilityReleaseGate
+}) {
+  return applyGate({
+    runDir,
+    verdict,
+    ciSubset,
+    require: "candidate"
+  });
+}
+
 /** Pure decision from files on disk; used by the CLI and by the tests. */
-export function decideReadiness({ run, candidate, mode, now = Date.now(), inputs = loadVerifyInputs() }) {
+export function decideReadiness({
+  run,
+  candidate,
+  mode,
+  now = Date.now(),
+  inputs = loadVerifyInputs(),
+  ciSubset = process.env.COMPAT_COVERAGE_MODE === "ci-subset" || process.env.LUCY_MCP_COMPAT_COVERAGE_MODE === "ci-subset",
+  applyMcpGate = applyMcpCompatibilityReleaseGate
+}) {
   const results = loadResults(run);
   const audit = readJsonIfExists(path.join(run.paths.runDir, "results", "npm-audit.json"));
   // Automated required products only; manual GUI products (workbuddy/cursor) are checked separately via
@@ -60,7 +89,14 @@ export function decideReadiness({ run, candidate, mode, now = Date.now(), inputs
   const { evidence, missing } = assembleEvidence({ run, results, candidate, profileDigest: inputs.profileDigest, cases: inputs.cases, expectedCount, clientsDoc: inputs.clientsDoc });
   if (mode !== "release") evidence.executionMode = mode === "dry-run" ? "dry_run" : "collect";
   const runCreatedAtMs = Number.isFinite(Date.parse(run.createdAt)) ? Date.parse(run.createdAt) : NaN;
-  const verdict = verifyRelease({ evidence, candidate, ...inputs, audit, readFile: fileReaderFor(run.paths.runDir), now, runId: run.runId, instanceId: run.instanceId, runCreatedAtMs });
+  let verdict = verifyRelease({ evidence, candidate, ...inputs, audit, readFile: fileReaderFor(run.paths.runDir), now, runId: run.runId, instanceId: run.instanceId, runCreatedAtMs });
+  // Always re-evaluate MCP compatibility public evidence (SC-16 / SC-21). Never trust runner stdout.
+  verdict = gateReadinessWithMcpCompatibility({
+    runDir: run.paths.runDir,
+    verdict,
+    ciSubset,
+    applyGate: applyMcpGate
+  });
   if (mode !== "release") {
     // Collect / dry-run gathers and reports; it is not a gate and can never be publishable (Spec §8.2: exit 3).
     // The problems stay in the written file so nothing about an incomplete run is hidden.

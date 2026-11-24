@@ -1,0 +1,9 @@
+
+ RUN  v4.1.9 /Users/zhangxingchen/Projects/project-lucy/webui
+
+
+ Test Files  2 passed (2)
+      Tests  26 passed (26)
+   Start at  11:20:34
+   Duration  961ms (transform 318ms, setup 236ms, import 516ms, tests 56ms, environment 0ms)
+

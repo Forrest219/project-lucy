@@ -5,6 +5,7 @@
  * E∪D call set as the sankey access layer. Conservation uses global call-ID sets
  * — never Σ allowCalls as |E|.
  */
+import { isAccessMapAllowedOutcome } from "./access-map-outcome.js";
 import type { InquiryKind } from "./audit-inquiry-kind.js";
 import { accessGrade, type AccessGrade } from "../proxy/usage-classification.js";
 
@@ -327,7 +328,7 @@ export function bandSetsFromAuditRows(rows: HourlyDetailAuditRow[]): {
   const E = new Set<string>();
   const D = new Set<string>();
   for (const row of rows) {
-    if (row.outcome === "allow") E.add(row.callId);
+    if (isAccessMapAllowedOutcome(row.outcome)) E.add(row.callId);
     else D.add(row.callId);
   }
   return { E, D };

@@ -1,0 +1,21 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 2772,
+  "body": {
+    "ok": true,
+    "data": {
+      "schema": "weather",
+      "readable": true,
+      "yaml": "tables:\n  city:\n    table: weather.city\n    columns:\n      - name: id\n        type: number\n        nullable: false\n        pk: true\n      - name: name\n        type: string\n        nullable: true\n  zebra:\n    table: weather.zebra\n    columns:\n      - name: id\n        type: number\n        nullable: false\n        pk: true\n",
+      "tableCount": 2,
+      "columnCount": 3,
+      "namesOnly": false,
+      "mapped": {
+        "number": 2,
+        "string": 1,
+        "time": 0
+      },
+      "downgraded": []
+    }
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "id": "UAT-COLD-01",
+  "title": "对照：0.25.0 在同一限速冷启动台上能起来",
+  "pass": true,
+  "checks": [
+    {
+      "name": "process stayed up (no exit)",
+      "pass": true,
+      "actual": {
+        "running": true,
+        "exitCode": 0,
+        "restarts": 0,
+        "oomKilled": false
+      },
+      "limit": "running"
+    },
+    {
+      "name": "no FST_ERR_HOOK_TIMEOUT / AVV_ERR_READY_TIMEOUT",
+      "pass": true,
+      "actual": false,
+      "limit": false
+    },
+    {
+      "name": "restart count == 0",
+      "pass": true,
+      "actual": 0,
+      "limit": 0
+    },
+    {
+      "name": "ready within 120s",
+      "pass": true,
+      "actual": 30.8,
+      "limit": "≤ 120s"
+    },
+    {
+      "name": "health all 200 in 60s window",
+      "pass": true,
+      "actual": 0,
+      "limit": 0
+    }
+  ],
+  "image": "project-lucy:old-9c78b0e3",
+  "readyT": 30.8,
+  "exited": null,
+  "finalState": {
+    "running": true,
+    "exitCode": 0,
+    "restarts": 0,
+    "oomKilled": false
+  },
+  "windowStart": 30.8,
+  "windowEnd": 90.8,
+  "stats": {
+    "samples": 44,
+    "livezMaxMs": null,
+    "livezP99Ms": null,
+    "livezNon200": 0,
+    "readyzMaxMs": null,
+    "readyzP99Ms": null,
+    "readyzNon200": 0,
+    "healthMaxMs": 493,
+    "healthNon200": 0
+  },
+  "logFindings": {
+    "hookTimeout": false,
+    "auditSchemaReady": null,
+    "tail": [
+      "{\"level\":30,\"time\":1794929782929,\"pid\":366,\"hostname\":\"86296fd05001\",\"reqId\":\"req-16\",\"res\":{\"statusCode\":200},\"responseTime\":358.07737500000076,\"msg\":\"request completed\"}",
+      "{\"level\":30,\"time\":1794929783932,\"pid\":366,\"hostname\":\"86296fd05001\",\"reqId\":\"req-17\",\"req\":{\"method\":\"GET\",\"url\":\"/api/health\",\"host\":\"127.0.0.1:55391\",\"remoteAddress\":\"146.75.114.132\",\"remotePort\":43383},\"msg\":\"incoming request\"}",
+      "{\"level\":30,\"time\":1794929784302,\"pid\":366,\"hostname\":\"86296fd05001\",\"reqId\":\"req-17\",\"res\":{\"statusCode\":200},\"responseTime\":369.327750000004,\"msg\":\"request completed\"}",
+      "{\"level\":30,\"time\":1794929785305,\"pid\":366,\"hostname\":\"86296fd05001\",\"reqId\":\"req-18\",\"req\":{\"method\":\"GET\",\"url\":\"/api/health\",\"host\":\"127.0.0.1:55391\",\"remoteAddress\":\"146.75.114.132\",\"remotePort\":43383},\"msg\":\"incoming request\"}",
+      "{\"level\":30,\"time\":1794929785698,\"pid\":366,\"hostname\":\"86296fd05001\",\"reqId\":\"req-18\",\"res\":{\"statusCode\":200},\"responseTime\":392.33008300000074,\"msg\":\"request completed\"}",
+      "{\"level\":30,\"time\":1794929786701,\"pid\":366,\"hostname\":\"86296fd05001\",\"reqId\":\"req-19\",\"req\":{\"method\":\"GET\",\"url\":\"/api/health\",\"host\":\"127.0.0.1:55391\",\"remoteAddress\":\"146.75.114.132\",\"remotePort\":43383},\"msg\":\"incoming request\"}",
+      "{\"level\":30,\"time\":1794929787122,\"pid\":366,\"hostname\":\"86296fd05001\",\"reqId\":\"req-19\",\"res\":{\"statusCode\":200},\"responseTime\":421.14425000000483,\"msg\":\"request completed\"}",
+      "{\"level\":30,\"time\":1794929788124,\"pid\":366,\"hostname\":\"86296fd05001\",\"reqId\":\"req-1a\",\"req\":{\"method\":\"GET\",\"url\":\"/api/health\",\"host\":\"127.0.0.1:55391\",\"remoteAddress\":\"146.75.114.132\",\"remotePort\":43383},\"msg\":\"incoming request\"}",
+      "{\"level\":30,\"time\":1794929788456,\"pid\":366,\"hostname\":\"86296fd05001\",\"reqId\":\"req-1a\",\"res\":{\"statusCode\":200},\"responseTime\":331.7415420000034,\"msg\":\"request completed\"}",
+      "{\"level\":30,\"time\":1794929789458,\"pid\":366,\"hostname\":\"86296fd05001\",\"reqId\":\"req-1b\",\"req\":{\"method\":\"GET\",\"url\":\"/api/health\",\"host\":\"127.0.0.1:55391\",\"remoteAddress\":\"146.75.114.132\",\"remotePort\":43383},\"msg\":\"incoming request\"}",
+      "{\"level\":30,\"time\":1794929789811,\"pid\":366,\"hostname\":\"86296fd05001\",\"reqId\":\"req-1b\",\"res\":{\"statusCode\":200},\"responseTime\":352.08995900000446,\"msg\":\"request completed\"}",
+      ""
+    ]
+  }
+}

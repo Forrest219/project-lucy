@@ -79,6 +79,11 @@ describe("trace/evidence — schema setup", () => {
     const result = db.pragma("busy_timeout", { simple: true }) as number;
     expect(result).toBe(5000);
   });
+
+  it("sets wal_autocheckpoint to AUDIT_WAL_AUTOCHECKPOINT_PAGES (P1-47 B-line)", async () => {
+    const { AUDIT_WAL_AUTOCHECKPOINT_PAGES } = await import("../trace/evidence.js");
+    expect(Number(db.pragma("wal_autocheckpoint", { simple: true }))).toBe(AUDIT_WAL_AUTOCHECKPOINT_PAGES);
+  });
 });
 
 describe("trace/evidence — append-only semantics", () => {

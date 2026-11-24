@@ -1,0 +1,23 @@
+{
+  "headers": [
+    "trace_id",
+    "span_id",
+    "parent_span_id",
+    "access_log_id",
+    "seq",
+    "stage",
+    "started_at_utc",
+    "started_at_local",
+    "duration_ms",
+    "status",
+    "reason_code",
+    "reason_param",
+    "error_category",
+    "attrs_json",
+    "derivation_version",
+    "ledger_seq"
+  ],
+  "csv": "trace_id,span_id,parent_span_id,access_log_id,seq,stage,started_at_utc,started_at_local,duration_ms,status,reason_code,reason_param,error_category,attrs_json,derivation_version,ledger_seq\nt_fixed_0,t_fixed_0_root,,1,1,admission,2026-11-10T08:00:00.000Z,2026-11-10 08:00:00,12,ok,,,,,v2p5-2,1\nt_fixed_0,t_fixed_0_acl,t_fixed_0_root,1,2,acl,2026-11-10T08:00:00.001Z,2026-11-10 08:00:00,3,ok,,,,\"{\"\"note\"\":\"\"a,b\"\",\"\"q\"\":\"\"say \\\"\"hi\\\"\"\"\"}\",v2p5-2,1\nt_fixed_1,t_fixed_1_root,,2,1,admission,2026-11-10T08:00:01.000Z,2026-11-10 08:00:01,13,ok,,,,,v2p5-2,2\nt_fixed_1,t_fixed_1_acl,t_fixed_1_root,2,2,acl,2026-11-10T08:00:01.001Z,2026-11-10 08:00:01,3,ok,,,,\"{\"\"note\"\":\"\"a,b\"\",\"\"q\"\":\"\"say \\\"\"hi\\\"\"\"\"}\",v2p5-2,2\n",
+  "rowCount": 4,
+  "unsequenced": 0
+}

@@ -1,0 +1,76 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 2.331,
+  "body": {
+    "ok": true,
+    "data": {
+      "status": "ok",
+      "insecureTestProfile": true,
+      "lucyVersion": "0.30.0",
+      "gitSha": "77e2ad8425ae0e7a2918803e497da10636b14e5a",
+      "gitDirty": true,
+      "bundledKtxVersion": "0.16.0",
+      "ktxRuntime": {
+        "ready": true,
+        "status": "ready",
+        "detail": "status: ready"
+      },
+      "policy": {
+        "policyVersion": "9a69da2e3c14f0ba3dc566cc15974eb14e8248e3df5865c5a4b9e9bc45fe09ae",
+        "degradedGlobal": false,
+        "degradedAgents": [],
+        "healthy": true
+      },
+      "execution": {
+        "status": "unknown",
+        "lastCheckedAt": "2026-11-20T05:09:59.983Z",
+        "unknownConnections": [
+          "lucy-ops",
+          "uat-mysql"
+        ],
+        "activation": "unknown",
+        "reload": {
+          "state": "idle"
+        },
+        "verification": {
+          "state": "unverified"
+        }
+      },
+      "dataQaInstructions": {
+        "source": "missing",
+        "length": 0,
+        "lastError": null,
+        "loadedAt": null
+      },
+      "contentLayout": {
+        "contentRoot": "/data/lucy/config",
+        "contentRootSource": "env",
+        "authoring": {
+          "semanticLayer": "/data/lucy/config/semantic-layer",
+          "wiki": "/data/lucy/config/wiki",
+          "evals": "/data/lucy/config/evals",
+          "skills": "/data/lucy/config/skills"
+        },
+        "mirror": {
+          "semanticLayer": "/data/lucy/semantic-layer",
+          "wiki": "/data/lucy/wiki",
+          "evals": "/data/lucy/evals",
+          "skills": "/data/lucy/skills"
+        },
+        "mirrorActive": true,
+        "drift": [],
+        "driftTruncated": false
+      },
+      "eventLoop": {
+        "p99Ms": 75.104,
+        "maxMs": 119.865,
+        "windowSeconds": 60
+      }
+    },
+    "diagnostics": {
+      "observedAt": "2026-11-20T05:10:00.636Z",
+      "ageMs": 816,
+      "freshness": "fresh"
+    }
+  }
+}

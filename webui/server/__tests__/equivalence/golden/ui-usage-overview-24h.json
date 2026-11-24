@@ -1,0 +1,505 @@
+{
+  "windowHours": 24,
+  "pageViews": 707,
+  "visitorCount": 9,
+  "activeMenuCount": 27,
+  "unmappedViews": 34,
+  "pageViewSeries": {
+    "bucket": "hour",
+    "since": "2026-11-14T12:00:00.000Z",
+    "until": "2026-11-15T12:00:00.000Z",
+    "points": [
+      {
+        "start": "2026-11-14T12:00:00.000Z",
+        "end": "2026-11-14T13:00:00.000Z",
+        "pageViews": 35
+      },
+      {
+        "start": "2026-11-14T13:00:00.000Z",
+        "end": "2026-11-14T14:00:00.000Z",
+        "pageViews": 31
+      },
+      {
+        "start": "2026-11-14T14:00:00.000Z",
+        "end": "2026-11-14T15:00:00.000Z",
+        "pageViews": 27
+      },
+      {
+        "start": "2026-11-14T15:00:00.000Z",
+        "end": "2026-11-14T16:00:00.000Z",
+        "pageViews": 21
+      },
+      {
+        "start": "2026-11-14T16:00:00.000Z",
+        "end": "2026-11-14T17:00:00.000Z",
+        "pageViews": 33
+      },
+      {
+        "start": "2026-11-14T17:00:00.000Z",
+        "end": "2026-11-14T18:00:00.000Z",
+        "pageViews": 36
+      },
+      {
+        "start": "2026-11-14T18:00:00.000Z",
+        "end": "2026-11-14T19:00:00.000Z",
+        "pageViews": 32
+      },
+      {
+        "start": "2026-11-14T19:00:00.000Z",
+        "end": "2026-11-14T20:00:00.000Z",
+        "pageViews": 25
+      },
+      {
+        "start": "2026-11-14T20:00:00.000Z",
+        "end": "2026-11-14T21:00:00.000Z",
+        "pageViews": 27
+      },
+      {
+        "start": "2026-11-14T21:00:00.000Z",
+        "end": "2026-11-14T22:00:00.000Z",
+        "pageViews": 27
+      },
+      {
+        "start": "2026-11-14T22:00:00.000Z",
+        "end": "2026-11-14T23:00:00.000Z",
+        "pageViews": 31
+      },
+      {
+        "start": "2026-11-14T23:00:00.000Z",
+        "end": "2026-11-15T00:00:00.000Z",
+        "pageViews": 22
+      },
+      {
+        "start": "2026-11-15T00:00:00.000Z",
+        "end": "2026-11-15T01:00:00.000Z",
+        "pageViews": 26
+      },
+      {
+        "start": "2026-11-15T01:00:00.000Z",
+        "end": "2026-11-15T02:00:00.000Z",
+        "pageViews": 41
+      },
+      {
+        "start": "2026-11-15T02:00:00.000Z",
+        "end": "2026-11-15T03:00:00.000Z",
+        "pageViews": 23
+      },
+      {
+        "start": "2026-11-15T03:00:00.000Z",
+        "end": "2026-11-15T04:00:00.000Z",
+        "pageViews": 32
+      },
+      {
+        "start": "2026-11-15T04:00:00.000Z",
+        "end": "2026-11-15T05:00:00.000Z",
+        "pageViews": 22
+      },
+      {
+        "start": "2026-11-15T05:00:00.000Z",
+        "end": "2026-11-15T06:00:00.000Z",
+        "pageViews": 33
+      },
+      {
+        "start": "2026-11-15T06:00:00.000Z",
+        "end": "2026-11-15T07:00:00.000Z",
+        "pageViews": 28
+      },
+      {
+        "start": "2026-11-15T07:00:00.000Z",
+        "end": "2026-11-15T08:00:00.000Z",
+        "pageViews": 33
+      },
+      {
+        "start": "2026-11-15T08:00:00.000Z",
+        "end": "2026-11-15T09:00:00.000Z",
+        "pageViews": 30
+      },
+      {
+        "start": "2026-11-15T09:00:00.000Z",
+        "end": "2026-11-15T10:00:00.000Z",
+        "pageViews": 25
+      },
+      {
+        "start": "2026-11-15T10:00:00.000Z",
+        "end": "2026-11-15T11:00:00.000Z",
+        "pageViews": 33
+      },
+      {
+        "start": "2026-11-15T11:00:00.000Z",
+        "end": "2026-11-15T12:00:00.000Z",
+        "pageViews": 34
+      }
+    ]
+  },
+  "groups": [
+    {
+      "id": "governance",
+      "label": "访问治理",
+      "visits": 229
+    },
+    {
+      "id": "evaluation",
+      "label": "质量评测",
+      "visits": 131
+    },
+    {
+      "id": "semantic-modeling",
+      "label": "业务上下文",
+      "visits": 83
+    },
+    {
+      "id": "runtime-status",
+      "label": "运行状态",
+      "visits": 75
+    },
+    {
+      "id": "system-settings",
+      "label": "系统设置",
+      "visits": 52
+    },
+    {
+      "id": "connections",
+      "label": "数据接入",
+      "visits": 41
+    },
+    {
+      "id": "publish",
+      "label": "语义发布",
+      "visits": 28
+    }
+  ],
+  "menus": [
+    {
+      "id": "semantic-catalog",
+      "label": "语义资产",
+      "visits": 56
+    },
+    {
+      "id": "admin-roles",
+      "label": "角色权限",
+      "visits": 50
+    },
+    {
+      "id": "eval-runs",
+      "label": "运行历史",
+      "visits": 50
+    },
+    {
+      "id": "admin-agents",
+      "label": "Agent",
+      "visits": 42
+    },
+    {
+      "id": "admin-tokens",
+      "label": "Token 凭据",
+      "visits": 39
+    },
+    {
+      "id": "connections-overview",
+      "label": "连接概览",
+      "visits": 34
+    },
+    {
+      "id": "eval-cases",
+      "label": "评测用例",
+      "visits": 33
+    },
+    {
+      "id": "admin-config-audit",
+      "label": "配置审计",
+      "visits": 26
+    },
+    {
+      "id": "admin-row-policies",
+      "label": "行权限视图",
+      "visits": 25
+    },
+    {
+      "id": "admin-accounts",
+      "label": "登录账户",
+      "visits": 23
+    },
+    {
+      "id": "admin-ops-steps",
+      "label": "运维步骤",
+      "visits": 23
+    },
+    {
+      "id": "overview",
+      "label": "系统概览",
+      "visits": 21
+    },
+    {
+      "id": "eval-security-candidates",
+      "label": "安全评测候选",
+      "visits": 20
+    },
+    {
+      "id": "ops-calls",
+      "label": "调用监控",
+      "visits": 19
+    },
+    {
+      "id": "publish-history",
+      "label": "发布记录",
+      "visits": 18
+    },
+    {
+      "id": "admin-mcp-playground",
+      "label": "MCP 调试台",
+      "visits": 18
+    },
+    {
+      "id": "admin-branding",
+      "label": "品牌外观",
+      "visits": 16
+    },
+    {
+      "id": "admin-audit",
+      "label": "访问日志",
+      "visits": 15
+    },
+    {
+      "id": "eval-field-questions",
+      "label": "现场提问",
+      "visits": 15
+    },
+    {
+      "id": "admin-access-map",
+      "label": "访问关系图",
+      "visits": 14
+    },
+    {
+      "id": "semantic-skills",
+      "label": "业务 Skill",
+      "visits": 14
+    },
+    {
+      "id": "admin-version",
+      "label": "版本信息",
+      "visits": 13
+    },
+    {
+      "id": "eval-monitor",
+      "label": "趋势监控",
+      "visits": 13
+    },
+    {
+      "id": "semantic-wiki",
+      "label": "业务 Wiki",
+      "visits": 13
+    },
+    {
+      "id": "admin-governance",
+      "label": "使用概况",
+      "visits": 12
+    },
+    {
+      "id": "publish-workbench",
+      "label": "发布工作台",
+      "visits": 10
+    },
+    {
+      "id": "connections-enabled-tables",
+      "label": "启用表范围",
+      "visits": 7
+    }
+  ],
+  "pages": [
+    {
+      "id": "eval-run-detail",
+      "label": "运行详情",
+      "visits": 27
+    },
+    {
+      "id": "config-audit",
+      "label": "配置审计",
+      "visits": 26
+    },
+    {
+      "id": "agent-detail",
+      "label": "Agent 详情",
+      "visits": 24
+    },
+    {
+      "id": "admin-accounts",
+      "label": "登录账户",
+      "visits": 23
+    },
+    {
+      "id": "issue-token",
+      "label": "签发 Token",
+      "visits": 23
+    },
+    {
+      "id": "admin-ops-steps",
+      "label": "运维步骤",
+      "visits": 23
+    },
+    {
+      "id": "eval-runs",
+      "label": "运行历史",
+      "visits": 23
+    },
+    {
+      "id": "catalog",
+      "label": "语义资产",
+      "visits": 22
+    },
+    {
+      "id": "overview",
+      "label": "系统概览",
+      "visits": 21
+    },
+    {
+      "id": "eval-security-candidates",
+      "label": "安全评测候选",
+      "visits": 20
+    },
+    {
+      "id": "role-detail",
+      "label": "角色详情",
+      "visits": 20
+    },
+    {
+      "id": "eval-case-editor",
+      "label": "评测用例编辑",
+      "visits": 20
+    },
+    {
+      "id": "table-editor",
+      "label": "表语义编辑",
+      "visits": 19
+    },
+    {
+      "id": "ops-calls",
+      "label": "调用监控",
+      "visits": 19
+    },
+    {
+      "id": "connections",
+      "label": "连接概览",
+      "visits": 19
+    },
+    {
+      "id": "publish-history",
+      "label": "发布记录",
+      "visits": 18
+    },
+    {
+      "id": "admin-authorization-summary",
+      "label": "授权摘要",
+      "visits": 18
+    },
+    {
+      "id": "admin-agents",
+      "label": "Agent",
+      "visits": 18
+    },
+    {
+      "id": "mcp-playground",
+      "label": "MCP 调试台",
+      "visits": 18
+    },
+    {
+      "id": "role-create",
+      "label": "新建角色",
+      "visits": 17
+    },
+    {
+      "id": "help",
+      "label": "帮助中心",
+      "visits": 16
+    },
+    {
+      "id": "admin-branding",
+      "label": "品牌外观",
+      "visits": 16
+    },
+    {
+      "id": "admin-tokens",
+      "label": "Token 凭据",
+      "visits": 16
+    },
+    {
+      "id": "admin-audit",
+      "label": "访问日志",
+      "visits": 15
+    },
+    {
+      "id": "joins",
+      "label": "关联关系",
+      "visits": 15
+    },
+    {
+      "id": "connection-test",
+      "label": "连通测试",
+      "visits": 15
+    },
+    {
+      "id": "eval-field-questions",
+      "label": "现场提问",
+      "visits": 15
+    },
+    {
+      "id": "admin-access-map",
+      "label": "访问关系图",
+      "visits": 14
+    },
+    {
+      "id": "admin-row-policy-templates",
+      "label": "行策略模板",
+      "visits": 14
+    },
+    {
+      "id": "skills",
+      "label": "业务 Skill",
+      "visits": 14
+    },
+    {
+      "id": "admin-version",
+      "label": "版本信息",
+      "visits": 13
+    },
+    {
+      "id": "admin-roles",
+      "label": "角色权限",
+      "visits": 13
+    },
+    {
+      "id": "eval-cases",
+      "label": "评测用例",
+      "visits": 13
+    },
+    {
+      "id": "eval-monitor",
+      "label": "趋势监控",
+      "visits": 13
+    },
+    {
+      "id": "wiki",
+      "label": "业务 Wiki",
+      "visits": 13
+    },
+    {
+      "id": "admin-usage",
+      "label": "使用概况",
+      "visits": 12
+    },
+    {
+      "id": "admin-row-policies",
+      "label": "行权限视图",
+      "visits": 11
+    },
+    {
+      "id": "publish-workbench",
+      "label": "发布工作台",
+      "visits": 10
+    },
+    {
+      "id": "enabled-tables",
+      "label": "启用表范围",
+      "visits": 7
+    }
+  ]
+}

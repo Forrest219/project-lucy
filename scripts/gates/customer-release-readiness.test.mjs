@@ -7,7 +7,12 @@ import { after, describe, it } from "node:test";
 import { REPO_ROOT, EXIT_CODES } from "../e2e/lib/common.mjs";
 import { prepareEnvironment } from "../e2e/prepare-environment.mjs";
 import { collectGateResults } from "./collect-gate-results.mjs";
-import { READINESS_STEPS, decideReadiness, reconcileChild } from "./customer-release-readiness.mjs";
+import {
+  READINESS_STEPS,
+  decideReadiness,
+  gateReadinessWithMcpCompatibility,
+  reconcileChild
+} from "./customer-release-readiness.mjs";
 import { statusFromExitCode } from "./record-gate-result.mjs";
 
 const SCRIPT = path.join(REPO_ROOT, "scripts/gates/customer-release-readiness.mjs");
@@ -117,6 +122,37 @@ describe("customer-release-readiness (the only customer aggregate gate)", () => 
     assert.equal(reconcileChild({ jsonStatus: "passed", exitCode: 3 }).status, "failed");
     assert.equal(reconcileChild({ jsonStatus: "collect", exitCode: 3 }).status, "collect");
     for (const [status, code] of Object.entries(EXIT_CODES)) assert.equal(reconcileChild({ jsonStatus: status, exitCode: code }).problem, null);
+  });
+
+  it("P1-53 MCP compatibility gate: missing evidence or ci-subset cannot set releaseReady=true", async () => {
+    assert.ok(READINESS_STEPS.some((s) => /MCP upgrade-compatibility/i.test(s)));
+    const { run } = await makeRun("release");
+    const gatedMissing = gateReadinessWithMcpCompatibility({
+      runDir: run.paths.runDir,
+      verdict: { status: "passed", releaseReady: true, problems: [], exitCode: 0 }
+    });
+    assert.equal(gatedMissing.releaseReady, false);
+    assert.ok(gatedMissing.mcpCompatibility);
+
+    const { verdict } = decideReadiness({
+      run,
+      candidate,
+      mode: "release",
+      ciSubset: true,
+      applyMcpGate: ({ verdict: v }) => ({
+        ...v,
+        releaseReady: false,
+        status: "blocked",
+        exitCode: 2,
+        problems: [
+          ...(v.problems ?? []),
+          { severity: "blocked", code: "ci_subset_no_release", message: "CI subset must not set releaseReady=true" }
+        ],
+        mcpCompatibility: { status: "BLOCKED", releaseReady: false, problems: [] }
+      })
+    });
+    assert.equal(verdict.releaseReady, false);
+    assert.ok(verdict.problems.some((p) => p.code === "ci_subset_no_release"));
   });
 });
 

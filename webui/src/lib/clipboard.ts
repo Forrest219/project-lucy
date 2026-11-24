@@ -54,21 +54,29 @@ function execCommandFallback(text: string): ClipboardCopyResult {
   const savedRanges: Range[] = [];
   if (selection) {
     for (let i = 0; i < selection.rangeCount; i += 1) {
-      savedRanges.push(selection.getRangeAt(i));
+      savedRanges.push(selection.getRangeAt(i).cloneRange());
     }
   }
+  const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  // Inside an open Radix dialog/drawer the focus trap pulls focus back from any
+  // element outside it, which would empty the selection again — stay inside.
+  const host = previousFocus?.closest('[role="dialog"], [role="alertdialog"]') ?? document.body;
 
-  document.body.appendChild(textarea);
+  host.appendChild(textarea);
   try {
-    // Move the selection onto the textarea instead of focusing it, so the
-    // user's caret and focus stay exactly where they were.
-    if (selection) {
-      selection.removeAllRanges();
-      const range = document.createRange();
-      range.selectNodeContents(textarea);
-      selection.addRange(range);
-    } else {
-      textarea.select();
+    // `execCommand("copy")` copies the focused control's selection and still
+    // returns `true` when that selection is empty. A Range over the textarea's
+    // contents is NOT a selection inside a form control (Chromium reports an
+    // empty one), so focus the textarea and select its text explicitly.
+    textarea.focus({ preventScroll: true });
+    textarea.select();
+    textarea.setSelectionRange(0, textarea.value.length);
+    const selectedAll =
+      document.activeElement === textarea &&
+      textarea.selectionStart === 0 &&
+      textarea.selectionEnd === textarea.value.length;
+    if (!selectedAll) {
+      return { ok: false, reason: "exec-command-rejected" };
     }
 
     const copied = document.execCommand("copy");
@@ -76,7 +84,8 @@ function execCommandFallback(text: string): ClipboardCopyResult {
   } catch {
     return { ok: false, reason: "exec-command-threw" };
   } finally {
-    document.body.removeChild(textarea);
+    host.removeChild(textarea);
+    previousFocus?.focus({ preventScroll: true });
     if (selection) {
       selection.removeAllRanges();
       for (const range of savedRanges) {

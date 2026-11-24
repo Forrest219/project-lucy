@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { parse, stringify } from "yaml";
+import { parse } from "yaml";
+import { stringifySafe } from "../yaml-safe";
 import { resolveProjectRoot } from "../project.js";
 import { auditedWriteFile } from "../admin/config-audit-write.js";
 import { normalizeAccountEmail } from "./account-email.js";
@@ -370,7 +371,7 @@ export async function saveAdminsConfig(
   }
 ): Promise<void> {
   const projectRoot = await resolveProjectRoot();
-  const content = stringify(
+  const content = stringifySafe(
     {
       version: config.version || "1",
       admins: config.admins.map((a) => ({

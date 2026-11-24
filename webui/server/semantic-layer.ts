@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
-import { Document, isMap, parseDocument, Scalar, YAMLMap, YAMLSeq, type ParsedNode } from "yaml";
+import { Document, isMap, parseDocument, Scalar, YAMLMap, YAMLParseError as YamlSyntaxError, YAMLSeq, type ParsedNode } from "yaml";
+import { readCatalogYaml } from "./catalog-yaml-cache";
 import { computeCompletion } from "./completion";
 import { previewDiff } from "./diff";
 import { assertReadable, ForbiddenPathError, safeWrite } from "./fs-safe";
@@ -282,6 +283,16 @@ async function readYamlDocument(projectRoot: string, relPath: string): Promise<{
   return { doc: parseYaml(text, relPath), text };
 }
 
+async function readCatalogRecord(projectRoot: string, relPath: string): Promise<Record<string, unknown>> {
+  const absPath = await assertReadable(await loadContentPaths(), projectRoot, relPath);
+  try {
+    return valueAsRecord(await readCatalogYaml(absPath, { json: true }));
+  } catch (error) {
+    if (error instanceof YamlSyntaxError) throw new YamlParseError(`Failed to parse ${relPath}: ${error.message}`);
+    throw error;
+  }
+}
+
 async function listSchemaFiles(projectRoot: string): Promise<SchemaFile[]> {
   const base = (await loadContentPaths()).semanticLayer;
   const connections = await readdir(base, { withFileTypes: true }).catch(() => []);
@@ -320,8 +331,8 @@ async function listSchemaFiles(projectRoot: string): Promise<SchemaFile[]> {
 async function readOverlay(projectRoot: string, conn: string, table: string): Promise<Record<string, unknown>> {
   const relPath = path.posix.join("semantic-layer", conn, `${table}.yaml`);
   try {
-    const { doc } = await readYamlDocument(projectRoot, relPath);
-    return valueAsRecord(doc.toJSON());
+    countEntryPerf("overlayReads");
+    return await readCatalogRecord(projectRoot, relPath);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return {};
@@ -407,14 +418,13 @@ function modelFromTable(
   };
 }
 
-type ParsedSchemaFile = { file: SchemaFile; doc: Document; tables: Record<string, unknown> };
+type ParsedSchemaFile = { file: SchemaFile; tables: Record<string, unknown> };
 
 async function readSchemaFiles(projectRoot: string): Promise<ParsedSchemaFile[]> {
   const parsed: ParsedSchemaFile[] = [];
   for (const file of await listSchemaFiles(projectRoot)) {
-    const { doc } = await readYamlDocument(projectRoot, file.relPath);
-    const root = valueAsRecord(doc.toJSON());
-    parsed.push({ file, doc, tables: valueAsRecord(root.tables) });
+    const root = await readCatalogRecord(projectRoot, file.relPath);
+    parsed.push({ file, tables: valueAsRecord(root.tables) });
   }
   return parsed;
 }
@@ -438,12 +448,23 @@ export type SourcesListing = {
 };
 
 /** Spec 174 §3.1 — tables and manifestSchemas derived from one Manifest scan. */
-export async function listSourcesWithManifests(projectRoot: string): Promise<SourcesListing> {
+export type ListSourcesOptions = {
+  /**
+   * 跳过「按 Agent 统计可用数」。该统计会为每个 Agent 编译一遍权限（宽目录下数百毫秒），
+   * 只有管理端列表展示需要；MCP 拒绝路径的修复提示只读 completion／measureCount（P1-37 U4）。
+   * 跳过时 `authorizedAgentCount` 恒为 0、`authorizedCountsState` 为 `unavailable`，不得用于展示。
+   */
+  skipAuthorizedCounts?: boolean;
+};
+
+export async function listSourcesWithManifests(
+  projectRoot: string,
+  options: ListSourcesOptions = {}
+): Promise<SourcesListing> {
   type Pending = {
     file: SchemaFile;
     table: string;
     tableValue: unknown;
-    tableNode: ParsedNode | null;
     overlay: Record<string, unknown>;
     overlayMtime: Date | null;
   };
@@ -467,7 +488,7 @@ export async function listSourcesWithManifests(projectRoot: string): Promise<Sou
 
   const schemaFiles = await timeAsync("manifest", () => readSchemaFiles(projectRoot));
   await timeAsync("overlay", async () => {
-    for (const { file, doc, tables } of schemaFiles) {
+    for (const { file, tables } of schemaFiles) {
       for (const [table, tableValue] of Object.entries(tables)) {
         const overlayMtime = await statOverlay(projectRoot, file.conn, table);
         const overlay = overlayMtime ? await readOverlay(projectRoot, file.conn, table) : {};
@@ -475,7 +496,6 @@ export async function listSourcesWithManifests(projectRoot: string): Promise<Sou
           file,
           table,
           tableValue,
-          tableNode: tableNodeFromDocument(doc, table),
           overlay,
           overlayMtime
         });
@@ -484,7 +504,9 @@ export async function listSourcesWithManifests(projectRoot: string): Promise<Sou
     }
   });
 
-  const authorized = await timeAsync("permissions", () => computeAuthorizedAgentCounts(projectRoot, authorizedInputs));
+  const authorized: Awaited<ReturnType<typeof computeAuthorizedAgentCounts>> = options.skipAuthorizedCounts
+    ? { counts: new Map(), state: "unavailable", policyInputs: null }
+    : await timeAsync("permissions", () => computeAuthorizedAgentCounts(projectRoot, authorizedInputs));
   const authorizedCounts = authorized.counts;
 
   const summaries: SourceSummary[] = pending.map((entry) => {
@@ -500,7 +522,7 @@ export async function listSourcesWithManifests(projectRoot: string): Promise<Sou
       entry.table,
       entry.file.relPath,
       entry.tableValue,
-      entry.tableNode,
+      null,
       entry.overlay
     );
 
@@ -567,8 +589,8 @@ export function sourcesDisplayMeta(
   };
 }
 
-export async function listSources(projectRoot: string): Promise<SourceSummary[]> {
-  return (await listSourcesWithManifests(projectRoot)).tables;
+export async function listSources(projectRoot: string, options: ListSourcesOptions = {}): Promise<SourceSummary[]> {
+  return (await listSourcesWithManifests(projectRoot, options)).tables;
 }
 
 export async function listManifestSchemas(projectRoot: string): Promise<ManifestSchemaSummary[]> {
@@ -605,8 +627,7 @@ async function readYamlRecordIfPresent(
   relPath: string
 ): Promise<Record<string, unknown> | null> {
   try {
-    const { doc } = await readYamlDocument(projectRoot, relPath);
-    return valueAsRecord(doc.toJSON());
+    return await readCatalogRecord(projectRoot, relPath);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw error;

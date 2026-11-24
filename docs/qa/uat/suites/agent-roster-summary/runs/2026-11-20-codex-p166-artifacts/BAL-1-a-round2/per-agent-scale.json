@@ -1,0 +1,1337 @@
+[
+  {
+    "id": "ars_00_a00",
+    "roles": [
+      "ars_00_r00"
+    ],
+    "identityDigest": "e69579d2dedd28beeff8c68c7256449e87a15da1de004ed007d7ee4073f22319",
+    "capabilities": 2100,
+    "sources": 350,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 574818,
+    "normalizedFingerprint": "b5046acb48038abdaf27dd4dd80bd45aed645a457775b1e5adabdc529ebd6d39",
+    "semanticDigest": "eef64179994e4196a347515c5d8bef15b7b7f9bb050f86f6027741da2468b015",
+    "grantProjectionFingerprint": "fb69731eb856d915608ebb895bcb34c0a3d1db5ca5cdfcfafab79100ffd75fa5",
+    "uniqueCapabilities": 2100
+  },
+  {
+    "id": "ars_00_a01",
+    "roles": [
+      "ars_00_r02"
+    ],
+    "identityDigest": "38e43739e2d6017bcd73bb3860ce41249c6abe95f3104509f950a4d6df96c655",
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "normalizedFingerprint": "34fa0b93b63f68d343ba59801368f53b60d45e3a73eeaa7caae599761a40a0be",
+    "semanticDigest": "c9696ef2a8e85fbf01885fc49647e122f3d5396d3482f7bec89e65be38aa5bbd",
+    "grantProjectionFingerprint": "4c6c03e9e781864910204ec2029399ee888427e081d2a04c750acd8ae3bb2b6c",
+    "uniqueCapabilities": 216
+  },
+  {
+    "id": "ars_00_a02",
+    "roles": [
+      "ars_00_r03"
+    ],
+    "identityDigest": "ce951938436fa5930cc6a73cc70529f75eb2afaf97d380f6f0f6fe4d7fd674d1",
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "normalizedFingerprint": "c27bada4ef6ac1150fc20963999d2d965b3467a1472d9e11e9b2f1a0fb1333b4",
+    "semanticDigest": "69dc688e4631424b94bda904344a0ee3df34eee2ad95ebde136bd343f3464b68",
+    "grantProjectionFingerprint": "4c6c03e9e781864910204ec2029399ee888427e081d2a04c750acd8ae3bb2b6c",
+    "uniqueCapabilities": 216
+  },
+  {
+    "id": "ars_00_a03",
+    "roles": [
+      "ars_00_r04"
+    ],
+    "identityDigest": "001cc39479f5e40e551235aa5df9c2844af2f3960c25e12cae53fe7f4d682aa6",
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "normalizedFingerprint": "c5f250a91849406e71635fb5a372b238033652abe26c973780637b1c09f912f5",
+    "semanticDigest": "5d2aa0f6a877964cdde4a5712ee52bcd18b93b962b6cbddc2f4b997685949355",
+    "grantProjectionFingerprint": "4c6c03e9e781864910204ec2029399ee888427e081d2a04c750acd8ae3bb2b6c",
+    "uniqueCapabilities": 216
+  },
+  {
+    "id": "ars_00_a04",
+    "roles": [
+      "ars_00_r05"
+    ],
+    "identityDigest": "5fdafdba081ff0e993e6ad5ab318bf6a7705dfd3973c5dd692ade00d25e94a9f",
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "normalizedFingerprint": "35f078d23c8d7a49499d2913f1565d9e2da8721c2188e10d804898329653152e",
+    "semanticDigest": "10531751989998ae308a6254f118eb64e164ed1937972298822ad1e235adcf60",
+    "grantProjectionFingerprint": "4c6c03e9e781864910204ec2029399ee888427e081d2a04c750acd8ae3bb2b6c",
+    "uniqueCapabilities": 216
+  },
+  {
+    "id": "ars_00_a05",
+    "roles": [
+      "ars_00_r06"
+    ],
+    "identityDigest": "90423787c3e14765efa9a286a3a8df56ea293fb07aee167b0e73ce35f2e7755b",
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "normalizedFingerprint": "917b12acd6b1c0b9dc1d2e731d16432d38a927f62b835499275c1c131c0a179d",
+    "semanticDigest": "9d21eed4915745193d0c13c682af235b3cad822beddf474bfcb9a413a9dddda7",
+    "grantProjectionFingerprint": "4c6c03e9e781864910204ec2029399ee888427e081d2a04c750acd8ae3bb2b6c",
+    "uniqueCapabilities": 216
+  },
+  {
+    "id": "ars_00_a06",
+    "roles": [
+      "ars_00_r07"
+    ],
+    "identityDigest": "3c0db7502e9f9aaa6ae593f293e56e40d5c363493ec9e8ff85320341199344bb",
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "normalizedFingerprint": "635a412120b551173c3282626f15b8ac7b279e8f045342ae41e731f4c48e5033",
+    "semanticDigest": "54b873eb322cf8ad2f638c77547615a132815d106cf70c7d0ec4447e02ba3773",
+    "grantProjectionFingerprint": "4c6c03e9e781864910204ec2029399ee888427e081d2a04c750acd8ae3bb2b6c",
+    "uniqueCapabilities": 216
+  },
+  {
+    "id": "ars_00_a07",
+    "roles": [
+      "ars_00_r08"
+    ],
+    "identityDigest": "dc8a4d745cd27c638b3574312733e0046e062644d59626aa6fb765c5ca01b671",
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "normalizedFingerprint": "acf9897b2748e7133fc14e43d676c62d67c69873667aecba92019ea09dd1ded2",
+    "semanticDigest": "ae414744ef46307092e20585cc543b03af2e887f066c8b5d82f21b356b902835",
+    "grantProjectionFingerprint": "4c6c03e9e781864910204ec2029399ee888427e081d2a04c750acd8ae3bb2b6c",
+    "uniqueCapabilities": 216
+  },
+  {
+    "id": "ars_00_a08",
+    "roles": [
+      "ars_00_r09"
+    ],
+    "identityDigest": "cb8071ef05a2a640755cd6393acfdbd3284b76ed75ebdd02e5be3335e11ec8f0",
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "normalizedFingerprint": "8fa1cc70f9db03ae6e3f12b230f06ad785579aea33de0f01e3657837fd74a464",
+    "semanticDigest": "ffbfce133042e9fd6c3eb1c237840b7bbb12da511dd3220deed4ed82656d918c",
+    "grantProjectionFingerprint": "4c6c03e9e781864910204ec2029399ee888427e081d2a04c750acd8ae3bb2b6c",
+    "uniqueCapabilities": 216
+  },
+  {
+    "id": "ars_00_a09",
+    "roles": [
+      "ars_00_r10"
+    ],
+    "identityDigest": "b1849375f49e67443c23f7a9b3546333eecd105034cd66f80db9bffc34b879ed",
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "normalizedFingerprint": "c0c363fe71c34a5be87f7e64c781fc93c2bfcf78453b5e5fed21fc767e1c2112",
+    "semanticDigest": "91eb6a0ec725623e1aead884f3f13d943b0cdb42cd18c4e1f36817bd62478d49",
+    "grantProjectionFingerprint": "4c6c03e9e781864910204ec2029399ee888427e081d2a04c750acd8ae3bb2b6c",
+    "uniqueCapabilities": 216
+  },
+  {
+    "id": "ars_00_a10",
+    "roles": [
+      "ars_00_r11"
+    ],
+    "identityDigest": "2d8f722de471a1c6ffd64013fab26dd5f79da848820592d1e2db6de729493ad3",
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "normalizedFingerprint": "79fe6978ab6cfb1cb0610684a55e9fb11d55a2779ebda126d8d82d3b5bd3b8b9",
+    "semanticDigest": "4f44eb22a33398bac626d46fdf4c85393134c4ffcba6c0d5949db2be696c0dfd",
+    "grantProjectionFingerprint": "4c6c03e9e781864910204ec2029399ee888427e081d2a04c750acd8ae3bb2b6c",
+    "uniqueCapabilities": 216
+  },
+  {
+    "id": "ars_00_a11",
+    "roles": [
+      "ars_00_r12"
+    ],
+    "identityDigest": "fccb798bd764e8a266a53f526694a0ca0e9403c9b3164e9e2c3c70e13f7b1416",
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "normalizedFingerprint": "dceeafd7c36151ebc11bc5b39e44018a16b9b35e7295a372db3aa1faaad72de3",
+    "semanticDigest": "8eec0753f80dc9937550cabb2ea9cec904959101a05d0c6d21ff6c325d275a67",
+    "grantProjectionFingerprint": "4c6c03e9e781864910204ec2029399ee888427e081d2a04c750acd8ae3bb2b6c",
+    "uniqueCapabilities": 216
+  },
+  {
+    "id": "ars_00_a12",
+    "roles": [
+      "ars_00_r13"
+    ],
+    "identityDigest": "ea2bfbf07c0e8ec38a02af6a672ffb8a13464d319536f9ea1e29552be8222240",
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "normalizedFingerprint": "4a7abc118e508740acce76b8dc2935b99587a7225a2a02ff2adcc0fd933bf554",
+    "semanticDigest": "5c459f6e2ef294b912890dc41c7d8f336bdd48a62813d7820213b6c0d611cf5e",
+    "grantProjectionFingerprint": "4c6c03e9e781864910204ec2029399ee888427e081d2a04c750acd8ae3bb2b6c",
+    "uniqueCapabilities": 216
+  },
+  {
+    "id": "ars_00_a13",
+    "roles": [
+      "ars_00_r14"
+    ],
+    "identityDigest": "3771d3ae5c39331e3f7ee4fe7c051f521c40f14a49ab6da884f7a6f6daa68abd",
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "normalizedFingerprint": "9da12f39910d62e17882b8001297ad563185561a8109e2bb84f8370746b92f2e",
+    "semanticDigest": "80525e7e51bdb9116414c85201271297a58fcac04bc7e40c7ee30835305fe860",
+    "grantProjectionFingerprint": "4c6c03e9e781864910204ec2029399ee888427e081d2a04c750acd8ae3bb2b6c",
+    "uniqueCapabilities": 216
+  },
+  {
+    "id": "ars_00_a14",
+    "roles": [
+      "ars_00_r15"
+    ],
+    "identityDigest": "d4f76f8871216eaaafdc68d11f5c7c677b527849632f13d409b5dc9c47a4ecd2",
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "normalizedFingerprint": "62b8b93259afbf6414e4d84d6ba5dfa5ebd5ebed70efa23b468367b18226a9a6",
+    "semanticDigest": "c028935bf7795d4c6e41b1d094518a6b060d6b5689c019819cc26a4bc27717c4",
+    "grantProjectionFingerprint": "4c6c03e9e781864910204ec2029399ee888427e081d2a04c750acd8ae3bb2b6c",
+    "uniqueCapabilities": 216
+  },
+  {
+    "id": "ars_00_a15",
+    "roles": [
+      "ars_00_r16"
+    ],
+    "identityDigest": "f0c6dd791e8d609755368feaba29bf78afd5093a38bd1e4454161cd573b89be7",
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "normalizedFingerprint": "ae9c6e4044d5602367b1683debcd485aae2027a39b9f12ec4de6bc70d265c2a0",
+    "semanticDigest": "2da92a349e9684cd1260ffec6ef864d04ef42457db4dd5c48a378193716f07e0",
+    "grantProjectionFingerprint": "4c6c03e9e781864910204ec2029399ee888427e081d2a04c750acd8ae3bb2b6c",
+    "uniqueCapabilities": 216
+  },
+  {
+    "id": "ars_00_a16",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r17"
+    ],
+    "identityDigest": "a4172181c001f4bb57061de76bfb16434f7bbe5b4c9e803d8322a81392a57ab3",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 126031,
+    "normalizedFingerprint": "2799e2fa40cccabfdc749278d64fe8a521225fae44c1fa4d04ed7d5194173854",
+    "semanticDigest": "75662980daf7f7a0e3ac8ecbef593c5b1f7cbd2130372b39f18e7fb7dae1a548",
+    "constraints": {
+      "sources": [
+        {
+          "connection": "ars_00_c0",
+          "schema": "ars_00",
+          "names": [
+            "ars_00_source_000"
+          ],
+          "predicates": [
+            {
+              "field": "department",
+              "op": "eq",
+              "value": "Finance"
+            }
+          ]
+        }
+      ]
+    },
+    "grantProjectionFingerprint": "2bc43350da29b93b1ade82800094cd1130bb1f49c8c35dd7672d3cd17c030273",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a17",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r18"
+    ],
+    "identityDigest": "c02458f4dd2a538d49ed5e5b16d75edf9b2c52372e29749060dd83621a26fec6",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 126031,
+    "normalizedFingerprint": "4ddb34dcd1e7a268430425cc1526c2d31d903ce98f6a41c61d861eed4eb917b3",
+    "semanticDigest": "b4ac06a7a1314320137c7478b06c3af44c84b87b7cd9b0fb0616be03b4fe1fdb",
+    "constraints": {
+      "sources": [
+        {
+          "connection": "ars_00_c0",
+          "schema": "ars_00",
+          "names": [
+            "ars_00_source_000"
+          ],
+          "predicates": [
+            {
+              "field": "department",
+              "op": "eq",
+              "value": "Finance"
+            }
+          ]
+        }
+      ]
+    },
+    "grantProjectionFingerprint": "2bc43350da29b93b1ade82800094cd1130bb1f49c8c35dd7672d3cd17c030273",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a18",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r19"
+    ],
+    "identityDigest": "f0fcf307760c1a14aa5c4a09d94fef9d75af4c2f252399fbd987e43513126c1e",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 126031,
+    "normalizedFingerprint": "7aed08b0ef915f8b457f4183d9eb634c9e916965967cb4ff1b341c2a541903f2",
+    "semanticDigest": "c7663efa3900c9ed8556f3f1842bd1ee81119241ead382ea4a7db290a775c16c",
+    "constraints": {
+      "sources": [
+        {
+          "connection": "ars_00_c0",
+          "schema": "ars_00",
+          "names": [
+            "ars_00_source_000"
+          ],
+          "predicates": [
+            {
+              "field": "department",
+              "op": "eq",
+              "value": "Finance"
+            }
+          ]
+        }
+      ]
+    },
+    "grantProjectionFingerprint": "2bc43350da29b93b1ade82800094cd1130bb1f49c8c35dd7672d3cd17c030273",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a19",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r20"
+    ],
+    "identityDigest": "1a59291ea92f96128e5f75064c9a2d83f64c3b8d17e1477a3cb745d219128614",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 126031,
+    "normalizedFingerprint": "0fc05fb1d2eb46a3241b196f2c2f7858e7562db8ab3cde3b07d2a7668541ebdd",
+    "semanticDigest": "f5eef8816eec159e02d6eab863a11cfc08e2290a7412d08d899de6faee639996",
+    "constraints": {
+      "sources": [
+        {
+          "connection": "ars_00_c0",
+          "schema": "ars_00",
+          "names": [
+            "ars_00_source_000"
+          ],
+          "predicates": [
+            {
+              "field": "department",
+              "op": "eq",
+              "value": "Finance"
+            }
+          ]
+        }
+      ]
+    },
+    "grantProjectionFingerprint": "2bc43350da29b93b1ade82800094cd1130bb1f49c8c35dd7672d3cd17c030273",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a20",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r21"
+    ],
+    "identityDigest": "69fb2b8ac4539f41a26f951d1a299e0563d364a7e1afcd73c69bc3a2a75ce86b",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 126031,
+    "normalizedFingerprint": "ccb75a0f4a55d8f2468bfc80779dac8aa10bf19289895934b2e21cfe21df9c37",
+    "semanticDigest": "aa4ce0c6c7633bd7a023185c1f9a87e4a49756e63107b7f874f90e3d1f747d8d",
+    "constraints": {
+      "sources": [
+        {
+          "connection": "ars_00_c0",
+          "schema": "ars_00",
+          "names": [
+            "ars_00_source_000"
+          ],
+          "predicates": [
+            {
+              "field": "department",
+              "op": "eq",
+              "value": "Finance"
+            }
+          ]
+        }
+      ]
+    },
+    "grantProjectionFingerprint": "2bc43350da29b93b1ade82800094cd1130bb1f49c8c35dd7672d3cd17c030273",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a21",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r22"
+    ],
+    "identityDigest": "e71f161f68adb58294405baf97342136202bd0dc157a7d55e7af0f020f9fe30d",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 126031,
+    "normalizedFingerprint": "c65f8dd543f171e76e58322bc571c7b6a6c2e0c3e920e742f8fcc7b3567d62a0",
+    "semanticDigest": "2724735e5dc8afbff1901f381ab3da4d962715eaf00257f893c3c6fcb33aaf27",
+    "constraints": {
+      "sources": [
+        {
+          "connection": "ars_00_c0",
+          "schema": "ars_00",
+          "names": [
+            "ars_00_source_000"
+          ],
+          "predicates": [
+            {
+              "field": "department",
+              "op": "eq",
+              "value": "Finance"
+            }
+          ]
+        }
+      ]
+    },
+    "grantProjectionFingerprint": "2bc43350da29b93b1ade82800094cd1130bb1f49c8c35dd7672d3cd17c030273",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a22",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r23"
+    ],
+    "identityDigest": "8774f8abcca52e97feaa78b0473c6e654e9ab1b96a074032eed499f1153f8434",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 126031,
+    "normalizedFingerprint": "6adcda3038b1c5e0914bad555b5c833c2da38e7ade4259481a2be51be79e2c0c",
+    "semanticDigest": "8bb32cd9101b716d53d0ae834401bb946d33326b314b335aecea61660f4bc874",
+    "constraints": {
+      "sources": [
+        {
+          "connection": "ars_00_c0",
+          "schema": "ars_00",
+          "names": [
+            "ars_00_source_000"
+          ],
+          "predicates": [
+            {
+              "field": "department",
+              "op": "eq",
+              "value": "Finance"
+            }
+          ]
+        }
+      ]
+    },
+    "grantProjectionFingerprint": "2bc43350da29b93b1ade82800094cd1130bb1f49c8c35dd7672d3cd17c030273",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a23",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r24"
+    ],
+    "identityDigest": "3b5575859097fe819b55c8d5964ed2b0a497471e256e388d52f06eea8fccdaf1",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 126031,
+    "normalizedFingerprint": "3954076aa3c181bf7a771d870bf2cd1f53cc85207b526dad4760e5001a411876",
+    "semanticDigest": "cd488e932ef479812f52f9be01343b592788eac0df4190e8a8f813f3634e7746",
+    "constraints": {
+      "sources": [
+        {
+          "connection": "ars_00_c0",
+          "schema": "ars_00",
+          "names": [
+            "ars_00_source_000"
+          ],
+          "predicates": [
+            {
+              "field": "department",
+              "op": "eq",
+              "value": "Finance"
+            }
+          ]
+        }
+      ]
+    },
+    "grantProjectionFingerprint": "2bc43350da29b93b1ade82800094cd1130bb1f49c8c35dd7672d3cd17c030273",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a24",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r25"
+    ],
+    "identityDigest": "2faa9afb37556e75219a99828db18ab9b98b77c8d981a322a52a0171eae6ad41",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "79dedc27ca1119705c2656fd62e03383bb7b05de554dcd8109ec57caab1f9a68",
+    "semanticDigest": "6a1412d9c5dabca702fdc0d6aca51b5b4cf3e714f6e9ff0d9cd1f9446519c0de",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a25",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r26"
+    ],
+    "identityDigest": "56fe19419ca349ed5efcaf058227294c2b5ffd84ec6550acc58c6f9f7756410d",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "312b47f10e70f9f03e3348b5501d80cd2f100604ce7a6b6573c154f0d9c12eee",
+    "semanticDigest": "5d5f8c9cda9f716b3d7700c853efee344c7d1d65c1884fcd094da577d3ec0d1c",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a26",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r27"
+    ],
+    "identityDigest": "24827b7b85a91726f289425d3becbcfebf8c2e2981386e3ef2193c4f47141c5a",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "23d60c694393685ffe18e59e844db18ea71744516a9ba09df350399d003055c3",
+    "semanticDigest": "bd590ba1adc42827db0cb989628c17a0df6cd86a60e45f5bc4af0cda477ac711",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a27",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r28"
+    ],
+    "identityDigest": "82e7dd76ca94bbb9bec99b2cf5845df804f8798e5ce3daca7f6e84722a3c5329",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "315ae8e172fe74004bddd569e0a2cdda06157cdf3b1d751764b3ce6e763a4393",
+    "semanticDigest": "e09db77c8d3f4ec942c498b90c7fd9999f216b8948cbc275d329096170e6f156",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a28",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r29"
+    ],
+    "identityDigest": "59c73492599304f12f5a806680b4c49af42f15eff3c732138efed49a50f10044",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "ac5223ff6abac613be86eb5f91cbd19ac1e22b94d2d9f55661198944ebacda20",
+    "semanticDigest": "342be966799abaa67e7fe7faec43b79681cbf5d92f9239c14274c8d2fa06d006",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a29",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r30"
+    ],
+    "identityDigest": "4be8b6a9bd5c8e96864b31e7760b16c7264352db1a1cd98f4d2064510b046039",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "87489610f4fb59d0f7888ce6a34d2053c5f155a212624d301a95649e7238aed4",
+    "semanticDigest": "21470d025aca21f7246ca0f57f92586ca99fc2bda99d0162fbbcd3f4ac0fc555",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a30",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r31"
+    ],
+    "identityDigest": "94c6e788d48212a72b96bee513aa75650a5bbf33b32b7edac7f5a11ea4af4e9e",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "0104e623412d0cc263b83257e02352ed9519edbaf07677d5c455601b4fce6662",
+    "semanticDigest": "783c05e526628bebd05b3f93d3516eeea6c5959f29e02536a282ca928f9a2631",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a31",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r32"
+    ],
+    "identityDigest": "99eb2704e524bdbd9db740a758f4311215ef0017f233839e7ffd8ee0693120e6",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "9d1ccf04d2b52b0e4c95f572cbbf07896e8028fd7ef83c752a66aa5570bffef8",
+    "semanticDigest": "136009bb7b7db984fb619878156f551e99766ea19360bfdeaa8b44ebc202f523",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a32",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r33"
+    ],
+    "identityDigest": "3b589cb60ec869d2e2b1b12632846617d4b75b2b197cdd88054fc6e02bc500bc",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "f2ae33c3b013094f30e0fbaebcd31e1a809d48d0935c1a76861b2135a30955c6",
+    "semanticDigest": "4916d6330e07e09d15e6087b61361695bec74713029c240d97630c6c04235a82",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a33",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r34"
+    ],
+    "identityDigest": "c5e1da59346b0feb6bdb420e4e3ecffbec8f7b5bed279a9e3d0971b339f3f43c",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "f549f6de8a158e9fed56715e3ab942c9da751d83616206aaa0fbe2e7676f0837",
+    "semanticDigest": "c79484c766b89559165d402fc3c0c7f517b4b4bbeb191c1f8b6ee4db3cca22de",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a34",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r35"
+    ],
+    "identityDigest": "346852dd19b686f03125c17176bc6ec22586c5a0728d24651c4087c3afdc9a72",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "363899faee9c98b811896dcb8314ec5b321f30b49ada6851f083303ee33b7358",
+    "semanticDigest": "a397fb297a036bd64de765964c5c33b4f96b9426ccafe6d47f292dbb1a7462d9",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a35",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r36"
+    ],
+    "identityDigest": "ca79d0e90272f55508d7dd4ba26b8340d0e5b9d96dd798aca124880b76739f28",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "73aea9da14866033bb68f154826f17e1bde46d6e1bd9121181835cfb62f77698",
+    "semanticDigest": "73c0c94c6532d422cf28ef8850faf53d9f73e03822f8042b3a0580d28cb1ba80",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a36",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r37"
+    ],
+    "identityDigest": "516c0765dc82ff636fb6b85a39c62c7c5a4fb601d529b824db13f4b6d3ecdf8e",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "07456e2a6631e5b0a25667891d92efeee22a42f4e5bb9707d30f41be9955e20c",
+    "semanticDigest": "dc67722cdef17d495dcaf54450b9b8d1ff2f239f682cda9ba8771b361a1e6c55",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a37",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r38"
+    ],
+    "identityDigest": "29d3a86737b0fa7603e1340db407ce2d477ef2be3622ef3a449cb83e3cfa757c",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "3204855f3e7118e5374af265ed28f451407efff5eb2f823b3c9c8e4a3a1985f0",
+    "semanticDigest": "048e0fbef83b71bd150078424f1f30927db9bd78824e7cb23e51c4dd69989582",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a38",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r39"
+    ],
+    "identityDigest": "4fca0bedab86a53ab1f456cd71635c8ba270de490e5593650bf7208f6c0e97de",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "fb3c2898e3e6d151d2348404a172fc99067abcabc5edbaec9cca4f0926aaa41d",
+    "semanticDigest": "0277c75e9f1f2ff3b484477ac5233c062551ca7bbf901a68799c0d389402f930",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a39",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r40"
+    ],
+    "identityDigest": "fd4e2851700d606779c6e622d593685c81f946d6516ab69f9f5f2b1cb36a4cae",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "16aecc78639fa44ec1dc285fd26510bda38c040814c84d626075378a41c84bb0",
+    "semanticDigest": "bfadc8ee37d3360ac6ec07ae38be64de42439f45d208fa4c8f30d51d3d0c92ed",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a40",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r41"
+    ],
+    "identityDigest": "6e14afc9d71258dc98266339382806f365654057775b8b0f4730c0518a14523e",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "2137050eba686a23c5958c28984c8686383463a9f874b2f64f8810233711ca3f",
+    "semanticDigest": "9d946711699af4fef7f2218058e117a78fb777e39a446fcba780a874c63d1db7",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a41",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r42"
+    ],
+    "identityDigest": "a276fc811876e75c20312484a2bd6955321ccd19a279687a3cf9d1e8406a9ef5",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "ef9ceb3cc1f5075f96675bcf03a0fbd05b346ec36641a8219a0672c2b23dade9",
+    "semanticDigest": "2ae89a6930af3795b8ba633a9526f36b87e9ee6d27457e0afd41e905c83bb7de",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a42",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r43"
+    ],
+    "identityDigest": "124acc53802f44ac97aafbe38f991506085fc002fa896a6649598f7c2d963693",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "b3c863640941b1040762fa34f4af55c6a6ab0bb3f54cddff0f22a25cbf6221b0",
+    "semanticDigest": "f68d0c359a3424e6a33564d576b382c8b2364c0df16d6b9a09b137c3ccd30626",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a43",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r44"
+    ],
+    "identityDigest": "83a27773f748f5b674569af720594c777997c6b90dac9684fa5ce6c96cc66599",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "edb5c0ee56e6eee5e669b5a0080a6c522f30b68ec571d89d75bbe840e586a3f8",
+    "semanticDigest": "a9117053f62bde275cf0cdfa9856d782414e8bd3b60a16f4fab636c4364aad76",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a44",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r45"
+    ],
+    "identityDigest": "87a45fca96e825222a35c5be0ec7f2a6f748cf0b42edeaaeed3e7d65dea1befe",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "487bf12007abe3d6a6a8a5f91d2e25995305393811cc833124618a74d29afb89",
+    "semanticDigest": "fcd03841f088bfdf7bd9dcddafc2883bb6fc0bd58aa7632fd9c8220c81b1aa2e",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a45",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r46"
+    ],
+    "identityDigest": "fd64e71cc7214076665b655b4c936e40cd7f2763b1cde147c548b9519186d459",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "ab2920af6c6a5dbf44bb69e3a021956444c4cd85c30b04703187227dc6f7e3e9",
+    "semanticDigest": "657d9021d9b306922e4295f96b35e3c1360bd0ad6d78c518762c03e1eae37901",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a46",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r17"
+    ],
+    "identityDigest": "c40d0374b4aee18162c169f6193ba912fca1f77a0dac47b8bb54f560d10c036d",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "c0c915170e4eaec87f707dfefaedfbeee1cf6a1a6c56dcac9a0fa0146cf3fdb6",
+    "semanticDigest": "4afaa5276dc44b2af3c453f692e76a6af3143481a4e8e426646fc91aaf6c50f0",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a47",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r18"
+    ],
+    "identityDigest": "0658cbc826606aa97ae042f55299c689c2f18a7f2cf3355317d2ba73c77da1cd",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "dece58bf3567ee6605590c06b2584188bb2ba8ba537d068f0e296d4c364bf14a",
+    "semanticDigest": "b28784940e42d4a2de7b0164b1fc1106333a590d7e17336b2e81eb678a089052",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a48",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r19"
+    ],
+    "identityDigest": "678123b00cde3b362bad9837d19a8a97169959adfaaf36bc17424e748f66658c",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "b1ebbc341d1aab66de68e728b4079566657b5e3d329e7fb32f49399b127f28d0",
+    "semanticDigest": "9d2b58455e75083ab6880f9bbc3616ef59519fc0c721c01b81976e514af23c73",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a49",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r20"
+    ],
+    "identityDigest": "2f596659da7c9a6f505962679dde27c75c7380edbf1e636e5baf7bc527bd96c1",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "d546de6618e295a8684bd4d5ef93fa905a09df3dfb66a7c4e381e68442afd044",
+    "semanticDigest": "f24eb19beefba75a5cb123b66611b8fadc9ade27dc2b2f4802bde53b618eb4bd",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a50",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r21"
+    ],
+    "identityDigest": "47398a29daa8c6168040cb032394bfaa1a41d6c0b1d65536b32fced40360bf8a",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "3a01dcc4a6dfde735d3a24d1ef6b8c33de2231a6bc66d64ba7b78292842535ff",
+    "semanticDigest": "1cb2f38ff836791bea13bf306fe0536b660d3b2b78a6f4a9ae675a60c24bc10e",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a51",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r22"
+    ],
+    "identityDigest": "35594bd245f40e5e1830cd2baa481d01a1d671da993bebf891523d867aabb289",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "73fee54d98c6639f68d8e182374ade592cea3c3a82741d776c092ec406236660",
+    "semanticDigest": "694d401f74268b154e50ac1449cdd182571c0138d9fe91345ee9041bad5645f3",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a52",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r23"
+    ],
+    "identityDigest": "fd8aac12ceda8eb8c4a0b255b2aacf132a38a34878464e79a24ecd73c0632dd0",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "3a8537ac4ee5da24f5a3717e640c5592790ae1dfd1bc4a2891668d4910c8325d",
+    "semanticDigest": "8b4dcba08e2e4d084df286977b3b5b06c680a68a825a1e84be158bfdb601a0ca",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a53",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r24"
+    ],
+    "identityDigest": "2b0944143fad7d0ee6314a06c4ac3f0ee78052b64c8c2e82324b59c42fcb3380",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "061ab4811de15f58fe48f8691717fd139f5ae9298edd8c5083bde610c9d0d21b",
+    "semanticDigest": "d0a2d9d03a3d4d04f1cf4630201239ecb287e4b9d01ede754c5e396aef43ce01",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a54",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r25"
+    ],
+    "identityDigest": "df2b570d73f2bf3c536c1216098195ad2dd8be92dc2ae6aa01e74a7b51768775",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "79dedc27ca1119705c2656fd62e03383bb7b05de554dcd8109ec57caab1f9a68",
+    "semanticDigest": "6a1412d9c5dabca702fdc0d6aca51b5b4cf3e714f6e9ff0d9cd1f9446519c0de",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a55",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r26"
+    ],
+    "identityDigest": "3bb775f73f984a38fbfa7253c053b98fa80495d86eab64d509fad03a141415c8",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "312b47f10e70f9f03e3348b5501d80cd2f100604ce7a6b6573c154f0d9c12eee",
+    "semanticDigest": "5d5f8c9cda9f716b3d7700c853efee344c7d1d65c1884fcd094da577d3ec0d1c",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a56",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r27"
+    ],
+    "identityDigest": "2e6dc28c6950bc025a7675e1b8d1daf4264118437ada15126d1cdcea999aaa58",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "23d60c694393685ffe18e59e844db18ea71744516a9ba09df350399d003055c3",
+    "semanticDigest": "bd590ba1adc42827db0cb989628c17a0df6cd86a60e45f5bc4af0cda477ac711",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a57",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r28"
+    ],
+    "identityDigest": "99f97d34be4c30017767b99df6a2d0f9ff243f906dc50d055542767e96bbdae4",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "315ae8e172fe74004bddd569e0a2cdda06157cdf3b1d751764b3ce6e763a4393",
+    "semanticDigest": "e09db77c8d3f4ec942c498b90c7fd9999f216b8948cbc275d329096170e6f156",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a58",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r29"
+    ],
+    "identityDigest": "2c6b745cafb3ad3d7f69bf624659ba18c9b59a3c432df2317ca00687842e8a41",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "ac5223ff6abac613be86eb5f91cbd19ac1e22b94d2d9f55661198944ebacda20",
+    "semanticDigest": "342be966799abaa67e7fe7faec43b79681cbf5d92f9239c14274c8d2fa06d006",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a59",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r30"
+    ],
+    "identityDigest": "bb360d3c70616808d90793f7ffa0a74155d9c96e4457e55ce6667cd0e304b06f",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "87489610f4fb59d0f7888ce6a34d2053c5f155a212624d301a95649e7238aed4",
+    "semanticDigest": "21470d025aca21f7246ca0f57f92586ca99fc2bda99d0162fbbcd3f4ac0fc555",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a60",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r31"
+    ],
+    "identityDigest": "8277b8b1f1c86d0b8deacd232828c01bd58afb2635eca07a9f40671650b6cb1c",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "0104e623412d0cc263b83257e02352ed9519edbaf07677d5c455601b4fce6662",
+    "semanticDigest": "783c05e526628bebd05b3f93d3516eeea6c5959f29e02536a282ca928f9a2631",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a61",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r32"
+    ],
+    "identityDigest": "9e51242e06fc338d8ac25e50de79489b00d9f98f92546bfa55c0b492829014e3",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "9d1ccf04d2b52b0e4c95f572cbbf07896e8028fd7ef83c752a66aa5570bffef8",
+    "semanticDigest": "136009bb7b7db984fb619878156f551e99766ea19360bfdeaa8b44ebc202f523",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a62",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r33"
+    ],
+    "identityDigest": "8d4493802b14cf76a63006ae3e86bd5409d74095a8fa7130f2b43b62415728ee",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "f2ae33c3b013094f30e0fbaebcd31e1a809d48d0935c1a76861b2135a30955c6",
+    "semanticDigest": "4916d6330e07e09d15e6087b61361695bec74713029c240d97630c6c04235a82",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a63",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r34"
+    ],
+    "identityDigest": "66116c087358979c58085be73ccfc012cd91c392f9e58201e731a9fb2dd6e6a9",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "f549f6de8a158e9fed56715e3ab942c9da751d83616206aaa0fbe2e7676f0837",
+    "semanticDigest": "c79484c766b89559165d402fc3c0c7f517b4b4bbeb191c1f8b6ee4db3cca22de",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a64",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r35"
+    ],
+    "identityDigest": "db20471b68bec11fcb3050bd79fa8965d24f1b755af99b9b9d8277bd7388bb01",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "363899faee9c98b811896dcb8314ec5b321f30b49ada6851f083303ee33b7358",
+    "semanticDigest": "a397fb297a036bd64de765964c5c33b4f96b9426ccafe6d47f292dbb1a7462d9",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a65",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r36"
+    ],
+    "identityDigest": "1d07a5845b4e059b2e8e2ebe9796c6ced5568150dac4447206611314dacf4179",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "73aea9da14866033bb68f154826f17e1bde46d6e1bd9121181835cfb62f77698",
+    "semanticDigest": "73c0c94c6532d422cf28ef8850faf53d9f73e03822f8042b3a0580d28cb1ba80",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a66",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r37"
+    ],
+    "identityDigest": "1c0d6d15b5b8f412e90483b9735340f4acd5258403dc759c507028e7b3dac54e",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "07456e2a6631e5b0a25667891d92efeee22a42f4e5bb9707d30f41be9955e20c",
+    "semanticDigest": "dc67722cdef17d495dcaf54450b9b8d1ff2f239f682cda9ba8771b361a1e6c55",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a67",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r38"
+    ],
+    "identityDigest": "2ed14b2a95ddeee496a355ef76923b8b405f21b0962842481c116f70aeb5e33a",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "3204855f3e7118e5374af265ed28f451407efff5eb2f823b3c9c8e4a3a1985f0",
+    "semanticDigest": "048e0fbef83b71bd150078424f1f30927db9bd78824e7cb23e51c4dd69989582",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a68",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r39"
+    ],
+    "identityDigest": "8a0d67642230231962f9b59aad591aa958ab01c77ea883a079569557067986ca",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "fb3c2898e3e6d151d2348404a172fc99067abcabc5edbaec9cca4f0926aaa41d",
+    "semanticDigest": "0277c75e9f1f2ff3b484477ac5233c062551ca7bbf901a68799c0d389402f930",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a69",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r40"
+    ],
+    "identityDigest": "a9398b3185b352a4918fe170c720efe34b8d0ac6f984d0c77c2e087701c40385",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "16aecc78639fa44ec1dc285fd26510bda38c040814c84d626075378a41c84bb0",
+    "semanticDigest": "bfadc8ee37d3360ac6ec07ae38be64de42439f45d208fa4c8f30d51d3d0c92ed",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  },
+  {
+    "id": "ars_00_a70",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r41"
+    ],
+    "identityDigest": "8792866af13530037eff189950c92e7ced749b54e568757df88efa85eafc1d56",
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "normalizedFingerprint": "2137050eba686a23c5958c28984c8686383463a9f874b2f64f8810233711ca3f",
+    "semanticDigest": "9d946711699af4fef7f2218058e117a78fb777e39a446fcba780a874c63d1db7",
+    "grantProjectionFingerprint": "9311b6e11e4b82684608b03af69ee5a48463403cd669365ee0427d4318edbf30",
+    "uniqueCapabilities": 180
+  }
+]

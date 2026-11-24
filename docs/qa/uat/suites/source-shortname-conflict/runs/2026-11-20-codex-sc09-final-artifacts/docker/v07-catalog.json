@@ -1,0 +1,16 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 11,
+  "body": {
+    "jsonrpc": "2.0",
+    "id": 32,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\n  \"connections\": [\n    \"hive-1\"\n  ],\n  \"sources\": [\n    {\n      \"connectionId\": \"hive-1\",\n      \"schema\": \"weather\",\n      \"sourceName\": \"city\",\n      \"table\": \"weather.city\",\n      \"description\": null,\n      \"descriptionState\": \"missing\"\n    },\n    {\n      \"connectionId\": \"hive-1\",\n      \"schema\": \"ods\",\n      \"sourceName\": \"ods_city\",\n      \"table\": \"ods.city\",\n      \"description\": null,\n      \"descriptionState\": \"missing\"\n    }\n  ],\n  \"examples\": []\n}"
+        }
+      ]
+    }
+  }
+}

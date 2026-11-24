@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Helm static gates for Lucy K8s chart (H1 in customer-delivery-preflight-checklist).
+# Helm static gates for Lucy K8s chart (H1; see customer-amd64-image-build-checklist).
 #
 # Runs unchanged from BOTH layouts:
 #   repo:     scripts/gates/helm-lucy-gate.sh     chart deploy/k8s/helm/lucy
@@ -161,8 +161,9 @@ assert_universal_contract() {
   assert_present "${render}" "workingDir: /data/lucy"
   assert_present "${render}" "runAsUser: 10001"
   assert_present "${render}" "fsGroup: 10001"
-  assert_present "${render}" "path: /api/health"
-  assert_env_value "${render}" "LUCY_VERSION" "0.25.0"
+  assert_present "${render}" "path: /api/livez"
+  assert_present "${render}" "path: /api/readyz"
+  assert_env_value "${render}" "LUCY_VERSION" "0.30.0"
   assert_env_value "${render}" "LUCY_BUNDLED_KTX_VERSION" "0.16.0"
   # A Secret volume is read-only: it must never shadow the WebUI-writable dir.
   assert_absent "${render}" "mountPath: /data/lucy/.ktx/secrets"

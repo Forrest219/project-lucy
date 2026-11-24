@@ -1,0 +1,100 @@
+{
+  "startedAt": "2026-11-20T05:08:05.230401+00:00",
+  "runnerSha256": "9f6bb5271ed917aeb9f057e36beb252b3a7c7f6977366aafe3d83ed5946ca8bd",
+  "image": "project-lucy:p160-p164-final-v5",
+  "cases": {
+    "UAT-ZB-R0": {
+      "status": "PASS",
+      "detail": "real isolated Docker/MySQL; independent SQL oracle"
+    },
+    "UAT-ZB-01": {
+      "status": "PASS"
+    },
+    "UAT-ZB-02": {
+      "status": "PASS"
+    },
+    "UAT-ZB-03": {
+      "status": "PASS",
+      "variants": [
+        "I0",
+        "I1",
+        "I2",
+        "I3"
+      ],
+      "stages": 3,
+      "sessionsPerStage": 2
+    },
+    "UAT-ZB-04": {
+      "status": "PASS"
+    },
+    "UAT-ZB-05": {
+      "status": "PASS"
+    },
+    "UAT-ZB-06": {
+      "status": "PASS"
+    },
+    "UAT-ZB-07": {
+      "status": "PASS",
+      "revocationVariants": [
+        "draft",
+        "delete"
+      ]
+    },
+    "UAT-ZB-08": {
+      "status": "PASS",
+      "operatorManagementTasks": "public read-only audit API + independent reconciliation"
+    },
+    "UAT-ZB-09": {
+      "status": "PASS"
+    },
+    "UAT-ZB-10": {
+      "status": "PASS",
+      "rounds": [
+        {
+          "round": 1,
+          "baselineP95Ms": 639.791,
+          "candidateP95Ms": 773.366,
+          "p95WithinTolerance": true,
+          "failureCounts": {
+            "baseline": 0,
+            "candidate": 0
+          }
+        },
+        {
+          "round": 2,
+          "baselineP95Ms": 780.151,
+          "candidateP95Ms": 806.683,
+          "p95WithinTolerance": true,
+          "failureCounts": {
+            "baseline": 0,
+            "candidate": 0
+          }
+        },
+        {
+          "round": 3,
+          "baselineP95Ms": 740.149,
+          "candidateP95Ms": 876.858,
+          "p95WithinTolerance": true,
+          "failureCounts": {
+            "baseline": 0,
+            "candidate": 0
+          }
+        }
+      ]
+    },
+    "UAT-ZB-11": {
+      "status": "PASS"
+    },
+    "UAT-ZB-12": {
+      "status": "PASS",
+      "client": "Codex CLI 0.165.0",
+      "actualAnswer": {
+        "order_count": 4,
+        "amount_sum": 100
+      },
+      "hiddenBeginCallObserved": false
+    }
+  },
+  "status": "PASS",
+  "finishedAt": "2026-11-20T05:22:59.948619+00:00"
+}

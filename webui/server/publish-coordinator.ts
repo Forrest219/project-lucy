@@ -2,7 +2,7 @@ import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { assertSemanticWritesOpen } from "./semantic-recovery-journal.js";
+import { assertSemanticWritesOpen, type RecoveryJournal } from "./semantic-recovery-journal.js";
 
 /**
  * Lucy v0.25 — shared single-instance publish coordinator.
@@ -118,6 +118,7 @@ export function publishLockOwnedBy(
 
 export class PublishCoordinatorBusyError extends Error {
   readonly code = "PUBLISH_COORDINATOR_BUSY";
+  readonly statusCode = 503;
 
   constructor(readonly holder: PublishLockHolder | null, readonly requestedKind: PublishEntryKind) {
     super(formatPublishWindowBusy(holder, requestedKind));
@@ -149,16 +150,98 @@ const coordinatorHeld = new AsyncLocalStorage<true>();
  * flag and a lock file that merely exists are not proof of ownership.
  */
 let processPublishHolder: PublishLockHolder | null = null;
+const holderProjects = new WeakMap<PublishLockHolder, string>();
+
+type WriteStageResult = "files_saved" | "failed";
+type PublishWriteStage = {
+  holder: PublishLockHolder;
+  projectRoot: string;
+  journalId: string;
+  releaseId: string;
+  signature: string;
+  settled: Promise<WriteStageResult>;
+  isCurrent(): boolean;
+};
+const publishWriteStages = new Map<string, PublishWriteStage>();
+function writeStageKey(projectRoot: string, journalId: string): string {
+  return JSON.stringify([path.resolve(projectRoot), journalId]);
+}
+function writeTargetSignature(journal: RecoveryJournal): string {
+  return JSON.stringify(journal.entries.map((entry) => ({
+    path: entry.targetPath, digest: entry.expectedNewDigest,
+    surface: entry.surface ?? "content_root", identity: entry.identity
+  })));
+}
+
+/** P1-70: the REAL Manifest writer registers before the WAL can be visible. */
+export function registerPublishWriteStage(
+  holder: PublishLockHolder,
+  input: { projectRoot: string; journal: RecoveryJournal }
+): { filesSaved(): void; failed(): void } {
+  const projectRoot = path.resolve(input.projectRoot);
+  const journal = input.journal;
+  if (!isInsidePublishCoordinator() || processPublishHolder !== holder || holder.kind !== "manifest_upload"
+    || holderProjects.get(holder) !== projectRoot || journal.status !== "open"
+    || journal.phase !== "write_in_progress" || journal.recoveryRequired
+    || journal.operationId !== journal.releaseId || journal.entries.length === 0) {
+    throw new Error("Semantic write registration does not belong to the active Manifest owner");
+  }
+  const key = writeStageKey(projectRoot, journal.journalId);
+  if (publishWriteStages.has(key)) throw new Error("Semantic write journal already registered");
+  let resolve!: (result: WriteStageResult) => void;
+  const settled = new Promise<WriteStageResult>((done) => { resolve = done; });
+  const stage: PublishWriteStage = {
+    holder, projectRoot, journalId: journal.journalId, releaseId: journal.releaseId,
+    signature: writeTargetSignature(journal), settled,
+    isCurrent: () => processPublishHolder === holder && publishWriteStages.get(key) === stage
+  };
+  publishWriteStages.set(key, stage);
+  const emit = (event: string) => console.info("[lucy-semantic-write]", JSON.stringify({
+    event, holderOperationId: holder.operationId, journalId: stage.journalId,
+    releaseId: stage.releaseId, atMs: Date.now(), monoMs: performance.now()
+  }));
+  emit("registered");
+  let ended = false;
+  const finish = (result: WriteStageResult) => {
+    if (ended) return;
+    ended = true;
+    if (publishWriteStages.get(key) === stage) publishWriteStages.delete(key);
+    emit(result);
+    resolve(result);
+  };
+  return { filesSaved: () => finish("files_saved"), failed: () => finish("failed") };
+}
+
+/** No PID, lock file, fresh timestamp or reader inference can grant eligibility. */
+export function matchedActivePublishWriteStages(
+  projectRoot: string, journals: readonly RecoveryJournal[]
+): readonly PublishWriteStage[] | null {
+  if (journals.length === 0) return null;
+  const result: PublishWriteStage[] = [];
+  for (const journal of journals) {
+    const stage = publishWriteStages.get(writeStageKey(projectRoot, journal.journalId));
+    if (!stage?.isCurrent() || journal.status !== "open" || journal.phase !== "write_in_progress"
+      || journal.recoveryRequired || journal.releaseId !== stage.releaseId
+      || journal.operationId !== stage.releaseId || writeTargetSignature(journal) !== stage.signature) return null;
+    result.push(stage);
+  }
+  return result;
+}
 
 export function currentProcessPublishHolder(): PublishLockHolder | null {
   return processPublishHolder;
 }
 
-function rememberProcessHolder(holder: PublishLockHolder): void {
+function rememberProcessHolder(holder: PublishLockHolder, projectRoot: string): void {
   processPublishHolder = holder;
+  holderProjects.set(holder, path.resolve(projectRoot));
 }
 
 function forgetProcessHolder(holder: PublishLockHolder): void {
+  // Removal revokes eligibility; it does NOT invent an actual write terminal.
+  for (const [key, stage] of publishWriteStages) {
+    if (stage.holder === holder) publishWriteStages.delete(key);
+  }
   if (processPublishHolder && publishLockOwnedBy(processPublishHolder, holder)) {
     processPublishHolder = null;
   }
@@ -328,7 +411,7 @@ export async function acquirePublishCoordinatorLock(
   };
 
   if (await tryCreateLock(projectRoot, holder)) {
-    rememberProcessHolder(holder);
+    rememberProcessHolder(holder, projectRoot);
     return { acquired: true, holder };
   }
 
@@ -336,7 +419,7 @@ export async function acquirePublishCoordinatorLock(
   if (existing && isStaleHolder(existing, now(), staleAfterMs)) {
     if (await reclaimStaleLock(projectRoot, existing)) {
       if (await tryCreateLock(projectRoot, holder)) {
-        rememberProcessHolder(holder);
+        rememberProcessHolder(holder, projectRoot);
         return { acquired: true, holder };
       }
     }

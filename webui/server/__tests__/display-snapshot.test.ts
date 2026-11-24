@@ -29,18 +29,26 @@ import {
   withDisplayWriteBarrier
 } from "../display-generation";
 import {
+  activeCommittedView,
+  captureCommittedDisplayView,
+  committedViewServeValid,
   createDisplayRequestBudget,
   displayCacheVerified,
+  displayBusySummary,
   displaySnapshotDiagnostics,
   DISPLAY_RECOVERY_WAIT_BUDGET_MS,
   DisplaySnapshotBusyError,
   getDisplaySnapshot,
+  evictDisplaySnapshotSlot,
   reconcileFullDigest,
   reconcileMetadata,
   resetDisplaySnapshotsForTests,
   startDisplayReconciler,
   stopDisplayReconciler,
-  MAX_CONCURRENT_DISPLAY_BUILDS
+  MAX_CONCURRENT_DISPLAY_BUILDS,
+  openCommittedViewServe,
+  runWithCommittedViewServe,
+  withdrawCommittedViewServe
 } from "../display-snapshot";
 import { invalidateContentPathsCache } from "../paths";
 
@@ -88,6 +96,16 @@ afterEach(async () => {
 });
 
 describe("Spec 174 T3 — display snapshot cache (SC-03/04/13/15)", () => {
+  it("P1-66 CAS preserves a rebuilt slot even when its public key-derived version is unchanged", async () => {
+    const first = await getDisplaySnapshot("pair", ["P"], async () => ({payload:"full-1",sidecar:"small-1"}));
+    expect(evictDisplaySnapshotSlot("pair", first.incarnation)).toBe(true);
+    const rebuilt = await getDisplaySnapshot("pair", ["P"], async () => ({payload:"full-2",sidecar:"small-2"}));
+    expect(rebuilt.version).toBe(first.version);
+    expect(evictDisplaySnapshotSlot("pair", first.incarnation)).toBe(false);
+    const still = await getDisplaySnapshot("pair", ["P"], async () => "wrong");
+    expect(still.payload).toBe("full-2"); expect(still.sidecar).toBe("small-2"); expect(still.cache).toBe("hit");
+  });
+
   it("merges concurrent cold requests for one key and caches empty results", async () => {
     let builds = 0;
     const gate = deferred();
@@ -104,6 +122,61 @@ describe("Spec 174 T3 — display snapshot cache (SC-03/04/13/15)", () => {
     const again = await getDisplaySnapshot("t", ["D"], build);
     expect(again.cache).toBe("hit");
     expect(builds).toBe(1);
+  });
+
+  it("times out readers without releasing the shared build, then serves its verified result", async () => {
+    const gate = deferred<string>();
+    const entered = deferred();
+    const build = vi.fn(() => {
+      entered.resolve();
+      return gate.promise;
+    });
+    const read = () => getDisplaySnapshot("slow", ["D"], build, { budget: createDisplayRequestBudget(3, 1500, 60) });
+    const owner = read();
+    await entered.promise;
+    const attached = read();
+    let watchdog: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const timedOut = Promise.allSettled([owner, attached]);
+      const results = await Promise.race([timedOut, new Promise<never>((_, reject) => {
+        watchdog = setTimeout(() => reject(new Error("readers remained attached")), 500);
+      })]);
+      expect(results).toEqual(Array.from({ length: 2 }, () => ({
+        status: "rejected",
+        reason: expect.objectContaining({ code: "DISPLAY_SNAPSHOT_BUSY", statusCode: 503, retryAfterSeconds: 1, reason: "build_wait_timeout" })
+      })));
+      expect(displaySnapshotDiagnostics()).toMatchObject({ inflightBuilds: 1, busyByReason: { build_wait_timeout: 2 } });
+      const summary = displayBusySummary();
+      expect(summary).toMatchObject({ busy: 2, byReason: { build_wait_timeout: 2 } });
+      expect(summary.recent).toHaveLength(2);
+      expect(summary.recent[0]).toMatchObject({ name: "slow", reason: "build_wait_timeout", attempts: 1 });
+      expect(summary.recent[0]).toEqual(expect.objectContaining({ at: expect.any(String), uptimeS: expect.any(Number), eventLoopMaxMs: expect.any(Number), ages: expect.any(Object) }));
+      expect(JSON.stringify(summary)).not.toMatch(/\/Users\/|token/i);
+      expect(build).toHaveBeenCalledTimes(1);
+    } finally {
+      clearTimeout(watchdog);
+      gate.resolve("ready");
+      await Promise.allSettled([owner, attached]);
+    }
+    await vi.waitFor(() => expect(displaySnapshotDiagnostics().inflightBuilds).toBe(0));
+    await expect(read()).resolves.toMatchObject({ payload: "ready", cache: "hit" });
+    expect(build).toHaveBeenCalledTimes(1);
+  });
+
+  it("discards a detached build if a scoped write changes its generation before it finishes", async () => {
+    const gate = deferred<string>();
+    const build = vi.fn(() => gate.promise);
+    const old = getDisplaySnapshot("changed", ["D"], build, { budget: createDisplayRequestBudget(3, 1500, 60) });
+    try {
+      await expect(old).rejects.toMatchObject({ reason: "build_wait_timeout" });
+      const token = beginDisplayWrite(["D"]);
+      endDisplayWrite(token);
+    } finally {
+      gate.resolve("old");
+    }
+    await vi.waitFor(() => expect(displaySnapshotDiagnostics().inflightBuilds).toBe(0));
+    expect(displaySnapshotDiagnostics().entries.find(({ name }) => name === "changed")).toMatchObject({ hasCurrent: false, inflight: 0 });
+    await expect(getDisplaySnapshot("changed", ["D"], async () => "new")).resolves.toMatchObject({ payload: "new", cache: "miss" });
   });
 
   it("does not cache failures, backs off for 1 s, then rebuilds", async () => {
@@ -507,7 +580,7 @@ describe("Spec 195 SI-09/SI-10/SI-12 — bounded recovery and diagnostics", () =
   /** Push the clock past the freshness windows so the scope is overdue. */
   function makeOverdue(): () => void {
     const realNow = Date.now();
-    const spy = vi.spyOn(Date, "now").mockReturnValue(realNow + 60_000);
+    const spy = vi.spyOn(Date, "now").mockReturnValue(realNow + 200_000);
     return () => spy.mockRestore();
   }
 
@@ -527,6 +600,38 @@ describe("Spec 195 SI-09/SI-10/SI-12 — bounded recovery and diagnostics", () =
     await reconcileFullDigest();
     const recovered = await getDisplaySnapshot("overdue", ["D"], async () => "payload");
     expect(recovered.payload).toBe("payload");
+  });
+
+  it("P0-1 an aged-but-error-free verification serves the committed slot at once and re-verifies in the background", async () => {
+    const first = await getDisplaySnapshot("grace", ["D"], async () => "payload");
+    expect(first.cache).toBe("miss");
+    const hold = deferred();
+    fsGate.hold = hold.promise;
+    const realNow = Date.now();
+    const spy = vi.spyOn(Date, "now").mockReturnValue(realNow + 5_000);
+    const started = performance.now();
+    const served = await getDisplaySnapshot("grace", ["D"], async () => { throw new Error("must not build"); });
+    expect(performance.now() - started).toBeLessThan(500);
+    expect(served).toMatchObject({ payload: "payload", cache: "hit", version: first.version });
+    expect(displaySnapshotDiagnostics()).toMatchObject({ graceServes: 1 });
+    hold.resolve();
+    fsGate.hold = null;
+    spy.mockRestore();
+    await reconcileMetadata();
+  });
+
+  it("P0-1 beyond the grace limit the committed slot is not served", async () => {
+    await getDisplaySnapshot("grace-limit", ["D"], async () => "payload");
+    const hold = deferred();
+    fsGate.hold = hold.promise;
+    const restoreClock = makeOverdue();
+    await expect(getDisplaySnapshot("grace-limit", ["D"], async () => "payload")).rejects.toBeInstanceOf(DisplaySnapshotBusyError);
+    expect(displaySnapshotDiagnostics().graceServes).toBe(0);
+    hold.resolve();
+    fsGate.hold = null;
+    restoreClock();
+    await reconcileMetadata();
+    await reconcileFullDigest();
   });
 
   it("SI-09 a request that gives up does not stop the shared verification task", async () => {
@@ -600,5 +705,167 @@ describe("Spec 195 SI-09/SI-10/SI-12 — bounded recovery and diagnostics", () =
     // No absolute path, file content or credential may appear in diagnostics.
     expect(JSON.stringify(diagnostics)).not.toContain(projectRoot);
     expect(JSON.stringify(diagnostics)).not.toContain("ktx.yaml");
+  });
+});
+
+describe("P1-75 committed view served during a single note-only write", () => {
+  const SCOPES = ["P", "C"] as const;
+  const quick = () => createDisplayRequestBudget(3, 30);
+  async function warm(payload = "old") {
+    await getDisplaySnapshot("roster", SCOPES, async () => payload, { extraKey: "v1" });
+    return captureCommittedDisplayView("roster", SCOPES, "v1", { raw: "old-raw", version: "v1" });
+  }
+
+  it("captures only a verified, current, complete committed slot", async () => {
+    expect(await captureCommittedDisplayView("roster", SCOPES, "v1", null)).toBeNull();
+    expect(await warm()).not.toBeNull();
+    expect(await captureCommittedDisplayView("roster", SCOPES, "other-version", null)).toBeNull();
+    const token = beginDisplayWrite(["P"]);
+    expect(await captureCommittedDisplayView("roster", SCOPES, "v1", null)).toBeNull();
+    endDisplayWrite(token);
+  });
+
+  it("serves the committed payload inside its own write barrier while the normal path stays busy", async () => {
+    const view = await warm("old");
+    await withDisplayWriteBarrier(["P"], async (token) => {
+      expect(openCommittedViewServe(view!, token)).toBe(true);
+      expect(activeCommittedView("roster")).toBe(view);
+      const served = await getDisplaySnapshot("roster", SCOPES, async () => "live-mid-write", { extraKey: "v2", budget: quick(), committedView: view! });
+      expect(served.payload).toBe("old");
+      expect(served.cache).toBe("hit");
+      await expect(getDisplaySnapshot("roster", SCOPES, async () => "live", { extraKey: "v2", budget: quick() }))
+        .rejects.toMatchObject({ code: "DISPLAY_SNAPSHOT_BUSY", reason: "write_pending" });
+    });
+    // The write ended: the view is gone and a stale companion is never built from.
+    expect(committedViewServeValid(view!)).toBe(false);
+    expect(activeCommittedView("roster")).toBeNull();
+    await expect(getDisplaySnapshot("roster", SCOPES, async () => "never", { extraKey: "v1", budget: quick(), committedView: view! }))
+      .rejects.toMatchObject({ code: "DISPLAY_SNAPSHOT_BUSY", reason: "generation_changed" });
+  });
+
+  it("counts a served attempt against the shared request budget", async () => {
+    const view = await warm();
+    await withDisplayWriteBarrier(["P"], async (token) => {
+      openCommittedViewServe(view!, token);
+      const budget = createDisplayRequestBudget(2, 30);
+      await getDisplaySnapshot("roster", SCOPES, async () => "x", { budget, committedView: view! });
+      await getDisplaySnapshot("roster", SCOPES, async () => "x", { budget, committedView: view! });
+      expect(budget.attemptsLeft).toBe(0);
+      await expect(getDisplaySnapshot("roster", SCOPES, async () => "x", { budget, committedView: view! }))
+        .rejects.toMatchObject({ reason: "generation_changed" });
+    });
+  });
+
+  it("tolerates the write's own nested barriers but withdraws on any other generation movement", async () => {
+    const view = await warm();
+    await withDisplayWriteBarrier(["P"], async (token) => {
+      expect(openCommittedViewServe(view!, token)).toBe(true);
+      await runWithCommittedViewServe(view!, () => withDisplayWriteBarrier(["P"], async () => undefined));
+      expect(committedViewServeValid(view!)).toBe(true);
+      // A foreign writer (different async chain) begins: eligibility goes away synchronously.
+      const foreign = beginDisplayWrite(["P"]);
+      expect(committedViewServeValid(view!)).toBe(false);
+      expect(activeCommittedView("roster")).toBeNull();
+      endDisplayWrite(foreign);
+    });
+  });
+
+  it("withdraws on an external change to the scopes and on slot eviction", async () => {
+    const view = await warm();
+    await withDisplayWriteBarrier(["P"], async (token) => {
+      openCommittedViewServe(view!, token);
+      expect(committedViewServeValid(view!)).toBe(true);
+      const served = await getDisplaySnapshot("roster", SCOPES, async () => "x", { budget: quick(), committedView: view! });
+      expect(evictDisplaySnapshotSlot("roster", served.incarnation)).toBe(true);
+      expect(committedViewServeValid(view!)).toBe(false);
+    });
+  });
+
+  it("refuses to open when another generation moved between capture and the barrier", async () => {
+    const view = await warm();
+    const other = beginDisplayWrite(["C"]);
+    endDisplayWrite(other);
+    await withDisplayWriteBarrier(["P"], async (token) => {
+      expect(openCommittedViewServe(view!, token)).toBe(false);
+      expect(activeCommittedView("roster")).toBeNull();
+    });
+  });
+
+  it("refuses a view whose barrier does not cover its scopes and an ended barrier", async () => {
+    const view = await warm();
+    const unrelated = beginDisplayWrite(["D"]);
+    expect(openCommittedViewServe(view!, unrelated)).toBe(false);
+    endDisplayWrite(unrelated);
+    const token = beginDisplayWrite(["P"]);
+    endDisplayWrite(token);
+    expect(openCommittedViewServe(view!, token)).toBe(false);
+  });
+
+  it("an explicit withdraw makes the readers fall back to the normal verified path", async () => {
+    const view = await warm();
+    await withDisplayWriteBarrier(["P"], async (token) => {
+      openCommittedViewServe(view!, token);
+      withdrawCommittedViewServe(view!);
+      withdrawCommittedViewServe("roster");
+      await expect(getDisplaySnapshot("roster", SCOPES, async () => "x", { budget: quick(), committedView: view! }))
+        .rejects.toMatchObject({ reason: "generation_changed" });
+    });
+  });
+
+  it("stops serving when the reconciler can no longer verify the scopes", async () => {
+    const view = await warm();
+    await withDisplayWriteBarrier(["P"], async (token) => {
+      openCommittedViewServe(view!, token);
+      stopDisplayReconciler();
+      expect(committedViewServeValid(view!)).toBe(false);
+    });
+  });
+
+  it("refuses and withdraws the view when the access recovery latch is closed, then serves normally once it clears", async () => {
+    const recovery = await import("../access-recovery");
+    const view = await warm("old");
+    try {
+      await withDisplayWriteBarrier(["P"], async (token) => {
+        expect(openCommittedViewServe(view!, token)).toBe(true);
+        expect(committedViewServeValid(view!)).toBe(true);
+        recovery.setInMemoryRecoveryRequiredSync({ reason: "test_latch" });
+        expect(committedViewServeValid(view!)).toBe(false);
+        expect(activeCommittedView("roster")).toBeNull();
+        await expect(getDisplaySnapshot("roster", SCOPES, async () => "x", { budget: quick(), committedView: view! }))
+          .rejects.toMatchObject({ reason: "generation_changed" });
+        // Clearing the latch does not resurrect a withdrawn view.
+        recovery.clearInMemoryRecoveryRequiredSync();
+        expect(committedViewServeValid(view!)).toBe(false);
+      });
+    } finally {
+      recovery.clearInMemoryRecoveryRequiredSync();
+    }
+    const after = await getDisplaySnapshot("roster", SCOPES, async () => "fresh", { extraKey: "v1" });
+    expect(["old", "fresh"]).toContain(after.payload);
+  });
+
+  it("bounded recovery: an unverifiable reconciler refuses, and the same process serves again once restored", async () => {
+    const view = await warm("old");
+    await withDisplayWriteBarrier(["P"], async (token) => {
+      openCommittedViewServe(view!, token);
+      stopDisplayReconciler();
+      expect(committedViewServeValid(view!)).toBe(false);
+    });
+    const started = Date.now();
+    await expect(getDisplaySnapshot("roster", SCOPES, async () => "x", { extraKey: "v1", budget: quick() }))
+      .rejects.toMatchObject({ code: "DISPLAY_SNAPSHOT_BUSY", reason: "reconcile_failed" });
+    expect(Date.now() - started).toBeLessThan(DISPLAY_RECOVERY_WAIT_BUDGET_MS + 1500);
+    await startDisplayReconciler({ metadataIntervalMs: 60_000, fullDigestIntervalMs: 60_000 });
+    const recovered = await getDisplaySnapshot("roster", SCOPES, async () => "recovered", { extraKey: "v1" });
+    expect(["old", "recovered"]).toContain(recovered.payload);
+  });
+
+  it("rejects a view requested under another snapshot name or scope set", async () => {
+    const view = await warm();
+    await withDisplayWriteBarrier(["P"], async (token) => {
+      openCommittedViewServe(view!, token);
+      await expect(getDisplaySnapshot("other", SCOPES, async () => "x", { budget: quick(), committedView: view! })).rejects.toMatchObject({ reason: "generation_changed" });
+      await expect(getDisplaySnapshot("roster", ["P"], async () => "x", { budget: quick(), committedView: view! })).rejects.toMatchObject({ reason: "generation_changed" });
+    });
   });
 });

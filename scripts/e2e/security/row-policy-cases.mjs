@@ -21,8 +21,7 @@
 //   * `byOutcome` distinguishes positive from negative controls: BY-01 / BY-10
 //     are phase-on allow paths (华东, 华东∪西南); deny variants must produce an
 //     explicit allowlisted denial with a real observer-measured zero.
-//   * BY-09 is phase-off only and passes `deny` solely for
-//     `row_policy_upstream_unproven`.
+//   * BY-09 verifies automatic enforcement with no operator prerequisite.
 
 import { createHash } from "node:crypto";
 import { Checks, denyReasonMatches, explicitDeny, extractDenyReason, measureValue } from "./context.mjs";
@@ -67,11 +66,6 @@ function packToken(ctx, agentId) {
     throw new Error(`row-policy pack token missing for agent ${agentId}`);
   }
   return token;
-}
-
-function forcedPredicateProven(ctx) {
-  const raw = ctx.run?.instance?.env?.LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN;
-  return raw === "1" || raw === "true" || raw === "TRUE";
 }
 
 function regionHeader(key, field) {
@@ -501,12 +495,12 @@ async function sec10v05(ctx) {
 
 /** BY-01 — phase-on allow path. `ag_east` (`rp_east`) may read 华东 and must not
  *  see 西南. A deny (including upstream unproven) does not count as this allow. */
-async function by01(ctx) {
+async function by01(ctx, label = "BY-01", extraArgs = {}) {
   const checks = new Checks();
   const token = packToken(ctx, AGENTS.east);
   const fp = tokenFingerprint(token);
-  const win = await observeWindow(ctx, { label: "BY-01", ...nowWindow(), agentId: AGENTS.east, tokenFingerprint: fp });
-  const res = await ctx.lucyQuery(token, { ...PACK_REGION_QUERY, filters: [] });
+  const win = await observeWindow(ctx, { label, ...nowWindow(), agentId: AGENTS.east, tokenFingerprint: fp });
+  const res = await ctx.lucyQuery(token, { ...PACK_REGION_QUERY, filters: [], ...extraArgs });
   const extraction = extractDenyReason(res);
   let branch = "unrecognized";
   if (res.status >= 500) {
@@ -526,7 +520,7 @@ async function by01(ctx) {
     const parsed = ctx.parseMcpToolResult(res);
     // Allow path: do not record a failed `deny` token — any passed:false fails the case.
     checks.expect("deny", true, "BY-01: allow path; request was accepted (not a refusal case)");
-    bindRegionAllow(checks, "BY-01", parsed, expectedRegionSet(ctx, "east"));
+    bindRegionAllow(checks, label, parsed, expectedRegionSet(ctx, "east"));
   } else {
     checks.expect("deny", false, `BY-01: response was not a recognized envelope (source=${extraction.source})`);
     checks.expect("allow_control", false, `BY-01: response was not a recognized envelope (source=${extraction.source})`);
@@ -535,9 +529,9 @@ async function by01(ctx) {
   }
   await win.finish();
   if (branch === "allow") {
-    expectAuthorizedUpstream(ctx, checks, "BY-01", win, { authorizedRequests: 1 });
+    expectAuthorizedUpstream(ctx, checks, label, win, { authorizedRequests: 1 });
   } else {
-    expectUpstreamZero(ctx, checks, "BY-01", win, { authorizedRequests: 0 });
+    expectUpstreamZero(ctx, checks, label, win, { authorizedRequests: 0 });
   }
   checks.noLeak([bodyText(res)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
   return { ...checks.result(), denyReason: extraction.matched };
@@ -594,25 +588,8 @@ async function by04(ctx) {
 }
 
 async function by05(ctx) {
-  const checks = new Checks();
-  const token = packToken(ctx, AGENTS.east);
-  const fp = tokenFingerprint(token);
-  const win = await observeWindow(ctx, { label: "BY-05", ...nowWindow(), agentId: AGENTS.east, tokenFingerprint: fp });
   const forged = { or: [{ and: [{ field: REGION_FIELD, op: "eq", value: REGIONS.B }] }] };
-  const res = await ctx.lucyQuery(token, {
-    ...PACK_REGION_QUERY,
-    filters: [],
-    forced_filters: forged,
-    forcedFilters: forged
-  });
-  bindPackDeny(ctx, checks, "BY-05 forged forced", res, null);
-  const text = bodyText(res);
-  const forgedEchoed = text.includes(JSON.stringify(forged));
-  checks.expect("deny", !forgedEchoed || explicitDeny(res), `BY-05: forged forced must not be honoured (echoed=${forgedEchoed})`);
-  await win.finish();
-  expectUpstreamZero(ctx, checks, "BY-05", win);
-  checks.noLeak([bodyText(res)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
-  return { ...checks.result(), denyReason: extractDenyReason(res).matched };
+  return by01(ctx, "BY-05", { forced_filters: forged, forcedFilters: forged });
 }
 
 /** BY-06 — entity_details AND sl_validate on the scoped source must BOTH be
@@ -659,34 +636,8 @@ async function by08(ctx) {
   return { ...checks.result(), denyReason: extractDenyReason(res).matched };
 }
 
-/** BY-09 — phase-off only. A scoped read must be refused with
- *  `row_policy_upstream_unproven`. Any other reason, and any phase-on allow,
- *  fails this case so Gate-On cannot reuse it as a pass. */
-async function by09(ctx) {
-  const checks = new Checks();
-  const token = packToken(ctx, AGENTS.east);
-  const fp = tokenFingerprint(token);
-  const win = await observeWindow(ctx, { label: "BY-09", ...nowWindow(), agentId: AGENTS.east, tokenFingerprint: fp });
-  const res = await ctx.lucyQuery(token, { ...PACK_REGION_QUERY, filters: [] });
-  const extraction = extractDenyReason(res);
-  const phaseOn = forcedPredicateProven(ctx);
-  const exactUnproven = !phaseOn && res.status < 500 && extraction.matched === "row_policy_upstream_unproven";
-  if (phaseOn) {
-    checks.expect("deny", false, "BY-09 is phase-off only; LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN is set so this case must not pass");
-  } else if (res.status >= 500) {
-    checks.expect("deny", false, `BY-09: HTTP 5xx is not a deny; got ${res.status}`);
-  } else if (exactUnproven) {
-    checks.expect("deny", true, `BY-09 unproven: ${extraction.matched}`);
-  } else {
-    checks.expect("deny", false, `BY-09: expected row_policy_upstream_unproven, got matched=${extraction.matched ?? "null"} source=${extraction.source}`);
-  }
-  checks.expect("typed_gold", true, "BY-09: phase-off deny; Region 集合正确未测到");
-  checks.expect("real_query", true, "BY-09: phase-off deny; no successful query is required");
-  await win.finish();
-  expectUpstreamZero(ctx, checks, "BY-09", win);
-  checks.noLeak([bodyText(res)], { secrets: ctx.allSecrets, forbiddenCanaries: Object.values(ctx.canaries) });
-  return { ...checks.result(), denyReason: extraction.matched };
-}
+/** BY-09 — no operator proof flag is required; scoped reads must return only their domain. */
+async function by09(ctx) { return by01(ctx, "BY-09"); }
 
 /** BY-10 — phase-on allow path for the pack union agent. `ag_east_west` holds
  *  `rp_east` and `rp_west` (two Roles, not one Role with two selectors) and must

@@ -1,0 +1,25 @@
+{
+  "roles": 32,
+  "agents": 105,
+  "configuredTokens": 300,
+  "audit": {
+    "count": 1000010,
+    "ceiling": 1000010
+  },
+  "indexes": [
+    {
+      "name": "idx_al_agent_window_cover",
+      "bytes": 115314688
+    },
+    {
+      "name": "idx_al_ts_token",
+      "bytes": 53239808
+    }
+  ],
+  "container": "lucy-racs-batch1-v2-browser",
+  "cpu": 2,
+  "memoryBytes": 4294967296,
+  "fixture": "task-owned B-derived synthetic fixture; includes diagnostic objects; not a full B-floor load verdict",
+  "production": false,
+  "retention": "All task containers stopped after evidence capture; labeled volumes and local images retained; no shared demo mutation"
+}

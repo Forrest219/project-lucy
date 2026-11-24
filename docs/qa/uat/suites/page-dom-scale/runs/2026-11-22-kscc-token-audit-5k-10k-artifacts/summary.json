@@ -1,0 +1,671 @@
+{
+  "complete": true,
+  "verdict": "PASS",
+  "findings": [],
+  "results": [
+    {
+      "stage": "a0",
+      "audit": {
+        "at": "2026-11-22T10:37:11.092Z",
+        "all": 0,
+        "toolRows": 0,
+        "ok": 0,
+        "protocol": 0,
+        "byUser": {
+          "demo_agent": {
+            "total": 0,
+            "ok": 0
+          },
+          "demo_ops": {
+            "total": 0,
+            "ok": 0
+          }
+        },
+        "recent7d": 0,
+        "recent30d": 0,
+        "tokens": 202,
+        "inventorySha256": "85ce921c42a2c5ac085469ca0014843cdb0deb05b2840bd38f750e1822a9a3f9"
+      },
+      "browser": "158.0.8127.36",
+      "samples": [
+        {
+          "name": "a0-token-cold-navigation",
+          "result": "PASS",
+          "ms": 247.3,
+          "rows": 202,
+          "foreground": true,
+          "pageErrors": 0,
+          "consoleErrors": 0,
+          "longestTaskMs": 61,
+          "apiMs": [
+            30.9
+          ],
+          "apiBytes": [
+            85064
+          ],
+          "apiStatus": [
+            200
+          ]
+        },
+        {
+          "name": "a0-token-first-spa",
+          "result": "PASS",
+          "ms": 329,
+          "rows": 202,
+          "foreground": true,
+          "pageErrors": 0,
+          "consoleErrors": 0,
+          "longestTaskMs": 0,
+          "apiMs": [
+            15
+          ],
+          "apiBytes": [
+            85064
+          ],
+          "apiStatus": [
+            200
+          ]
+        },
+        {
+          "name": "a0-token-warm-spa-1",
+          "result": "PASS",
+          "ms": 97.7,
+          "rows": 202,
+          "foreground": true,
+          "pageErrors": 0,
+          "consoleErrors": 0,
+          "longestTaskMs": 0,
+          "apiMs": [
+            41.9
+          ],
+          "apiBytes": [
+            85064
+          ],
+          "apiStatus": [
+            200
+          ]
+        },
+        {
+          "name": "a0-token-warm-spa-2",
+          "result": "PASS",
+          "ms": 79.6,
+          "rows": 202,
+          "foreground": true,
+          "pageErrors": 0,
+          "consoleErrors": 0,
+          "longestTaskMs": 0,
+          "apiMs": [
+            62.1
+          ],
+          "apiBytes": [
+            85064
+          ],
+          "apiStatus": [
+            200
+          ]
+        },
+        {
+          "name": "a0-token-warm-spa-3",
+          "result": "PASS",
+          "ms": 79.9,
+          "rows": 202,
+          "foreground": true,
+          "pageErrors": 0,
+          "consoleErrors": 0,
+          "longestTaskMs": 0,
+          "apiMs": [
+            30.3
+          ],
+          "apiBytes": [
+            85064
+          ],
+          "apiStatus": [
+            200
+          ]
+        },
+        {
+          "name": "a0-token-search",
+          "result": "PASS",
+          "ms": 86.4,
+          "rows": 1,
+          "foreground": true,
+          "pageErrors": 0,
+          "consoleErrors": 0,
+          "longestTaskMs": 0,
+          "apiMs": [
+            21.2
+          ],
+          "apiBytes": [
+            562
+          ],
+          "apiStatus": [
+            200
+          ]
+        },
+        {
+          "name": "a0-token-search-clear",
+          "result": "PASS",
+          "ms": 70.7,
+          "rows": 202,
+          "foreground": true,
+          "pageErrors": 0,
+          "consoleErrors": 0,
+          "longestTaskMs": 0,
+          "apiMs": [
+            15.3
+          ],
+          "apiBytes": [
+            85064
+          ],
+          "apiStatus": [
+            200
+          ]
+        }
+      ],
+      "slow": false,
+      "complete": true
+    },
+    {
+      "stage": "a1500",
+      "audit": {
+        "at": "2026-11-22T10:38:37.089Z",
+        "all": 1500,
+        "toolRows": 1500,
+        "ok": 1500,
+        "protocol": 0,
+        "byUser": {
+          "demo_agent": {
+            "total": 750,
+            "ok": 750
+          },
+          "demo_ops": {
+            "total": 750,
+            "ok": 750
+          }
+        },
+        "recent7d": 1500,
+        "recent30d": 1500,
+        "tokens": 202,
+        "inventorySha256": "85ce921c42a2c5ac085469ca0014843cdb0deb05b2840bd38f750e1822a9a3f9"
+      },
+      "browser": "158.0.8127.36",
+      "samples": [
+        {
+          "name": "a1500-token-cold-navigation",
+          "result": "PASS",
+          "ms": 158.6,
+          "rows": 202,
+          "foreground": true,
+          "pageErrors": 0,
+          "consoleErrors": 0,
+          "longestTaskMs": 0,
+          "apiMs": [
+            37.3
+          ],
+          "apiBytes": [
+            88685
+          ],
+          "apiStatus": [
+            200
+          ]
+        },
+        {
+          "name": "a1500-token-first-spa",
+          "result": "PASS",
+          "ms": 330,
+          "rows": 202,
+          "foreground": true,
+          "pageErrors": 0,
+          "consoleErrors": 0,
+          "longestTaskMs": 0,
+          "apiMs": [
+            30.1
+          ],
+          "apiBytes": [
+            88685
+          ],
+          "apiStatus": [
+            200
+          ]
+        },
+        {
+          "name": "a1500-token-warm-spa-1",
+          "result": "PASS",
+          "ms": 97.5,
+          "rows": 202,
+          "foreground": true,
+          "pageErrors": 0,
+          "consoleErrors": 0,
+          "longestTaskMs": 0,
+          "apiMs": [
+            24.2
+          ],
+          "apiBytes": [
+            88685
+          ],
+          "apiStatus": [
+            200
+          ]
+        },
+        {
+          "name": "a1500-token-warm-spa-2",
+          "result": "PASS",
+          "ms": 63.9,
+          "rows": 202,
+          "foreground": true,
+          "pageErrors": 0,
+          "consoleErrors": 0,
+          "longestTaskMs": 0,
+          "apiMs": [
+            27.2
+          ],
+          "apiBytes": [
+            88685
+          ],
+          "apiStatus": [
+            200
+          ]
+        },
+        {
+          "name": "a1500-token-warm-spa-3",
+          "result": "PASS",
+          "ms": 81.9,
+          "rows": 202,
+          "foreground": true,
+          "pageErrors": 0,
+          "consoleErrors": 0,
+          "longestTaskMs": 0,
+          "apiMs": [
+            34.3
+          ],
+          "apiBytes": [
+            88685
+          ],
+          "apiStatus": [
+            200
+          ]
+        },
+        {
+          "name": "a1500-token-search",
+          "result": "PASS",
+          "ms": 101.3,
+          "rows": 1,
+          "foreground": true,
+          "pageErrors": 0,
+          "consoleErrors": 0,
+          "longestTaskMs": 0,
+          "apiMs": [
+            17.5
+          ],
+          "apiBytes": [
+            744
+          ],
+          "apiStatus": [
+            200
+          ]
+        },
+        {
+          "name": "a1500-token-search-clear",
+          "result": "PASS",
+          "ms": 68.1,
+          "rows": 202,
+          "foreground": true,
+          "pageErrors": 0,
+          "consoleErrors": 0,
+          "longestTaskMs": 0,
+          "apiMs": [
+            17
+          ],
+          "apiBytes": [
+            88685
+          ],
+          "apiStatus": [
+            200
+          ]
+        }
+      ],
+      "slow": false,
+      "complete": true
+    },
+    {
+      "stage": "a5000",
+      "audit": {
+        "at": "2026-11-22T10:41:41.240Z",
+        "all": 5000,
+        "toolRows": 5000,
+        "ok": 5000,
+        "protocol": 0,
+        "byUser": {
+          "demo_agent": {
+            "total": 2500,
+            "ok": 2500
+          },
+          "demo_ops": {
+            "total": 2500,
+            "ok": 2500
+          }
+        },
+        "recent7d": 5000,
+        "recent30d": 5000,
+        "tokens": 202,
+        "inventorySha256": "85ce921c42a2c5ac085469ca0014843cdb0deb05b2840bd38f750e1822a9a3f9"
+      },
+      "browser": "158.0.8127.36",
+      "samples": [
+        {
+          "name": "a5000-token-cold-navigation",
+          "result": "PASS",
+          "ms": 165.2,
+          "rows": 202,
+          "foreground": true,
+          "pageErrors": 0,
+          "consoleErrors": 0,
+          "longestTaskMs": 0,
+          "apiMs": [
+            44.1
+          ],
+          "apiBytes": [
+            88655
+          ],
+          "apiStatus": [
+            200
+          ]
+        },
+        {
+          "name": "a5000-token-first-spa",
+          "result": "PASS",
+          "ms": 327.6,
+          "rows": 202,
+          "foreground": true,
+          "pageErrors": 0,
+          "consoleErrors": 0,
+          "longestTaskMs": 0,
+          "apiMs": [
+            34.8
+          ],
+          "apiBytes": [
+            88655
+          ],
+          "apiStatus": [
+            200
+          ]
+        },
+        {
+          "name": "a5000-token-warm-spa-1",
+          "result": "PASS",
+          "ms": 80.2,
+          "rows": 202,
+          "foreground": true,
+          "pageErrors": 0,
+          "consoleErrors": 0,
+          "longestTaskMs": 0,
+          "apiMs": [
+            79.8
+          ],
+          "apiBytes": [
+            88655
+          ],
+          "apiStatus": [
+            200
+          ]
+        },
+        {
+          "name": "a5000-token-warm-spa-2",
+          "result": "PASS",
+          "ms": 64.3,
+          "rows": 202,
+          "foreground": true,
+          "pageErrors": 0,
+          "consoleErrors": 0,
+          "longestTaskMs": 0,
+          "apiMs": [
+            29.2
+          ],
+          "apiBytes": [
+            88655
+          ],
+          "apiStatus": [
+            200
+          ]
+        },
+        {
+          "name": "a5000-token-warm-spa-3",
+          "result": "PASS",
+          "ms": 97.6,
+          "rows": 202,
+          "foreground": true,
+          "pageErrors": 0,
+          "consoleErrors": 0,
+          "longestTaskMs": 0,
+          "apiMs": [
+            60
+          ],
+          "apiBytes": [
+            88655
+          ],
+          "apiStatus": [
+            200
+          ]
+        },
+        {
+          "name": "a5000-token-search",
+          "result": "PASS",
+          "ms": 116.1,
+          "rows": 1,
+          "foreground": true,
+          "pageErrors": 0,
+          "consoleErrors": 0,
+          "longestTaskMs": 0,
+          "apiMs": [
+            32.8
+          ],
+          "apiBytes": [
+            741
+          ],
+          "apiStatus": [
+            200
+          ]
+        },
+        {
+          "name": "a5000-token-search-clear",
+          "result": "PASS",
+          "ms": 84.6,
+          "rows": 202,
+          "foreground": true,
+          "pageErrors": 0,
+          "consoleErrors": 0,
+          "longestTaskMs": 0,
+          "apiMs": [
+            30.9
+          ],
+          "apiBytes": [
+            88655
+          ],
+          "apiStatus": [
+            200
+          ]
+        }
+      ],
+      "slow": false,
+      "complete": true
+    },
+    {
+      "stage": "a10000",
+      "audit": {
+        "at": "2026-11-22T10:46:05.444Z",
+        "all": 10000,
+        "toolRows": 10000,
+        "ok": 10000,
+        "protocol": 0,
+        "byUser": {
+          "demo_agent": {
+            "total": 5000,
+            "ok": 5000
+          },
+          "demo_ops": {
+            "total": 5000,
+            "ok": 5000
+          }
+        },
+        "recent7d": 10000,
+        "recent30d": 10000,
+        "tokens": 202,
+        "inventorySha256": "85ce921c42a2c5ac085469ca0014843cdb0deb05b2840bd38f750e1822a9a3f9"
+      },
+      "browser": "158.0.8127.36",
+      "samples": [
+        {
+          "name": "a10000-token-cold-navigation",
+          "result": "PASS",
+          "ms": 204.5,
+          "rows": 202,
+          "foreground": true,
+          "pageErrors": 0,
+          "consoleErrors": 0,
+          "longestTaskMs": 0,
+          "apiMs": [
+            65
+          ],
+          "apiBytes": [
+            88655
+          ],
+          "apiStatus": [
+            200
+          ]
+        },
+        {
+          "name": "a10000-token-first-spa",
+          "result": "PASS",
+          "ms": 355.8,
+          "rows": 202,
+          "foreground": true,
+          "pageErrors": 0,
+          "consoleErrors": 0,
+          "longestTaskMs": 55,
+          "apiMs": [
+            37.3
+          ],
+          "apiBytes": [
+            88655
+          ],
+          "apiStatus": [
+            200
+          ]
+        },
+        {
+          "name": "a10000-token-warm-spa-1",
+          "result": "PASS",
+          "ms": 96.7,
+          "rows": 202,
+          "foreground": true,
+          "pageErrors": 0,
+          "consoleErrors": 0,
+          "longestTaskMs": 0,
+          "apiMs": [
+            80.8
+          ],
+          "apiBytes": [
+            88655
+          ],
+          "apiStatus": [
+            200
+          ]
+        },
+        {
+          "name": "a10000-token-warm-spa-2",
+          "result": "PASS",
+          "ms": 64.1,
+          "rows": 202,
+          "foreground": true,
+          "pageErrors": 0,
+          "consoleErrors": 0,
+          "longestTaskMs": 0,
+          "apiMs": [
+            42.7
+          ],
+          "apiBytes": [
+            88655
+          ],
+          "apiStatus": [
+            200
+          ]
+        },
+        {
+          "name": "a10000-token-warm-spa-3",
+          "result": "PASS",
+          "ms": 81.2,
+          "rows": 202,
+          "foreground": true,
+          "pageErrors": 0,
+          "consoleErrors": 0,
+          "longestTaskMs": 0,
+          "apiMs": [
+            56.5
+          ],
+          "apiBytes": [
+            88655
+          ],
+          "apiStatus": [
+            200
+          ]
+        },
+        {
+          "name": "a10000-token-search",
+          "result": "PASS",
+          "ms": 117.5,
+          "rows": 1,
+          "foreground": true,
+          "pageErrors": 0,
+          "consoleErrors": 0,
+          "longestTaskMs": 0,
+          "apiMs": [
+            37.9
+          ],
+          "apiBytes": [
+            741
+          ],
+          "apiStatus": [
+            200
+          ]
+        },
+        {
+          "name": "a10000-token-search-clear",
+          "result": "PASS",
+          "ms": 84.1,
+          "rows": 202,
+          "foreground": true,
+          "pageErrors": 0,
+          "consoleErrors": 0,
+          "longestTaskMs": 0,
+          "apiMs": [
+            43
+          ],
+          "apiBytes": [
+            88655
+          ],
+          "apiStatus": [
+            200
+          ]
+        }
+      ],
+      "slow": false,
+      "complete": true
+    }
+  ],
+  "cleanup": {
+    "revoked": 200,
+    "successfulRevocations": 200,
+    "inventoryRestored": true,
+    "containerUnchanged": true,
+    "health": {
+      "status": "ok",
+      "gitSha": "8fe7cebc0e73d98aba3e687899fb83e34651e0aa",
+      "gitDirty": false,
+      "lucyVersion": "0.30.0"
+    },
+    "resourcesRemaining": 0,
+    "sharedContainerUnchanged": true,
+    "privateRemoved": true
+  },
+  "completed": "2026-11-22T10:48:22.263Z"
+}

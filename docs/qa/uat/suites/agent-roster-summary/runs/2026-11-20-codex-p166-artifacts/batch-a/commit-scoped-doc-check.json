@@ -1,0 +1,34 @@
+{
+  "ownScopeViolations": 0,
+  "knownUnchangedFile": "docs/plans/lucy-20261120-page-dom-scale-assessment-plan.md",
+  "headBlob": "ec10886dcf5f434ad12858aa6ed8fd09b466a3cc",
+  "indexBlob": "ec10886dcf5f434ad12858aa6ed8fd09b466a3cc",
+  "unchanged": true,
+  "existingGlobalViolations": [
+    {
+      "file": "docs/plans/lucy-20261120-page-dom-scale-assessment-plan.md",
+      "rule": "index",
+      "message": "Plan 未被 docs/plans/README.md 索引登记"
+    },
+    {
+      "file": "docs/plans/lucy-20261120-page-dom-scale-assessment-plan.md",
+      "rule": "plan-parts",
+      "message": "Plan 缺少「开工前置」类小节"
+    },
+    {
+      "file": "docs/plans/lucy-20261120-page-dom-scale-assessment-plan.md",
+      "rule": "plan-parts",
+      "message": "Plan 缺少「验收」类小节"
+    },
+    {
+      "file": "docs/plans/lucy-20261120-page-dom-scale-assessment-plan.md",
+      "rule": "plan-parts",
+      "message": "Plan 缺少「完成定义」类小节"
+    },
+    {
+      "file": "docs/plans/lucy-20261120-page-dom-scale-assessment-plan.md",
+      "rule": "metadata",
+      "message": "Plan 头部元数据缺少「状态」「授权边界」或「验收」"
+    }
+  ]
+}

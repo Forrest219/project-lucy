@@ -1,0 +1,8 @@
+✔ B pass requires both phases green and no blocking blocked (0.4145ms)
+✔ blockedBlocking prevents B pass (0.05325ms)
+✔ phase-on failed prevents B pass (0.051416ms)
+✔ registryMissing prevents B pass (0.282292ms)
+  ✔ records D-03 fixed by the repository tests while V19 / V22 stay not_run (0.150458ms)
+ℹ tests 97
+ℹ pass 97
+ℹ fail 0

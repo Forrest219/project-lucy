@@ -1,0 +1,47 @@
+{
+  "provenance": "Selected fields read from original events.jsonl contract-recovery rows; derived excerpt, not producer summary rewrite",
+  "originalSource": "/Users/zhangxingchen/Projects/project-lucy/inbox/core-availability-followup/20261120-execution/01-tools/calibration-r5-contract/events.jsonl",
+  "originalSourceBytes": 5616716,
+  "completed": 2,
+  "interruptedTransportTerminals": 6,
+  "records": [
+    {
+      "originalRequestId": "mcp-4",
+      "ok": true
+    },
+    {
+      "originalRequestId": "mcp-3",
+      "ok": true
+    },
+    {
+      "originalRequestId": "mcp-5",
+      "ok": false,
+      "error": "Remote end closed connection without response"
+    },
+    {
+      "originalRequestId": "mcp-6",
+      "ok": false,
+      "error": "Remote end closed connection without response"
+    },
+    {
+      "originalRequestId": "mcp-16",
+      "ok": false,
+      "error": "Remote end closed connection without response"
+    },
+    {
+      "originalRequestId": "mcp-17",
+      "ok": false,
+      "error": "Remote end closed connection without response"
+    },
+    {
+      "originalRequestId": "mcp-18",
+      "ok": false,
+      "error": "Remote end closed connection without response"
+    },
+    {
+      "originalRequestId": "mcp-19",
+      "ok": false,
+      "error": "Remote end closed connection without response"
+    }
+  ]
+}

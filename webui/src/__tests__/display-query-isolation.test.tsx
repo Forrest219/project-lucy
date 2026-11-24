@@ -18,7 +18,15 @@ import {
   setDisplayWriteSettledHandler
 } from "../lib/apiClient";
 import { AuthProvider, useAuth } from "../lib/auth";
-import { adminAgentsQueryOptions, DISPLAY_SCOPE_QUERY_KEYS, DISPLAY_STALE_TIME_MS, projectQueryOptions, sourcesQueryOptions } from "../lib/displayQueryOptions";
+import {
+  adminAgentsQueryOptions,
+  adminAgentsRosterQueryOptions,
+  adminAgentsStatisticsQueryOptions,
+  DISPLAY_SCOPE_QUERY_KEYS,
+  DISPLAY_STALE_TIME_MS,
+  projectQueryOptions,
+  sourcesQueryOptions
+} from "../lib/displayQueryOptions";
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(status === 200 ? { ok: true, data } : data), { status, headers: { "Content-Type": "application/json" } });
@@ -99,6 +107,10 @@ describe("Spec 174 T3 — client freshness guards (SC-08/18, DI-14)", () => {
     expect(projectQueryOptions().staleTime).toBe(DISPLAY_STALE_TIME_MS);
     expect(sourcesQueryOptions().gcTime).toBe(300_000);
     expect("staleTime" in adminAgentsQueryOptions()).toBe(false);
+    expect("staleTime" in adminAgentsRosterQueryOptions()).toBe(false);
+    expect("staleTime" in adminAgentsStatisticsQueryOptions("30d")).toBe(false);
+    expect(adminAgentsRosterQueryOptions().queryKey).toEqual(["admin", "agents", "roster"]);
+    expect(adminAgentsStatisticsQueryOptions("7d").queryKey).toEqual(["admin", "agents", "statistics", "7d"]);
     const retry = sourcesQueryOptions().retry;
     expect(retry(0, new ApiError({ code: "DISPLAY_SNAPSHOT_BUSY", message: "" }))).toBe(true);
     expect(retry(1, new ApiError({ code: "DISPLAY_SNAPSHOT_BUSY", message: "" }))).toBe(false);

@@ -26,6 +26,7 @@ source "${ROOT}/scripts/gates/k8s-gate-lib.sh"
 
 CHART_N="${ROOT}/deploy/k8s/helm/lucy"
 VALUES_CI="${ROOT}/deploy/k8s/gate/values.gate-ci.yaml"
+VALUES_CI_N1_PROBES="${ROOT}/deploy/k8s/gate/values.gate-ci-n1-probes.yaml"
 BASELINE_FILE="${ROOT}/deploy/k8s/gate/n1-baseline.txt"
 
 CLUSTER_NAME="${K8S_KIND_CLUSTER_NAME:-lucy-h3-gate-ci}"
@@ -85,6 +86,7 @@ require_cmd helm
 require_cmd git
 
 [[ -f "${VALUES_CI}" ]] || fail "missing CI values: ${VALUES_CI}"
+[[ -f "${VALUES_CI_N1_PROBES}" ]] || fail "missing N-1 probe overlay: ${VALUES_CI_N1_PROBES}"
 [[ -f "${BASELINE_FILE}" ]] || fail "missing N-1 baseline file: ${BASELINE_FILE}"
 
 N1_REF="${K8S_GATE_N1_REF:-}"
@@ -194,12 +196,21 @@ run_fixture() {
   kubectl create namespace "${ns}"
 
   log "H3-prep: helm install N-1 (${IMAGE_N1_TAG}) with chart ${N1_CHART_VERSION}"
-  helm upgrade --install "${RELEASE}" "${N1_CHART}" \
+  if ! helm upgrade --install "${RELEASE}" "${N1_CHART}" \
     --namespace "${ns}" \
     -f "${VALUES_CI}" \
+    -f "${VALUES_CI_N1_PROBES}" \
     --set "image.tag=${IMAGE_N1_TAG}" \
     --wait \
-    --timeout "${TIMEOUT}"
+    --timeout "${TIMEOUT}"; then
+    log "N-1 helm install failed — dumping pod/events for ${ns}"
+    kubectl -n "${ns}" get pods,pvc,events -o wide >"${evidence}/n1-install-dump.txt" 2>&1 || true
+    kubectl -n "${ns}" describe pods >>"${evidence}/n1-install-dump.txt" 2>&1 || true
+    kubectl -n "${ns}" logs -l "app.kubernetes.io/instance=${RELEASE}" --tail=200 \
+      >>"${evidence}/n1-install-dump.txt" 2>&1 || true
+    cat "${evidence}/n1-install-dump.txt" >&2 || true
+    fail "N-1 helm install did not become Ready (see ${evidence}/n1-install-dump.txt)"
+  fi
 
   wait_for_pod_ready "${ns}" "${RELEASE}" 900
 

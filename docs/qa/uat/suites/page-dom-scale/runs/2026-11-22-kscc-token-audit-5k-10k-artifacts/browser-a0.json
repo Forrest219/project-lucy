@@ -1,0 +1,225 @@
+{
+  "at": "2026-11-22T10:37:15.849Z",
+  "mode": "a0",
+  "web": "http://127.0.0.1:55578",
+  "browser": "158.0.8127.36",
+  "headless": false,
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "samples": [
+    {
+      "name": "a0-token-cold-navigation",
+      "path": "/admin/tokens",
+      "clock": "navigation",
+      "startFocus": true,
+      "ms": 247.3,
+      "visibility": "visible",
+      "focus": true,
+      "domNodes": 6876,
+      "rows": 202,
+      "longestTaskMs": 61,
+      "api": [
+        {
+          "path": "/api/admin/tokens",
+          "status": 200,
+          "ok": true,
+          "ms": 30.9,
+          "bytes": 85064,
+          "serverTiming": "total;dur=27.4, builds;desc=0",
+          "count": 202,
+          "total": 202,
+          "range": null,
+          "projection": null,
+          "error": null
+        }
+      ],
+      "cache": "network",
+      "errors": [],
+      "result": "PASS"
+    },
+    {
+      "name": "a0-token-first-spa",
+      "path": "/admin/tokens",
+      "clock": "event",
+      "startFocus": true,
+      "ms": 329,
+      "visibility": "visible",
+      "focus": true,
+      "domNodes": 6879,
+      "rows": 202,
+      "longestTaskMs": 0,
+      "api": [
+        {
+          "path": "/api/admin/tokens",
+          "status": 200,
+          "ok": true,
+          "ms": 15,
+          "bytes": 85064,
+          "serverTiming": "total;dur=12.6, builds;desc=0",
+          "count": 202,
+          "total": 202,
+          "range": null,
+          "projection": null,
+          "error": null
+        }
+      ],
+      "cache": "network",
+      "errors": [],
+      "result": "PASS"
+    },
+    {
+      "name": "a0-token-warm-spa-1",
+      "path": "/admin/tokens",
+      "clock": "event",
+      "startFocus": true,
+      "ms": 97.7,
+      "visibility": "visible",
+      "focus": true,
+      "domNodes": 6879,
+      "rows": 202,
+      "longestTaskMs": 0,
+      "api": [
+        {
+          "path": "/api/admin/tokens",
+          "status": 200,
+          "ok": true,
+          "ms": 41.9,
+          "bytes": 85064,
+          "serverTiming": "total;dur=34.3, builds;desc=0",
+          "count": 202,
+          "total": 202,
+          "range": null,
+          "projection": null,
+          "error": null
+        }
+      ],
+      "cache": "network",
+      "errors": [],
+      "result": "PASS"
+    },
+    {
+      "name": "a0-token-warm-spa-2",
+      "path": "/admin/tokens",
+      "clock": "event",
+      "startFocus": true,
+      "ms": 79.6,
+      "visibility": "visible",
+      "focus": true,
+      "domNodes": 6879,
+      "rows": 202,
+      "longestTaskMs": 0,
+      "api": [
+        {
+          "path": "/api/admin/tokens",
+          "status": 200,
+          "ok": true,
+          "ms": 62.1,
+          "bytes": 85064,
+          "serverTiming": "total;dur=55.8, builds;desc=0",
+          "count": 202,
+          "total": 202,
+          "range": null,
+          "projection": null,
+          "error": null
+        }
+      ],
+      "cache": "network",
+      "errors": [],
+      "result": "PASS"
+    },
+    {
+      "name": "a0-token-warm-spa-3",
+      "path": "/admin/tokens",
+      "clock": "event",
+      "startFocus": true,
+      "ms": 79.9,
+      "visibility": "visible",
+      "focus": true,
+      "domNodes": 6879,
+      "rows": 202,
+      "longestTaskMs": 0,
+      "api": [
+        {
+          "path": "/api/admin/tokens",
+          "status": 200,
+          "ok": true,
+          "ms": 30.3,
+          "bytes": 85064,
+          "serverTiming": "total;dur=27.9, builds;desc=0",
+          "count": 202,
+          "total": 202,
+          "range": null,
+          "projection": null,
+          "error": null
+        }
+      ],
+      "cache": "network",
+      "errors": [],
+      "result": "PASS"
+    },
+    {
+      "name": "a0-token-search",
+      "path": "/admin/tokens",
+      "clock": "event",
+      "startFocus": true,
+      "ms": 86.4,
+      "visibility": "visible",
+      "focus": true,
+      "domNodes": 446,
+      "rows": 1,
+      "longestTaskMs": 0,
+      "api": [
+        {
+          "path": "/api/admin/tokens?search=uat_pds_audit_high_20261122_001",
+          "status": 200,
+          "ok": true,
+          "ms": 21.2,
+          "bytes": 562,
+          "serverTiming": "total;dur=18.8, builds;desc=0",
+          "count": 1,
+          "total": 202,
+          "range": null,
+          "projection": null,
+          "error": null
+        }
+      ],
+      "cache": "network",
+      "errors": [],
+      "result": "PASS"
+    },
+    {
+      "name": "a0-token-search-clear",
+      "path": "/admin/tokens",
+      "clock": "event",
+      "startFocus": true,
+      "ms": 70.7,
+      "visibility": "visible",
+      "focus": true,
+      "domNodes": 6879,
+      "rows": 202,
+      "longestTaskMs": 0,
+      "api": [
+        {
+          "path": "/api/admin/tokens",
+          "status": 200,
+          "ok": true,
+          "ms": 15.3,
+          "bytes": 85064,
+          "serverTiming": "total;dur=12.1, builds;desc=0",
+          "count": 202,
+          "total": 202,
+          "range": null,
+          "projection": null,
+          "error": null
+        }
+      ],
+      "cache": "network",
+      "errors": [],
+      "result": "PASS"
+    }
+  ],
+  "cases": [],
+  "completed": "2026-11-22T10:37:19.035Z"
+}

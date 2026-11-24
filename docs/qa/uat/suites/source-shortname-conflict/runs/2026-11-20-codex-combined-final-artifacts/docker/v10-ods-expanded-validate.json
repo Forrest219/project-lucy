@@ -1,0 +1,33 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 27,
+  "body": {
+    "ok": true,
+    "data": {
+      "valid": true,
+      "connectionId": "hive-1",
+      "schema": "ods",
+      "assetKind": "schema_manifest",
+      "assetType": "schemaManifest",
+      "targetPath": "semantic-layer/hive-1/_schema/ods.yaml",
+      "originalFilename": "ods.yaml",
+      "sizeBytes": 455,
+      "sha256": "1104f7b16eadff2b0039e34a7c7d96deaffc4ed19dca072491317260e3168217",
+      "errors": [],
+      "warnings": [
+        {
+          "code": "TARGET_EXISTS",
+          "message": "目标文件已存在：semantic-layer/hive-1/_schema/ods.yaml"
+        }
+      ],
+      "tableNames": [
+        "ods_city",
+        "ods_zebra",
+        "ods_ods_zebra"
+      ],
+      "tables": 3,
+      "sourceNameConflicts": [],
+      "exists": true
+    }
+  }
+}

@@ -17,6 +17,15 @@ vi.mock("../ktx", () => ({
   }))
 }));
 
+const ktxMcpReload = vi.hoisted(() => ({
+  reloadKtxMcpAfterConfigWrite: vi.fn(async (): Promise<{ status: "reloaded" | "started" | "skipped" | "failed"; detail: string }> => ({ status: "reloaded", detail: "ok" }))
+}));
+
+vi.mock("../ktx-mcp-reload.js", () => ({
+  reloadKtxMcpAfterConfigWrite: ktxMcpReload.reloadKtxMcpAfterConfigWrite,
+  reloadKtxMcpExecutionRuntime: ktxMcpReload.reloadKtxMcpAfterConfigWrite
+}));
+
 let projectRoot: string;
 let previousRoot: string | undefined;
   let previousContentRoot: string | undefined;
@@ -460,6 +469,7 @@ describe("connection enabled_tables API", () => {
     expect(typeof response.body.data.policyVersion).toBe("string");
     expect(typeof response.body.data.runtimeAck).toBe("boolean");
     expect(response.body.data.policyRuntimeAck).toBe(response.body.data.runtimeAck);
+    expect(Array.isArray(response.body.data.policyRuntimeIssues)).toBe(true);
     expect(typeof response.body.data.catalogRuntimeAck).toBe("boolean");
     expect(typeof response.body.data.executionRuntimeAck).toBe("boolean");
     expect(["unknown", "ok", "stale", "unavailable", "error"]).toContain(
@@ -642,6 +652,25 @@ schemas:
     expect(written).not.toMatch(/connections:\s*\n\s*\{/);
     expect(() => parse(written)).not.toThrow();
     await request(app.server).get("/api/project").expect(200);
+    await app.close();
+  });
+
+  it("returns 503 EXECUTION_RUNTIME_NOT_LOADED when reload fails (诚实行为守护 ed7eec01)", async () => {
+    // Guard: when reloadKtxMcpAfterConfigWrite returns "failed", settleExecutionRuntime
+    // must throw 503 EXECUTION_RUNTIME_NOT_LOADED. This test ensures the mock used in
+    // other tests in this file cannot silently hide a regression in that code path.
+    await writeConnectionProject();
+    ktxMcpReload.reloadKtxMcpAfterConfigWrite.mockResolvedValueOnce({ status: "failed", detail: "simulated reload failure" });
+    const app = buildServer();
+    await app.ready();
+    const response = await request(app.server)
+      .put("/api/connections/mysql-aliyun/enabled-tables")
+      .send({ dryRun: false, enabledTables: ["dataforai.superstore_orders"] })
+      .expect(503);
+
+    expect(response.body.ok).toBe(false);
+    expect(response.body.error.code).toBe("EXECUTION_RUNTIME_NOT_LOADED");
+    expect(response.body.error.message).toBe("配置已保存，但执行层未加载。");
     await app.close();
   });
 });

@@ -14,6 +14,7 @@ import { parseProbePurpose, ProbeScheduler, type ProbeTiming } from "./backgroun
 import {
   createDisplayRequestBudget,
   getDisplaySnapshot,
+  displayBusySummary,
   prewarmDisplaySnapshots,
   registerDisplayPrewarmer,
   ensureDisplayReconciler,
@@ -35,7 +36,7 @@ import {
 import { isSqlServerDriver, normalizeEnabledTableNames } from "../src/lib/enabled-table-identity.js";
 import { joinCandidatesPath, readJoinCandidates, writeJoinCandidates, type JoinCandidate } from "./joins-sidecar";
 import { formatConnectionErrorMessage } from "./connection-errors";
-import { readKtxRuntimeStatus } from "./ktx-runtime";
+import { peekKtxRuntimeStatus, readKtxRuntimeStatusCached } from "./ktx-runtime";
 import { resolveLucyVersion } from "./lucy-version.js";
 import { loadRuntimeRevision } from "./lucy-revision.js";
 import { reindexProject, validateSource, testConnection, type ValidationResult } from "./ktx";
@@ -47,6 +48,11 @@ import {
   peekLiveSchemasCache
 } from "./live-catalog";
 import { previewSchemaStructure, SchemaStructureError } from "./schema-structure";
+import { readSchemaTableRejection } from "../shared/schema-table-rejection.js";
+import { SCHEMA_REQUEST_TIMEOUT_MS } from "./schema-read-deadline.js";
+import { CALL_BUDGET_MS, parseRequestedTables } from "./schema-structure-batch";
+import { withHeavyWorkPermit } from "./runtime/heavy-work-capacity.js";
+import { hashSessionJti } from "./security/store.js";
 import {
   addSchema,
   createConnection,
@@ -61,7 +67,14 @@ import {
   updateConnectionEndpoint
 } from "./project";
 import { loadContentPaths, resolveContentPaths } from "./paths";
-import { collectContentLayout, mirrorOnlySemanticRelPaths } from "./content-layout";
+// P0-1 问题类型口径绑定（Spec v0.9 O1）。
+import {
+  commitCaliberBindingRegistry,
+  loadCaliberBindingCandidate,
+  recoverCaliberBindingRegistry
+} from "./proxy/caliber-binding-registry";
+import { withCaliberBindingRegistryExclusion } from "./proxy/caliber-binding-lock";
+import { collectContentLayout, mirrorOnlySemanticRelPaths, type ContentLayoutStatus } from "./content-layout";
 import { buildSemanticModelIndex } from "./semantic-identity";
 import { applySharedSemanticLegality } from "./semantic-checks";
 import {
@@ -156,19 +169,45 @@ import { registerRowPolicyTemplateRoutes } from "./admin/routes/row-policy.js";
 import { registerAuthorizationSummaryRoutes } from "./admin/routes/authorization-summary.js";
 // Lucy v0.25 / L25-08 — 访问关系图（P1-3）。
 import { registerAccessMapRoutes } from "./admin/routes/access-map.js";
+import { registerAccessWriteStatusRoutes } from "./admin/access-write-status.js";
 // Lucy v0.25 / L25-10 — Hive 直连的配置面（P1-4，仅编译侧）。
 import { registerHiveConnectionRoutes } from "./admin/routes/hive.js";
+import { warmAuditDatabases } from "./admin/audit-warmup.js";
 import { auditedWriteFile } from "./admin/config-audit-write.js";
 import { registerMcpToolsRoutes } from "./admin/mcp-tools.js";
 import { registerMcpPlaygroundRoutes } from "./admin/mcp-playground.js";
 import {
-  readMcpRuntimeStatus,
+  peekExecutionProbe,
   registerMcpRuntimeRoutes,
-  runMcpRuntimeCanary
+  runMcpRuntimeCanary,
+  startExecutionProbeRefresh,
+  stopExecutionProbeRefresh
 } from "./admin/mcp-runtime.js";
 import { markExecutionRuntimePending } from "./admin/mcp-runtime-reload.js";
-import { readKtxYamlDigest } from "./mcp-runtime-state.js";
+import { readKtxYamlDigest, snapshotExecutionRuntimeObservations } from "./mcp-runtime-state.js";
+import { collectDiagnosticIo, type DiagnosticStepHold } from "./runtime/diagnostic-collector.js";
+import {
+  createOpsStepId,
+  getOpsStepJournal,
+  opsStepReasonFromError
+} from "./runtime/ops-step-journal.js";
+import { registerOpsStepRoutes } from "./admin/ops-steps.js";
+import { opsStepUatBusyError, registerOpsStepUatRoutes } from "./admin/ops-step-uat.js";
 import { reloadKtxMcpAfterConfigWrite } from "./ktx-mcp-reload.js";
+
+async function settleExecutionRuntime(
+  projectRoot: string,
+  digestBefore: string,
+  connectionId?: string
+): Promise<boolean> {
+  const reload = await reloadKtxMcpAfterConfigWrite(projectRoot, connectionId);
+  await pendingAfterConfigReload(projectRoot, digestBefore, reload);
+  if (reload.status === "reloaded" || reload.status === "started") return false;
+  const err = new Error("配置已保存，但执行层未加载。") as Error & { statusCode: number; code: string };
+  err.statusCode = 503;
+  err.code = "EXECUTION_RUNTIME_NOT_LOADED";
+  throw err;
+}
 import { registerRiskReviewRoutes } from "./admin/risk-review.js";
 import { registerReleaseReadinessRoutes } from "./admin/release-readiness-package.js";
 import { removeLegacyLicenseFile } from "./remove-legacy-license-file.js";
@@ -182,7 +221,7 @@ import { buildAdminOpenApiDocument } from "./admin/openapi-document.js";
 import { registerOidcRoutes } from "./auth/oidc-routes.js";
 import { registerBrandingRoutes } from "./branding.js";
 import { actorIdFromRequest, requireWebuiAuthHook } from "./auth/guard.js";
-import { auditActorFields, trustedActorFromRequest } from "./security/request-actor.js";
+import { ActorUnresolvedError, auditActorFields, trustedActorFromRequest } from "./security/request-actor.js";
 import { assertStartupPolicy, resolveCookieSecure } from "./auth/deployment-mode.js";
 import { reconcileBootstrapOnStartup } from "./auth/bootstrap.js";
 import { closeSecurityStore, getSecurityStore } from "./security/instance.js";
@@ -199,7 +238,30 @@ import {
 import { loadWikiAccessConfigSnapshot } from "./wiki-access-effects.js";
 import { recoverWikiAccessOperations } from "./wiki-access-recovery.js";
 import { recoverInterruptedOperations } from "./security/ledger.js";
-import { AUDIT_PROJECTOR_NAME, createProjectionScheduler, readTargetCursor } from "./security/projector.js";
+import { AUDIT_PROJECTOR_NAME, createProjectionScheduler, readTargetCursor, registerProjectionTrigger } from "./security/projector.js";
+import { bindInferredTurnMaintainer, createInferredTurnMaintainer, isInferredMaintainerPaused, stopInferredTurnMaintainer } from "./admin/inferred-turn-maintainer.js";
+import { INFERRED_TURN_REBUILD_LOOKBACK_HOURS, rebuildInferredTurns } from "./proxy/audit.js";
+import { eventLoopDelaySnapshot } from "./runtime/event-loop-delay.js";
+import { isWebuiReady, markWebuiWarmupComplete } from "./runtime/readiness.js";
+import { getMcpExecutionCapacity } from "./runtime/mcp-execution-capacity.js";
+import { isSelfHealNotReady, selfHealSnapshot, startSelfHeal, stopSelfHeal } from "./runtime/self-heal.js";
+import {
+  configureProcessDrainIpc,
+  drainIpcPathsForProject,
+  getProcessLifecyclePhase,
+  installProcessDrainSignalHandlers,
+  SERVICE_DRAINING,
+  SERVICE_DRAINING_MESSAGE,
+  startWatchingParentDrainRequest,
+  tryAdmitBusinessWork,
+  type AdmitTicket
+} from "./runtime/process-drain.js";
+import {
+  bindDiagnosticSnapshotService,
+  DiagnosticSnapshotService,
+  type DiagnosticData,
+  type DiagnosticsMeta
+} from "./runtime/diagnostic-snapshot.js";
 import { recoverProjectionCursor } from "./security/recovery.js";
 import { recordProjectionStatus } from "./proxy/audit-write-health.js";
 import { registerWebSecurity } from "./web-security.js";
@@ -216,6 +278,11 @@ import { registerR1ObservabilityRoutes } from "./observability.js";
 import { registerCallMonitorRoutes } from "./ops/call-monitor.js";
 import { safeWrite } from "./fs-safe.js";
 import { isPublishCoordinatorBusy, withPublishCoordinator } from "./publish-coordinator.js";
+import {
+  armSharedIndexMutationBarrier,
+  markUpstreamIndexAdvanced,
+  settleSharedIndexMutationBarrier
+} from "./proxy/field-exposure.js";
 import {
   beginPublishConsumptionEvidence,
   commitPublishConsumptionEvidence,
@@ -235,6 +302,8 @@ import {
 } from "./semantic-assets.js";
 import {
   readPublishPendingSnapshot,
+  scanPublishContent,
+  type PublishContentScan,
   type PublishPendingSnapshot
 } from "./publish-workbench-state.js";
 import {
@@ -405,6 +474,21 @@ function supportedErrorDetail(error: SupportedError): unknown {
       );
     }
   }
+  if (error.code === "READ_FAILED") {
+    const detail = error.detail;
+    if (!detail || typeof detail !== "object") return undefined;
+    const source = detail as Record<string, unknown>;
+    const tableRejection = readSchemaTableRejection(source.tableRejection);
+    // SQL and driver stderr stay in server logs only — never on the wire.
+    return {
+      ...(typeof source.connectionId === "string" ? { connectionId: source.connectionId } : {}),
+      ...(typeof source.schema === "string" ? { schema: source.schema } : {}),
+      ...(typeof source.table === "string" ? { table: source.table } : {}),
+      ...(typeof source.phase === "string" ? { phase: source.phase } : {}),
+      ...(tableRejection ? { tableRejection } : {}),
+      ...(typeof source.opsStepId === "string" ? { opsStepId: source.opsStepId } : {})
+    };
+  }
   if (error.code === "connection_references_remain") {
     // Spec 179 §3 / §5: blockers let the Admin client say which of 角色 / 用户 /
     // 业务 Wiki / 本地 YAML 资产 still block deletion. Pinned shape — only `{kind, id}`.
@@ -444,10 +528,10 @@ function distDir(): string {
  */
 
 /**
- * Spec 191 §11.1 — a write that changes ktx.yaml leaves the execution layer
- * behind: the configuration is on disk, but the daemon has not confirmed
- * loading it. The write path only REPORTS that fact (and never triggers a
- * reload by itself); the owner decides when to reload.
+ * Spec 191 §11.1 — after a ktx.yaml write the write path attempts an automatic
+ * execution-layer reload. Mark `reload_required` only when that attempt did not
+ * complete (`reloaded` / `started`); a successful reload must not be overwritten
+ * back to pending.
  */
 async function noteExecutionRuntimePending(
   projectRoot: string,
@@ -461,9 +545,47 @@ async function noteExecutionRuntimePending(
   }
 }
 
+async function pendingAfterConfigReload(
+  projectRoot: string,
+  digestBefore: string,
+  reload: { status: string }
+): Promise<boolean> {
+  if (reload.status === "reloaded" || reload.status === "started") {
+    return false;
+  }
+  return noteExecutionRuntimePending(projectRoot, digestBefore);
+}
+
 /** The configuration digest as it was BEFORE a write, for the pending check. */
 async function ktxDigestSnapshot(projectRoot: string): Promise<string> {
   return readKtxYamlDigest(projectRoot).catch(() => "");
+}
+
+/**
+ * P1-64／REQ-030-085 D9 — narrow Policy ack for the two ktx.yaml write paths
+ * (connection create + enabled-tables). Source Map compile failure must not
+ * report policyRuntimeAck/runtimeAck=true. Does not change evaluateRuntimeAck
+ * used by Access writes (D10).
+ */
+function ackKtxWritePolicyRuntime(status: {
+  policyVersion: string;
+  degradedGlobal: boolean;
+  issues: Array<{ reason?: string }>;
+}): {
+  policyRuntimeAck: boolean;
+  runtimeAck: boolean;
+  policyRuntimeIssues: Array<{ reason?: string }>;
+} {
+  const sourceMapFailed = status.issues.some((issue) =>
+    (issue.reason ?? "").startsWith("source_map_compile_failed:")
+  );
+  const policyRuntimeAck =
+    status.policyVersion !== "" && !status.degradedGlobal && !sourceMapFailed;
+  return {
+    policyRuntimeAck,
+    runtimeAck: policyRuntimeAck,
+    policyRuntimeIssues: status.issues
+  };
 }
 
 async function executionAckForConnection(connectionId: string): Promise<{
@@ -558,21 +680,21 @@ function logProbeTiming(request: FastifyRequest, kind: string, purpose: string, 
  */
 async function buildPendingChangedFiles(
   projectRoot: string,
-  snapshot: PublishPendingSnapshot
+  snapshot: PublishPendingSnapshot,
+  scan: PublishContentScan
 ): Promise<Array<{ filePath: string; status: string; diff: string }>> {
-  const files: Array<{ filePath: string; status: string; diff: string }> = [];
-  for (const change of snapshot.changes) {
+  return mapLimit(snapshot.changes, 4, async (change) => {
     const evidence = await readPublishEvidence(
       projectRoot,
-      evidenceRefFor(change.logicalPath, "diff")
+      evidenceRefFor(change.logicalPath, "diff"),
+      scan
     );
-    files.push({
+    return {
       filePath: change.logicalPath,
       status: change.changeType,
       diff: evidence?.kind === "diff" ? evidence.content : ""
-    });
-  }
-  return files;
+    };
+  });
 }
 
 /**
@@ -647,9 +769,180 @@ async function resolvePendingValidationTargets(
   return targets;
 }
 
+let contentLayoutCache: { at: number; value: ContentLayoutStatus | null } | null = null;
+const CONTENT_LAYOUT_TTL_MS = 30_000;
+
+/**
+ * Full diagnostic collect for the P1-61 background snapshot.
+ * May perform file / subprocess / network I/O — never call from probe handlers.
+ */
+async function collectDependencyDiagnostics(
+  signal: AbortSignal,
+  uatTrigger?: { opId: string; steps: DiagnosticStepHold["steps"]; holdMs: number }
+): Promise<DiagnosticData> {
+  const policy = getPolicyRuntimeStatus();
+  const reusedLayout = contentLayoutCache?.value && Date.now() - contentLayoutCache.at < CONTENT_LAYOUT_TTL_MS
+    ? contentLayoutCache.value : undefined;
+  const io = await collectDiagnosticIo(signal, {
+    probe: peekExecutionProbe(),
+    observations: snapshotExecutionRuntimeObservations(),
+    ktxRuntime: peekKtxRuntimeStatus(),
+    ...(reusedLayout ? { contentLayout: reusedLayout } : {}),
+    ...(uatTrigger
+      ? { opId: uatTrigger.opId, uatHold: { steps: uatTrigger.steps, holdMs: uatTrigger.holdMs } }
+      : {})
+  });
+  const { ktxRuntime } = io;
+  const contentLayout = io.contentLayout ?? contentLayoutCache?.value;
+  if (io.contentLayout && !reusedLayout) contentLayoutCache = { at: Date.now(), value: io.contentLayout };
+  const policyHealthy = isPolicyRuntimeHealthy(policy);
+  const executionHardFailure = ["stale", "unavailable", "error"].includes(io.execution.status);
+  const healthy = policyHealthy && ktxRuntime.ready && !executionHardFailure;
+  return {
+    status: healthy ? "ok" : "degraded",
+    ...(resolveCookieSecure().insecureTestProfile ? { insecureTestProfile: true } : {}),
+    lucyVersion: resolveLucyVersion(),
+    ...loadRuntimeRevision(),
+    bundledKtxVersion: process.env.LUCY_BUNDLED_KTX_VERSION ?? "unknown",
+    ktxRuntime: {
+      ready: ktxRuntime.ready,
+      status: ktxRuntime.status,
+      ...(ktxRuntime.detail ? { detail: ktxRuntime.detail } : {})
+    },
+    policy: {
+      policyVersion: policy.policyVersion,
+      degradedGlobal: policy.degradedGlobal,
+      degradedAgents: policy.degradedAgents,
+      healthy: policyHealthy
+    },
+    execution: io.execution,
+    dataQaInstructions: getDataQaInstructionsStatus(),
+    ...(contentLayout ? { contentLayout } : {})
+  };
+}
+
+/**
+ * Memory-only unknown placeholder when no successful snapshot exists yet.
+ * Uses peeks / env / already-cached process identity — no diagnostic I/O.
+ */
+function unknownDiagnosticData(processIdentity: {
+  lucyVersion: string;
+  gitSha: string;
+  gitDirty: boolean;
+  bundledKtxVersion: string;
+}): DiagnosticData {
+  const policy = getPolicyRuntimeStatus();
+  const policyHealthy = isPolicyRuntimeHealthy(policy);
+  const ktxRuntime = peekKtxRuntimeStatus();
+  const probe = peekExecutionProbe();
+  const execution = probe
+    ? {
+        status: probe.status === "reachable" ? ("unknown" as const) : probe.status,
+        lastCheckedAt: probe.checkedAt,
+        ...(probe.error ? { lastError: probe.error } : {})
+      }
+    : { status: "unknown" as const, lastCheckedAt: "1970-01-01T00:00:00.000Z" };
+  const executionHardFailure = ["stale", "unavailable", "error"].includes(execution.status);
+  const healthy = policyHealthy && ktxRuntime.ready && !executionHardFailure;
+  return {
+    // Never forge healthy solely because diagnostics are unknown: when ktx is
+    // uncached and execution unverified, status stays degraded.
+    status: healthy ? "ok" : "degraded",
+    ...(resolveCookieSecure().insecureTestProfile ? { insecureTestProfile: true } : {}),
+    lucyVersion: processIdentity.lucyVersion,
+    gitSha: processIdentity.gitSha,
+    gitDirty: processIdentity.gitDirty,
+    bundledKtxVersion: processIdentity.bundledKtxVersion,
+    ktxRuntime: {
+      ready: ktxRuntime.ready,
+      status: ktxRuntime.status,
+      ...(ktxRuntime.detail ? { detail: ktxRuntime.detail } : {})
+    },
+    policy: {
+      policyVersion: policy.policyVersion,
+      degradedGlobal: policy.degradedGlobal,
+      degradedAgents: policy.degradedAgents,
+      healthy: policyHealthy
+    },
+    execution,
+    dataQaInstructions: getDataQaInstructionsStatus()
+  };
+}
+
+function probeDataFromMemory(
+  processIdentity: {
+    lucyVersion: string;
+    gitSha: string;
+    gitDirty: boolean;
+    bundledKtxVersion: string;
+  },
+  snapshot: { readPublished: () => { data: DiagnosticData | null; diagnostics: DiagnosticsMeta } }
+): { data: DiagnosticData; diagnostics: DiagnosticsMeta } {
+  const published = snapshot.readPublished();
+  const data = published.data ?? unknownDiagnosticData(processIdentity);
+  return { data, diagnostics: published.diagnostics };
+}
+
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      results[index] = await fn(items[index]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 export function buildServer() {
   assertStartupPolicy(); // invalid mode, Chart-mode override or insecure customer cookie refuses to start
   const app = Fastify({ logger: true });
+  // Capture process identity once at server build so probe handlers never read VERSION/git.
+  const processIdentity = {
+    lucyVersion: resolveLucyVersion(),
+    ...loadRuntimeRevision(),
+    bundledKtxVersion: process.env.LUCY_BUNDLED_KTX_VERSION ?? "unknown"
+  };
+  // P1-61 — background diagnostic snapshot; probe routes only read memory.
+  const diagnosticSnapshot = new DiagnosticSnapshotService({
+    collect: collectDependencyDiagnostics
+  });
+  bindDiagnosticSnapshotService(diagnosticSnapshot);
+  let inferredMaintainer: ReturnType<typeof createInferredTurnMaintainer> | null = null;
+  app.addHook("onReady", async () => {
+    if (inferredMaintainer) return;
+    if (isInferredMaintainerPaused()) {
+      app.log.warn("[inferred-turns] LUCY_INFERRED_MAINTAINER=off: background inferred-turn rebuild is paused");
+      return;
+    }
+    inferredMaintainer = createInferredTurnMaintainer({
+      getDb: getAuditDb,
+      rebuild: (userId) => rebuildInferredTurns(userId, { lookbackHours: INFERRED_TURN_REBUILD_LOOKBACK_HOURS })
+    });
+    bindInferredTurnMaintainer(inferredMaintainer);
+    // Tests read the audit page as soon as the app is ready, so the first pass
+    // finishes first. Production listen does not wait; users are rebuilt one by one.
+    // P1-39: outside tests the first scan waits for the listener. It shares the disk with the
+    // remaining onReady hooks; on a cold throttled disk that pushed a hook past its 10 s timeout.
+    const underTest = process.env.VITEST === "true";
+    const listening = new Promise<void>((resolve) => { app.server.once("listening", () => resolve()); });
+    await inferredMaintainer.start({ awaitInitial: underTest, after: underTest ? undefined : listening });
+  });
+  app.addHook("onReady", async () => {
+    diagnosticSnapshot.start();
+  });
+  app.addHook("onClose", async () => {
+    inferredMaintainer?.stop();
+    bindInferredTurnMaintainer(null);
+    inferredMaintainer = null;
+  });
+  app.addHook("onClose", async () => {
+    await diagnosticSnapshot.close();
+    bindDiagnosticSnapshotService(null);
+  });
   const writtenFiles: SessionWrittenFile[] = [];
   const changedSources = new Map<string, { conn: string; schema: string; table: string }>();
 
@@ -661,6 +954,8 @@ export function buildServer() {
     if (!scopes.includes("L")) return;
     probeScheduler.invalidateGeneration();
     clearLiveCatalogCache();
+    // P1-61 — project/config generation change must discard late diagnostic publishes.
+    diagnosticSnapshot.bumpGeneration();
   });
   // Spec 174 §3.2 — display snapshots are only served while a reconciler verifies them.
   let stopOwnReconciler: () => void = () => undefined;
@@ -716,11 +1011,43 @@ export function buildServer() {
     stopDiscoveryWorker();
   });
   app.addHook("onClose", async () => {
+    stopSelfHeal();
     closeSecurityStore();
     stopOwnReconciler();
     stopProbeInvalidation();
     probeScheduler.close();
   });
+  // P1-63 — shared Web admit barrier before auth (probes are not business in-flight).
+  app.addHook("onRequest", async (request, reply) => {
+    const pathOnly = (request.url.split("?")[0] ?? request.url).split("#")[0] ?? "";
+    if (
+      pathOnly === "/api/livez" ||
+      pathOnly === "/api/readyz" ||
+      pathOnly === "/api/health" ||
+      !pathOnly.startsWith("/api/")
+    ) {
+      return;
+    }
+    const admitted = tryAdmitBusinessWork();
+    if (!admitted.ok) {
+      return reply.status(503).send({
+        ok: false,
+        error: { code: SERVICE_DRAINING, message: SERVICE_DRAINING_MESSAGE }
+      });
+    }
+    const ticket = admitted.ticket;
+    (request as FastifyRequest & { lucyDrainTicket?: AdmitTicket }).lucyDrainTicket = ticket;
+    // Default retire on response finish. Adapters may replace settle via
+    // registerSettle before the first await; bare client disconnect does not retire.
+    let retired = false;
+    const retire = () => {
+      if (retired) return;
+      retired = true;
+      void ticket.retireWhenSettled();
+    };
+    reply.raw.on("finish", retire);
+  });
+
   app.addHook("onRequest", requireWebuiAuthHook);
 
   app.setErrorHandler((error: SupportedError, request, reply) => {
@@ -762,75 +1089,46 @@ export function buildServer() {
     }
     const retryAfter = (error as { retryAfterSeconds?: unknown }).retryAfterSeconds;
     if (typeof retryAfter === "number") reply.header("Retry-After", String(retryAfter));
+    // P0-1：忙碌原因（固定枚举，无敏感信息）随响应头返回，供现场与 UAT 归因。
+    const busyReason = (error as { reason?: unknown }).reason;
+    if (code === "DISPLAY_SNAPSHOT_BUSY" && typeof busyReason === "string") reply.header("X-Lucy-Busy-Reason", busyReason);
 
     reply.status(statusCode).send(payload);
   });
 
-  app.get("/api/health", async () => {
-    const policy = getPolicyRuntimeStatus();
-    // Spec 180 §2 — the content layout diagnostic is a *side* check on
-    // `/api/health`. Health must not depend on it resolving: a project root
-    // we cannot locate (early boot, missing ktx.yaml) must still produce
-    // a 200 with the existing policy / ktx / execution signal.
-    let contentLayout: import("./content-layout").ContentLayoutStatus | null = null;
-    try {
-      const projectRoot = await resolveProjectRoot();
-      const contentPaths = await resolveContentPaths(projectRoot);
-      contentLayout = await collectContentLayout(projectRoot, contentPaths);
-    } catch {
-      // leave null; `contentLayout` is omitted from the envelope.
+  // P1-61 — probe handlers read only in-memory lifecycle + published diagnostics.
+  // P1-63 — probes are not business in-flight; DRAINING → readyz 503; livez 200
+  // while listening; health keeps diagnostic semantics.
+  app.get("/api/livez", async () => ({ ok: true }));
+
+  app.get("/api/readyz", async (_request, reply) => {
+    const { data, diagnostics } = probeDataFromMemory(processIdentity, diagnosticSnapshot);
+    if (!isWebuiReady()) {
+      reply.code(503);
+      const phase = getProcessLifecyclePhase();
+      const reason =
+        phase === "DRAINING" || phase === "STOPPING" || phase === "STOPPED" ? "draining" : "warming_up";
+      return { ok: false, reason, data, diagnostics };
     }
-    const [ktxRuntime, mcpRuntime] = await Promise.all([
-      readKtxRuntimeStatus(),
-      readMcpRuntimeStatus().catch((error) => ({
-        execution: {
-          status: "error" as const,
-          lastCheckedAt: new Date().toISOString(),
-          lastError: error instanceof Error ? error.message : String(error)
-        }
-      }))
-    ]);
-    const policyHealthy = isPolicyRuntimeHealthy(policy);
-    const executionHardFailure = ["stale", "unavailable", "error"].includes(
-      mcpRuntime.execution.status
-    );
-    // Spec 180 §2 — drift is informational; it must not turn `status` into a
-    // failure. `healthy` only reflects policy + ktx runtime + MCP execution.
-    const healthy = policyHealthy && ktxRuntime.ready && !executionHardFailure;
+    // P1-81 SC-03 — an instance that declared itself stuck must not keep reporting ready.
+    if (isSelfHealNotReady()) {
+      reply.code(503);
+      return { ok: false, reason: "stuck", data: { ...data, selfHeal: selfHealSnapshot() }, diagnostics };
+    }
+    return { ok: true, data, diagnostics };
+  });
+
+  app.get("/api/health", async () => {
+    const { data, diagnostics } = probeDataFromMemory(processIdentity, diagnosticSnapshot);
     return {
       ok: true,
-      data: {
-        // Spec 98 §8.4 — align with /api/admin/policy-runtime; empty policyVersion is not healthy.
-        status: healthy ? "ok" : "degraded",
-        // Spec §3.1 item 8: surfaced only while customer mode runs without Secure cookies (test profile).
-        ...(resolveCookieSecure().insecureTestProfile ? { insecureTestProfile: true } : {}),
-        lucyVersion: resolveLucyVersion(),
-        // Commit identity from /app/BUILD_REVISION or the Lucy source checkout. Not LUCY_GIT_SHA.
-        ...loadRuntimeRevision(),
-        bundledKtxVersion: process.env.LUCY_BUNDLED_KTX_VERSION ?? "unknown",
-        ktxRuntime: {
-          ready: ktxRuntime.ready,
-          status: ktxRuntime.status,
-          ...(ktxRuntime.detail ? { detail: ktxRuntime.detail } : {})
-        },
-        policy: {
-          policyVersion: policy.policyVersion,
-          degradedGlobal: policy.degradedGlobal,
-          degradedAgents: policy.degradedAgents,
-          healthy: policyHealthy
-        },
-        execution: mcpRuntime.execution,
-        // T9 — guidance is advisory; missing guidance must not fail liveness.
-        // The status is exposed for operator visibility and so an Admin can
-        // confirm the proxy is still functional when the file is being rolled out.
-        dataQaInstructions: getDataQaInstructionsStatus(),
-        // Spec 180 §2 — content root vs. mirror layout snapshot; read-only,
-        // surfaces drift without flipping `status`. Omitted when no project
-        // root can be resolved (e.g. before ktx.yaml is wired up).
-        ...(contentLayout ? { contentLayout } : {})
-      }
+      data: { ...data, eventLoop: eventLoopDelaySnapshot(), displayBusy: displayBusySummary(), selfHeal: selfHealSnapshot(), mcpCapacity: getMcpExecutionCapacity().publicSummary() },
+      diagnostics
     };
   });
+
+  // Test seam: same instance the probe routes close over (avoids ESM dual-bind flakes).
+  (app as { diagnosticSnapshot?: DiagnosticSnapshotService }).diagnosticSnapshot = diagnosticSnapshot;
 
   app.get("/api/project", async () => {
     const projectRoot = await resolveProjectRoot();
@@ -1043,24 +1341,23 @@ export function buildServer() {
     const projectRoot = await resolveProjectRoot();
     let mirrorOnlySemanticFiles: string[] = [];
     let mirrorDriftTruncated = false;
+    let contentPaths: Awaited<ReturnType<typeof resolveContentPaths>> | undefined;
     try {
-      const contentPaths = await resolveContentPaths(projectRoot);
+      contentPaths = await resolveContentPaths(projectRoot);
       const layout = await collectContentLayout(projectRoot, contentPaths);
       mirrorOnlySemanticFiles = mirrorOnlySemanticRelPaths(layout);
       mirrorDriftTruncated = layout.driftTruncated;
     } catch {
       // Spec 180: drift is advisory and must not fail the pending-change read.
     }
-    // Spec §5.1 — the pending list is the difference between the current author
-    // content and the last content version with proven sync evidence. The Git
-    // diff can DISCOVER a change; it cannot prove that the change took effect,
-    // so it is no longer the source of this list.
-    const snapshot = await readPublishPendingSnapshot(projectRoot);
+    // One content scan for the pending list and every per-file evidence read.
+    const scan = await scanPublishContent(projectRoot, contentPaths);
+    const snapshot = await readPublishPendingSnapshot(projectRoot, contentPaths, { scan });
     const impact = await buildPublishImpactSafely(projectRoot, snapshot);
     return {
       ok: true,
       data: {
-        files: await buildPendingChangedFiles(projectRoot, snapshot),
+        files: await buildPendingChangedFiles(projectRoot, snapshot, scan),
         pendingDigest: snapshot.pendingDigest,
         baselineState: snapshot.baselineState,
         baselineGeneration: snapshot.baselineGeneration,
@@ -1651,21 +1948,23 @@ export function buildServer() {
         console.error("[connection-create] catalog reload failed", error);
       }
 
-      await reloadKtxMcpAfterConfigWrite(projectRoot);
+      const executionRuntimePending = await settleExecutionRuntime(projectRoot, digestBefore, body.id);
 
       let policyVersion = "";
       let policyRuntimeAck = false;
+      let policyRuntimeIssues: Array<{ reason?: string }> = [];
       try {
         const { commitEffectivePolicy } = await import("./proxy/acl.js");
         const status = await commitEffectivePolicy();
         policyVersion = status.policyVersion;
-        policyRuntimeAck = status.policyVersion !== "" && !status.degradedGlobal;
+        const ack = ackKtxWritePolicyRuntime(status);
+        policyRuntimeAck = ack.policyRuntimeAck;
+        policyRuntimeIssues = ack.policyRuntimeIssues;
       } catch (error) {
         console.error("[connection-create] policy runtime commit failed", error);
       }
 
       const executionAck = await executionAckForConnection(body.id);
-      const executionRuntimePending = await noteExecutionRuntimePending(projectRoot, digestBefore);
 
       return {
         ok: true,
@@ -1673,6 +1972,7 @@ export function buildServer() {
           ...result,
           policyVersion,
           policyRuntimeAck,
+          policyRuntimeIssues,
           catalogRuntimeAck,
           ...executionAck,
           executionRuntimePending,
@@ -1761,22 +2061,79 @@ export function buildServer() {
 
   app.post<{
     Params: { connId: string };
-    Body: { schema?: string };
+    Body: { schema?: string; tables?: string[] };
   }>("/api/connections/:connId/schema-structure", async (request) => {
-    const projectRoot = await resolveProjectRoot();
     const schema = request.body?.schema;
     if (typeof schema !== "string" || !schema.trim()) {
       throw enabledTableError("BAD_REQUEST", "schema is required");
     }
-    try {
-      const data = await previewSchemaStructure(projectRoot, request.params.connId, schema);
-      return { ok: true, data };
-    } catch (err) {
-      if (err instanceof SchemaStructureError) {
-        throw enabledTableError(err.code, err.message);
+    const parsed = parseRequestedTables(request.body?.tables);
+    if (!parsed.ok) throw enabledTableError("BAD_REQUEST", parsed.message);
+    const { tables } = parsed;
+    const opsStepId = createOpsStepId();
+    // P1-62: capacity before project/DB/channel open; queue wait counts into CALL_BUDGET_MS.
+    const moduleStartedAt = Date.now();
+    const callBudgetMs = tables ? CALL_BUDGET_MS : SCHEMA_REQUEST_TIMEOUT_MS;
+    return withHeavyWorkPermit({
+      class: "schema_discovery",
+      identity: trustedActorFromRequest(request).actorId,
+      deadlineMs: Math.max(0, callBudgetMs - (Date.now() - moduleStartedAt)),
+      revalidate: async () => {
+        const ctx = request.lucyAdmin;
+        if (ctx?.authMode === "open") return;
+        if (!ctx?.admin) throw new ActorUnresolvedError();
+        if (!ctx.session) return;
+        const store = await getSecurityStore();
+        if (!store.ok) {
+          throw Object.assign(new Error("认证状态暂不可用，请稍后重试或联系部署人员"), {
+            code: "AUTH_STATE_UNAVAILABLE",
+            statusCode: 503
+          });
+        }
+        const validation = store.value.validateSession(hashSessionJti(ctx.session.jti));
+        if (!validation.ok || !validation.value.valid) throw new ActorUnresolvedError();
+      },
+      run: async () => {
+        const remainingBudget = Math.max(0, callBudgetMs - (Date.now() - moduleStartedAt));
+        const projectRoot = await resolveProjectRoot();
+        try {
+          const data = await previewSchemaStructure(projectRoot, request.params.connId, schema, {
+            requestTimeoutMs: SCHEMA_REQUEST_TIMEOUT_MS,
+            opsStepId,
+            ...(tables ? { tables, callBudgetMs: remainingBudget } : {})
+          });
+          return {
+            ok: true,
+            data: {
+              ...data,
+              ...((data.rejections?.length ?? 0) > 0 || (data.deferred?.length ?? 0) > 0
+                ? { opsStepId }
+                : {})
+            }
+          };
+        } catch (err) {
+          if (err instanceof SchemaStructureError) {
+            console.error("[schema-structure] preview API failed", {
+              connectionId: request.params.connId,
+              schema,
+              code: err.code,
+              message: err.message,
+              detail: err.detail ?? null
+            });
+            throw enabledTableError(err.code, err.message, {
+              ...(err.detail && typeof err.detail === "object" ? err.detail : {}),
+              opsStepId
+            });
+          }
+          console.error("[schema-structure] preview API unexpected failure", {
+            connectionId: request.params.connId,
+            schema,
+            detail: err instanceof Error ? err.message : String(err)
+          });
+          throw err;
+        }
       }
-      throw err;
-    }
+    });
   });
 
   app.get<{
@@ -1848,87 +2205,153 @@ export function buildServer() {
       new Set(oldEnabledTables)
     );
 
-    // M45: local patch preserves order, comments and unknown
-    // fields in unrelated parts of ktx.yaml so the dry-run diff only shows
-    // the enabled_tables sequence change.
-    const { proposedYaml } = patchConnectionEnabledTablesYaml(yamlText, connId, newEnabledTables);
-    const diff = makeDiff(yamlText, proposedYaml);
-
-    if (dryRun) {
-      return { ok: true, data: { diff, proposedYaml, oldEnabledTables, newEnabledTables, warnings } };
-    }
-
-    const digestBefore = await ktxDigestSnapshot(projectRoot);
-
-    // Spec 174 §3.2 — barrier spans ktx.yaml write → catalog reload → policy commit.
-    // L25-16 N05 / G17 — the legacy write entry joins the SAME ktx.yaml write lock as the
-    // control-plane batch service; otherwise the batch service's mutual-exclusion promise
-    // does not hold (the legacy entry could interleave while the batch holds the lock).
-    return withKtxYamlWriteLock(() =>
-    withDisplayWriteBarrier(["C", "D", "P", "L"], async () => {
-    const { auditId } = await auditedWriteFile(projectRoot, "ktx.yaml", proposedYaml, {
-      enabled: true,
-      changeType: "enabled_tables_update",
-      assetKind: "governance",
-      ...auditActorFields(trustedActorFromRequest(request)),
-      source: "connections_enabled_tables_api",
-      targetId: connId,
-      oldSummary: { count: oldEnabledTables.length, enabledTables: oldEnabledTables },
-      newSummary: { count: newEnabledTables.length, enabledTables: newEnabledTables },
-      diff
-    });
-
-    let catalogRuntimeAck = false;
-    try {
-      const catalogRun = await reloadCatalog(projectRoot, { connectionId: connId });
-      catalogRuntimeAck = catalogRun.status === "success" && !catalogRun.warnings.some(
-        (warning) => warning.code === "SCHEMA_MANIFEST_MISSING"
-      );
-    } catch (err) {
-      console.error("[enabled-tables] ktx.yaml written but catalog reload failed", err);
-    }
-
-    // Spec 131 / P1-1: catalog_bound capabilities depend on enabled_tables — recompile now.
-    let policyVersion = "";
-    let policyRuntimeAck = false;
-    try {
-      const { commitEffectivePolicy } = await import("./proxy/acl.js");
-      const status = await commitEffectivePolicy();
-      policyVersion = status.policyVersion;
-      policyRuntimeAck = status.policyVersion !== "" && !status.degradedGlobal;
-      if (!policyRuntimeAck) {
-        console.error("[enabled-tables] ktx.yaml written but policy runtime not acknowledged", {
-          connId,
-          policyVersion: status.policyVersion,
-          degradedGlobal: status.degradedGlobal
-        });
-      }
-    } catch (err) {
-      console.error("[enabled-tables] ktx.yaml written but commitEffectivePolicy failed", err);
-      policyRuntimeAck = false;
-    }
-
-    const executionAck = await executionAckForConnection(connId);
-    const executionRuntimePending = await noteExecutionRuntimePending(projectRoot, digestBefore);
-
-    return {
-      ok: true,
-      data: {
-        written: true,
-        auditId,
-        oldEnabledTables,
-        newEnabledTables,
-        warnings,
-        policyVersion,
-        policyRuntimeAck,
-        catalogRuntimeAck,
-        ...executionAck,
-        executionRuntimePending,
-        runtimeAck: policyRuntimeAck
-      }
+    const journal = dryRun ? undefined : getOpsStepJournal();
+    const opId = dryRun ? undefined : createOpsStepId();
+    let writeConfigOpen = !dryRun;
+    const failWriteConfig = (error: unknown) => {
+      if (!writeConfigOpen || !journal || !opId) return;
+      writeConfigOpen = false;
+      journal.writeStep({
+        op: "enabled_tables_save",
+        opId,
+        step: "write_config",
+        phase: "fail",
+        reasonCode: opsStepReasonFromError(error)
+      });
     };
-    })
-    );
+    if (journal && opId) {
+      journal.writeStep({ op: "enabled_tables_save", opId, step: "write_config", phase: "enter" });
+    }
+
+    try {
+      // M45: local patch preserves order, comments and unknown
+      // fields in unrelated parts of ktx.yaml so the dry-run diff only shows
+      // the enabled_tables sequence change.
+      const { proposedYaml } = patchConnectionEnabledTablesYaml(yamlText, connId, newEnabledTables);
+      const diff = makeDiff(yamlText, proposedYaml);
+
+      if (dryRun) {
+        return { ok: true, data: { diff, proposedYaml, oldEnabledTables, newEnabledTables, warnings } };
+      }
+
+      const digestBefore = await ktxDigestSnapshot(projectRoot);
+
+      // Spec 174 §3.2 — barrier spans ktx.yaml write → catalog reload → policy commit.
+      // L25-16 N05 / G17 — the legacy write entry joins the SAME ktx.yaml write lock as the
+      // control-plane batch service; otherwise the batch service's mutual-exclusion promise
+      // does not hold (the legacy entry could interleave while the batch holds the lock).
+      return await withKtxYamlWriteLock(() =>
+      withDisplayWriteBarrier(["C", "D", "P", "L"], async () => {
+      const { auditId } = await auditedWriteFile(projectRoot, "ktx.yaml", proposedYaml, {
+        enabled: true,
+        changeType: "enabled_tables_update",
+        assetKind: "governance",
+        ...auditActorFields(trustedActorFromRequest(request)),
+        source: "connections_enabled_tables_api",
+        targetId: connId,
+        oldSummary: { count: oldEnabledTables.length, enabledTables: oldEnabledTables },
+        newSummary: { count: newEnabledTables.length, enabledTables: newEnabledTables },
+        diff
+      });
+      journal?.writeStep({ op: "enabled_tables_save", opId: opId!, step: "write_config", phase: "leave" });
+      writeConfigOpen = false;
+
+      let catalogRuntimeAck = false;
+      try {
+        await journal!.runStep({
+          op: "enabled_tables_save",
+          opId: opId!,
+          step: "catalog_reload",
+          body: () => reloadCatalog(projectRoot, { connectionId: connId }),
+          classifyReturn: (catalogRun) => {
+            const manifestMissing = catalogRun.warnings.some(
+              (warning) => warning.code === "SCHEMA_MANIFEST_MISSING"
+            );
+            catalogRuntimeAck = catalogRun.status === "success" && !manifestMissing;
+            return catalogRuntimeAck
+              ? { ok: true }
+              : { ok: false, reasonCode: manifestMissing ? "missing" : "unreadable" };
+          }
+        });
+      } catch (err) {
+        console.error("[enabled-tables] ktx.yaml written but catalog reload failed", err);
+      }
+
+      // Spec 131 / P1-1: catalog_bound capabilities depend on enabled_tables — recompile now.
+      // P1-64 D9 — also fail Policy ack when Source Map compile issues are present.
+      let policyVersion = "";
+      let policyRuntimeAck = false;
+      let policyRuntimeIssues: Array<{ reason?: string }> = [];
+      try {
+        const status = await journal!.runStep({
+          op: "enabled_tables_save",
+          opId: opId!,
+          step: "policy_commit",
+          body: async () => {
+            const { commitEffectivePolicy } = await import("./proxy/acl.js");
+            return commitEffectivePolicy();
+          },
+          classifyReturn: (policyStatus) => {
+            policyVersion = policyStatus.policyVersion;
+            const ack = ackKtxWritePolicyRuntime(policyStatus);
+            policyRuntimeAck = ack.policyRuntimeAck;
+            policyRuntimeIssues = ack.policyRuntimeIssues;
+            return policyRuntimeAck ? { ok: true } : { ok: false, reasonCode: "unreadable" };
+          }
+        });
+        if (!policyRuntimeAck) {
+          console.error("[enabled-tables] ktx.yaml written but policy runtime not acknowledged", {
+            connId,
+            policyVersion: status.policyVersion,
+            degradedGlobal: status.degradedGlobal,
+            policyRuntimeIssues
+          });
+        }
+      } catch (err) {
+        console.error("[enabled-tables] ktx.yaml written but commitEffectivePolicy failed", err);
+        policyRuntimeAck = false;
+      }
+
+      const executionRuntimePending = await journal!.runStep({
+        op: "enabled_tables_save",
+        opId: opId!,
+        step: "execution_reload",
+        body: () => settleExecutionRuntime(projectRoot, digestBefore, connId)
+      });
+
+      const executionAck = await journal!.runStep({
+        op: "enabled_tables_save",
+        opId: opId!,
+        step: "execution_ack",
+        body: () => executionAckForConnection(connId),
+        classifyReturn: (ack) => ack.executionRuntimeAck
+          ? { ok: true }
+          : { ok: false, reasonCode: "unreadable" }
+      });
+
+      return {
+        ok: true,
+        data: {
+          written: true,
+          auditId,
+          oldEnabledTables,
+          newEnabledTables,
+          warnings,
+          policyVersion,
+          policyRuntimeAck,
+          policyRuntimeIssues,
+          catalogRuntimeAck,
+          ...executionAck,
+          executionRuntimePending,
+          runtimeAck: policyRuntimeAck
+        }
+      };
+      })
+      );
+    } catch (error) {
+      failWriteConfig(error);
+      throw error;
+    }
   });
 
   app.post<{
@@ -1998,11 +2421,21 @@ export function buildServer() {
     );
     if (!dryRun) {
       writtenFiles.push({ filePath: "ktx.yaml" });
-      void digestBefore;
     }
+    const executionRuntimePending = dryRun
+      ? false
+      : await settleExecutionRuntime(projectRoot, digestBefore, connId);
+    if (dryRun) {
+      return { ok: true, data: { ...result, executionRuntimePending } };
+    }
+    const executionAck = await executionAckForConnection(connId);
     return {
       ok: true,
-      data: dryRun ? result : { ...result, executionRuntimePending: true as const }
+      data: {
+        ...result,
+        executionRuntimePending,
+        ...executionAck
+      }
     };
   });
 
@@ -2027,11 +2460,10 @@ export function buildServer() {
           writtenFiles.push({ filePath });
         }
       }
-      await reloadKtxMcpAfterConfigWrite(projectRoot);
     }
     const executionRuntimePending = dryRun
       ? false
-      : await noteExecutionRuntimePending(projectRoot, digestBefore);
+      : await settleExecutionRuntime(projectRoot, digestBefore);
     return { ok: true, data: { ...result, executionRuntimePending } };
   });
 
@@ -2052,11 +2484,10 @@ export function buildServer() {
     });
     if (!dryRun) {
       writtenFiles.push({ filePath: "ktx.yaml" });
-      await reloadKtxMcpAfterConfigWrite(projectRoot);
     }
     const executionRuntimePending = dryRun
       ? false
-      : await noteExecutionRuntimePending(projectRoot, digestBefore);
+      : await settleExecutionRuntime(projectRoot, digestBefore, connId);
     return { ok: true, data: { ...result, executionRuntimePending } };
   });
 
@@ -2084,11 +2515,10 @@ export function buildServer() {
           writtenFiles.push({ filePath });
         }
       }
-      await reloadKtxMcpAfterConfigWrite(projectRoot);
     }
     const executionRuntimePending = dryRun
       ? false
-      : await noteExecutionRuntimePending(projectRoot, digestBefore);
+      : await settleExecutionRuntime(projectRoot, digestBefore, connId);
     return { ok: true, data: { ...result, executionRuntimePending } };
   });
 
@@ -2730,7 +3160,42 @@ export function buildServer() {
             attemptId,
             "pending"
           );
-          const reindex = await reindexProject(projectRoot, { force });
+          // ─── P0-1（O1 §4.1②／§4.1⑦）—— 绑定注册表在同一发布窗口内提交 ───
+          // 顺序固定：先读候选并校验（失败 → 整批不成功，**不得**借 KTX 成功推进
+          // 绑定基线）→ KTX 重建索引 → 绑定注册表提交（①②③）→ 基线 CAS。
+          // 「KTX 失败也不得先激活候选绑定」：提交在 reindex 成功之后。
+          const bindingCandidate = await loadCaliberBindingCandidate();
+          if (!bindingCandidate.ok) {
+            throw new SemanticAssetValidationError(
+              "caliber_binding_candidate_failed",
+              `口径绑定候选校验失败（${bindingCandidate.reason}${bindingCandidate.detail ? `:${bindingCandidate.detail}` : ""}），本次发布批次未成功。`,
+              [],
+              409
+            );
+          }
+          // D23／SC-26 Strat-B：手动 reindex 与 publish runReindex 共用同一屏障。
+          // STOP→DRAIN→mutate；成功对齐代次再 OPEN；索引已成功／绑定不一致则禁 OPEN。
+          const armed = await armSharedIndexMutationBarrier({ projectRoot });
+          if (!armed) {
+            throw new SemanticAssetValidationError(
+              "admission_stop_failed",
+              "字段暴露准入无法进入 STOP／DRAIN，禁止在 OPEN 下改写共享索引。",
+              [],
+              409
+            );
+          }
+          let admissionSettled = false;
+          let reindex: { exitCode: number; stdout: string; stderr: string };
+          try {
+            reindex = await reindexProject(projectRoot, { force });
+          } catch (error) {
+            await settleSharedIndexMutationBarrier({
+              projectRoot,
+              outcome: "index_failed"
+            }).catch(() => undefined);
+            admissionSettled = true;
+            throw error;
+          }
           const finishedAt = new Date().toISOString();
           const reindexRecord = {
             ok: reindex.exitCode === 0,
@@ -2742,8 +3207,14 @@ export function buildServer() {
           // the reindex result alongside normal publish batches. The snapshot is
           // the pending set at sync start, so a write that lands during reindex
           // stays on the workbench for the next sync.
+          //
+          // P0-1 —— 绑定文件同样进发布记录（O1 §4.1①）。
+          const pendingSnapshot = await readPublishPendingSnapshot(projectRoot);
+          const bindingFilePaths = pendingSnapshot.currentFiles
+            .filter((file) => file.kind === "caliber_binding")
+            .map((file) => file.logicalPath);
           const pending = await describePendingReleaseAssets(projectRoot, {
-            filePaths: consumedFiles.map((file) => file.filePath),
+            filePaths: [...consumedFiles.map((file) => file.filePath), ...bindingFilePaths],
             sources: consumedSourceEntries.map(([, source]) => source)
           });
           const historyRecord = await recordManualReindex(projectRoot, {
@@ -2755,7 +3226,47 @@ export function buildServer() {
             changedSources: pending.changedSources,
             connectionIds: pending.connectionIds
           });
-          if (reindexRecord.ok) {
+          if (!reindexRecord.ok) {
+            await settleSharedIndexMutationBarrier({
+              projectRoot,
+              outcome: "index_failed"
+            });
+            admissionSettled = true;
+            return { historyRecord, finishedAt, reindexRecord };
+          }
+          // 索引 mutate 已成功：耐久拉开 upstream≠serving，激活／align 前禁 index_failed→OPEN。
+          await markUpstreamIndexAdvanced({ projectRoot });
+          try {
+            // ①②③ —— 原子持久化提交凭据 → 切换内存 generation → 完成终态登记。
+            // 与 begin 提交互斥（`registryActivationCommitExclusion`）。
+            const bindingCommit = await withCaliberBindingRegistryExclusion(() =>
+              commitCaliberBindingRegistry(bindingCandidate, {
+                releaseId: historyRecord.id,
+                attemptId
+              })
+            );
+            if (!bindingCommit.ok) {
+              await settleSharedIndexMutationBarrier({
+                projectRoot,
+                outcome: "index_succeeded_keep_stop"
+              }).catch(() => undefined);
+              admissionSettled = true;
+              throw new SemanticAssetValidationError(
+                "caliber_binding_commit_failed",
+                `口径绑定注册表提交失败（${bindingCommit.reason}），本次发布批次未成功。`,
+                [],
+                409
+              );
+            }
+
+            // 索引已成功：对齐 ExecutionGeneration（upstream==serving）后再 OPEN。
+            await settleSharedIndexMutationBarrier({
+              projectRoot,
+              outcome: "index_succeeded_align",
+              generationId: `gen-${historyRecord.id}`
+            });
+            admissionSettled = true;
+
             const consumed = new Set(consumedFiles);
             for (let index = writtenFiles.length - 1; index >= 0; index -= 1) {
               if (consumed.has(writtenFiles[index])) writtenFiles.splice(index, 1);
@@ -2774,6 +3285,14 @@ export function buildServer() {
               historyRecord.id,
               consumption
             );
+          } catch (error) {
+            if (!admissionSettled) {
+              await settleSharedIndexMutationBarrier({
+                projectRoot,
+                outcome: "index_succeeded_keep_stop"
+              }).catch(() => undefined);
+            }
+            throw error;
           }
           return { historyRecord, finishedAt, reindexRecord };
         },
@@ -2973,6 +3492,8 @@ export function buildServer() {
   registerAuthorizationSummaryRoutes(app);
   // Lucy v0.25 / L25-08 — 访问关系图（只读）。
   registerAccessMapRoutes(app);
+  // P1-59 RACS — read-only save outcome by client operationId.
+  registerAccessWriteStatusRoutes(app);
   // Lucy v0.25 / L25-10 — Hive 连接配置面（凭据只存引用；本轮不含 JDBC 执行）。
   registerHiveConnectionRoutes(app);
   // Lucy v0.25 / L25-02、L25-03 — 审计只读对账视图（三端点）。
@@ -2980,6 +3501,40 @@ export function buildServer() {
   registerMcpToolsRoutes(app);
   registerMcpPlaygroundRoutes(app);
   registerMcpRuntimeRoutes(app);
+  registerOpsStepRoutes(app);
+  registerOpsStepUatRoutes(app, {
+    startDiagnostic: (input) => {
+      const opId = createOpsStepId();
+      if (input.lifecycle === "production") {
+        const accepted = diagnosticSnapshot.tickForceForUat({
+          opId,
+          steps: input.steps,
+          holdMs: input.holdMs
+        });
+        if (!accepted) {
+          throw opsStepUatBusyError("诊断采集正在进行，请稍后重试");
+        }
+        return { opId };
+      }
+      if (diagnosticSnapshot.isCollecting()) {
+        throw opsStepUatBusyError("生产诊断正在进行，请先等待结束");
+      }
+      if (diagnosticSnapshot.isBackgroundEnabled()) {
+        throw opsStepUatBusyError("请先暂停后台诊断，再启动独立观察");
+      }
+      const controller = new AbortController();
+      const cleanup = setTimeout(() => controller.abort(), input.holdMs + 10_000);
+      cleanup.unref?.();
+      void collectDependencyDiagnostics(controller.signal, {
+        opId,
+        steps: input.steps,
+        holdMs: input.holdMs
+      }).catch(() => undefined).finally(() => clearTimeout(cleanup));
+      return { opId };
+    },
+    setBackgroundEnabled: (enabled) => diagnosticSnapshot.setBackgroundEnabledForUat(enabled),
+    waitForIdle: () => diagnosticSnapshot.waitUntilIdle()
+  });
   registerGovernanceObservabilityRoutes(app);
   registerUiUsageRoutes(app);
   registerCaseRoutes(app);
@@ -3098,6 +3653,7 @@ export async function startServer(options: { displayPrewarm?: boolean } = {}): P
   // writes, the publish and the manual reindex all have to be gated by the
   // recovery admission. Running this after `app.listen()` would leave a
   // window in which the API accepted writes on an unverified target.
+  const auditStartupSince = performance.now();
   await recoverSemanticJournals();
 
   // ★ Lucy v0.25 / L25-16 §6.2 (F6-01 / G33): the control plane's non-terminal
@@ -3108,10 +3664,16 @@ export async function startServer(options: { displayPrewarm?: boolean } = {}): P
   // converge (Spec §6.2 / G33).
   await recoverOpsControlPlane();
 
+  // P1-39: 审计库两个连接的打开、建表迁移与外键盘点在监听之前完成，
+  // 冷盘上不再落进 onReady 钩子（10 秒超时即进程退出）或首个请求。
+  await warmAuditDatabases({ since: auditStartupSince });
+
   const app = buildServer();
   const host = process.env.LUCY_WEBUI_HOST ?? "127.0.0.1";
   const port = Number(process.env.LUCY_WEBUI_PORT ?? DEFAULT_WEBUI_PORT);
   await app.listen({ host, port });
+  // P1-46 (REQ-030-067): do NOT markWebuiWarmupComplete here.
+  // /api/readyz must stay 503 until the MCP proxy port is also listening.
   const t3 = performance.now();
   let displayReadyMs: number | null = null;
   if (options.displayPrewarm !== false) {
@@ -3125,15 +3687,54 @@ export async function startServer(options: { displayPrewarm?: boolean } = {}): P
     getTarget: getAuditDb,
     onStatus: recordProjectionStatus
   });
+  registerProjectionTrigger(() => projection.trigger());
+  startExecutionProbeRefresh();
+  void readKtxRuntimeStatusCached();
+  const ktxRefresh = setInterval(() => {
+    void readKtxRuntimeStatusCached();
+  }, 60_000);
+  ktxRefresh.unref();
   const { server: proxy, host: proxyHost, port: proxyPort } = buildProxy({
     onOperationSettled: () => projection.trigger()
   });
-  proxy.on("close", () => projection.stop());
+  proxy.on("close", () => {
+    projection.stop();
+    registerProjectionTrigger(null);
+    stopInferredTurnMaintainer();
+    stopExecutionProbeRefresh();
+    clearInterval(ktxRefresh);
+  });
   projection.start();
   await new Promise<void>((resolve, reject) => {
     proxy.listen(proxyPort, proxyHost, resolve);
     proxy.on("error", reject);
   });
+  // P1-46 (REQ-030-067): MCP proxy is now listening; mark WebUI ready so that
+  // /api/readyz returns 200 only after both the web port AND the MCP port are
+  // bound.  Moving this call here closes the startup window where readyz could
+  // return 200 while the MCP port was still not yet listening.
+  markWebuiWarmupComplete();
+  // P1-81 — start the stuck-state watchdog only once the instance is serving.
+  if (process.env.VITEST !== "true") {
+    try {
+      startSelfHeal(await resolveProjectRoot());
+    } catch (error) {
+      console.warn("[self-heal] watchdog not started:", error instanceof Error ? error.message : error);
+    }
+  }
+
+  // P1-63 — whole-instance drain IPC + signals (parent entrypoint owns shutdown).
+  try {
+    const projectRoot = await resolveProjectRoot();
+    configureProcessDrainIpc(drainIpcPathsForProject(projectRoot));
+    startWatchingParentDrainRequest();
+  } catch (error) {
+    console.warn("[process-drain] IPC configure skipped:", error instanceof Error ? error.message : error);
+  }
+  if (process.env.VITEST !== "true") {
+    installProcessDrainSignalHandlers();
+  }
+
   console.log(`Lucy WebUI listening on http://${host}:${port}`);
   console.log(`MCP proxy listening on http://${proxyHost}:${proxyPort}/mcp`);
   return {
@@ -3199,6 +3800,15 @@ async function recoverSemanticJournals(): Promise<void> {
   await reconcilePublishWorkbenchAttempts(projectRoot).catch((error: unknown) => {
     console.error(
       "[lucy-publish-workbench] pending baseline reconciliation failed",
+      error instanceof Error ? error.message : "unknown"
+    );
+  });
+  // P0-1（O1 §4.1⑥）—— 绑定注册表的启动恢复。以持久化的 `activeGeneration`
+  // 提交凭据为权威：凭据已提交且引用完整 → 恢复同一 generation；只有 prepared、
+  // 凭据缺失或引用不完整 → **拒绝新 begin**。不把当前作者目录自动视为已发布。
+  await recoverCaliberBindingRegistry().catch((error: unknown) => {
+    console.error(
+      "[lucy-caliber-binding] registry recovery failed",
       error instanceof Error ? error.message : "unknown"
     );
   });

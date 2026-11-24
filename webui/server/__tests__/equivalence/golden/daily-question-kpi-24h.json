@@ -1,0 +1,101 @@
+{
+  "realQuestions": {
+    "metricId": "real-questions",
+    "state": "ok",
+    "value": 43,
+    "asOf": "2026-11-15T12:00:00.000Z",
+    "windowStart": "2026-11-14T12:00:00.000Z",
+    "windowEnd": "2026-11-15T12:00:00.000Z"
+  },
+  "unreportedQuerySessions": {
+    "metricId": "unreported-query-sessions",
+    "state": "ok",
+    "value": 26,
+    "asOf": "2026-11-15T12:00:00.000Z",
+    "windowStart": "2026-11-14T12:00:00.000Z",
+    "windowEnd": "2026-11-15T12:00:00.000Z"
+  },
+  "connectOnlySessions": {
+    "metricId": "connect-only-sessions",
+    "state": "ok",
+    "value": 8,
+    "asOf": "2026-11-15T12:00:00.000Z",
+    "windowStart": "2026-11-14T12:00:00.000Z",
+    "windowEnd": "2026-11-15T12:00:00.000Z"
+  },
+  "browseWithoutAskSessions": {
+    "metricId": "browse-without-ask-sessions",
+    "state": "ok",
+    "value": 14,
+    "asOf": "2026-11-15T12:00:00.000Z",
+    "windowStart": "2026-11-14T12:00:00.000Z",
+    "windowEnd": "2026-11-15T12:00:00.000Z"
+  },
+  "excludedSessions": {
+    "metricId": "excluded-sessions",
+    "state": "ok",
+    "value": 2,
+    "asOf": "2026-11-15T12:00:00.000Z",
+    "windowStart": "2026-11-14T12:00:00.000Z",
+    "windowEnd": "2026-11-15T12:00:00.000Z"
+  },
+  "unassignedQueryCalls": {
+    "metricId": "unassigned-query-calls",
+    "state": "ok",
+    "value": 38,
+    "asOf": "2026-11-15T12:00:00.000Z",
+    "windowStart": "2026-11-14T12:00:00.000Z",
+    "windowEnd": "2026-11-15T12:00:00.000Z"
+  },
+  "queryCalls": {
+    "metricId": "query-calls",
+    "state": "ok",
+    "value": 192,
+    "asOf": "2026-11-15T12:00:00.000Z",
+    "windowStart": "2026-11-14T12:00:00.000Z",
+    "windowEnd": "2026-11-15T12:00:00.000Z"
+  },
+  "unlinkedQueryCalls": {
+    "metricId": "unlinked-query-calls",
+    "state": "ok",
+    "value": 110,
+    "asOf": "2026-11-15T12:00:00.000Z",
+    "windowStart": "2026-11-14T12:00:00.000Z",
+    "windowEnd": "2026-11-15T12:00:00.000Z"
+  },
+  "queriesPerQuestion": {
+    "metricId": "queries-per-question",
+    "state": "ok",
+    "value": 0.3,
+    "asOf": "2026-11-15T12:00:00.000Z",
+    "windowStart": "2026-11-14T12:00:00.000Z",
+    "windowEnd": "2026-11-15T12:00:00.000Z"
+  },
+  "questionActiveAgents": {
+    "metricId": "question-active-agents",
+    "state": "ok",
+    "value": 9,
+    "asOf": "2026-11-15T12:00:00.000Z",
+    "windowStart": "2026-11-14T12:00:00.000Z",
+    "windowEnd": "2026-11-15T12:00:00.000Z"
+  },
+  "dailyQuestions": [
+    {
+      "date": "2026-11-14",
+      "partialDay": true,
+      "realQuestions": 5,
+      "unreportedQuerySessions": 6,
+      "connectOnlySessions": 3,
+      "browseWithoutAskSessions": 3
+    },
+    {
+      "date": "2026-11-15",
+      "partialDay": true,
+      "realQuestions": 38,
+      "unreportedQuerySessions": 20,
+      "connectOnlySessions": 5,
+      "browseWithoutAskSessions": 11
+    }
+  ],
+  "skippedBadTimestamp": 26
+}

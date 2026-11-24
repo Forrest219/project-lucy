@@ -14,12 +14,18 @@ import {
   targetLabel
 } from "../../src/lib/configAuditLabels.js";
 import { resolveProjectRoot } from "../project.js";
-import { recordProjectionStatus } from "../proxy/audit-write-health.js";
+import { readAuditWriteHealth, recordProjectionStatus } from "../proxy/audit-write-health.js";
 import { getSecurityStore } from "../security/instance.js";
-import { runProjection, type ProjectionStatus } from "../security/projector.js";
-import { trustedActorFromRequest } from "../security/request-actor.js";
+import { projectionStatus, runProjection, triggerAuditProjection, type ProjectionStatus } from "../security/projector.js";
+import { inferredRebuildStatus } from "./inferred-turn-maintainer.js";
+import { selectInquiryPackCallRows } from "./audit-inquiry-pack-rows.js";
+import { mapSlicesYielding, yieldToEventLoop } from "./yield-slices.js";
+import { formatAuditLocalTimestamp as formatAuditLocalTimestampIn } from "./audit-local-timestamp.js";
+import { ActorUnresolvedError, trustedActorFromRequest } from "../security/request-actor.js";
+import { hashSessionJti } from "../security/store.js";
+import { withHeavyWorkPermit } from "../runtime/heavy-work-capacity.js";
 import { redactAuditDiff, redactAuditSummary, redactAuditText } from "../security/redaction.js";
-import { rebuildInferredTurns, purgeExpiredConversationTurns, scrubAccessLogArgsSummaries, INFERRED_TURN_REBUILD_LOOKBACK_HOURS, sessionVisitSummary, SESSION_VISIT_SUMMARY_PREFIX, ACCESS_LOG_COLUMNS as AUDIT_ACCESS_LOG_COLUMNS } from "../proxy/audit.js";
+import { getAuditSqliteStatus, rebuildInferredTurns, purgeExpiredConversationTurns, scrubAccessLogArgsSummaries, INFERRED_TURN_REBUILD_LOOKBACK_HOURS, sessionVisitSummary, SESSION_VISIT_SUMMARY_PREFIX, ACCESS_LOG_COLUMNS as AUDIT_ACCESS_LOG_COLUMNS } from "../proxy/audit.js";
 import {
   inquiryKindLabelZh,
   inquiryKindMatches,
@@ -413,22 +419,7 @@ function ensureColumn(database: Database.Database, table: string, column: string
 }
 
 function formatAuditLocalTimestamp(iso: string | null | undefined): string {
-  if (!iso) return "";
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: AUDIT_EXPORT_TIMEZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false
-  }).formatToParts(date);
-  const get = (type: Intl.DateTimeFormatPartTypes) =>
-    parts.find((part) => part.type === type)?.value ?? "00";
-  return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}:${get("second")}`;
+  return formatAuditLocalTimestampIn(iso, AUDIT_EXPORT_TIMEZONE);
 }
 
 function auditExportFilename(kind: string, ext: "csv" | "json", now = new Date()): string {
@@ -649,6 +640,14 @@ export async function getAuditDb(): Promise<Database.Database> {
     CREATE INDEX IF NOT EXISTS idx_al_user_token_ts ON access_log(user_id, token_hash_prefix, ts);
     CREATE INDEX IF NOT EXISTS idx_al_session_ts ON access_log(lucy_session_id, ts);
     CREATE INDEX IF NOT EXISTS idx_al_client_ip_ts ON access_log(client_ip, ts);
+    CREATE INDEX IF NOT EXISTS idx_al_ts ON access_log(ts);
+    -- P1-58 D7: covering reads avoid random table lookups across large windows.
+    -- Built by the existing audit warmup before HTTP listening, never on first UI read.
+    CREATE INDEX IF NOT EXISTS idx_al_agent_window_cover
+      ON access_log(user_id, ts, token_hash_prefix, tool, outcome, eval_mark, args_summary, tables, client_ip);
+    CREATE INDEX IF NOT EXISTS idx_al_ts_token ON access_log(ts, token_hash_prefix);
+    CREATE INDEX IF NOT EXISTS idx_al_lucy_turn_id ON access_log(lucy_turn_id);
+    CREATE INDEX IF NOT EXISTS idx_ital_access_log ON inferred_turn_access_logs(access_log_id);
   `);
   ensureColumn(db, "config_change_log", "asset_kind", "TEXT NOT NULL DEFAULT 'governance'");
   ensureColumn(db, "config_change_log", "operation", "TEXT");
@@ -1130,6 +1129,25 @@ interface QueryRow {
   credential_principal_id?: string | null;
 }
 
+/** REQ-030-035：预算复盘扁平列；不得进入 calls-v2 数据列／v2 metadata。 */
+const BUDGET_RETROSPECTIVE_CSV_HEADERS = [
+  "budget_event_kind",
+  "budget_exhausted_by",
+  "budget_calls",
+  "budget_busy_ms",
+  "budget_elapsed_ms",
+  "budget_attempts",
+  "budget_max_calls",
+  "budget_max_busy_ms",
+  "budget_max_wall_ms",
+  "budget_wall_mode",
+  "budget_window_id",
+  "budget_continuations"
+] as const;
+
+type BudgetRetrospectiveCsvHeader = (typeof BUDGET_RETROSPECTIVE_CSV_HEADERS)[number];
+const BUDGET_RETROSPECTIVE_HEADER_SET: ReadonlySet<string> = new Set(BUDGET_RETROSPECTIVE_CSV_HEADERS);
+
 const ACCESS_LOG_CSV_HEADERS = [
   "id",
   "ts",
@@ -1197,7 +1215,9 @@ const ACCESS_LOG_CSV_HEADERS = [
   "ingress_event_id",
   "endpoint_id",
   "ledger_seq",
-  "error_category"
+  "error_category",
+  // REQ-030-035／P1-14：问询预算复盘扁平列（仅 calls.csv v1 表尾；v2 显式排除）
+  ...BUDGET_RETROSPECTIVE_CSV_HEADERS
 ] as const;
 
 type CsvFieldMetadata = {
@@ -1599,10 +1619,112 @@ const ACCESS_LOG_FIELD_METADATA: Record<(typeof ACCESS_LOG_CSV_HEADERS)[number],
     format: "string|null",
     description: "MCP initialize 的 clientInfo.version。与自报客户端成对。",
     trigger: "握手带了 clientInfo.version 时输出。"
+  },
+  // REQ-030-035／P1-14 — 预算复盘扁平列（从 args_summary.budgetSnapshot 抽取）
+  budget_event_kind: {
+    label: "预算事件种类",
+    format: "enum {budget_stop, continuation_rollover}|空",
+    description: "budget_stop＝预算终止停机行；continuation_rollover＝续查换窗生效行（快照为换窗前读数）。",
+    trigger: "args_summary 含 budgetSnapshot 时输出；非事件行为空。"
+  },
+  budget_exhausted_by: {
+    label: "预算耗尽维度",
+    format: "enum {calls, busy, wall, both}|空",
+    description: "与运行时 classifyExhaustion 同源：次数／忙时／墙钟／同时。",
+    trigger: "预算复盘事件行输出。"
+  },
+  budget_calls: {
+    label: "预算窗口调用数",
+    format: "integer|空",
+    description: "该事件所涉窗口内的数据工具调用次数。",
+    trigger: "预算复盘事件行输出。"
+  },
+  budget_busy_ms: {
+    label: "预算窗口忙时毫秒",
+    format: "integer|空",
+    description: "该事件所涉窗口已结算忙时（settled）。",
+    trigger: "预算复盘事件行输出。"
+  },
+  budget_elapsed_ms: {
+    label: "预算窗口墙钟毫秒",
+    format: "integer|空",
+    description: "elapsed 模式下该窗口墙钟流逝；settled 下为空。",
+    trigger: "wallMode=elapsed 的预算复盘事件行输出。"
+  },
+  budget_attempts: {
+    label: "问询累计尝试次数",
+    format: "integer|空",
+    description: "问询级累计准入次数（跨窗）。",
+    trigger: "预算复盘事件行输出。"
+  },
+  budget_max_calls: {
+    label: "预算次数上限",
+    format: "integer|空",
+    description: "写入时的 QUESTION_BUDGET_MAX_CALLS 常量。",
+    trigger: "预算复盘事件行输出。"
+  },
+  budget_max_busy_ms: {
+    label: "预算忙时上限毫秒",
+    format: "integer|空",
+    description: "写入时的 QUESTION_BUDGET_MAX_BUSY_MS 常量。",
+    trigger: "预算复盘事件行输出。"
+  },
+  budget_max_wall_ms: {
+    label: "预算墙钟上限毫秒",
+    format: "integer|空",
+    description: "写入时的 QUESTION_BUDGET_MAX_WALL_MS 常量。",
+    trigger: "预算复盘事件行输出。"
+  },
+  budget_wall_mode: {
+    label: "预算墙钟模式",
+    format: "enum {settled, elapsed}|空",
+    description: "写入时的墙钟判定模式。",
+    trigger: "预算复盘事件行输出。"
+  },
+  budget_window_id: {
+    label: "预算窗口 ID",
+    format: "integer|空",
+    description: "该事件所涉窗口编号。",
+    trigger: "预算复盘事件行输出。"
+  },
+  budget_continuations: {
+    label: "已用续查次数",
+    format: "integer|空",
+    description: "快照瞬间已消耗的续查次数（换窗前为旧窗读数）。",
+    trigger: "预算复盘事件行输出。"
   }
 };
 
-function renderAccessLogCsv(rows: QueryRow[]): string {
+function budgetRetrospectiveCsvCells(argsSummaryRaw: string | null): string[] {
+  let snap: Record<string, unknown> | undefined;
+  if (argsSummaryRaw) {
+    try {
+      const args = JSON.parse(argsSummaryRaw) as Record<string, unknown>;
+      if (args.budgetSnapshot && typeof args.budgetSnapshot === "object" && args.budgetSnapshot !== null) {
+        snap = args.budgetSnapshot as Record<string, unknown>;
+      }
+    } catch {
+      snap = undefined;
+    }
+  }
+  if (!snap) return BUDGET_RETROSPECTIVE_CSV_HEADERS.map(() => "");
+  return [
+    csvCell(typeof snap.eventKind === "string" ? snap.eventKind : null),
+    csvCell(typeof snap.exhaustedBy === "string" ? snap.exhaustedBy : null),
+    snap.calls == null ? "" : String(snap.calls),
+    snap.busyMs == null ? "" : String(snap.busyMs),
+    snap.elapsedMs == null ? "" : String(snap.elapsedMs),
+    snap.attempts == null ? "" : String(snap.attempts),
+    snap.maxCalls == null ? "" : String(snap.maxCalls),
+    snap.maxBusyMs == null ? "" : String(snap.maxBusyMs),
+    snap.maxWallMs == null ? "" : String(snap.maxWallMs),
+    csvCell(typeof snap.wallMode === "string" ? snap.wallMode : null),
+    snap.windowId == null ? "" : String(snap.windowId),
+    snap.continuations == null ? "" : String(snap.continuations)
+  ];
+}
+
+export function renderAccessLogCsv(rows: QueryRow[]): string {
   const lines = [
     ACCESS_LOG_CSV_HEADERS.join(","),
     ...rows.map((row) => {
@@ -1693,11 +1815,19 @@ function renderAccessLogCsv(rows: QueryRow[]): string {
         csvCell(row.ingress_event_id),
         csvCell(row.endpoint_id),
         row.ledger_seq ?? "",
-        csvCell(row.error_category)
+        csvCell(row.error_category),
+        ...budgetRetrospectiveCsvCells(row.args_summary)
       ].join(",")
     })
   ];
   return lines.join("\n");
+}
+
+/** Same text as `renderAccessLogCsv`, rendered in slices that yield to the event loop. */
+export async function renderAccessLogCsvYielding(rows: QueryRow[]): Promise<string> {
+  const header = ACCESS_LOG_CSV_HEADERS.join(",");
+  const bodies = await mapSlicesYielding(rows, (slice) => [renderAccessLogCsv(slice).slice(header.length + 1)]);
+  return [header, ...bodies].join("\n");
 }
 
 function filterSnapshotForManifest(
@@ -1846,36 +1976,43 @@ function turnSpanMs(startedAt: string, endedAt: string): number {
   return Math.max(0, new Date(endedAt).getTime() - new Date(startedAt).getTime());
 }
 
-function loadAccessLogMetrics(
-  database: Database.Database,
-  accessLogIds: number[],
-  p95Ms: number
-): {
+type AccessFact = {
+  id: number;
+  ts: string;
+  tool: string;
+  outcome: string;
+  primary_status: string | null;
+  duration_ms: number;
+  tables: string | null;
+  decision_reason: string | null;
+  client: string | null;
+  client_version: string | null;
+  user_agent: string | null;
+  reported_client: string | null;
+  reported_client_version: string | null;
+};
+
+function emptyTurnMetrics(): {
   totalCallDurationMs: number;
   maxCallDurationMs: number;
   slowCallCount: number;
   outcomeSummary: TurnOutcomeSummary;
-  /** B27：八桶主状态汇总（`budget_stopped` 不再被丢弃）。 */
   primaryStatusSummary: PrimaryStatusSummary;
 } {
-  const empty = {
+  return {
     totalCallDurationMs: 0,
     maxCallDurationMs: 0,
     slowCallCount: 0,
-    outcomeSummary: { ok: 0, denied: 0, error: 0, budgetStop: 0 } as TurnOutcomeSummary,
+    outcomeSummary: { ok: 0, denied: 0, error: 0, budgetStop: 0 },
     primaryStatusSummary: emptyPrimaryStatusCounts() as PrimaryStatusSummary
   };
-  if (accessLogIds.length === 0) return empty;
-  const placeholders = accessLogIds.map(() => "?").join(",");
-  const rows = database
-    .prepare(
-      `SELECT outcome, primary_status, duration_ms FROM access_log WHERE id IN (${placeholders})`
-    )
-    .all(...accessLogIds) as Array<{
-    outcome: string;
-    primary_status: string | null;
-    duration_ms: number;
-  }>;
+}
+
+function metricsFromRows(
+  rows: Array<{ outcome: string; primary_status: string | null; duration_ms: number }>,
+  p95Ms: number
+): ReturnType<typeof emptyTurnMetrics> {
+  if (rows.length === 0) return emptyTurnMetrics();
   let totalCallDurationMs = 0;
   let maxCallDurationMs = 0;
   let slowCallCount = 0;
@@ -1894,6 +2031,25 @@ function loadAccessLogMetrics(
   return { totalCallDurationMs, maxCallDurationMs, slowCallCount, outcomeSummary, primaryStatusSummary };
 }
 
+function loadAccessLogMetrics(
+  database: Database.Database,
+  accessLogIds: number[],
+  p95Ms: number
+): ReturnType<typeof emptyTurnMetrics> {
+  if (accessLogIds.length === 0) return emptyTurnMetrics();
+  const placeholders = accessLogIds.map(() => "?").join(",");
+  const rows = database
+    .prepare(
+      `SELECT outcome, primary_status, duration_ms FROM access_log WHERE id IN (${placeholders})`
+    )
+    .all(...accessLogIds) as Array<{
+    outcome: string;
+    primary_status: string | null;
+    duration_ms: number;
+  }>;
+  return metricsFromRows(rows, p95Ms);
+}
+
 const TABLE_FORBIDDEN_PREFIX = "table_forbidden:";
 
 function parseTableForbiddenPhysicalTable(decisionReason: string | null | undefined): string | null {
@@ -1904,15 +2060,10 @@ function parseTableForbiddenPhysicalTable(decisionReason: string | null | undefi
 }
 
 /** Tool-call count + denied tables from table_forbidden reasons. */
-function loadTurnToolCallStats(
-  database: Database.Database,
-  accessLogIds: number[]
+function toolStatsFromRows(
+  rows: Array<{ tables: string | null; decision_reason: string | null }>
 ): { toolCallCount: number; forbiddenTables: string[] } {
-  if (accessLogIds.length === 0) return { toolCallCount: 0, forbiddenTables: [] };
-  const placeholders = accessLogIds.map(() => "?").join(",");
-  const rows = database
-    .prepare(`SELECT tables, decision_reason FROM access_log WHERE id IN (${placeholders})`)
-    .all(...accessLogIds) as Array<{ tables: string | null; decision_reason: string | null }>;
+  if (rows.length === 0) return { toolCallCount: 0, forbiddenTables: [] };
   let toolCallCount = 0;
   const forbiddenTables: string[] = [];
   const seen = new Set<string>();
@@ -1926,6 +2077,18 @@ function loadTurnToolCallStats(
     }
   }
   return { toolCallCount, forbiddenTables };
+}
+
+function loadTurnToolCallStats(
+  database: Database.Database,
+  accessLogIds: number[]
+): { toolCallCount: number; forbiddenTables: string[] } {
+  if (accessLogIds.length === 0) return { toolCallCount: 0, forbiddenTables: [] };
+  const placeholders = accessLogIds.map(() => "?").join(",");
+  const rows = database
+    .prepare(`SELECT tables, decision_reason FROM access_log WHERE id IN (${placeholders})`)
+    .all(...accessLogIds) as Array<{ tables: string | null; decision_reason: string | null }>;
+  return toolStatsFromRows(rows);
 }
 
 /**
@@ -2013,8 +2176,13 @@ function attachInquiryNumbers(database: Database.Database, rows: QueryRow[]): Qu
   });
 }
 
-function presentCallRows(database: Database.Database, rows: QueryRow[]): QueryRow[] {
+export function presentCallRows(database: Database.Database, rows: QueryRow[]): QueryRow[] {
   return attachInquiryNumbers(database, attachInferredTurnIds(database, rows));
+}
+
+/** Same rows as `presentCallRows`, built in slices that yield to the event loop (P1-32 / P1-33). */
+export function presentCallRowsYielding(database: Database.Database, rows: QueryRow[]): Promise<QueryRow[]> {
+  return mapSlicesYielding(rows, (slice) => presentCallRows(database, slice));
 }
 
 /** Spec 173: evidence packs include handshake rows already linked to the exported inquiries. */
@@ -2091,15 +2259,62 @@ function displayedTurnIdentity(
   };
 }
 
-function enrichTurnEntry(database: Database.Database, entry: TurnEntry, p95Ms: number): TurnEntry {
-  const accessLogIds = listTurnAccessLogIds(database, entry);
-  const metrics = loadAccessLogMetrics(database, accessLogIds, p95Ms);
-  const { toolCallCount, forbiddenTables } = loadTurnToolCallStats(database, accessLogIds);
-  const linkedCallCount = accessLogIds.length;
+function identityFromFacts(
+  rows: AccessFact[],
+  fallback: { client?: string; questionSummary?: string }
+): Pick<TurnEntry, "client" | "reportedClient" | "reportedClientVersion" | "questionSummary"> {
+  const sorted = [...rows].sort((a, b) => {
+    const rank = (tool: string) => (tool === "initialize" ? 0 : 1);
+    const byTool = rank(a.tool) - rank(b.tool);
+    if (byTool !== 0) return byTool;
+    if (a.ts < b.ts) return -1;
+    if (a.ts > b.ts) return 1;
+    return a.id - b.id;
+  });
+  const row = sorted[0];
+  const shown: ResolvedClientIdentity = presentStoredClient(row ?? { client: fallback.client });
+  const client = shown.client ?? fallback.client;
+  const questionSummary = fallback.questionSummary?.startsWith(SESSION_VISIT_SUMMARY_PREFIX)
+    ? sessionVisitSummary(client)
+    : fallback.questionSummary;
+  return {
+    client,
+    reportedClient: shown.reportedClient,
+    reportedClientVersion: shown.reportedClientVersion,
+    questionSummary
+  };
+}
+
+function enrichTurnEntry(
+  database: Database.Database,
+  entry: TurnEntry,
+  p95Ms: number,
+  facts?: AccessFact[]
+): TurnEntry {
+  if (!facts) {
+    const accessLogIds = listTurnAccessLogIds(database, entry);
+    const metrics = loadAccessLogMetrics(database, accessLogIds, p95Ms);
+    const { toolCallCount, forbiddenTables } = loadTurnToolCallStats(database, accessLogIds);
+    const linkedCallCount = accessLogIds.length;
+    const businessCallCount = entry.source === "reported" ? linkedCallCount : toolCallCount;
+    const identity = displayedTurnIdentity(database, accessLogIds, entry);
+    return {
+      ...entry,
+      ...identity,
+      businessCallCount,
+      linkedCallCount,
+      sources: mergeTurnSources(entry.sources, forbiddenTables),
+      turnSpanMs: turnSpanMs(entry.startedAt, entry.endedAt),
+      ...metrics
+    };
+  }
+  const metrics = metricsFromRows(facts, p95Ms);
+  const { toolCallCount, forbiddenTables } = toolStatsFromRows(facts);
+  const linkedCallCount = facts.length;
   // Reported turns already count every linked non-protocol call as a tool call.
   // Inferred turns: tool call = touched table OR table_forbidden deny.
   const businessCallCount = entry.source === "reported" ? linkedCallCount : toolCallCount;
-  const identity = displayedTurnIdentity(database, accessLogIds, entry);
+  const identity = identityFromFacts(facts, entry);
   return {
     ...entry,
     ...identity,
@@ -2137,18 +2352,124 @@ function matchesTurnIdFilter(entry: TurnEntry, raw: string): boolean {
   return entry.id.toLowerCase().includes(raw.toLowerCase());
 }
 
-function presentInquiry(database: Database.Database, entry: TurnEntry): TurnEntry {
-  const inquiryNo = entry.inquiryNo ?? lookupInquiryNo(database, entry.id) ?? undefined;
-  return {
-    ...entry,
-    inquiryNo,
-    correlationKey: entry.id,
-    inquiryKind: inquiryKindOfTurn({
-      source: entry.source,
-      questionSource: entry.questionSource,
-      questionSummary: entry.questionSummary
-    })
-  };
+const TURN_FACT_COLUMNS = `id, ts, tool, outcome, primary_status, duration_ms, tables, decision_reason, client, client_version, user_agent, reported_client, reported_client_version`;
+
+function rowsByJsonEach<T>(database: Database.Database, sql: string, ids: Array<string | number>): T[] {
+  if (ids.length === 0) return [];
+  return database.prepare(sql).all(JSON.stringify(ids)) as T[];
+}
+
+function sourcesForLogIds(
+  ids: number[],
+  sources: Map<number, TurnEntry["sources"]>
+): TurnEntry["sources"] {
+  const seen = new Set<string>();
+  const out: TurnEntry["sources"] = [];
+  for (const id of ids) {
+    for (const source of sources.get(id) ?? []) {
+      const key = sourceIdentityKey(source);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(source);
+    }
+  }
+  return out;
+}
+
+function loadTurnFactBundle(database: Database.Database, inferredIds: string[], reportedIds: string[]): {
+  inferred: Map<string, AccessFact[]>;
+  reportedByTurn: Map<string, AccessFact[]>;
+  sources: Map<number, TurnEntry["sources"]>;
+} {
+  const links = rowsByJsonEach<{ inferred_turn_id: string; access_log_id: number }>(
+    database,
+    `SELECT inferred_turn_id, access_log_id FROM inferred_turn_access_logs
+     WHERE inferred_turn_id IN (SELECT value FROM json_each(?))`,
+    inferredIds
+  );
+  const reported = rowsByJsonEach<AccessFact & { lucy_turn_id: string }>(
+    database,
+    `SELECT ${TURN_FACT_COLUMNS}, lucy_turn_id FROM access_log
+     WHERE lucy_turn_id IN (SELECT value FROM json_each(?))
+     ORDER BY ts ASC, id ASC`,
+    reportedIds
+  );
+  const inferredLogIds = links.map((link) => link.access_log_id);
+  const inferredFacts = rowsByJsonEach<AccessFact>(
+    database,
+    `SELECT ${TURN_FACT_COLUMNS} FROM access_log WHERE id IN (SELECT value FROM json_each(?))`,
+    inferredLogIds
+  );
+  const byId = new Map(inferredFacts.map((row) => [row.id, row]));
+  const inferred = new Map<string, AccessFact[]>();
+  for (const link of links) {
+    const fact = byId.get(link.access_log_id);
+    if (!fact) continue;
+    const list = inferred.get(link.inferred_turn_id) ?? [];
+    list.push(fact);
+    inferred.set(link.inferred_turn_id, list);
+  }
+  for (const list of inferred.values()) {
+    list.sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : a.id - b.id));
+  }
+  const reportedByTurn = new Map<string, AccessFact[]>();
+  for (const row of reported) {
+    const list = reportedByTurn.get(row.lucy_turn_id) ?? [];
+    list.push(row);
+    reportedByTurn.set(row.lucy_turn_id, list);
+  }
+  const allIds = [...new Set([...inferredLogIds, ...reported.map((row) => row.id)])];
+  const sourceRows = rowsByJsonEach<{
+    access_log_id: number;
+    connection_id: string | null;
+    schema_name: string | null;
+    source_name: string | null;
+    physical_table: string;
+  }>(
+    database,
+    `SELECT access_log_id, connection_id, schema_name, source_name, physical_table
+     FROM access_log_sources WHERE access_log_id IN (SELECT value FROM json_each(?))`,
+    allIds
+  );
+  const sources = new Map<number, TurnEntry["sources"]>();
+  for (const row of sourceRows) {
+    const list = sources.get(row.access_log_id) ?? [];
+    list.push({
+      connectionId: row.connection_id ?? undefined,
+      schema: row.schema_name ?? undefined,
+      sourceName: row.source_name ?? undefined,
+      physicalTable: row.physical_table
+    });
+    sources.set(row.access_log_id, list);
+  }
+  return { inferred, reportedByTurn, sources };
+}
+
+function attachPresentedInquiries(database: Database.Database, entries: TurnEntry[]): TurnEntry[] {
+  const missing = entries.filter((entry) => entry.inquiryNo == null).map((entry) => entry.id);
+  const found = new Map<string, number>();
+  if (missing.length > 0) {
+    const rows = rowsByJsonEach<{ correlation_key: string; inquiry_no: number }>(
+      database,
+      `SELECT correlation_key, inquiry_no FROM inquiry_correlation_serial
+       WHERE correlation_key IN (SELECT value FROM json_each(?))`,
+      missing
+    );
+    for (const row of rows) found.set(row.correlation_key, row.inquiry_no);
+  }
+  return entries.map((entry) => {
+    const inquiryNo = entry.inquiryNo ?? found.get(entry.id);
+    return {
+      ...entry,
+      inquiryNo,
+      correlationKey: entry.id,
+      inquiryKind: inquiryKindOfTurn({
+        source: entry.source,
+        questionSource: entry.questionSource,
+        questionSummary: entry.questionSummary
+      })
+    };
+  });
 }
 
 async function listAuditTurnEntries(
@@ -2167,7 +2488,7 @@ async function listAuditTurnEntries(
   ensureInquirySerialSchema(database);
   ensureBackfillBeforeAllocate(database);
 
-  if (source !== "reported") {
+  if (source !== "reported" && process.env.LUCY_TURN_REBUILD_ON_READ === "1") {
     const cutoff = new Date(Date.now() - INFERRED_TURN_REBUILD_LOOKBACK_HOURS * 60 * 60 * 1000).toISOString();
     const targetUsers = q.user
       ? [q.user]
@@ -2177,116 +2498,96 @@ async function listAuditTurnEntries(
     }
   }
 
-  const entries: TurnEntry[] = [];
-
-  if (source === "inferred" || source === "all") {
-    const conditions: string[] = [];
-    const params: Record<string, string | null> = {
-      user: q.user ?? null,
-      since: q.since ?? sinceDefault,
-      until: q.until ?? null
-    };
-    if (params.user) conditions.push("user_id = @user");
-    if (params.since) conditions.push("started_at >= @since");
-    if (params.until) conditions.push("started_at <= @until");
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-    const rows = database.prepare(`SELECT * FROM inferred_turns ${where} ORDER BY started_at DESC`).all(params) as Array<{
-      inferred_turn_id: string;
-      user_id: string;
-      client: string | null;
-      session_id: string | null;
-      started_at: string;
-      ended_at: string;
-      business_call_count: number;
-      tool_summary: string;
-      source_summary: string;
-      question_summary: string | null;
-      confidence: string;
-      inquiry_no: number | null;
-    }>;
-    for (const row of rows) {
-      entries.push(
-        presentInquiry(database, enrichTurnEntry(database, {
-          id: row.inferred_turn_id,
-          source: "inferred",
-          inquiryNo: row.inquiry_no ?? undefined,
-          userId: row.user_id,
-          client: row.client ?? undefined,
-          sessionId: row.session_id ?? undefined,
-          startedAt: row.started_at,
-          endedAt: row.ended_at,
-          businessCallCount: row.business_call_count,
-          linkedCallCount: 0,
-          questionSummary: row.question_summary ?? undefined,
-          confidence: row.confidence,
-          tools: JSON.parse(row.tool_summary) as string[],
-          sources: JSON.parse(row.source_summary) as TurnEntry["sources"]
-        }, p95Ms))
-      );
-    }
+  const built: TurnEntry[] = [];
+  const windowParams = {
+    user: q.user ?? null,
+    since: q.since ?? sinceDefault,
+    until: q.until ?? null
+  };
+  const inferredRows = source === "reported" ? [] : database.prepare(
+    `SELECT * FROM inferred_turns ${[
+      windowParams.user ? "user_id = @user" : "",
+      windowParams.since ? "started_at >= @since" : "",
+      windowParams.until ? "started_at <= @until" : ""
+    ].filter(Boolean).join(" AND ").replace(/^(.+)$/, "WHERE $1")} ORDER BY started_at DESC`
+  ).all(windowParams) as Array<{
+    inferred_turn_id: string;
+    user_id: string;
+    client: string | null;
+    session_id: string | null;
+    started_at: string;
+    ended_at: string;
+    business_call_count: number;
+    tool_summary: string;
+    source_summary: string;
+    question_summary: string | null;
+    confidence: string;
+    inquiry_no: number | null;
+  }>;
+  const reportedRows = source === "inferred" ? [] : database.prepare(
+    `SELECT * FROM conversation_turns ${[
+      windowParams.user ? "user_id = @user" : "",
+      windowParams.since ? "created_at >= @since" : "",
+      windowParams.until ? "created_at <= @until" : ""
+    ].filter(Boolean).join(" AND ").replace(/^(.+)$/, "WHERE $1")} ORDER BY created_at DESC`
+  ).all(windowParams) as Array<{
+    turn_id: string;
+    session_id: string | null;
+    user_id: string;
+    client: string | null;
+    created_at: string;
+    question_summary: string | null;
+    question_preview: string | null;
+    question_source: string | null;
+    inquiry_no: number | null;
+  }>;
+  const bundle = loadTurnFactBundle(
+    database,
+    inferredRows.map((row) => row.inferred_turn_id),
+    reportedRows.map((row) => row.turn_id)
+  );
+  for (const row of inferredRows) {
+    const facts = bundle.inferred.get(row.inferred_turn_id) ?? [];
+    built.push(enrichTurnEntry(database, {
+      id: row.inferred_turn_id,
+      source: "inferred",
+      inquiryNo: row.inquiry_no ?? undefined,
+      userId: row.user_id,
+      client: row.client ?? undefined,
+      sessionId: row.session_id ?? undefined,
+      startedAt: row.started_at,
+      endedAt: row.ended_at,
+      businessCallCount: row.business_call_count,
+      linkedCallCount: 0,
+      questionSummary: row.question_summary ?? undefined,
+      confidence: row.confidence,
+      tools: JSON.parse(row.tool_summary) as string[],
+      sources: JSON.parse(row.source_summary) as TurnEntry["sources"]
+    }, p95Ms, facts));
   }
-
-  if (source === "reported" || source === "all") {
-    const conditions: string[] = [];
-    const params: Record<string, string | null> = {
-      user: q.user ?? null,
-      since: q.since ?? sinceDefault,
-      until: q.until ?? null
-    };
-    if (params.user) conditions.push("user_id = @user");
-    if (params.since) conditions.push("created_at >= @since");
-    if (params.until) conditions.push("created_at <= @until");
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-    const rows = database.prepare(`SELECT * FROM conversation_turns ${where} ORDER BY created_at DESC`).all(params) as Array<{
-      turn_id: string;
-      session_id: string | null;
-      user_id: string;
-      client: string | null;
-      created_at: string;
-      question_summary: string | null;
-      question_preview: string | null;
-      question_source: string | null;
-      inquiry_no: number | null;
-    }>;
-    for (const row of rows) {
-      const linked = database.prepare(`
-        SELECT id, ts, tool FROM access_log WHERE lucy_turn_id = ? ORDER BY ts ASC
-      `).all(row.turn_id) as Array<{ id: number; ts: string; tool: string }>;
-      const accessLogIds = linked.map((l) => l.id);
-      const sourceRows = accessLogIds.length > 0
-        ? database.prepare(`
-            SELECT DISTINCT connection_id, schema_name, source_name, physical_table
-            FROM access_log_sources WHERE access_log_id IN (${accessLogIds.map(() => "?").join(",")})
-          `).all(...accessLogIds) as Array<{ connection_id: string | null; schema_name: string | null; source_name: string | null; physical_table: string }>
-        : [];
-      entries.push(
-        presentInquiry(database, enrichTurnEntry(database, {
-          id: row.turn_id,
-          source: "reported",
-          inquiryNo: row.inquiry_no ?? undefined,
-          questionSource: row.question_source ?? undefined,
-          userId: row.user_id,
-          client: row.client ?? undefined,
-          sessionId: row.session_id ?? undefined,
-          startedAt: row.created_at,
-          endedAt: linked.length > 0 ? linked[linked.length - 1].ts : row.created_at,
-          businessCallCount: linked.length,
-          linkedCallCount: linked.length,
-          questionSummary: row.question_summary ?? undefined,
-          questionPreview: row.question_preview ?? undefined,
-          confidence: "high",
-          tools: [...new Set(linked.map((l) => l.tool))],
-          sources: sourceRows.map((s) => ({
-            connectionId: s.connection_id ?? undefined,
-            schema: s.schema_name ?? undefined,
-            sourceName: s.source_name ?? undefined,
-            physicalTable: s.physical_table
-          }))
-        }, p95Ms))
-      );
-    }
+  for (const row of reportedRows) {
+    const facts = bundle.reportedByTurn.get(row.turn_id) ?? [];
+    const accessLogIds = facts.map((fact) => fact.id);
+    built.push(enrichTurnEntry(database, {
+      id: row.turn_id,
+      source: "reported",
+      inquiryNo: row.inquiry_no ?? undefined,
+      questionSource: row.question_source ?? undefined,
+      userId: row.user_id,
+      client: row.client ?? undefined,
+      sessionId: row.session_id ?? undefined,
+      startedAt: row.created_at,
+      endedAt: facts.length > 0 ? facts[facts.length - 1].ts : row.created_at,
+      businessCallCount: facts.length,
+      linkedCallCount: facts.length,
+      questionSummary: row.question_summary ?? undefined,
+      questionPreview: row.question_preview ?? undefined,
+      confidence: "high",
+      tools: [...new Set(facts.map((fact) => fact.tool))],
+      sources: sourcesForLogIds(accessLogIds, bundle.sources)
+    }, p95Ms, facts));
   }
-
+  const entries = attachPresentedInquiries(database, built);
   entries.sort((a, b) => (a.startedAt < b.startedAt ? 1 : a.startedAt > b.startedAt ? -1 : 0));
 
   const filtered = entries.filter((entry) => {
@@ -2544,7 +2845,7 @@ function turnSourceLabel(source: TurnEntry["source"]): string {
   return source === "reported" ? "用户原始问询" : "系统推断问询";
 }
 
-function renderTurnCsv(rows: TurnEntry[]): string {
+export function renderTurnCsv(rows: TurnEntry[]): string {
   const lines = [
     TURN_CSV_HEADERS.join(","),
     ...rows.map((row) =>
@@ -2579,6 +2880,13 @@ function renderTurnCsv(rows: TurnEntry[]): string {
     )
   ];
   return lines.join("\n");
+}
+
+/** Same text as `renderTurnCsv`, rendered in slices that yield to the event loop. */
+export async function renderTurnCsvYielding(rows: TurnEntry[]): Promise<string> {
+  const header = TURN_CSV_HEADERS.join(",");
+  const bodies = await mapSlicesYielding(rows, (slice) => [renderTurnCsv(slice).slice(header.length + 1)]);
+  return [header, ...bodies].join("\n");
 }
 
 // `T` is the header element type (not the array type) so that `headers.map`
@@ -2625,7 +2933,11 @@ function buildAuditCsvFieldMetadata(kind: "calls" | "turns", generatedAt = new D
 // v2 CSV path: GET /api/admin/audit/v2/export-metadata (this file).
 
 const ACCESS_LOG_CSV_HEADERS_V2 = [
-  ...ACCESS_LOG_CSV_HEADERS,
+  // REQ-030-035 R9：v2 显式排除预算复盘扁平列（声明 ⊆ 实际；不扩散进 calls-v2）
+  ...(ACCESS_LOG_CSV_HEADERS.filter(
+    (h): h is Exclude<(typeof ACCESS_LOG_CSV_HEADERS)[number], BudgetRetrospectiveCsvHeader> =>
+      !BUDGET_RETROSPECTIVE_HEADER_SET.has(h)
+  )),
   // Spec 173 v0.3 / contract §2.3 — 4-axis status + event_type
   "event_type",
   "transport_sub_type",
@@ -2667,7 +2979,10 @@ const ACCESS_LOG_CSV_HEADERS_V2 = [
 ] as const;
 
 const ACCESS_LOG_FIELD_METADATA_V2: Record<(typeof ACCESS_LOG_CSV_HEADERS_V2)[number], Omit<CsvFieldMetadata, "name">> = {
-  ...ACCESS_LOG_FIELD_METADATA,
+  // REQ-030-035 R9：v2 metadata 不得声明预算复盘列
+  ...Object.fromEntries(
+    Object.entries(ACCESS_LOG_FIELD_METADATA).filter(([key]) => !BUDGET_RETROSPECTIVE_HEADER_SET.has(key))
+  ) as Record<Exclude<(typeof ACCESS_LOG_CSV_HEADERS)[number], BudgetRetrospectiveCsvHeader>, Omit<CsvFieldMetadata, "name">>,
   // B27 新增列的元数据已在 ACCESS_LOG_FIELD_METADATA 中声明（单一来源）。
   event_type: {
     label: "事件类型",
@@ -2861,10 +3176,78 @@ return database.prepare(sql).all(...params) as never;
 async function auditProjectionStatus(database: Database.Database): Promise<ProjectionStatus> {
   const store = await getSecurityStore();
   const status: ProjectionStatus = store.ok
-    ? runProjection(store.value, database).status
+    ? projectionStatus(store.value, database)
     : { complete: false, cursor: 0, latestSeq: 0, lag: 0, delayMs: 0, reason: "security_store_unavailable" };
   recordProjectionStatus(status);
+  triggerAuditProjection();
   return status;
+}
+
+/**
+ * Export catch-up: wait until projection.cursor ≥ upperSeq (N26 追平口径).
+ * Returns { caughtUp, lag } where lag = max(0, upperSeq - cursor) relative to S.
+ * C4: relies on upperSeq (S) for lag calculation; events after S do not count.
+ */
+async function waitForProjectionCatchUp(
+  database: Database.Database,
+  upperSeq: number,
+  deadlineMs: number,
+  startedAt: number
+): Promise<{ caughtUp: boolean; lag: number }> {
+  const store = await getSecurityStore();
+  if (!store.ok) return { caughtUp: false, lag: Math.max(1, upperSeq) };
+  for (;;) {
+    const status = projectionStatus(store.value, database);
+    // N26: lag relative to S (not to latestSeq). cursor ≥ S means caught up.
+    const lag = Math.max(0, upperSeq - status.cursor);
+    recordProjectionStatus(status);
+    if (lag === 0 && status.reason !== "security_store_unavailable" && status.latestSeq >= upperSeq) {
+      return { caughtUp: true, lag: 0 };
+    }
+    if (Date.now() - startedAt >= deadlineMs) {
+      return { caughtUp: false, lag: Math.max(1, lag) };
+    }
+    runProjection(store.value, database, { maxBatches: 1 });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+}
+
+/** P1-62: re-check session before a queued export starts (waiting revoke / epoch). */
+async function revalidateHeavyExportRequest(request: { lucyAdmin?: { authMode?: string; admin?: unknown; session?: { jti: string } | null } }): Promise<void> {
+  const ctx = request.lucyAdmin;
+  if (ctx?.authMode === "open") return;
+  if (!ctx?.admin) throw new ActorUnresolvedError();
+  if (!ctx.session) return;
+  const store = await getSecurityStore();
+  if (!store.ok) {
+    throw Object.assign(new Error("认证状态暂不可用，请稍后重试或联系部署人员"), {
+      code: "AUTH_STATE_UNAVAILABLE",
+      statusCode: 503
+    });
+  }
+  const validation = store.value.validateSession(hashSessionJti(ctx.session.jti));
+  if (!validation.ok) {
+    throw Object.assign(new Error("认证状态暂不可用，请稍后重试或联系部署人员"), {
+      code: "AUTH_STATE_UNAVAILABLE",
+      statusCode: 503
+    });
+  }
+  if (!validation.value.valid) throw new ActorUnresolvedError();
+}
+
+/** P1-62: acquire audit_export permit before DB open / CSV / zip build. */
+function runAuditExportHeavy<T>(
+  request: Parameters<typeof trustedActorFromRequest>[0],
+  run: () => Promise<T>,
+  options: { deadlineMs?: number } = {}
+): Promise<T> {
+  return withHeavyWorkPermit({
+    class: "audit_export",
+    identity: trustedActorFromRequest(request).actorId,
+    deadlineMs: options.deadlineMs,
+    revalidate: () => revalidateHeavyExportRequest(request),
+    run
+  });
 }
 
 export function registerAuditRoutes(app: FastifyInstance) {
@@ -3134,6 +3517,21 @@ export function registerAuditRoutes(app: FastifyInstance) {
     reply.header("Content-Type", "text/csv; charset=utf-8");
     reply.header("Content-Disposition", `attachment; filename="config-audit-${dateStr}.csv"`);
     return reply.send(`\uFEFF${csvLines.join("\n")}`);
+  });
+
+  // P1-36 §5.1：只读诊断。`sqlite.foreign_keys` 是**服务单例连接**的实际 PRAGMA 值
+  // （PRAGMA 逐连接生效，另开连接自查不能代表服务）；`writeHealth.pendingWrites` 供 UAT
+  // 在两次导出之间确认审计写入已排空。
+  app.get("/api/admin/audit/status", async () => {
+    const sqlite = await getAuditSqliteStatus();
+    return {
+      sqlite: {
+        foreign_keys: sqlite.foreignKeys,
+        foreign_key_children: sqlite.foreignKeyChildren,
+        foreign_key_violations: sqlite.foreignKeyViolations
+      },
+      writeHealth: readAuditWriteHealth()
+    };
   });
 
   app.get("/api/admin/audit/sources", async () => {
@@ -3506,44 +3904,47 @@ export function registerAuditRoutes(app: FastifyInstance) {
   app.get<{
     Querystring: AccessLogFilterQuery & { bom?: string; cursor?: string; limit?: string };
   }>("/api/admin/audit/export", async (request, reply) => {
-    const q = request.query;
-    const database = await getAuditDb();
-    const resolved = resolveCallIdentityQuery(database, q);
-    const { conditions, params } = buildAccessLogFilter(resolved);
+    return runAuditExportHeavy(request, async () => {
+      const q = request.query;
+      const database = await getAuditDb();
+      const resolved = resolveCallIdentityQuery(database, q);
+      const { conditions, params } = buildAccessLogFilter(resolved);
 
-    // SC-18 — page size defaults to 10,000; `cursor` resumes after the last
-    // row of the previous page so the second page can read row 10,001.
-    const pageSize = Math.min(Math.max(parseInt(q.limit ?? "", 10) || auditExportMaxRows(), 1), auditExportMaxRows());
-    const resumed = applyAuditExportCursor(conditions, params, decodeAuditExportCursor(q.cursor));
-    const where = resumed.conditions.length > 0 ? `WHERE ${resumed.conditions.join(" AND ")}` : "";
-    // Fetch one extra row to learn whether a next page exists without
-    // dropping the overflow.
-    const fetched = database
-      .prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC, id DESC LIMIT @pageSizePlusOne`)
-      .all({ ...resumed.params, pageSizePlusOne: pageSize + 1 }) as QueryRow[];
-    const hasMore = fetched.length > pageSize;
-    const rows = presentCallRows(database, hasMore ? fetched.slice(0, pageSize) : fetched);
-    const last = fetched[pageSize - 1] ?? fetched[fetched.length - 1];
-    const nextCursor = hasMore && last
-      ? encodeAuditExportCursor({ ts: last.ts, id: last.id })
-      : undefined;
+      // SC-18 — page size defaults to 10,000; `cursor` resumes after the last
+      // row of the previous page so the second page can read row 10,001.
+      const pageSize = Math.min(Math.max(parseInt(q.limit ?? "", 10) || auditExportMaxRows(), 1), auditExportMaxRows());
+      const resumed = applyAuditExportCursor(conditions, params, decodeAuditExportCursor(q.cursor));
+      const where = resumed.conditions.length > 0 ? `WHERE ${resumed.conditions.join(" AND ")}` : "";
+      // Fetch one extra row to learn whether a next page exists without
+      // dropping the overflow.
+      const fetched = database
+        .prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC, id DESC LIMIT @pageSizePlusOne`)
+        .all({ ...resumed.params, pageSizePlusOne: pageSize + 1 }) as QueryRow[];
+      const hasMore = fetched.length > pageSize;
+      const rows = await presentCallRowsYielding(database, hasMore ? fetched.slice(0, pageSize) : fetched);
+      const last = fetched[pageSize - 1] ?? fetched[fetched.length - 1];
+      const nextCursor = hasMore && last
+        ? encodeAuditExportCursor({ ts: last.ts, id: last.id })
+        : undefined;
 
-    const body = renderAccessLogCsv(rows);
-    const withBom = q.bom === "1" || q.bom === "true" ? `\uFEFF${body}` : body;
-    reply.header("Content-Type", "text/csv; charset=utf-8");
-    reply.header("Content-Disposition", `attachment; filename="${auditExportFilename("calls", "csv")}"`);
-    reply.header("Cache-Control", "private, no-store");
-    // The resume cursor rides in headers so a plain CSV download can be paged
-    // without switching client.
-    reply.header("X-Lucy-Export-Row-Count", String(rows.length));
-    if (nextCursor) reply.header("X-Lucy-Export-Next-Cursor", nextCursor);
-    return reply.send(withBom);
+      const body = await renderAccessLogCsvYielding(rows);
+      const withBom = q.bom === "1" || q.bom === "true" ? `\uFEFF${body}` : body;
+      reply.header("Content-Type", "text/csv; charset=utf-8");
+      reply.header("Content-Disposition", `attachment; filename="${auditExportFilename("calls", "csv")}"`);
+      reply.header("Cache-Control", "private, no-store");
+      // The resume cursor rides in headers so a plain CSV download can be paged
+      // without switching client.
+      reply.header("X-Lucy-Export-Row-Count", String(rows.length));
+      if (nextCursor) reply.header("X-Lucy-Export-Next-Cursor", nextCursor);
+      return reply.send(withBom);
+    });
   });
 
   // GET /api/admin/audit/export-pack — 审计证据包 zip (Spec 137 / 162 §8)
   app.get<{
     Querystring: AccessLogFilterQuery & { cursor?: string };
   }>("/api/admin/audit/export-pack", async (request, reply) => {
+    return runAuditExportHeavy(request, async () => {
     const q = request.query;
     const database = await getAuditDb();
     const resolved = resolveCallIdentityQuery(database, q);
@@ -3781,6 +4182,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
     reply.header("Cache-Control", "private, no-store");
     if (nextCursor) reply.header("X-Lucy-Export-Next-Cursor", nextCursor);
     return reply.send(zip);
+    });
   });
 
   // POST /api/admin/audit/args-summary/scrub — Spec 137
@@ -3820,7 +4222,7 @@ export function registerAuditRoutes(app: FastifyInstance) {
 
     return {
       ok: true,
-      data: { ...result, projection }
+      data: { ...result, projection, inferredRebuild: inferredRebuildStatus() }
     };
   });
 
@@ -3828,64 +4230,54 @@ export function registerAuditRoutes(app: FastifyInstance) {
   app.get<{
     Querystring: TurnFilterQuery;
   }>("/api/admin/audit/turns/export", async (request, reply) => {
-    const q = request.query;
-    const database = await getAuditDb();
-    const result = await listAuditTurnEntries(database, q, { paginate: false });
-    const body = renderTurnCsv(result.entries);
-    const withBom = q.bom === "1" || q.bom === "true" ? `\uFEFF${body}` : body;
-    reply.header("Content-Type", "text/csv; charset=utf-8");
-    reply.header("Content-Disposition", `attachment; filename="${auditExportFilename("turns", "csv")}"`);
-    reply.header("Cache-Control", "private, no-store");
-    return reply.send(withBom);
+    return runAuditExportHeavy(request, async () => {
+      const q = request.query;
+      const database = await getAuditDb();
+      const result = await listAuditTurnEntries(database, q, { paginate: false });
+      await yieldToEventLoop();
+      const body = await renderTurnCsvYielding(result.entries);
+      const withBom = q.bom === "1" || q.bom === "true" ? `\uFEFF${body}` : body;
+      reply.header("Content-Type", "text/csv; charset=utf-8");
+      reply.header("Content-Disposition", `attachment; filename="${auditExportFilename("turns", "csv")}"`);
+      reply.header("Cache-Control", "private, no-store");
+      return reply.send(withBom);
+    });
   });
 
   // GET /api/admin/audit/export-inquiry-pack — 问询 CSV 与调用 CSV 同一次查询 (Spec 172)
   app.get<{
     Querystring: TurnFilterQuery;
   }>("/api/admin/audit/export-inquiry-pack", async (request, reply) => {
-    const q = request.query;
-    const database = await getAuditDb();
-    const turns = await listAuditTurnEntries(database, q, { paginate: false });
-    const turnIds = turns.entries.map((entry) => entry.id);
-    const callFilter: AccessLogFilterQuery = {
-      user: q.user,
-      since: q.since,
-      until: q.until,
-      outcome: q.outcome,
-      tableSearch: q.tableSearch,
-      includeProtocol: "true"
-    };
-    const { conditions, params } = buildAccessLogFilter(callFilter, { applyAccessGrade: false });
-    if (turnIds.length > 0) {
-      const placeholders = turnIds.map((_, index) => `@turn${index}`);
-      turnIds.forEach((id, index) => {
-        params[`turn${index}`] = id;
-      });
-      conditions.push(`(
-        IFNULL(lucy_turn_id, '') IN (${placeholders.join(", ")})
-        OR EXISTS (
-          SELECT 1 FROM inferred_turn_access_logs ital
-          WHERE ital.access_log_id = access_log.id AND ital.inferred_turn_id IN (${placeholders.join(", ")})
-        )
-      )`);
-    } else {
-      conditions.push("1 = 0");
-    }
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-    const callRows = presentCallRows(
-      database,
-      database.prepare(`SELECT * FROM access_log ${where} ORDER BY ts DESC, id DESC`).all(params) as QueryRow[]
-    );
-    const turnsCsv = Buffer.from(`\uFEFF${renderTurnCsv(turns.entries)}`, "utf8");
-    const callsCsv = Buffer.from(`\uFEFF${renderAccessLogCsv(callRows)}`, "utf8");
-    const zip = buildStoredZip([
-      { name: "turns.csv", data: turnsCsv },
-      { name: "calls.csv", data: callsCsv }
-    ]);
-    reply.header("Content-Type", "application/zip");
-    reply.header("Content-Disposition", `attachment; filename="${auditExportFilename("inquiry-pack", "csv").replace(/\.csv$/, ".zip")}"`);
-    reply.header("Cache-Control", "private, no-store");
-    return reply.send(zip);
+    return runAuditExportHeavy(request, async () => {
+      const q = request.query;
+      const database = await getAuditDb();
+      const turns = await listAuditTurnEntries(database, q, { paginate: false });
+      await yieldToEventLoop(); // do not chain the turn listing and the call query into one block
+      const turnIds = turns.entries.map((entry) => entry.id);
+      const callFilter: AccessLogFilterQuery = {
+        user: q.user,
+        since: q.since,
+        until: q.until,
+        outcome: q.outcome,
+        tableSearch: q.tableSearch,
+        includeProtocol: "true"
+      };
+      const { conditions, params } = buildAccessLogFilter(callFilter, { applyAccessGrade: false });
+      // Set-based selection (P1-32 / F-1): the inquiry ids are joined once, not expanded into IN lists.
+      const selected = selectInquiryPackCallRows(database, { conditions, params }, turnIds) as unknown as QueryRow[];
+      await yieldToEventLoop();
+      const callRows = await presentCallRowsYielding(database, selected);
+      const turnsCsv = Buffer.from(`\uFEFF${await renderTurnCsvYielding(turns.entries)}`, "utf8");
+      const callsCsv = Buffer.from(`\uFEFF${await renderAccessLogCsvYielding(callRows)}`, "utf8");
+      const zip = buildStoredZip([
+        { name: "turns.csv", data: turnsCsv },
+        { name: "calls.csv", data: callsCsv }
+      ]);
+      reply.header("Content-Type", "application/zip");
+      reply.header("Content-Disposition", `attachment; filename="${auditExportFilename("inquiry-pack", "csv").replace(/\.csv$/, ".zip")}"`);
+      reply.header("Cache-Control", "private, no-store");
+      return reply.send(zip);
+    });
   });
 
   // GET /api/admin/audit/turns/:turnId — single turn detail (inferred or reported).
@@ -4442,76 +4834,74 @@ export function registerAuditRoutes(app: FastifyInstance) {
       };
     }
 
-    const store = await getSecurityStore();
-    if (!store.ok) {
-      reply.code(503);
-      return { ok: false, error: { code: "SECURITY_STORE_UNAVAILABLE", message: "security store unavailable" } };
-    }
-    // B19 / E-2：`S` 的唯一正确来源是账本已提交上界。
-    const upperSeq = store.value.maxEventSeq();
-    if (!upperSeq.ok) {
-      reply.code(503);
-      return { ok: false, error: { code: "SECURITY_STORE_UNAVAILABLE", message: "ledger watermark unavailable" } };
-    }
-
-    const database = await getAuditDb();
-    const projection = await auditProjectionStatus(database);
-    // B21：自捕获 S 那一刻起算，等待重试不重置。
+    // N26-6 / P1-62: T3 starts at request arrival so capacity wait counts into the deadline.
     const catchUpStartedAt = Date.now();
     const deadlineMs = DEFAULT_CATCH_UP_DEADLINE_MS;
-    const waitUntil = async (): Promise<boolean> => {
-      for (;;) {
-        const status = await auditProjectionStatus(database);
-        if (status.complete && status.latestSeq >= upperSeq.value) return true;
-        if (Date.now() - catchUpStartedAt >= deadlineMs) return false;
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-    };
-    const caughtUp = await waitUntil();
+    return runAuditExportHeavy(
+      request,
+      async () => {
+        const store = await getSecurityStore();
+        if (!store.ok) {
+          reply.code(503);
+          return { ok: false, error: { code: "SECURITY_STORE_UNAVAILABLE", message: "security store unavailable" } };
+        }
+        // B19 / E-2：`S` 的唯一正确来源是账本已提交上界。
+        const upperSeq = store.value.maxEventSeq();
+        if (!upperSeq.ok) {
+          reply.code(503);
+          return { ok: false, error: { code: "SECURITY_STORE_UNAVAILABLE", message: "ledger watermark unavailable" } };
+        }
 
-    try {
-      const result = await performExportV2({
-        mode,
-        confirmDiagnostic: query.confirmDiagnostic === "true",
-        fixedFilter: {
-          from: query.from,
-          until: query.until,
-          userId: query.userId
-        },
-        fixedZone: "UTC",
-        projectionLag: projection.lag,
-        auditStoreAvailable: true,
-        securityStoreAvailable: true,
-        backupOk: true,
-        snapshotDb: database,
-        sourceDb: database,
-        classificationVersion: CLASSIFICATION_VERSION_V2P5,
-        digestVersion: DIGEST_VERSION_V2P5,
-        ledgerUpperSeq: upperSeq.value,
-        catchUpStartedAt,
-        catchUpDeadlineMs: deadlineMs,
-        provenance: {
-          exportedBy: query.exportedBy ?? null,
-          exportReason: query.exportReason ?? null,
-          exportApprovalRef: query.exportApprovalRef ?? null
-        },
-        prevExportId: query.prevExportId ?? null
-      });
-      if (mode === "complete" && !caughtUp) {
-        reply.code(409);
-        return {
-          ok: false,
-          error: { code: "PROJECTION_NOT_CAUGHT_UP", message: "projection did not reach the captured ledger watermark" }
-        };
-      }
-      reply.header("content-type", "text/csv; charset=utf-8");
-      reply.header("x-lucy-audit-upper-seq", String(result.upperSeq));
-      return result.csv;
-    } catch (err) {
-      const message = String((err as Error).message ?? err);
-      reply.code(409);
-      return { ok: false, error: { code: "EXPORT_FAILED", message } };
-    }
+        const database = await getAuditDb();
+        // N26: waitForProjectionCatchUp returns { caughtUp, lag } relative to S.
+        const catchUp = await waitForProjectionCatchUp(database, upperSeq.value, deadlineMs, catchUpStartedAt);
+
+        try {
+          const result = await performExportV2({
+            mode,
+            confirmDiagnostic: query.confirmDiagnostic === "true",
+            fixedFilter: {
+              from: query.from,
+              until: query.until,
+              userId: query.userId
+            },
+            fixedZone: "UTC",
+            projectionLag: catchUp.lag,
+            auditStoreAvailable: true,
+            securityStoreAvailable: true,
+            backupOk: true,
+            snapshotDb: database,
+            sourceDb: database,
+            classificationVersion: CLASSIFICATION_VERSION_V2P5,
+            digestVersion: DIGEST_VERSION_V2P5,
+            ledgerUpperSeq: upperSeq.value,
+            catchUpStartedAt,
+            catchUpDeadlineMs: deadlineMs,
+            provenance: {
+              exportedBy: query.exportedBy ?? null,
+              exportReason: query.exportReason ?? null,
+              exportApprovalRef: query.exportApprovalRef ?? null
+            },
+            prevExportId: query.prevExportId ?? null
+          });
+          if (mode === "complete" && !catchUp.caughtUp) {
+            reply.code(409);
+            return {
+              ok: false,
+              error: { code: "PROJECTION_NOT_CAUGHT_UP", message: "projection did not reach the captured ledger watermark" }
+            };
+          }
+          reply.header("content-type", "text/csv; charset=utf-8");
+          reply.header("x-lucy-audit-upper-seq", String(result.upperSeq));
+          return result.csv;
+        } catch (err) {
+          const message = String((err as Error).message ?? err);
+          reply.code(409);
+          return { ok: false, error: { code: "EXPORT_FAILED", message } };
+        }
+      },
+      { deadlineMs: Math.max(0, deadlineMs - (Date.now() - catchUpStartedAt)) }
+    );
   });
 
   app.get<{
@@ -4537,70 +4927,69 @@ export function registerAuditRoutes(app: FastifyInstance) {
       };
     }
 
-    const store = await getSecurityStore();
-    if (!store.ok) {
-      reply.code(503);
-      return { ok: false, error: { code: "SECURITY_STORE_UNAVAILABLE", message: "security store unavailable" } };
-    }
-    const upperSeq = store.value.maxEventSeq();
-    if (!upperSeq.ok) {
-      reply.code(503);
-      return { ok: false, error: { code: "SECURITY_STORE_UNAVAILABLE", message: "ledger watermark unavailable" } };
-    }
-
-    const database = await getAuditDb();
-    const projection = await auditProjectionStatus(database);
+    // N26-6 / P1-62: T3 starts at request arrival so capacity wait counts into the deadline.
     const catchUpStartedAt = Date.now();
     const deadlineMs = DEFAULT_CATCH_UP_DEADLINE_MS;
-    const waitUntil = async (): Promise<boolean> => {
-      for (;;) {
-        const status = await auditProjectionStatus(database);
-        if (status.complete && status.latestSeq >= upperSeq.value) return true;
-        if (Date.now() - catchUpStartedAt >= deadlineMs) return false;
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-    };
-    const caughtUp = await waitUntil();
+    return runAuditExportHeavy(
+      request,
+      async () => {
+        const store = await getSecurityStore();
+        if (!store.ok) {
+          reply.code(503);
+          return { ok: false, error: { code: "SECURITY_STORE_UNAVAILABLE", message: "security store unavailable" } };
+        }
+        const upperSeq = store.value.maxEventSeq();
+        if (!upperSeq.ok) {
+          reply.code(503);
+          return { ok: false, error: { code: "SECURITY_STORE_UNAVAILABLE", message: "ledger watermark unavailable" } };
+        }
 
-    try {
-      const pack = await buildExportPackV2({
-        mode,
-        confirmDiagnostic: query.confirmDiagnostic === "true",
-        fixedFilter: { from: query.from, until: query.until, userId: query.userId },
-        fixedZone: "UTC",
-        projectionLag: projection.lag,
-        auditStoreAvailable: true,
-        securityStoreAvailable: true,
-        backupOk: true,
-        snapshotDb: database,
-        sourceDb: database,
-        classificationVersion: CLASSIFICATION_VERSION_V2P5,
-        digestVersion: DIGEST_VERSION_V2P5,
-        ledgerUpperSeq: upperSeq.value,
-        catchUpStartedAt,
-        catchUpDeadlineMs: deadlineMs,
-        provenance: {
-          exportedBy: query.exportedBy ?? null,
-          exportReason: query.exportReason ?? null,
-          exportApprovalRef: query.exportApprovalRef ?? null
-        },
-        prevExportId: query.prevExportId ?? null
-      });
-      if (mode === "complete" && !caughtUp) {
-        reply.code(409);
-        return {
-          ok: false,
-          error: { code: "PROJECTION_NOT_CAUGHT_UP", message: "projection did not reach the captured ledger watermark" }
-        };
-      }
-      reply.header("content-type", "application/zip");
-      reply.header("x-lucy-audit-upper-seq", String(pack.manifest.ledgerUpperSeq));
-      return reply.send(pack.zip);
-    } catch (err) {
-      const message = String((err as Error).message ?? err);
-      reply.code(409);
-      return { ok: false, error: { code: "EXPORT_FAILED", message } };
-    }
+        const database = await getAuditDb();
+        // N26: waitForProjectionCatchUp returns { caughtUp, lag } relative to S.
+        const catchUp = await waitForProjectionCatchUp(database, upperSeq.value, deadlineMs, catchUpStartedAt);
+
+        try {
+          const pack = await buildExportPackV2({
+            mode,
+            confirmDiagnostic: query.confirmDiagnostic === "true",
+            fixedFilter: { from: query.from, until: query.until, userId: query.userId },
+            fixedZone: "UTC",
+            projectionLag: catchUp.lag,
+            auditStoreAvailable: true,
+            securityStoreAvailable: true,
+            backupOk: true,
+            snapshotDb: database,
+            sourceDb: database,
+            classificationVersion: CLASSIFICATION_VERSION_V2P5,
+            digestVersion: DIGEST_VERSION_V2P5,
+            ledgerUpperSeq: upperSeq.value,
+            catchUpStartedAt,
+            catchUpDeadlineMs: deadlineMs,
+            provenance: {
+              exportedBy: query.exportedBy ?? null,
+              exportReason: query.exportReason ?? null,
+              exportApprovalRef: query.exportApprovalRef ?? null
+            },
+            prevExportId: query.prevExportId ?? null
+          });
+          if (mode === "complete" && !catchUp.caughtUp) {
+            reply.code(409);
+            return {
+              ok: false,
+              error: { code: "PROJECTION_NOT_CAUGHT_UP", message: "projection did not reach the captured ledger watermark" }
+            };
+          }
+          reply.header("content-type", "application/zip");
+          reply.header("x-lucy-audit-upper-seq", String(pack.manifest.ledgerUpperSeq));
+          return reply.send(pack.zip);
+        } catch (err) {
+          const message = String((err as Error).message ?? err);
+          reply.code(409);
+          return { ok: false, error: { code: "EXPORT_FAILED", message } };
+        }
+      },
+      { deadlineMs: Math.max(0, deadlineMs - (Date.now() - catchUpStartedAt)) }
+    );
   });
 }
 

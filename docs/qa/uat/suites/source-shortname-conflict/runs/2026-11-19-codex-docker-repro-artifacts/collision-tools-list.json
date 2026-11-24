@@ -1,0 +1,12 @@
+{
+  "httpStatus": 403,
+  "elapsedMs": 16,
+  "body": {
+    "jsonrpc": "2.0",
+    "id": 7,
+    "error": {
+      "code": -32003,
+      "message": "Access denied: source_map_compile_failed:duplicate_source_name:hive-1:city"
+    }
+  }
+}

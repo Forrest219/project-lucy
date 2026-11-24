@@ -6,8 +6,13 @@ import { uploadCatalogAsset, validateCatalogAsset } from "../../lib/catalog-asse
 import {
   countReadyTables,
   fetchSchemaStructure,
+  manifestTableNames,
+  readCheckedTableColumns,
   reloadPreparedCatalog,
+  schemaStructureOpsStepId,
+  schemaStructureOpsStepRefs,
   writeMinimalManifest,
+  type SchemaStructureOpsStepRef,
   type SchemaStructurePreview
 } from "../../lib/prepareSchemaStructure";
 import { queryKeys } from "../../lib/queryKeys";
@@ -79,9 +84,14 @@ export function Step2UploadManifest({
   const [validation, setValidation] = useState<CatalogAssetValidateResponse | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [structureError, setStructureError] = useState<string | null>(null);
+  const [structureError, setStructureError] = useState<{
+    message: string;
+    opsStepId?: string;
+    opsStepRefs: SchemaStructureOpsStepRef[];
+  } | null>(null);
   const [statusMessage, setStatusMessage] = useState("");
   const [preview, setPreview] = useState<SchemaStructurePreview | null>(null);
+  const [namePlan, setNamePlan] = useState<{ names: string[]; selected: string[] } | null>(null);
   const [preferExisting, setPreferExisting] = useState(false);
   const [recoveryPending, setRecoveryPending] = useState(
     () => getAssistantDraft(connectionId)?.recovery === "manifest_written_reload_pending"
@@ -100,6 +110,15 @@ export function Step2UploadManifest({
   });
   const connection = projectQuery.data?.connections.find((item) => item.id === connectionId) ?? null;
   const readable = canReadDatabaseStructure(connection);
+
+  function showStructureError(value: unknown, fallback: string) {
+    setStructureError({
+      message: typeof value === "string" ? value : value instanceof Error ? value.message : fallback,
+      opsStepId: schemaStructureOpsStepId(value),
+      opsStepRefs: schemaStructureOpsStepRefs(value)
+    });
+  }
+
   const liveQuery = useQuery({
     queryKey: queryKeys.connectionLiveSchemas(connectionId),
     queryFn: () =>
@@ -165,7 +184,7 @@ export function Step2UploadManifest({
         recovery: "manifest_written_reload_pending"
       });
       setRecoveryPending(true);
-      setStructureError("Schema Manifest 已写入，但 Catalog 尚未同步。请重新同步后再继续。");
+      showStructureError("Schema Manifest 已写入，但 Catalog 尚未同步。请重新同步后再继续。", "同步失败");
       return;
     }
     setAssistantDraft(connectionId, {
@@ -280,7 +299,7 @@ export function Step2UploadManifest({
           recovery: "manifest_written_reload_pending"
         });
         setRecoveryPending(true);
-        setStructureError("Catalog 尚未同步出当前 Schema 的数据表。请重新同步后再继续。");
+        showStructureError("Catalog 尚未同步出当前 Schema 的数据表。请重新同步后再继续。", "同步失败");
         return;
       }
       setAssistantDraft(connectionId, {
@@ -292,7 +311,7 @@ export function Step2UploadManifest({
       setRecoveryPending(false);
       onSuccess(tables);
     } catch (err) {
-      setStructureError(err instanceof Error ? err.message : "同步失败");
+      showStructureError(err, "同步失败");
     } finally {
       setBusy(false);
       setStatusMessage("");
@@ -306,7 +325,7 @@ export function Step2UploadManifest({
       const result = await writeMinimalManifest(connectionId, activeSchema, yaml);
       if (result.status === "invalid") {
         setValidation(result.validation);
-        setStructureError(result.message);
+        showStructureError(result.message, "写入失败");
         return;
       }
       if (result.status === "exists") {
@@ -320,7 +339,7 @@ export function Step2UploadManifest({
       setPreview(null);
       finishWritten(result.tables, result.reloadStatus);
     } catch (err) {
-      setStructureError(err instanceof Error ? err.message : "写入失败");
+      showStructureError(err, "写入失败");
     } finally {
       setBusy(false);
       setStatusMessage("");
@@ -330,23 +349,48 @@ export function Step2UploadManifest({
   async function readStructure() {
     if (!activeSchema) return;
     setBusy(true);
-    setStatusMessage("正在读取表结构...");
+    setStatusMessage("正在读取表名...");
     setStructureError(null);
     try {
       const data = await fetchSchemaStructure(connectionId, activeSchema);
+      const names = manifestTableNames(data.yaml);
+      if (names.length === 0) {
+        showStructureError("这个 Schema 没有可读取的表。", "读取失败");
+        return;
+      }
+      setNamePlan({ names, selected: [...names] });
+      setPreview(null);
+    } catch (err) {
+      if (err instanceof ApiError && err.code === "SCHEMA_UNSUPPORTED") {
+        setShowUpload(true);
+      }
+      showStructureError(err, "读取失败");
+    } finally {
+      setBusy(false);
+      setStatusMessage("");
+    }
+  }
+
+  async function readSelectedColumns() {
+    if (!activeSchema || !namePlan || namePlan.selected.length === 0) return;
+    setBusy(true);
+    setStructureError(null);
+    try {
+      const selected = namePlan.selected;
+      const data = await readCheckedTableColumns(connectionId, activeSchema, selected, (done, total, table) => {
+        setStatusMessage(`正在读取字段 ${done + 1}/${total}：${table}`);
+      });
+      setNamePlan(null);
       if (data.downgraded.length > 0) {
         setPreview(data);
         return;
       }
       await writeGenerated(data.yaml);
     } catch (err) {
-      if (err instanceof ApiError && err.code === "SCHEMA_UNSUPPORTED") {
-        setShowUpload(true);
-      }
-      setStructureError(err instanceof Error ? err.message : "读取失败");
+      showStructureError(err, "读取失败");
     } finally {
       setBusy(false);
-      if (!preview) setStatusMessage("");
+      setStatusMessage("");
     }
   }
 
@@ -365,8 +409,9 @@ export function Step2UploadManifest({
     onExit();
   }
 
-  const primaryLabel =
-    primaryAction === "retry"
+  const primaryLabel = namePlan
+    ? `读取选中的 ${namePlan.selected.length} 张表字段`
+    : primaryAction === "retry"
       ? "重新同步并继续"
       : primaryAction === "use"
         ? "使用已有 Schema Manifest"
@@ -380,7 +425,8 @@ export function Step2UploadManifest({
     busy ||
     uploadMutation.isPending ||
     primaryAction === "choose" ||
-    (primaryAction === "upload" && !canUpload);
+    (primaryAction === "upload" && !canUpload) ||
+    Boolean(namePlan && namePlan.selected.length === 0);
 
   const liveSchemas = liveQuery.data?.schemas ?? [];
 
@@ -438,6 +484,38 @@ export function Step2UploadManifest({
               </label>
             ))}
           </fieldset>
+        ) : null}
+
+        {namePlan ? (
+          <div className="grid gap-2 text-xs" data-testid="setup-table-picker">
+            <p className="notranslate" translate="no">
+              读到 {namePlan.names.length} 张表。请勾选要读取字段的表，然后写入 Schema Manifest。
+            </p>
+            <div className="max-h-48 overflow-y-auto grid gap-1 sm:grid-cols-2">
+              {namePlan.names.map((name) => (
+                <label key={name} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={namePlan.selected.includes(name)}
+                    onChange={(event) => {
+                      const checked = event.target.checked;
+                      setNamePlan((current) => {
+                        if (!current) return current;
+                        const selected = checked
+                          ? current.selected.includes(name)
+                            ? current.selected
+                            : [...current.selected, name]
+                          : current.selected.filter((item) => item !== name);
+                        return { ...current, selected };
+                      });
+                    }}
+                    data-testid={`setup-add-table-${name}`}
+                  />
+                  <span className="notranslate" translate="no">{name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
         ) : null}
 
         {preview ? (
@@ -542,7 +620,24 @@ export function Step2UploadManifest({
           role="alert"
         >
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-          <span>{uploadError || structureError}</span>
+          <div>
+            <span>{uploadError || structureError?.message}</span>
+            {!uploadError && structureError?.opsStepId ? (
+              <p className="mt-1" data-testid="setup-step2-ops-step-id">
+                操作号：<code className="notranslate" translate="no">{structureError.opsStepId}</code>
+              </p>
+            ) : null}
+            {!uploadError && structureError && structureError.opsStepRefs.length > 0 ? (
+              <ul className="mt-1 space-y-1" data-testid="setup-step2-ops-step-refs">
+                {structureError.opsStepRefs.map((ref) => (
+                  <li key={ref.table} data-testid={`setup-step2-ops-step-ref-${ref.table}`}>
+                    表「<code className="notranslate" translate="no">{ref.table}</code>」操作号：
+                    <code className="notranslate" translate="no">{ref.opsStepId}</code>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
@@ -591,7 +686,8 @@ export function Step2UploadManifest({
             disabled={primaryDisabled}
             aria-busy={busy || uploadMutation.isPending}
             onClick={() => {
-              if (primaryAction === "read") void readStructure();
+              if (namePlan) void readSelectedColumns();
+              else if (primaryAction === "read") void readStructure();
               else if (primaryAction === "use" || primaryAction === "retry") void syncExisting();
               else if (primaryAction === "upload") uploadMutation.mutate();
             }}

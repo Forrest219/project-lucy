@@ -1,0 +1,31 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 1315,
+  "body": {
+    "ok": true,
+    "data": {
+      "written": true,
+      "auditId": 42,
+      "oldEnabledTables": [
+        "weather.city",
+        "ods.city"
+      ],
+      "newEnabledTables": [
+        "weather.city",
+        "ods.city",
+        "ods.zebra",
+        "ods.ods_zebra"
+      ],
+      "warnings": [],
+      "policyVersion": "d4521bb7839cfa2677c3c6c1ca2c838c18aa7e931e5358b489101fc5fe3ab08b",
+      "policyRuntimeAck": true,
+      "policyRuntimeIssues": [],
+      "catalogRuntimeAck": false,
+      "executionRuntimeAck": true,
+      "executionRuntimeStatus": "ok",
+      "executionDecisionReason": "allowed",
+      "executionRuntimePending": false,
+      "runtimeAck": true
+    }
+  }
+}

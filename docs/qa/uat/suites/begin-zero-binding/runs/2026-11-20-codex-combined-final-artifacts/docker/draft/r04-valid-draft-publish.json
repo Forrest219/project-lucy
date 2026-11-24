@@ -1,0 +1,53 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 567.261,
+  "body": {
+    "ok": true,
+    "data": {
+      "accepted": true,
+      "release": {
+        "id": "rel_20261120_051007_917_836efe20",
+        "createdAt": "2026-11-20T05:10:07.918Z",
+        "actor": "uat_owner",
+        "status": "reindexing",
+        "trigger": "webui_publish",
+        "connectionIds": [
+          "uat-mysql"
+        ],
+        "files": [
+          {
+            "targetPath": "semantic-layer/uat-mysql/_schema/uat.yaml",
+            "kind": "schemaManifest",
+            "sha256": "8a104c302b8f2225cec61838da5961bda7dc6dd7fbf167f5e6aca8c7a35f7a73",
+            "overwritten": true
+          }
+        ],
+        "changedSources": [
+          {
+            "connectionId": "uat-mysql",
+            "sourceName": "uat_begin_zero_orders"
+          }
+        ],
+        "diff": "Index: semantic-layer/uat-mysql/_schema/uat.yaml\n===================================================================\n--- semantic-layer/uat-mysql/_schema/uat.yaml\tcurrent\n+++ semantic-layer/uat-mysql/_schema/uat.yaml\tproposed\n@@ -1,2 +1,3 @@\n {\"tables\": {\"uat_begin_zero_orders\": {\"table\": \"uat.uat_begin_zero_orders\", \"columns\": [{\"name\": \"order_id\", \"type\": \"number\", \"pk\": true}, {\"name\": \"tenant\", \"type\": \"string\"}, {\"name\": \"amount\", \"type\": \"number\"}]}}}\n # r04-invalid-business-fields\n+# r04-valid-draft\n",
+        "validation": {
+          "ok": true,
+          "results": [
+            {
+              "connectionId": "uat-mysql",
+              "sourceName": "uat_begin_zero_orders",
+              "ok": true,
+              "exitCode": 0,
+              "issues": []
+            }
+          ]
+        },
+        "recoveryRequired": false,
+        "activationStatus": "unconfirmed",
+        "attemptId": "att_f6e6d73b-bae9-4994-be35-cee447839339",
+        "idempotencyKey": "zb-r04-valid-draft",
+        "snapshotId": "snap_b08e3d40-0477-4f71-9ba9-8452c3df9c64",
+        "recoveryJournalId": "rj_c18d53ac-f33d-40fe-ae75-b118ee30cfa7"
+      }
+    }
+  }
+}

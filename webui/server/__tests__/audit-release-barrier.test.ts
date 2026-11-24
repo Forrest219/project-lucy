@@ -558,3 +558,78 @@ describe("T07-2 — SSE: bounded buffer, explicit failure, crash recovery", () =
     expect(await recoverInterruptedOperations(store.value)).toMatchObject({ ok: true, value: { interrupted: [] } });
   });
 });
+
+/** P1-69 SC-02: transport close/finish is not durable response-gate settlement. */
+describe("P1-69 — reload waits for actual response ledger work", () => {
+  function deferred() {
+    let resolve!: () => void;
+    const promise = new Promise<void>((done) => { resolve = done; });
+    return { promise, resolve };
+  }
+
+  it("keeps the RPC while prepare is deferred even when client close and failed terminal finish first", async () => {
+    const { ReleaseLedger } = await import("../security/ledger.js");
+    const work = await import("../runtime/mcp-process-work.js");
+    const drain = await import("../runtime/process-drain.js");
+    drain.markProcessServing();
+    const ledger = new ReleaseLedger();
+    const prepared = deferred(), allowPrepare = deferred(), terminalDone = deferred();
+    const originalPrepare = ledger.prepare.bind(ledger), originalFailed = ledger.failed.bind(ledger);
+    vi.spyOn(ledger, "prepare").mockImplementation(async (...args) => {
+      prepared.resolve(); await allowPrepare.promise; return originalPrepare(...args);
+    });
+    vi.spyOn(ledger, "failed").mockImplementation(async (...args) => {
+      try { return await originalFailed(...args); } finally { terminalDone.resolve(); }
+    });
+    await startUpstream(answerJson);
+    const port = await startProxy({ ledger });
+    const payload = JSON.stringify(readSource("prepare-close-owner"));
+    const client = http.request({ hostname: "127.0.0.1", port, path: "/mcp", method: "POST",
+      headers: { authorization: `Bearer ${TOKEN}`, accept: "application/json, text/event-stream", "content-type": "application/json", "content-length": Buffer.byteLength(payload) } });
+    client.on("error", () => undefined); client.end(payload);
+    try {
+      await prepared.promise; client.destroy(); await terminalDone.promise;
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(phasesOf()).toContain("response_failed");
+      expect(phasesOf()).not.toContain("response_prepared");
+      expect(work.mcpRpcInFlightCount()).toBe(1);
+      const lease = work.acquireMcpReloadWindow("prepare-close-reload", Date.now() + 1_000);
+      expect(work.mcpRpcInFlightCount()).toBe(1);
+      allowPrepare.resolve();
+      await vi.waitFor(() => expect(work.mcpRpcInFlightCount()).toBe(0));
+      expect(phasesOf()).toContain("response_prepared"); lease.release();
+    } finally {
+      allowPrepare.resolve(); client.destroy();
+      await vi.waitFor(() => expect(work.mcpRpcInFlightCount()).toBe(0));
+      work.resetMcpReloadWorkForTests(); drain.resetProcessDrainForTests();
+    }
+  });
+
+  it("keeps the RPC after HTTP finish until the real delivered ledger write settles", async () => {
+    const { ReleaseLedger } = await import("../security/ledger.js");
+    const work = await import("../runtime/mcp-process-work.js");
+    const drain = await import("../runtime/process-drain.js"); drain.markProcessServing();
+    const ledger = new ReleaseLedger();
+    const terminalEntered = deferred(), allowTerminal = deferred();
+    const originalDelivered = ledger.delivered.bind(ledger);
+    vi.spyOn(ledger, "delivered").mockImplementation(async (...args) => {
+      terminalEntered.resolve(); await allowTerminal.promise; return originalDelivered(...args);
+    });
+    await startUpstream(answerJson); const port = await startProxy({ ledger });
+    try {
+      const response = await post(port, readSource("finish-before-terminal"));
+      await terminalEntered.promise;
+      expect(response.status).toBe(200); expect(response.body).toContain(CANARY);
+      expect(phasesOf()).toContain("response_prepared");
+      expect(phasesOf()).not.toContain("response_delivered");
+      expect(work.mcpRpcInFlightCount()).toBe(1);
+      allowTerminal.resolve();
+      await vi.waitFor(() => expect(work.mcpRpcInFlightCount()).toBe(0));
+      expect(phasesOf()).toContain("response_delivered");
+    } finally {
+      allowTerminal.resolve();
+      await vi.waitFor(() => expect(work.mcpRpcInFlightCount()).toBe(0));
+      work.resetMcpReloadWorkForTests(); drain.resetProcessDrainForTests();
+    }
+  });
+});

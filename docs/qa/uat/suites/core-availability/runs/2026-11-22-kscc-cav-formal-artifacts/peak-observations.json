@@ -1,0 +1,220 @@
+{
+  "numberOfLivezSamplesOver1000": 1,
+  "peakIdentity": "probe:/api/livez-58",
+  "sameBucket": [
+    {
+      "requestId": "probe:/api/readyz-58",
+      "at": "2026-11-22T10:15:56.488284+00:00",
+      "status": 200,
+      "ms": 1152.719042000001,
+      "apiMs": 1152.248,
+      "eventLoop": null
+    },
+    {
+      "requestId": "probe:/api/health-58",
+      "at": "2026-11-22T10:15:56.550557+00:00",
+      "status": 200,
+      "ms": 1214.2609590000006,
+      "apiMs": 1213.869,
+      "eventLoop": {
+        "p99Ms": 353.108,
+        "maxMs": 1227.882,
+        "windowSeconds": 60
+      }
+    },
+    {
+      "requestId": "gateway-readyz-58",
+      "at": "2026-11-22T10:15:56.551092+00:00",
+      "status": 200,
+      "ms": 1214.0213339999946,
+      "apiMs": 1213.029,
+      "eventLoop": null
+    },
+    {
+      "requestId": "probe:/api/livez-58",
+      "at": "2026-11-22T10:15:56.551845+00:00",
+      "status": 200,
+      "ms": 1215.4672919999996,
+      "apiMs": 1214.594,
+      "eventLoop": null
+    },
+    {
+      "requestId": "http-58",
+      "at": "2026-11-22T10:15:56.578297+00:00",
+      "status": 200,
+      "ms": 1240.954875,
+      "apiMs": 1239.954,
+      "eventLoop": null
+    }
+  ],
+  "cycleTimeline": [
+    {
+      "kind": "mutation-start",
+      "at": "2026-11-22T10:14:57.339373+00:00",
+      "path": null,
+      "status": null,
+      "iteration": 0
+    },
+    {
+      "kind": "mutation-step",
+      "at": "2026-11-22T10:14:58.197316+00:00",
+      "path": "/api/catalog/assets/validate",
+      "status": 200,
+      "iteration": 0
+    },
+    {
+      "kind": "mutation-step",
+      "at": "2026-11-22T10:15:01.376319+00:00",
+      "path": "/api/catalog/assets/upload",
+      "status": 200,
+      "iteration": 0
+    },
+    {
+      "kind": "mutation-step",
+      "at": "2026-11-22T10:15:29.875703+00:00",
+      "path": "/api/connections/uat-mysql/enabled-tables",
+      "status": 200,
+      "iteration": 0
+    },
+    {
+      "kind": "reload-start",
+      "at": "2026-11-22T10:15:29.993241+00:00",
+      "path": null,
+      "status": null,
+      "iteration": 0
+    },
+    {
+      "kind": "reload-end",
+      "at": "2026-11-22T10:15:31.712637+00:00",
+      "path": null,
+      "status": 200,
+      "iteration": 0
+    },
+    {
+      "kind": "mutation-end",
+      "at": "2026-11-22T10:16:00.304168+00:00",
+      "path": null,
+      "status": null,
+      "iteration": 0
+    }
+  ],
+  "processSamples": [
+    {
+      "at": 1795342554.8569913,
+      "state": "R",
+      "mainWchan": "0",
+      "cpuTicks": 7319,
+      "cpu.stat": "usage_usec 169846676\nuser_usec 132687889\nsystem_usec 37158786\nnice_usec 0\nnr_periods 1262\nnr_throttled 294\nthrottled_usec 32051086\nnr_bursts 0\nburst_usec 0",
+      "memory.current": "2113011712",
+      "memory.events": "low 0\nhigh 0\nmax 2285\noom 0\noom_kill 0\noom_group_kill 0"
+    },
+    {
+      "at": 1795342555.1082442,
+      "state": "S",
+      "mainWchan": "futex_wait_queue",
+      "cpuTicks": 7337,
+      "cpu.stat": "usage_usec 170339760\nuser_usec 133101084\nsystem_usec 37238676\nnice_usec 0\nnr_periods 1264\nnr_throttled 294\nthrottled_usec 32051086\nnr_bursts 0\nburst_usec 0",
+      "memory.current": "2113662976",
+      "memory.events": "low 0\nhigh 0\nmax 2285\noom 0\noom_kill 0\noom_group_kill 0"
+    },
+    {
+      "at": 1795342555.360759,
+      "state": "R",
+      "mainWchan": "0",
+      "cpuTicks": 7349,
+      "cpu.stat": "usage_usec 170825509\nuser_usec 133525115\nsystem_usec 37300393\nnice_usec 0\nnr_periods 1267\nnr_throttled 297\nthrottled_usec 32376640\nnr_bursts 0\nburst_usec 0",
+      "memory.current": "2094718976",
+      "memory.events": "low 0\nhigh 0\nmax 2285\noom 0\noom_kill 0\noom_group_kill 0"
+    },
+    {
+      "at": 1795342555.6451578,
+      "state": "R",
+      "mainWchan": "0",
+      "cpuTicks": 7362,
+      "cpu.stat": "usage_usec 171377301\nuser_usec 133976489\nsystem_usec 37400811\nnice_usec 0\nnr_periods 1270\nnr_throttled 300\nthrottled_usec 33296397\nnr_bursts 0\nburst_usec 0",
+      "memory.current": "2077634560",
+      "memory.events": "low 0\nhigh 0\nmax 2285\noom 0\noom_kill 0\noom_group_kill 0"
+    },
+    {
+      "at": 1795342555.9636085,
+      "state": "R",
+      "mainWchan": "0",
+      "cpuTicks": 7372,
+      "cpu.stat": "usage_usec 172058599\nuser_usec 134603308\nsystem_usec 37455290\nnice_usec 0\nnr_periods 1273\nnr_throttled 303\nthrottled_usec 34644443\nnr_bursts 0\nburst_usec 0",
+      "memory.current": "2085310464",
+      "memory.events": "low 0\nhigh 0\nmax 2285\noom 0\noom_kill 0\noom_group_kill 0"
+    },
+    {
+      "at": 1795342556.244281,
+      "state": "R",
+      "mainWchan": "0",
+      "cpuTicks": 7380,
+      "cpu.stat": "usage_usec 172572970\nuser_usec 135072608\nsystem_usec 37500362\nnice_usec 0\nnr_periods 1276\nnr_throttled 306\nthrottled_usec 36377945\nnr_bursts 0\nburst_usec 0",
+      "memory.current": "2097172480",
+      "memory.events": "low 0\nhigh 0\nmax 2285\noom 0\noom_kill 0\noom_group_kill 0"
+    },
+    {
+      "at": 1795342556.4966295,
+      "state": "R",
+      "mainWchan": "0",
+      "cpuTicks": 7393,
+      "cpu.stat": "usage_usec 173167247\nuser_usec 135561328\nsystem_usec 37605918\nnice_usec 0\nnr_periods 1278\nnr_throttled 308\nthrottled_usec 36769577\nnr_bursts 0\nburst_usec 0",
+      "memory.current": "2130472960",
+      "memory.events": "low 0\nhigh 0\nmax 2285\noom 0\noom_kill 0\noom_group_kill 0"
+    },
+    {
+      "at": 1795342556.7483063,
+      "state": "R",
+      "mainWchan": "0",
+      "cpuTicks": 7401,
+      "cpu.stat": "usage_usec 173589578\nuser_usec 135884029\nsystem_usec 37705549\nnice_usec 0\nnr_periods 1281\nnr_throttled 311\nthrottled_usec 37526663\nnr_bursts 0\nburst_usec 0",
+      "memory.current": "2147282944",
+      "memory.events": "low 0\nhigh 0\nmax 2309\noom 0\noom_kill 0\noom_group_kill 0"
+    },
+    {
+      "at": 1795342557.0011325,
+      "state": "S",
+      "mainWchan": "futex_wait_queue",
+      "cpuTicks": 7410,
+      "cpu.stat": "usage_usec 174163170\nuser_usec 136271855\nsystem_usec 37891315\nnice_usec 0\nnr_periods 1283\nnr_throttled 313\nthrottled_usec 38241516\nnr_bursts 0\nburst_usec 0",
+      "memory.current": "2147250176",
+      "memory.events": "low 0\nhigh 0\nmax 2429\noom 0\noom_kill 0\noom_group_kill 0"
+    },
+    {
+      "at": 1795342557.252484,
+      "state": "R",
+      "mainWchan": "0",
+      "cpuTicks": 7415,
+      "cpu.stat": "usage_usec 174610055\nuser_usec 136612910\nsystem_usec 37997144\nnice_usec 0\nnr_periods 1286\nnr_throttled 316\nthrottled_usec 39147141\nnr_bursts 0\nburst_usec 0",
+      "memory.current": "2146959360",
+      "memory.events": "low 0\nhigh 0\nmax 2509\noom 0\noom_kill 0\noom_group_kill 0"
+    },
+    {
+      "at": 1795342557.5445015,
+      "state": "R",
+      "mainWchan": "0",
+      "cpuTicks": 7423,
+      "cpu.stat": "usage_usec 175177732\nuser_usec 137065728\nsystem_usec 38112004\nnice_usec 0\nnr_periods 1289\nnr_throttled 319\nthrottled_usec 39982017\nnr_bursts 0\nburst_usec 0",
+      "memory.current": "2147332096",
+      "memory.events": "low 0\nhigh 0\nmax 2567\noom 0\noom_kill 0\noom_group_kill 0"
+    },
+    {
+      "at": 1795342557.847801,
+      "state": "R",
+      "mainWchan": "0",
+      "cpuTicks": 7429,
+      "cpu.stat": "usage_usec 175791000\nuser_usec 137552855\nsystem_usec 38238144\nnice_usec 0\nnr_periods 1292\nnr_throttled 322\nthrottled_usec 41268889\nnr_bursts 0\nburst_usec 0",
+      "memory.current": "2147291136",
+      "memory.events": "low 0\nhigh 0\nmax 2650\noom 0\noom_kill 0\noom_group_kill 0"
+    },
+    {
+      "at": 1795342558.1461923,
+      "state": "R",
+      "mainWchan": "0",
+      "cpuTicks": 7433,
+      "cpu.stat": "usage_usec 176380649\nuser_usec 138036755\nsystem_usec 38343893\nnice_usec 0\nnr_periods 1295\nnr_throttled 325\nthrottled_usec 42055541\nnr_bursts 0\nburst_usec 0",
+      "memory.current": "2147303424",
+      "memory.events": "low 0\nhigh 0\nmax 2685\noom 0\noom_kill 0\noom_group_kill 0"
+    }
+  ]
+}

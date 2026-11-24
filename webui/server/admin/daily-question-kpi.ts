@@ -200,59 +200,56 @@ export function queryDailyQuestionKpi(db: SqlDb, hours: number, now: Date = new 
       `).all() as Array<{ session_id: string }>).map((row) => row.session_id)
     );
 
+    // The access grade CASE is evaluated once per row (inner query), not once per aggregate.
     const sessions = db.prepare(`
       SELECT
-        a.lucy_session_id AS session_id,
-        SUM(CASE WHEN (${grade}) = 'query' THEN 1 ELSE 0 END) AS query_rows,
-        SUM(CASE WHEN (${grade}) IN ('browse', 'prepare') THEN 1 ELSE 0 END) AS prep_rows,
-        SUM(CASE WHEN (${grade}) = 'connect' THEN 1 ELSE 0 END) AS connect_rows,
+        session_id,
+        SUM(CASE WHEN g = 'query' THEN 1 ELSE 0 END) AS query_rows,
+        SUM(CASE WHEN g IN ('browse', 'prepare') THEN 1 ELSE 0 END) AS prep_rows,
+        SUM(CASE WHEN g = 'connect' THEN 1 ELSE 0 END) AS connect_rows,
         COUNT(*) AS total_rows,
-        MIN(CASE WHEN (${grade}) = 'query' THEN a.ts END) AS first_query_ts,
-        MIN(CASE WHEN (${grade}) IN ('browse', 'prepare') THEN a.ts END) AS first_prep_ts,
-        MIN(a.ts) AS first_ts
-      FROM access_log a
-      WHERE ${windowSql}
-        AND ${notProbe}
-        AND a.lucy_session_id IS NOT NULL AND trim(a.lucy_session_id) != ''
-      GROUP BY a.lucy_session_id
+        MIN(CASE WHEN g = 'query' THEN ts END) AS first_query_ts,
+        MIN(CASE WHEN g IN ('browse', 'prepare') THEN ts END) AS first_prep_ts,
+        MIN(ts) AS first_ts
+      FROM (
+        SELECT a.lucy_session_id AS session_id, a.ts AS ts, (${grade}) AS g
+        FROM access_log a
+        WHERE ${windowSql}
+          AND ${notProbe}
+          AND a.lucy_session_id IS NOT NULL AND trim(a.lucy_session_id) != ''
+      )
+      GROUP BY session_id
     `).all(...windowParams) as SessionAggregate[];
 
-    const queryCalls = countGet(
-      db,
-      `SELECT COUNT(*) AS n FROM access_log a WHERE ${windowSql} AND ${notProbe} AND ${queryGrade}`,
-      windowParams
-    );
-    const unassignedQueryCalls = countGet(
-      db,
-      `SELECT COUNT(*) AS n FROM access_log a
-       WHERE ${windowSql} AND ${notProbe} AND ${queryGrade}
-         AND (a.lucy_session_id IS NULL OR trim(a.lucy_session_id) = '')`,
-      windowParams
-    );
-    const unlinkedQueryCalls = countGet(
-      db,
-      `SELECT COUNT(*) AS n FROM access_log a
-       WHERE ${windowSql} AND ${notProbe} AND ${queryGrade}
-         AND NOT EXISTS (
-           SELECT 1 FROM conversation_turns t
-           WHERE ${reportedTurn}
-             AND (t.turn_id = a.lucy_turn_id OR t.turn_id = a.effective_turn_id)
-         )`,
-      windowParams
-    );
-    const linkedQueryCalls = countGet(
-      db,
-      `SELECT COUNT(*) AS n FROM access_log a
-       WHERE ${windowSql} AND ${notProbe} AND ${queryGrade}
-         AND EXISTS (
-           SELECT 1 FROM conversation_turns t
-           WHERE ${reportedTurn}
-             AND t.created_at >= ? AND t.created_at < ?
-             AND ${validTimestampSql("t.created_at")}
-             AND (t.turn_id = a.lucy_turn_id OR t.turn_id = a.effective_turn_id)
-         )`,
-      [...windowParams, ...windowParams]
-    );
+    // One pass over the window's query calls (was four scans: total / unassigned / unlinked / linked).
+    const callCounts = db.prepare(`
+      SELECT
+        COUNT(*) AS query_calls,
+        SUM(CASE WHEN (a.lucy_session_id IS NULL OR trim(a.lucy_session_id) = '') THEN 1 ELSE 0 END) AS unassigned,
+        SUM(CASE WHEN NOT EXISTS (
+          SELECT 1 FROM conversation_turns t
+          WHERE ${reportedTurn}
+            AND (t.turn_id = a.lucy_turn_id OR t.turn_id = a.effective_turn_id)
+        ) THEN 1 ELSE 0 END) AS unlinked,
+        SUM(CASE WHEN EXISTS (
+          SELECT 1 FROM conversation_turns t
+          WHERE ${reportedTurn}
+            AND t.created_at >= ? AND t.created_at < ?
+            AND ${validTimestampSql("t.created_at")}
+            AND (t.turn_id = a.lucy_turn_id OR t.turn_id = a.effective_turn_id)
+        ) THEN 1 ELSE 0 END) AS linked
+      FROM access_log a
+      WHERE ${windowSql} AND ${notProbe} AND ${queryGrade}
+    `).get(...windowParams, ...windowParams) as {
+      query_calls: number | null;
+      unassigned: number | null;
+      unlinked: number | null;
+      linked: number | null;
+    } | undefined;
+    const queryCalls = callCounts?.query_calls ?? 0;
+    const unassignedQueryCalls = callCounts?.unassigned ?? 0;
+    const unlinkedQueryCalls = callCounts?.unlinked ?? 0;
+    const linkedQueryCalls = callCounts?.linked ?? 0;
 
     const questionUsers = db.prepare(`
       SELECT DISTINCT user_id

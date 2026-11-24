@@ -1,0 +1,18 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 7350.654,
+  "body": {
+    "jsonrpc": "2.0",
+    "id": 19,
+    "result": {
+      "isError": true,
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"code\":\"semantic_recovery_required\",\"message\":\"该语义资产仍有未决恢复日志，恢复核验完成前不能读取或查询。\"}"
+        }
+      ]
+    }
+  },
+  "rpcId": 19
+}

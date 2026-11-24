@@ -676,9 +676,9 @@ describe("访问关系图阅读降噪（呈现修订 Spec §7）", () => {
     renderPage();
     await waitFor(() => expect(screen.getByTestId("access-map-svg")).toBeInTheDocument());
 
-    // 闲置授权 → stub（空心），不含 warning。
-    const dormant = screen.getByTestId("access-map-idle-stub-shape-agent:agent_a");
-    expect(dormant.getAttribute("fill")).toBe("none");
+    // 闲置授权 → 幽灵带（虚线轮廓），不含 warning。
+    const dormant = screen.getByTestId("access-map-ghost-e|agent:agent_a|role:role_reader");
+    expect(dormant.getAttribute("stroke-dasharray")).toBeTruthy();
     expect(dormant.getAttribute("class")).not.toContain("warning");
 
     // 需复核：warning 面积 + 虚线中线（状态不只靠颜色区分）。
@@ -988,6 +988,29 @@ describe("访问关系图 audit-echo 工具条与弱入口（Spec §7 组件侧�
     expect(notice).toHaveTextContent("排除连接");
     expect(notice.textContent ?? "").not.toContain("无访问日志");
     expect(notice.textContent ?? "").not.toContain("系统无访问");
+    // 没有未确认关联调用时，仍用筛选提示，且不提未确认。
+    expect(notice.textContent ?? "").not.toContain("关联未确认");
+  });
+
+  it("SC-A6 — 窗口内有未确认关联调用时，空态披露次数并链接访问日志，不再归因筛选", async () => {
+    const response = makeResponse();
+    response.meta.echo = {
+      enteringAllowCallCount: 0,
+      enteringAllowCallCountBasis: "pre_structure"
+    };
+    response.meta.access = { ...response.meta.access, unconfirmedCalls: 175 };
+    response.meta.counts.accessPaths = 0;
+    stubAccessMap(response);
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("access-map-empty-access")).toBeInTheDocument());
+
+    const notice = screen.getByTestId("access-map-empty-access");
+    expect(notice.textContent ?? "").toContain(
+      "窗口内另有 175 次调用因问询关联未确认，未计入本图（口径：已确认关联）"
+    );
+    expect(notice.textContent ?? "").not.toContain("可调整筛选后再看");
+    const link = within(notice).getByRole("link", { name: "对照访问日志" });
+    expect(link.getAttribute("href")).toBe("/admin/audit");
   });
 });
 
@@ -1405,7 +1428,7 @@ describe("访问关系图几何语言（geometry Spec §7 组件侧）", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("SC-07 — usage-first 四态：normal／overflow 使用带；dormant→stub；needs_review 虚线；无深色内核", async () => {
+  it("SC-07 — usage-first 四态：normal／overflow 使用带；dormant→幽灵带＋聚合节点；needs_review 虚线；无深色内核", async () => {
     await renderFourState();
 
     const normalRibbon = screen.getByTestId("access-map-ribbon-e|agent:agent_a|role:role_reader");
@@ -1414,11 +1437,11 @@ describe("访问关系图几何语言（geometry Spec §7 组件侧）", () => {
       screen.queryByTestId("access-map-kernel-e|agent:agent_a|role:role_reader")
     ).not.toBeInTheDocument();
 
-    // dormant：不进流带，走闲置 stub。
+    // dormant：不进使用流带，走幽灵层与「闲置授权」聚合节点。
     expect(
       screen.queryByTestId("access-map-ribbon-e|conn:mysql_main|table:mysql_main::finance::orders")
     ).not.toBeInTheDocument();
-    expect(screen.getByTestId("access-map-idle-stub-conn:mysql_main")).toBeInTheDocument();
+    expect(screen.getByTestId("access-map-node-idle-agg:conn:mysql_main")).toBeInTheDocument();
 
     // needs_review：警示面积 + 虚线中线，没有内核。
     expect(screen.getByTestId("access-map-ribbon-e|role:role_reader|conn:mysql_main")).toBeInTheDocument();
@@ -1441,12 +1464,14 @@ describe("访问关系图几何语言（geometry Spec §7 组件侧）", () => {
     ).toBeInTheDocument();
   });
 
-  it("SC-11 — 状态不只靠颜色：dormant stub 不带 warning；needs_review 虚线；overflow / 确凿越权 danger 实线", async () => {
+  it("SC-11 — 状态不只靠颜色：dormant 幽灵带不带 warning；needs_review 虚线；overflow / 确凿越权 danger 实线", async () => {
     await renderFourState();
 
-    const dormantStub = screen.getByTestId("access-map-idle-stub-shape-conn:mysql_main");
-    expect(dormantStub.getAttribute("class")).not.toContain("warning");
-    expect(dormantStub.getAttribute("fill")).toBe("none");
+    const dormantGhost = screen.getByTestId(
+      "access-map-ghost-e|conn:mysql_main|idle-agg:conn:mysql_main"
+    );
+    expect(dormantGhost.getAttribute("class")).not.toContain("warning");
+    expect(dormantGhost.getAttribute("stroke-dasharray")).toBeTruthy();
 
     const midline = screen.getByTestId("access-map-midline-e|role:role_reader|conn:mysql_main");
     expect(midline.getAttribute("stroke-dasharray")).toBeTruthy();
@@ -1463,11 +1488,13 @@ describe("访问关系图几何语言（geometry Spec §7 组件侧）", () => {
     expect(overflowRibbon.getAttribute("class")).toMatch(/danger|accent/);
   });
 
-  it("SC-12 — 悬停可见使用带／闲置 stub 出浮层，浮层含从→到与三段式结论", async () => {
+  it("SC-12 — 悬停可见使用带／闲置幽灵带出浮层，浮层含从→到与三段式结论", async () => {
     await renderFourState();
 
-    // dormant → stub；悬停 stub 出闲置授权浮层。
-    const dormant = screen.getByTestId("access-map-idle-stub-conn:mysql_main");
+    // dormant → 幽灵带；悬停出闲置授权浮层。
+    const dormant = screen.getByTestId(
+      "access-map-ghost-e|conn:mysql_main|idle-agg:conn:mysql_main"
+    );
     fireEvent.mouseOver(dormant);
     const dormantTip = await screen.findByTestId("access-map-hover-tip");
     expect(dormantTip).toHaveTextContent("→");
@@ -1492,10 +1519,10 @@ describe("访问关系图几何语言（geometry Spec §7 组件侧）", () => {
     expect(normalTip).toHaveTextContent("调用 2 次");
   });
 
-  it("SC-13 — 点击闲置 stub→清单→边抽屉；点击 needs_review 带直接开抽屉", async () => {
+  it("SC-13 — 点击闲置聚合节点→清单→边抽屉；点击 needs_review 带直接开抽屉", async () => {
     await renderFourState();
 
-    fireEvent.click(screen.getByTestId("access-map-idle-stub-conn:mysql_main"));
+    fireEvent.click(screen.getByTestId("access-map-node-idle-agg:conn:mysql_main"));
     const list = await screen.findByTestId("access-map-idle-grant-list");
     expect(list).toBeInTheDocument();
     const row = screen.getByTestId(
@@ -1555,7 +1582,8 @@ describe("访问关系图几何语言（geometry Spec §7 组件侧）", () => {
     renderPage();
     await waitFor(() => expect(screen.getByTestId("access-map-svg")).toBeInTheDocument());
 
-    const stub = screen.getByTestId("access-map-idle-stub-conn:mysql_main");
+    // 访问面不可用：表不进列、不出聚合节点；授权余量仍以幽灵带示意，但不称「闲置」。
+    const stub = screen.getByTestId("access-map-ghost-e|agent:agent_a|role:role_reader");
     fireEvent.mouseOver(stub);
     const tip = await screen.findByTestId("access-map-hover-tip");
     expect(tip).toHaveTextContent("授权面可读，调用情况暂不可用");
@@ -1567,6 +1595,8 @@ describe("访问关系图几何语言（geometry Spec §7 组件侧）", () => {
     const title = stub.querySelector("title");
     expect(title?.textContent ?? "").not.toMatch(/调用 \d+ 次/);
     expect(title?.textContent ?? "").not.toContain("僵尸授权");
+    expect(title?.textContent ?? "").not.toContain("闲置");
+    expect(tip.textContent ?? "").not.toContain("闲置");
   });
 
   it("SC-15 — AccessMap 向 Canvas 传入 accessOk（源码合同）", () => {

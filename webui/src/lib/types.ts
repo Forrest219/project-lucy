@@ -211,6 +211,18 @@ export type CreateConnectionResult = {
     message?: string;
     durationMs?: number;
   };
+  /** Spec 191 / connection-create plan: three-layer ack after write. */
+  policyRuntimeAck?: boolean;
+  /** Spec 14 §0.3 / P1-64 D9 — Policy ack alias; UI success requires === true. */
+  runtimeAck?: boolean;
+  /** P1-64 D9 — Policy degrade / Source Map issues from commitEffectivePolicy. */
+  policyRuntimeIssues?: Array<{ agentId?: string; reason?: string }>;
+  catalogRuntimeAck?: boolean;
+  executionRuntimeAck?: boolean;
+  executionRuntimeStatus?: ExecutionRuntimeStatus;
+  executionDecisionReason?: string;
+  executionRuntimeError?: string;
+  executionRuntimePending?: boolean;
 };
 
 export type RemoveSchemaImpact = {
@@ -1187,6 +1199,8 @@ export type RoleAllowConfig = {
 
 export type RoleDetail = Role & {
   version?: string;
+  /** P1-59 RACS — serialized object version at read time. */
+  baseObjectVersion?: string;
   usageCount: number;
   users: RoleUserReference[];
   role: {
@@ -1294,6 +1308,9 @@ export type AccessWriteAck = {
   recoveryRequired?: boolean;
   /** The durable audit record id — the intent id of this write. */
   auditId?: number;
+  /** P1-59 RACS — client operation id when object-version protocol was used. */
+  operationId?: string;
+  baseObjectVersion?: string;
 };
 
 export type ExecutionRuntimeStatus = "unknown" | "ok" | "stale" | "unavailable" | "error";
@@ -1519,6 +1536,57 @@ export type AgentsResponseSummary = {
   };
 };
 
+/** P1-66: deliberately excludes tokens[], constraints and complete permissions. */
+export type AgentRosterSummaryRow = Pick<Agent, "id" | "name" | "note" | "enabled" | "roles" | "role" | "roleResolutionError" | "declaredRole" | "declaredRoles" | "createdAt" | "configUpdatedAt"> & {
+  legacyWildcard: boolean;
+  credentialSummary: { state: "ok" | "unavailable"; configured: number | null; available: number | null; evaluatedAt: string | null };
+  permissionSummary: { state: "ok" | "unavailable"; sourceCount: number | null; connectionCount: number | null;
+    toolCount: number | null; capabilityCount: number | null; snapshotHash: string | null; sourceMapVersion: string | null };
+  permissionWarnings: string[];
+};
+export type AgentsRosterSummaryResponse = {
+  agents: AgentRosterSummaryRow[];
+  version: string;
+  meta: { projection: "summary"; projectionVersion: 1; snapshotVersion: string; generatedAt: string;
+    permissionsState: "ok" | "partial" | "unavailable"; runtimeConsistency: "matched" | "unconfirmed" };
+};
+export type AgentRosterRead = {
+  kind: "summary-v1" | "legacy-roster" | "legacy-full";
+  /** Client-only capability-probe scope; never a server version or observation timestamp. */
+  legacyReadContext?: number;
+  agents: AgentRosterSummaryRow[];
+  version?: string;
+  meta?: { snapshotVersion?: string; generatedAt?: string; runtimeConsistency?: "matched" | "unconfirmed" };
+  inlineStatistics?: { agents: Array<{id: string; stats?: AgentStats}>; summary: AgentsResponseSummary };
+};
+
+/** P1-58 — `GET /api/admin/agents?view=roster` (no audit statistics). */
+export type AgentsRosterResponse = {
+  agents: Agent[];
+  version: string;
+  meta?: {
+    snapshotVersion?: string;
+    generatedAt?: string;
+    permissionsState?: "ok" | "partial" | "unavailable";
+    runtimeConsistency?: "matched" | "unconfirmed";
+  };
+};
+
+/** P1-58 — `GET /api/admin/agents/statistics` partition. */
+export type AgentsStatisticsResponse = {
+  version: string;
+  range: "7d" | "14d" | "30d";
+  agents: Array<{ id: string; stats: AgentStats }>;
+  summary: AgentsResponseSummary;
+  meta: {
+    statisticsAsOf: string;
+    generatedAt: string;
+    snapshotVersion: string;
+    configVersion: string;
+    cache?: "hit" | "miss" | "bypass";
+  };
+};
+
 export type AgentPatch = {
   name?: string;
   note?: string;
@@ -1548,6 +1616,8 @@ export type CreateTokenResponse = {
   device_name?: string | null;
   created: string;
   expires_at: string;
+  /** Spec 14 §0.3 — the token is ready to use only when this is exactly `true`. */
+  runtimeAck?: boolean;
 };
 
 export type TokenInventoryItem = {
@@ -1642,8 +1712,15 @@ export type AuditNullReason =
 
 export type AuditLogEntry = {
   id: number;
+  /**
+   * SC-21：调用流水与 auth_failure_log 合表时带事件类型。
+   * 缺省按 call 处理；auth_failure 行没有 tool / durationMs 等调用字段。
+   */
+  eventType?: "call" | "auth_failure";
+  /** auth_failure 行的拒绝原因（如 token_unrecognized）。 */
+  reason?: string;
   ts: string;
-  userId: string;
+  userId?: string;
   tokenLabel?: string;
   tokenHashPrefix?: string;
   lucySessionId?: string;
@@ -1663,7 +1740,8 @@ export type AuditLogEntry = {
   clientIp?: string;
   userAgent?: string;
   deviceName?: string;
-  tool: string;
+  /** 调用行必有；auth_failure 合表行可缺。 */
+  tool?: string;
   tables?: string[];
   argsSummary?: Record<string, unknown>;
   queryHash?: string;
@@ -1672,14 +1750,14 @@ export type AuditLogEntry = {
   queryPreview?: string;
   queryArtifactRef?: string;
   generatedSql?: string;
-  outcome: "ok" | "error" | "denied";
+  outcome?: "ok" | "error" | "denied";
   errorDetail?: string;
-  durationMs: number;
+  durationMs?: number;
   responseBytes?: number;
   responseRowCount?: number;
   responseColumnCount?: number;
   responseTruncated?: boolean;
-  requestId: string | number;
+  requestId?: string | number;
   traceId?: string;
   roleIds?: string[];
   permissionSnapshotHash?: string;
@@ -2327,7 +2405,8 @@ export type CatalogAssetWarningCode =
   | "EMPTY_MANIFEST"
   | "TARGET_EXISTS"
   | "TABLE_SCHEMA_MISMATCH"
-  | "UNKNOWN_MANIFEST_SHAPE";
+  | "UNKNOWN_MANIFEST_SHAPE"
+  | "PREEXISTING_SOURCE_NAME_CONFLICT";
 
 export type CatalogAssetWarning = {
   code: CatalogAssetWarningCode;
@@ -2351,11 +2430,27 @@ export type CatalogAssetErrorCode =
   | "OVERLAY_FIELD_IN_MANIFEST"
   | "MANIFEST_SHAPE_IN_OVERLAY"
   | "PATH_NOT_ALLOWED"
-  | "ASSET_NOT_FOUND";
+  | "ASSET_NOT_FOUND"
+  | "DUPLICATE_SOURCE_NAME";
 
 export type CatalogAssetError = {
   code: CatalogAssetErrorCode;
   message: string;
+};
+
+/** P1-64 — final-set sourceName conflict object from catalog validate. */
+export type CatalogAssetSourceNameConflictEntry = {
+  targetPath: string;
+  schema: string;
+  physicalTable: string;
+  sourceName: string;
+};
+
+export type CatalogAssetSourceNameConflict = {
+  sourceName: string;
+  entries: CatalogAssetSourceNameConflictEntry[];
+  involvesCandidate: boolean;
+  suggestedSourceName?: string;
 };
 
 export type CatalogAssetValidateRequest = {
@@ -2382,6 +2477,8 @@ export type CatalogAssetValidateResponse = {
   tableNames: string[];
   warnings: CatalogAssetWarning[];
   errors: CatalogAssetError[];
+  /** P1-64 — empty array when no conflicts; includes unrelated old conflicts as diagnostics. */
+  sourceNameConflicts: CatalogAssetSourceNameConflict[];
 };
 
 export type CatalogAssetUploadRequest = CatalogAssetValidateRequest & {
@@ -2436,7 +2533,14 @@ export type CatalogSchemaManifestReadResponse = {
 // computes every target path, refuses paths from the client, and the
 // publish pipeline never shells out before a staging-validate gate passes.
 
-export type SemanticAssetKind = "schemaManifest" | "semanticSource" | "wiki" | "eval";
+export type SemanticAssetKind =
+  | "schemaManifest"
+  | "semanticSource"
+  | "wiki"
+  | "eval"
+  | "caliberBinding"
+  /** REQ-030-012 — Source 级字段暴露台账 */
+  | "fieldExposure";
 
 export type SemanticAssetWarningCode =
   | "TARGET_EXISTS"

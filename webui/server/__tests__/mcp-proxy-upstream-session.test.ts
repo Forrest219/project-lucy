@@ -666,7 +666,7 @@ describe("Spec 191 — the reload window boundaries", () => {
     }
   });
 
-  it("does NOT recover a streaming passthrough request", async () => {
+  it("P1-37 U3a：ping 不再是流式透传，失效会话上同样恢复", async () => {
     const seen: UpstreamRequest[] = [];
     let issuedSessions = 0;
     let acceptedSession = "";
@@ -689,21 +689,145 @@ describe("Spec 191 — the reload window boundaries", () => {
     });
 
     try {
-      // `ping` is not a buffered path: it is piped straight through, so a
-      // refused session cannot be retried.
-      const res = await post(proxyPort, { jsonrpc: "2.0", id: "reload-stream", method: "ping" }, {
+      const res = await post(proxyPort, { jsonrpc: "2.0", id: "reload-ping", method: "ping" }, {
         "mcp-session-id": "client-stale-session"
       });
-      expect(res.ok).toBe(false);
-      // The upstream refusal is passed through as-is — a streamed response is
-      // never rewritten into a JSON-RPC error envelope.
-      const raw = await res.text();
-      expect(raw).toContain("initialize");
-
-      // No recovery handshake was attempted for the streamed request.
-      expect(seen.filter((entry) => entry.rpcMethod === "initialize")).toHaveLength(0);
+      expect(res.status).toBe(200);
+      expect(seen.filter((entry) => entry.rpcMethod === "initialize")).toHaveLength(1);
     } finally {
       await closeAll(upstream, server);
     }
   });
+});
+
+/**
+ * P1-37 U3a / SC-07 / SC-08。失效形态来自 O6 取证（KTX 0.16.0 真实重启）：
+ * 失效会话＝404 text/plain `Unknown MCP session: <id>`（所有方法一致）；无会话＝400。
+ */
+const STALE_SHAPES: Array<{ name: string; status: number; body: string }> = [
+  { name: "400 initialize-required", status: 400, body: SESSION_REQUIRED_BODY },
+  { name: "404 Unknown MCP session", status: 404, body: "Unknown MCP session: ktx-session-0" }
+];
+
+const RECOVERY_CALLS: Array<{ name: string; body: (id: string) => unknown }> = [
+  { name: "ping", body: (id) => ({ jsonrpc: "2.0", id, method: "ping" }) },
+  { name: "tools/list", body: (id) => ({ jsonrpc: "2.0", id, method: "tools/list" }) },
+  { name: "lucy_query", body: lucyQueryBody }
+];
+
+describe("P1-37 U3a — 会话恢复范围与上游调用上界", () => {
+  for (const shape of STALE_SHAPES) {
+    for (const call of RECOVERY_CALLS) {
+      it(`${call.name} × ${shape.name}：恢复成功，上游调用 ≤ 4，审计有恢复记录`, async () => {
+        const seen: UpstreamRequest[] = [];
+        let issuedSessions = 0;
+        let acceptedSession = "";
+        const { upstream, server, proxyPort } = await startProxy(async (req, res) => {
+          const body = recordUpstream(seen, req, await readRequestBody(req));
+          if (body?.method === "initialize") {
+            issuedSessions += 1;
+            acceptedSession = `ktx-session-${issuedSessions}`;
+            res.writeHead(200, { "content-type": "application/json", "mcp-session-id": acceptedSession });
+            res.end(okInitializeResult(body.id));
+            return;
+          }
+          if (body?.method === "notifications/initialized") {
+            res.writeHead(202, { "content-type": "text/plain" });
+            res.end("");
+            return;
+          }
+          if (req.headers["mcp-session-id"] !== acceptedSession) {
+            res.writeHead(shape.status, { "content-type": "text/plain" });
+            res.end(shape.body);
+            return;
+          }
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(call.name === "tools/list"
+            ? JSON.stringify({ jsonrpc: "2.0", id: body?.id, result: { tools: [] } })
+            : okToolResult(body?.id));
+        });
+        try {
+          const id = `u3a-${call.name}-${shape.status}`;
+          const res = await post(proxyPort, call.body(id), { "mcp-session-id": "client-stale-session" });
+          expect(res.status).toBe(200);
+          const text = await res.text();
+          expect(text).not.toContain("upstream_session_required");
+          // 原请求 1 + initialize 1 + notifications/initialized 1 + 重试 1。
+          expect(seen.length).toBeLessThanOrEqual(4);
+          expect(seen.filter((entry) => entry.rpcMethod === "initialize")).toHaveLength(1);
+          expect(seen.filter((entry) => entry.rpcMethod === "notifications/initialized")).toHaveLength(1);
+
+          const row = await waitForAuditRow(id);
+          const db = new Database(auditDbPath, { readonly: true });
+          try {
+            const stages = (db.prepare("SELECT stage, status FROM access_trace_span WHERE access_log_id = ?").all(row.id) as Array<{ stage: string; status: string }>);
+            expect(stages.some((span) => span.stage === "session_recover" && span.status === "ok")).toBe(true);
+          } finally {
+            db.close();
+          }
+        } finally {
+          await closeAll(upstream, server);
+        }
+      });
+    }
+  }
+
+  it("notifications/initialized 被上游拒绝：不缓存新会话，只尝试 1 次恢复（≤ 3 次上游调用），错误带 session_required 提示", async () => {
+    const seen: UpstreamRequest[] = [];
+    const { upstream, server, proxyPort } = await startProxy(async (req, res) => {
+      const body = recordUpstream(seen, req, await readRequestBody(req));
+      if (body?.method === "initialize") {
+        res.writeHead(200, { "content-type": "application/json", "mcp-session-id": "ktx-fresh" });
+        res.end(okInitializeResult(body.id));
+        return;
+      }
+      if (body?.method === "notifications/initialized") {
+        res.writeHead(500, { "content-type": "text/plain" });
+        res.end("boom");
+        return;
+      }
+      res.writeHead(404, { "content-type": "text/plain" });
+      res.end("Unknown MCP session: stale");
+    });
+    try {
+      const res = await post(proxyPort, lucyQueryBody("u3a-initialized-rejected"), { "mcp-session-id": "client-stale-session" });
+      const text = await res.text();
+      expect(text).toContain("upstream_session_required");
+      expect(seen.length).toBeLessThanOrEqual(3);
+      // 下一个请求不得复用没确认过的新会话：它必须再次走恢复握手（再看到一次 initialize）。
+      await post(proxyPort, lucyQueryBody("u3a-initialized-rejected-2"), { "mcp-session-id": "client-stale-session" }).then((r) => r.text());
+      expect(seen.filter((entry) => entry.rpcMethod === "initialize").length).toBe(2);
+    } finally {
+      await closeAll(upstream, server);
+    }
+  });
+
+  it("重试后仍是会话类错误：恢复只做 1 次，上游调用 ≤ 4", async () => {
+    const seen: UpstreamRequest[] = [];
+    const { upstream, server, proxyPort } = await startProxy(async (req, res) => {
+      const body = recordUpstream(seen, req, await readRequestBody(req));
+      if (body?.method === "initialize") {
+        res.writeHead(200, { "content-type": "application/json", "mcp-session-id": "ktx-fresh" });
+        res.end(okInitializeResult(body.id));
+        return;
+      }
+      if (body?.method === "notifications/initialized") {
+        res.writeHead(202, { "content-type": "text/plain" });
+        res.end("");
+        return;
+      }
+      res.writeHead(404, { "content-type": "text/plain" });
+      res.end("Unknown MCP session: still-bad");
+    });
+    try {
+      const res = await post(proxyPort, lucyQueryBody("u3a-still-refused"), { "mcp-session-id": "client-stale-session" });
+      const text = await res.text();
+      expect(text).toContain("upstream_session_required");
+      expect(seen.length).toBeLessThanOrEqual(4);
+      expect(seen.filter((entry) => entry.rpcMethod === "initialize")).toHaveLength(1);
+    } finally {
+      await closeAll(upstream, server);
+    }
+  });
+
 });

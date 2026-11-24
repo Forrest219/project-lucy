@@ -1,0 +1,384 @@
+{
+  "candidate": "old-ui",
+  "startedAt": "2026-11-20T07:14:00.837Z",
+  "headed": true,
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "requests": [
+    {
+      "phase": "02-real-build-navigation-and-current-window",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "phase": "02-real-build-navigation-and-current-window",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "phase": "02-real-build-navigation-and-current-window",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "phase": "02-real-build-navigation-and-current-window",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "phase": "02-real-build-navigation-and-current-window",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "phase": "02-real-build-navigation-and-current-window",
+      "path": "/api/admin/agents/statistics?range=7d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "phase": "02-real-build-navigation-and-current-window",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "phase": "02-real-build-navigation-and-current-window",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "phase": "02-real-build-navigation-and-current-window",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "phase": "03-drawer-only-selected-id",
+      "path": "/api/admin/agents",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "phase": "04-unmigrated-consumers-still-read-complete-agents",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "phase": "04-unmigrated-consumers-still-read-complete-agents",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "phase": "04-unmigrated-consumers-still-read-complete-agents",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "phase": "04-unmigrated-consumers-still-read-complete-agents",
+      "path": "/api/project",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "phase": "04-unmigrated-consumers-still-read-complete-agents",
+      "path": "/api/admin/agents",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "phase": "04-unmigrated-consumers-still-read-complete-agents",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "phase": "04-unmigrated-consumers-still-read-complete-agents",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "phase": "04-unmigrated-consumers-still-read-complete-agents",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "phase": "04-unmigrated-consumers-still-read-complete-agents",
+      "path": "/api/admin/mcp-runtime/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "phase": "04-unmigrated-consumers-still-read-complete-agents",
+      "path": "/api/admin/agents",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "phase": "04-unmigrated-consumers-still-read-complete-agents",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "phase": "04-unmigrated-consumers-still-read-complete-agents",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "phase": "04-unmigrated-consumers-still-read-complete-agents",
+      "path": "/api/admin/audit?since=2026-11-13T07%3A00%3A00.000Z&includeProtocol=false&limit=50&offset=0",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "phase": "04-unmigrated-consumers-still-read-complete-agents",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "phase": "04-unmigrated-consumers-still-read-complete-agents",
+      "path": "/api/admin/agents",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "phase": "05-empty-real-backend",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "phase": "05-empty-real-backend",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "phase": "05-empty-real-backend",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "phase": "05-empty-real-backend",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    }
+  ],
+  "cases": [
+    {
+      "name": "full-and-single-7d",
+      "status": "PASS",
+      "agents": 71,
+      "capabilities": 15240,
+      "window": {
+        "agentCount": 71,
+        "enabledAgentCount": 71,
+        "activeAgentCountLast7d": 71,
+        "businessActiveAgentCountLast7d": 71,
+        "configuredTokenCount": 213,
+        "availableTokenCount": 213,
+        "activeTokenCountLast7d": 213,
+        "usedCredentialCountLast7d": 213,
+        "usedCredentialState": "ok",
+        "callsLast7d": 100000,
+        "businessCallsLast7d": 90000,
+        "protocolCallsLast7d": 10000,
+        "usageCallsLast7d": 90000,
+        "evalProbeCallsLast7d": 0,
+        "usageActiveAgentCountLast7d": 71,
+        "deniedLast7d": 4736,
+        "metricsState": "ok",
+        "auditCompleteness": {
+          "state": "ok",
+          "scope": "current_process",
+          "observedSince": "2026-11-20T07:11:43.528Z",
+          "pendingWrites": 0,
+          "failedWrites": 0,
+          "successfulWrites": 0,
+          "ledger": {
+            "state": "ok",
+            "failedAppends": 0
+          },
+          "projection": {
+            "complete": true,
+            "cursor": 0,
+            "latestSeq": 0,
+            "lag": 0,
+            "delayMs": 0,
+            "checkedAt": "2026-11-20T07:13:59.748Z"
+          }
+        },
+        "windowStart": "2026-11-13T07:14:02.017Z",
+        "windowEnd": "2026-11-20T07:14:02.017Z",
+        "range": "7d"
+      }
+    },
+    {
+      "name": "full-and-single-14d",
+      "status": "PASS",
+      "agents": 71,
+      "capabilities": 15240,
+      "window": {
+        "agentCount": 71,
+        "enabledAgentCount": 71,
+        "activeAgentCountLast7d": 71,
+        "businessActiveAgentCountLast7d": 71,
+        "configuredTokenCount": 213,
+        "availableTokenCount": 213,
+        "activeTokenCountLast7d": 213,
+        "usedCredentialCountLast7d": 213,
+        "usedCredentialState": "ok",
+        "callsLast7d": 150000,
+        "businessCallsLast7d": 130000,
+        "protocolCallsLast7d": 20000,
+        "usageCallsLast7d": 130000,
+        "evalProbeCallsLast7d": 0,
+        "usageActiveAgentCountLast7d": 71,
+        "deniedLast7d": 6842,
+        "metricsState": "ok",
+        "auditCompleteness": {
+          "state": "ok",
+          "scope": "current_process",
+          "observedSince": "2026-11-20T07:11:43.528Z",
+          "pendingWrites": 0,
+          "failedWrites": 0,
+          "successfulWrites": 0,
+          "ledger": {
+            "state": "ok",
+            "failedAppends": 0
+          },
+          "projection": {
+            "complete": true,
+            "cursor": 0,
+            "latestSeq": 0,
+            "lag": 0,
+            "delayMs": 0,
+            "checkedAt": "2026-11-20T07:13:59.748Z"
+          }
+        },
+        "windowStart": "2026-11-06T07:14:04.408Z",
+        "windowEnd": "2026-11-20T07:14:04.408Z",
+        "range": "14d"
+      }
+    },
+    {
+      "name": "full-and-single-30d",
+      "status": "PASS",
+      "agents": 71,
+      "capabilities": 15240,
+      "window": {
+        "agentCount": 71,
+        "enabledAgentCount": 71,
+        "activeAgentCountLast7d": 71,
+        "businessActiveAgentCountLast7d": 71,
+        "configuredTokenCount": 213,
+        "availableTokenCount": 213,
+        "activeTokenCountLast7d": 213,
+        "usedCredentialCountLast7d": 213,
+        "usedCredentialState": "ok",
+        "callsLast7d": 200000,
+        "businessCallsLast7d": 180000,
+        "protocolCallsLast7d": 20000,
+        "usageCallsLast7d": 180000,
+        "evalProbeCallsLast7d": 0,
+        "usageActiveAgentCountLast7d": 71,
+        "deniedLast7d": 9474,
+        "metricsState": "ok",
+        "auditCompleteness": {
+          "state": "ok",
+          "scope": "current_process",
+          "observedSince": "2026-11-20T07:11:43.528Z",
+          "pendingWrites": 0,
+          "failedWrites": 0,
+          "successfulWrites": 0,
+          "ledger": {
+            "state": "ok",
+            "failedAppends": 0
+          },
+          "projection": {
+            "complete": true,
+            "cursor": 1,
+            "latestSeq": 1,
+            "lag": 0,
+            "delayMs": 0,
+            "checkedAt": "2026-11-20T07:14:05.073Z"
+          }
+        },
+        "windowStart": "2026-10-21T07:14:07.013Z",
+        "windowEnd": "2026-11-20T07:14:07.013Z",
+        "range": "30d"
+      }
+    },
+    {
+      "name": "01-original-complete-contract",
+      "status": "PASS",
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "name": "02-real-build-navigation-and-current-window",
+      "status": "PASS",
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "name": "03-drawer-only-selected-id",
+      "status": "PASS",
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "name": "unmigrated-token",
+      "status": "PASS",
+      "agents": 71,
+      "complete": true
+    },
+    {
+      "name": "unmigrated-playground",
+      "status": "PASS",
+      "agents": 71,
+      "complete": true
+    },
+    {
+      "name": "unmigrated-audit",
+      "status": "PASS",
+      "agents": 71,
+      "complete": true
+    },
+    {
+      "name": "04-unmigrated-consumers-still-read-complete-agents",
+      "status": "PASS",
+      "visible": "visible",
+      "focused": true
+    },
+    {
+      "name": "05-empty-real-backend",
+      "status": "PASS",
+      "visible": "visible",
+      "focused": true
+    }
+  ],
+  "failures": [],
+  "browser": "157.0.8103.79",
+  "emptyFixture": {
+    "fixtureUsers": 0
+  }
+}

@@ -76,6 +76,7 @@ export const UI_USAGE_MENUS: MenuDefinition[] = [
   { id: "overview", label: "系统概览" },
   { id: "ops-calls", label: "调用监控" },
   { id: "admin-governance", label: "使用概况" },
+  { id: "admin-ops-steps", label: "运维步骤" },
   { id: "connections-overview", label: "连接概览" },
   { id: "connections-enabled-tables", label: "启用表范围" },
   { id: "semantic-catalog", label: "语义资产" },
@@ -122,6 +123,7 @@ const PAGE = {
   evalFieldQuestions: { pageKey: "eval-field-questions", label: "现场提问", menuId: "eval-field-questions", groupId: "evaluation" },
   evalSecurity: { pageKey: "eval-security-candidates", label: "安全评测候选", menuId: "eval-security-candidates", groupId: "evaluation" },
   usage: { pageKey: "admin-usage", label: "使用概况", menuId: "admin-governance", groupId: "runtime-status" },
+  opsSteps: { pageKey: "admin-ops-steps", label: "运维步骤", menuId: "admin-ops-steps", groupId: "runtime-status" },
   agents: { pageKey: "admin-agents", label: "Agent", menuId: "admin-agents", groupId: "governance" },
   agentDetail: { pageKey: "agent-detail", label: "Agent 详情", menuId: "admin-agents", groupId: "governance" },
   issueTokenAgent: { pageKey: "issue-token", label: "签发 Token", menuId: "admin-agents", groupId: "governance" },
@@ -167,6 +169,7 @@ export const UI_USAGE_PAGES: UiPageDefinition[] = [
   PAGE.evalFieldQuestions,
   PAGE.evalSecurity,
   PAGE.usage,
+  PAGE.opsSteps,
   PAGE.agents,
   PAGE.agentDetail,
   PAGE.issueToken,
@@ -204,6 +207,7 @@ const EXACT_PAGES = new Map<string, UiPageDefinition>([
   ["/eval/field-questions", PAGE.evalFieldQuestions],
   ["/eval/security-candidates", PAGE.evalSecurity],
   ["/admin/usage", PAGE.usage],
+  ["/admin/ops-steps", PAGE.opsSteps],
   ["/admin/agents", PAGE.agents],
   ["/admin/tokens", PAGE.tokens],
   ["/admin/tokens/new", PAGE.issueToken],
@@ -324,6 +328,8 @@ async function ensureUiPageViews(db: Awaited<ReturnType<typeof getAuditDb>>): Pr
       group_id  TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_ui_page_views_ts ON ui_page_views(ts);
+    -- Covering index for the overview aggregates (P1-33 / F-5): window scans never touch the table rows.
+    CREATE INDEX IF NOT EXISTS idx_ui_page_views_ts_cover ON ui_page_views(ts, page_key, menu_id, admin_id);
   `);
 }
 
@@ -578,6 +584,7 @@ export async function queryUiUsageOverview(hours: 24 | 168, now = new Date()) {
     return new Map(rows.map((row) => [row.id, row.visits]));
   };
 
+  const pageCounts = countRows("page_key"); // one scan feeds both the group and the page rankings
   return {
     windowHours: hours,
     pageViews: totals.page_views ?? 0,
@@ -585,11 +592,11 @@ export async function queryUiUsageOverview(hours: 24 | 168, now = new Date()) {
     activeMenuCount: totals.active_menu_count ?? 0,
     unmappedViews: totals.unmapped_views ?? 0,
     pageViewSeries,
-    groups: rankByVisits(UI_USAGE_GROUPS, groupVisitsByCurrentCatalog(countRows("page_key"))),
+    groups: rankByVisits(UI_USAGE_GROUPS, groupVisitsByCurrentCatalog(pageCounts)),
     menus: rankByVisits(UI_USAGE_MENUS, countRows("menu_id")),
     pages: rankByVisits(
       UI_USAGE_PAGES.map((page) => ({ id: page.pageKey, label: page.label })),
-      countRows("page_key")
+      pageCounts
     )
   };
 }

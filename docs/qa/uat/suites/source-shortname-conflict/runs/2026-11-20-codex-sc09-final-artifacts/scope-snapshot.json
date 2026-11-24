@@ -1,0 +1,5 @@
+{
+  "at": "2026-11-20T04:12:53.579472+00:00",
+  "p160TestLedgerRow": "| `UAT-SUITE-BEGIN-ZERO-BINDING` | P1-60／REQ-030-081 | [suites/begin-zero-binding](suites/begin-zero-binding/suite.md) | 隔离 Docker 单实例／真实数据库／普通 MCP Token；R 含 RC1 既有 Codex CLI 0.165.0 | 尚无 | **NOT RUN／修复执行中**：已授权完整 R0／01–12 与制品取证；真实结果产生前不记 PASS；最终评审 R-01–04 待修复。 |",
+  "p160ReviewSha256": "52d3df08e2c803b510b1c877d90cc7079ffd04b030c89d9e2529799742aaa4d9"
+}

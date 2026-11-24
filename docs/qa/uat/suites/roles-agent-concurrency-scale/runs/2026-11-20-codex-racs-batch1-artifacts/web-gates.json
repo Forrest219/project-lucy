@@ -1,0 +1,26 @@
+[
+  {
+    "name": "terminology",
+    "exitCode": 0,
+    "ms": 498.5,
+    "output": "\n> webui@1.0.0 lint:terminology\n> node scripts/lint-terminology.mjs\n\nTerminology lint passed (1178 files scanned).\n"
+  },
+  {
+    "name": "ia-boundary",
+    "exitCode": 0,
+    "ms": 143.2,
+    "output": "\n> webui@1.0.0 lint:ia-boundary\n> node scripts/lint-ia-boundary.mjs\n\nIA boundary lint passed.\n"
+  },
+  {
+    "name": "copy-surfaces",
+    "exitCode": 0,
+    "ms": 138.7,
+    "output": "\n> webui@1.0.0 lint:copy-surfaces\n> node scripts/lint-copy-surfaces.mjs\n\nCopy surfaces lint passed (13 files, 15 call sites registered).\n"
+  },
+  {
+    "name": "button-feedback",
+    "exitCode": 0,
+    "ms": 174.0,
+    "output": "\n> webui@1.0.0 lint:button-feedback\n> node scripts/lint-button-feedback.mjs\n\nbutton-feedback baseline: 16 download trigger(s), 4 raw fetch() site(s), 8 writeAccessYaml() call(s)\nPASSED: button-feedback gate\n"
+  }
+]

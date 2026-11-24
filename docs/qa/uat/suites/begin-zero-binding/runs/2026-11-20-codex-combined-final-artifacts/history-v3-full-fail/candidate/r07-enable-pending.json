@@ -1,0 +1,42 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 94.652,
+  "body": {
+    "ok": true,
+    "data": {
+      "files": [
+        {
+          "filePath": "caliber-bindings/bound.yaml",
+          "status": "added",
+          "diff": "暂无可比较的生效版本。\n"
+        }
+      ],
+      "pendingDigest": "5377a83f60ecda85a657bad585592c2cdab12a32a76a1f704addf899b2bc3d9f",
+      "baselineState": "ready",
+      "baselineGeneration": 2,
+      "impact": {
+        "pendingDigest": "5377a83f60ecda85a657bad585592c2cdab12a32a76a1f704addf899b2bc3d9f",
+        "complete": true,
+        "counts": {
+          "files": 1,
+          "tables": 0,
+          "manifests": 0,
+          "wikiPages": 0
+        },
+        "tables": [],
+        "wikiChanges": [],
+        "schemaChanges": [],
+        "relatedScope": [],
+        "otherChanges": [
+          {
+            "filePath": "caliber-bindings/bound.yaml",
+            "changeType": "added"
+          }
+        ],
+        "unresolved": []
+      },
+      "mirrorOnlySemanticFiles": [],
+      "mirrorDriftTruncated": false
+    }
+  }
+}

@@ -28,13 +28,31 @@ Lucy 的测试分三层，不能互相替代：
 
 ## 2. Current Commands
 
+P1-58／59 首批入口：`RACS_WEB=http://127.0.0.1:<port> RACS_CONTAINER=lucy-racs-<name> RACS_SECRET_DIR=/private/tmp/<private-dir> node scripts/uat/racs-browser-functional.mjs inbox/p1-58-59-finalization-20261120/<run>`（真实前台Chrome）；夹具 `npx tsx scripts/uat/racs-fixture.mts <out> <1|2|5>`；候选／实例 `python3 scripts/uat/racs-candidate.py <name>`／`python3 scripts/uat/racs-instance.py <name> <fixture> <image> <port>`。`roles-agent-concurrency-scale.mts`与`racs-functional.mts`保留完整模块／事务入口，完整长测按委托人决议延期，未完成不得主张PASS。仅隔离本机，凭据不入库；无新增CI或发布入口。
+
 | Command | Layer | Purpose |
 |---|---|---|
+| `python3 scripts/uat/core-availability-uat.py preflight\|run\|verify` | uat（本机隔离 Docker；核验可离线） | [标准复测手册](../qa/uat/suites/core-availability/retest.md)。固定校准或正式档位，实测反代、HTTP、纯 MCP 与 1883 表重载。独立核验原始回执、审计和清理，结果按 STD-01～05 归档。 |
+| `python3 scripts/uat/core-availability-1883-soak.py --image IMG --out DIR [--mode formal] [--seconds 1800] [--cycle-seconds 150] [--io-control]` | uat（具名本机隔离Docker，人工执行） | CA-01整改入口：正式至少1800秒／12完整周期（默认每150秒，保留旧3600／300参数）、1883三重规模、20万合成审计；三探针／HTTP固定1Hz，普通MCP合计每5秒到达、有界并发、计划／漏发／终态／截尾可重算；CPU采样默认关闭，`--profile-seconds`只用于另窗短诊断。`--mode calibration`允许短校准，`--stop-after`仅校准停止路径，不能签正式PASS。显式`--contract-policy p1-69 --audit-evidence-copy`按确权SC03取证而仍保留失败分母；`--overall-seconds`为运行截止，另有有界`--cleanup-seconds`。FIFO真实终态／仅恢复路径与完整审计闭包单列；不签完整F61／F62／F63／R-CAV或客户结论。 |
+| `python3 scripts/uat/core-availability-standard.test.py` | local（独立复测工具回归） | 本机环回真实转发／网关失败、请求回执绑定、证据哈希及正式档位反例。 |
+| `python3 scripts/uat/core-availability-1883-soak.test.py` | local（验证工具回归） | 固定到达、有界并发、计数守恒、截止／真实本地进程回收、迟到探针全量分母、审计有效关联校验等工具反例；离线测试不代替Docker校准或产品UAT。 |
+| `python3 scripts/uat/readyz-diagnostic-repro.py --baseline-image IMG --candidate-image IMG --out DIR [--seconds 120] [--verify-repair 或 --assess-only [--no-fault]]` | uat（本机隔离Docker；需具名执行授权，不进PR CI） | 默认复现旧版真实FIFO等待；`--verify-repair`验证5秒实际进程回收、120秒探针与两轮仅恢复路径的自动fresh；`--assess-only`验证真实导出／MySQL在途查询TERM／原卷恢复，`--no-fault`为诊断正常对照。仅局部，不覆盖完整F61/F62/F63。runner不在执行时改产品源码，原Spec承接授权修复；不改客户环境，不签发布结论。 |
+| Docker 内 `/app/webui/node_modules/.bin/tsx /app/webui/scripts/row-policy-automatic-enforcement.mts unset`（另跑 `false`／`true`） | runtime + platform（P1-72） | 隔离候选源码与临时项目，真实 bundled KTX／demo MySQL，独立 SQL 对照行域及金额；13 项含默认成交／个人约束／伪造过滤／未包装拒绝／内部入口／explain。要求 demo-db 网络与 `/evidence` 可写挂载；不操作客户数据、不自动接入 CI。 |
 | `npm run smoke:fast` | platform + tier 0 fast smoke | 快速静态规范、元数据契约、WebUI L1 及轻量握手（≤45s，PR 阻塞门禁） |
 | `npm run smoke:full` | aggregate + tier 1 full smoke | 全量多数据源容器、License、Token 资产、发布回归、监控审计与 Agent E2E 就绪门禁 |
 | `npm run lint:spec` | platform | spec drift checks for routes/API/skills/evals/access roles |
 | `npm run lint:spec-docs` | platform | Spec／Plan 文档**形态**门禁：索引登记、伪代码小节、元数据、Plan 必备小节、Design System／Terminology 小节模板形态、文件名（`filename`）、闭口层级（`close-layer`）。各模块 `<module>/docs/`（含子目录）里新的一位及以上数字流水号 Spec 直接失败。存量豁免冻结在 `docs/governance/spec-plan-doc-baseline.json`（只减不增）。**判定按 git 跟踪状态分流：已跟踪文件的基线外违规阻塞（exit 1），未跟踪的在途草稿只报 WARN 不阻塞**（见 `docs/governance/DEVELOPMENT.md`「门禁的判定范围（按 git 跟踪状态分流）」）。规范出处：`docs/governance/DEVELOPMENT.md`「新增 Spec / Plan 的落盘清单」与「功能闭口与发布取证」 |
+| `npm run lint:status-vocab` | platform | Spec／Plan「状态」行英文状态禁用词＋`Status` 表头门禁（P1-73／REQ-030-094 Wave A；建议书 §3.4）。与 `lint:spec-docs` **同一实现**（`--rule=status-vocab` 导出入口），无第二份词表；缺状态行归 `metadata`，本规则不报。规范出处：`docs/governance/DEVELOPMENT.md`「状态措辞用中文」与 [`lucy-20261122-spec-status-vocabulary-chinese-plan.md`](../plans/lucy-20261122-spec-status-vocabulary-chinese-plan.md) |
+| `npm run lint:status-funnel` | platform | Spec「阶段」行阶段码（S1–S5／X_*）／S5 未收口矛盾／S1·S2 授权口令／状态行可上线·UAT 冒充／收口范围仅 S5／发布取证禁止 S5（实施期 S1–S4、收口 X_REL；D8／D8b）／Plan 镜像前缀门禁（P1-73／REQ-030-094；SC-01–SC-12）。grandfather＝`docs/governance/spec-status-funnel-grandfather.json`：名单内无「开发授权已获得」口令且无「状态漏斗门禁：纳入检查」标记行即跳过；口令／标记行取消跳过。与 `lint:spec-docs` 同一实现（`--rule=status-funnel` 导出入口）。**0.30 总账主 Spec MIG（2026-11-22 授权）已迁一批出 grandfather**；未挂 0.30 总账的存量 Spec 仍可留名单。规范出处：[`lucy-20261122-spec-status-funnel-gate-spec.md`](../specs/lucy-20261122-spec-status-funnel-gate-spec.md) |
+| `npm run lint:inventory-stage` | platform | 执行总账「跟进状态」须以阶段码｜开头；有主 Spec（链接文案 Spec／主 Spec）时与 Spec「阶段」格同码（P1-73 v1.1／D17；委托人 2026-11-22 授权）。与 `lint:spec-docs` 同一实现（`--rule=inventory-stage`）。现行扫描面＝`docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md`。回填入口 `npm run mig:funnel-inventory`。规范出处：同上 Spec D17＋DEVELOPMENT「开发台漏斗阶段码」 |
 | `npm run lint:url-driven-input` | platform | 扫描 `webui/src` 的受控文本输入框，判定其 `value` 是否源自路由状态（`useSearchParams`／`useParams` 派生变量），防止「输入法组合被打断」缺陷回流。判据是 `value` 的**来源**，不是 `onChange` 是否写 URL；**不设白名单**。规范出处：[`docs/specs/lucy-20261029-url-driven-input-ime-composition-spec.md`](../specs/lucy-20261029-url-driven-input-ime-composition-spec.md) §5.5 与 [`webui/docs/design-system/14-components-filter-input.md`](../../webui/docs/design-system/14-components-filter-input.md) |
+| `npm --prefix webui run lint:copy-surfaces` | platform | 复制入口登记门禁（接入 `webui` 的 `pretest`）：所有调用 `copyTextToClipboard`／`copyTextWithToast` 的生产文件必须登记在 `webui/scripts/copy-surfaces.manifest.json` 且调用点数一致；除 `src/lib/clipboard.ts` 外禁止直接用 `navigator.clipboard`／`execCommand(`／`ClipboardItem`。**只证明入口都登记且每个 click 入口有子用例编号 `UAT-COPY-02x`，不证明复制可用**；可用性只认测试台 `UAT-SUITE-COPY-FAKE-SUCCESS`（真实粘贴读回）。**不设白名单豁免 helper 外直连。** |
+| `node scripts/uat/wiki-upload-acl-recheck.mjs` | uat（人工，需已授权本机 demo Docker＋真实前台 Chrome，不进 PR CI） | P1-65 Wiki ACL 收口复核：R0／01–12 分支、headless=false＋可见／焦点与计时、逐写入严格 MCP 搜索／读取、清理套件专用页／Token／Agent。凭据经环境或仓库外文件，仅内存；0＝全通过且清理成功，1＝失败或残留；证据进 `wiki-upload-acl-adoption/runs/`。仅回环 demo，禁止客户环境与共享正式页清理。 |
+| `node --test scripts/uat/wiki-mcp-assertions.test.mjs` | platform（本机） | MCP 断言负控回归：传输失败、错误页面、旧正文、泛化错误文本、非精确 key 均不得误判 Wiki 搜索／读取授权通过；不访问网络，不替代真实 UAT。 |
+| `npm run uat:copy-probe` | uat（人工，需 demo Docker＋Playwright，不进 PR CI） | 复制按钮假成功探针（`UAT-SUITE-COPY-FAKE-SUCCESS`）：在**非回环明文 HTTP** 的真实 Chromium 里点每个复制入口并真实粘贴读回；真实签发并吊销一个探针 Token、用真实 MCP 查询造审计数据。退出码 0＝全 REAL，1＝存在假成功／静默，2＝环境不满足（含回环地址）。改动 `clipboard.ts`／任一复制入口、升 Chromium／Playwright、出包前跑。 |
+| `npm --prefix webui run lint:button-feedback` | platform | 按钮反馈登记门禁（接入 `webui` 的 `pretest`）：B1 每个下载触发点（`.download =`／`<ApiDownloadLink`）必须登记在 `webui/scripts/download-surfaces.manifest.json` 且次数一致；B2 `click` 入口须对应 `UAT-BTN-*` 用例；B3 裸 `fetch` 必读 `.ok`；B4 服务端 `writeAccessYaml` 必须处理非 `committed` 终态；B5 禁止裸 API 下载链接。**只证明登记与写法，不证明下载可用**；可用性只认测试台 `UAT-SUITE-BUTTON-FEEDBACK`。 |
+| `npm run uat:button-feedback` | uat（人工，需 demo Docker＋Playwright，不进 PR CI） | 下载／保存按钮反馈真实性探针（`UAT-SUITE-BUTTON-FEEDBACK`）：真实 Chromium 点每个下载入口并监听 `download` 事件；真实签发并吊销一个探针 Token，用同标签重复签发取真实 409。退出码 0＝无缺陷，1＝存在缺陷或吊销失败，2＝环境不满足。改动 `ApiDownloadLink`／任一下载入口、出包前跑。 |
+| `npm run uat:cold-start -- <r0\|seed\|cold01…cold05\|all\|clean> [--new-image IMG]` | uat（人工，需本机 Docker Desktop＋`--privileged` 清页缓存，不进 PR CI） | 慢盘冷页缓存冷启动演练（`UAT-SUITE-COLD-START-SLOW-DISK`，P1-39）：旧 schema、20 万行审计库快照；blkio 限速（读写 30MB/s、读 300／写 100 IOPS）＋宿主 `drop_caches`；对照 0.25.0，候选镜像测首次升级、重启、稳态冲缓存与冷启动后主路径。退出码 0＝全过，1＝有项未过，2＝参数不满足。改动审计库 schema／索引／`getDb`、`inferred-turn-maintainer`、`app.listen` 之前的恢复步骤、出包前跑。热缓存单测与 CI 绿不能代替。 |
 | `npm run security:baseline` | security + platform | token hash, wildcard ACL, deny tools, audit hooks, secrets exclusion baseline |
 | `npm run smoke:p0` | platform | local build/test/spec/WebUI health/static SPA smoke（含 delivery-isolation 静态门禁） |
 | `npm run smoke:p0:delivery-isolation` | platform（Lucy 硬门禁） | `.dockerignore` 排除 A3 路径；可选 `--check-images` 对 Lucy 镜像做 denylist；与 A3 是否启用无关 |
@@ -50,6 +68,7 @@ Lucy 的测试分三层，不能互相替代：
 | `npm run smoke:p0:customer` | customer/manual | verifies configured real DB path on this machine |
 | `npm run smoke:p1:context` | context governance | semantic-layer inventory/readability and key wiki playbook evidence; optional KTX/proxy runtime checks |
 | `npm run smoke:p1:skills` | skill governance | `SKILL.md` frontmatter, dependency references, runtime boundary, and eval `skill_version` coverage |
+| `npm run smoke:p1:mcp-client-config:test` | skill / MCP client config | 仓库 `.mcp.json` 必须挂主面 `/mcp`；拒绝 legacy `lucy-skills`／`/mcp/skills`。规范见 [`docs/specs/lucy-20261111-mcp-client-skill-endpoint-fix-spec.md`](../specs/lucy-20261111-mcp-client-skill-endpoint-fix-spec.md) |
 | `npm run smoke:p1:endpoint` | MCP lifecycle | authenticated proxy precheck, `initialize`, `tools/list`, and `lucy_read_source` forwarding metadata |
 | `npm run smoke:p1:observability` | observability | generic `/api/observability` evidence; reports blocked if WebUI service is not reachable |
 | `npm run e2e:agent` | agent database E2E | database-backed Lucy MCP control path plus main/Hermes/moz agent final-answer assertions; missing local tokens or agent adapters returns blocked evidence |
@@ -65,6 +84,18 @@ Lucy 的测试分三层，不能互相替代：
 | `npm run compat:ktx-upgrade -- --candidate <version>` | runtime + platform upgrade | validates a candidate bundled KTX version through Docker/demo/business gates |
 | `cd webui && npm run e2e:release-ux` | platform, release-only | 发版前 WebUI 菜单壳层。按 `navigation.ts` 点击每个一级分组和二级入口，并打开 `/help`。断言当前菜单、页头、H1、页头动作数量、错误原文、禁止主标签和时间筛选。独立 Playwright 配置，只跑 Chromium 1920×1080，不进入 `@pr-smoke`、`e2e:contract:release` 或 `e2e:real`。不是 PR 阻塞项，通过也不能单独把客户包签成可生产。规范见 [`docs/specs/lucy-20261030-webui-release-ux-review-spec.md`](../specs/lucy-20261030-webui-release-ux-review-spec.md) |
 | `npm run e2e:product -- --list` | product e2e entry | 列出主干或一个分支的文件、证据层级和配置。`--list` 不起 Lucy、不跑 Playwright。去掉 `--list` 才调度该目标。不是 PR 阻塞项，也不替代 `e2e:real:*` 或 `gate:customer-release`。规范见 [`docs/specs/lucy-20261102-e2e-independent-trial-scaffold-spec.md`](../specs/lucy-20261102-e2e-independent-trial-scaffold-spec.md) |
+| `npm run concepts` | content governance（本机） | Concept Registry 一期 CLI：`scan`／`list`／`show`／`set-canonical`／`reject`／`summary`。不进 CI。规范见 [`docs/specs/lucy-20261108-concept-registry-ontology-lite-spec.md`](../specs/lucy-20261108-concept-registry-ontology-lite-spec.md) |
+| `npm run concepts:test` | content governance（本机） | Concept Registry 单元／夹具测试（SC-01–SC-17）。不进 CI |
+| `npm run concepts:check-diff` | content governance（本机） | Concept Registry 一期差分白名单（D19／SC-05／SC-08）。可选 `CONCEPTS_DIFF_BASE=<commit>`。不进 CI |
+| `npm --prefix webui run perf:event-loop-relief` | event-loop relief perf（REQ-030-042） | 客户规模审计夹具上的 `/turns?hours=168` 与 60s 探针负载。证据写入 `docs/reviews/`。未达标不扩 worker。本条通过不表示可上线 |
+| `npm --prefix webui run sweep:event-loop` | page/route event-loop sweep（REQ-030-052／P1-31） | 本机全真：`docker cp` demo 项目、`vite build`、客户规模审计夹具＋合成账本，量**全部页面**与**全部 GET 路由**对 `/api/livez` 的影响。约 8–15 分钟。证据写入 `inbox/`。测试台 [`UAT-SUITE-PAGE-SWEEP`](../qa/uat/suites/page-event-loop-sweep/suite.md)。通过不表示可上线 |
+| `npm --prefix webui run sweep:event-loop:gate` | event-loop 门禁（`0.30` 候选构建，REQ-030-052） | 同上，另对照基线 `webui/scripts/page-event-loop-sweep.baseline.json`：**新增越线或新增未测路由／页面即退出码 1**；基线里已登记的越线不挡门禁，但 UAT-SWEEP-02 仍记 FAIL（P1-32／P1-33 整改后 `tracked` 已清零）。`SWEEP_STRICT=1` 时已登记越线也退出码 1。基线只减不增 |
+| `npm --prefix webui run test:equivalence` | 等价守卫（P1-32／P1-33 / REQ-030-053／054） | vitest＋better-sqlite3 真库，秒级。冻结旧实现（`legacy/`）与改前金样本（`golden/`）对照新实现，输出须逐字等价；导出分片须让出事件循环；`equivalence-manifest.test.ts` 防止删 oracle。**改动 `webui/server` 里审计／对账／治理／访问关系图／概览读路径（受守卫文件见 [fixtures](../qa/uat/suites/audit-scale-equivalence-guard/fixtures.md)）必跑**，红灯不得合入；也包含在 `npm --prefix webui test` 里。只证明输出没变，**不证明不卡**（不卡看上一行门禁）。测试台 [`UAT-SUITE-EQUIV-GUARD`](../qa/uat/suites/audit-scale-equivalence-guard/suite.md)。通过不表示可上线 |
+| `npm --prefix webui run perf:release-baseline -- --tier ci-small --output inbox/perf-baselines/<run>` | release perf（REQ-030-034） | WebUI Roles API＋source-map 计数＋MCP initialize／tools/list／wiki_search＋相对 D6；CI 小夹具。夹具分档见 [`docs/runbooks/release-perf-baseline-fixture-tiers.md`](../runbooks/release-perf-baseline-fixture-tiers.md)。本条通过不表示可上线 |
+| `npm --prefix webui run perf:release-baseline -- --tier release-medium --output inbox/perf-baselines/<run> [--previous <report.json>]` | release perf（发版） | 发版中档夹具＋相对上版；无上版记 `baseline-seed`。正式副本见 `formal-seed` |
+| `npm run perf:release-baseline:formal-seed -- --from inbox/perf-baselines/<run>` | release perf（正式种子） | 将通过报告晋升到 `inbox/perf-baselines/formal/<ver>-<sha>/` 并更新 `formal/LATEST`（SC-10） |
+| `cd webui && npx vitest run server/__tests__/memory-probe-diagnostics.test.ts server/__tests__/heavy-work-capacity.test.ts server/__tests__/process-drain.test.ts` | unit／component（P1-61／62／63，本机） | 核心可用性三组：探针零请求 I/O 与诊断快照、重任务容量许可生命周期、进程关停准入屏障。只证明单元／组件合同；**不代替**测试台 `UAT-SUITE-CORE-AVAILABILITY`（F61／F62／F63／R-CAV），不进 PR 专用新 job（已由 `cd webui && npm test` 覆盖）。通过 ≠ UAT PASS ≠ 可上线 |
+| `node --test scripts/runtime/process-drain.test.mjs scripts/runtime/docker-entrypoint.test.mjs scripts/runtime/ktx-reload-deadline.test.mjs` | platform／runtime（P1-63／69，本机） | entrypoint drain-first、退出码、预算、实际PID等待，以及重载过期请求不迟到重启／实际子进程剩余截止。`smoke:p0:docker-entrypoint:test`复用现有入口追加新deadline文件，无新增CI job；真实Docker TERM／重载仍须具名执行。通过 ≠ UAT PASS ≠ 可上线 |
 
 ### 2.1 Local Node / Native Addon Baseline
 
@@ -81,6 +112,15 @@ npm run smoke:p0:headless-config
 npm run smoke:p0:demo
 npm run smoke:p0:postgres-demo
 npm run smoke:p0:business-eval
+```
+
+Required before claiming **release performance evidence**（REQ-030-034／发版列车 P4-9；本条通过不表示可上线）:
+
+```bash
+npm run perf:release-baseline -- --tier release-medium \
+  --output inbox/perf-baselines/<run> \
+  --previous inbox/perf-baselines/formal/LATEST/report.json
+npm run perf:release-baseline:formal-seed -- --from inbox/perf-baselines/<run>
 ```
 
 Required before promoting P1 governance capabilities to verified:
@@ -259,7 +299,9 @@ Recommended CI jobs:
 
 | Job | Commands |
 |---|---|
-| spec-and-unit | `npm run lint:spec`; `npm run lint:spec-docs`; `npm run lint:url-driven-input`; `cd webui && npm test` |
+| readyz-diagnostic-repro（人工，当前无CI job） | 上述Python命令；仅在委托人授权的隔离本机执行；不能签署整套F61/F62/F63或发布PASS |
+| core-availability-1883-soak（人工，当前无CI job） | 上述正式1800秒／12周期或显式calibration入口；仅同次授权的具名资源与合成数据，CPU短采样／真实I/O故障另窗、全部失败保留；不签整套UAT或发布PASS；离线工具回归仅local，无新增CI job |
+| spec-and-unit | `npm run lint:spec`; `npm run lint:status-vocab`; `npm run lint:status-funnel`; `npm run lint:inventory-stage`; `npm run lint:spec-docs`; `npm run lint:url-driven-input`; `cd webui && npm test`（含 P1-61／62／63 的 `memory-probe-diagnostics`／`diagnostic-collector-process`／`mcp-proxy-execution-stale`／`heavy-work-capacity`／`process-drain` Vitest；entrypoint实际PID及drain顺序另用本机 `node --test scripts/runtime/process-drain.test.mjs scripts/runtime/docker-entrypoint.test.mjs`，不另开 CI job） |
 | security-baseline | `npm run security:baseline` |
 | docker-smoke | `npm run smoke:p0:docker`（含 delivery-isolation 双镜像 denylist） |
 | delivery-isolation | `npm run smoke:p0:delivery-isolation`（Lucy 硬门禁；亦由 `smoke:p0` 调用） |
@@ -271,6 +313,7 @@ Recommended CI jobs:
 | business-eval-catalog | `npm run smoke:p0:business-eval` |
 | p1-context | `npm run smoke:p1:context -- --strict-runtime` in a prepared KTX/proxy environment |
 | p1-skills | `npm run smoke:p1:skills` |
+| p1-mcp-client-config | `npm run smoke:p1:mcp-client-config:test` |
 | p1-endpoint | protected secret environment: `npm run smoke:p1:endpoint -- --proxy-url <url> --token <token>` |
 | p1-observability | service environment: `npm run smoke:p1:observability -- --url <url>/api/observability` |
 | p1-agent-e2e | protected local agent environment: `npm run e2e:agent` |
@@ -291,3 +334,5 @@ GitHub Actions implementation: `.github/workflows/lucy-release.yml`.
 之后执行，与 `lint:terminology` 并列。
 
 For customer signoff, treat `security-baseline`, `docker-smoke`（含 delivery-isolation）、`headless-config`, `demo-db-smoke`, `postgres-demo-db-smoke`, and `business-eval-catalog` as the headless gate set. **Headless gates are necessary but never sufficient for a customer release**: the customer release additionally requires `real-e2e` + `customer-release-readiness` on the same candidate digest (Spec 20261018 §8.3); a green headless set can not be presented as an E2E pass. Optional Agent Chat smokes are maintainer-only and are stripped from the customer source bundle. `spec-and-unit` / WebUI checks can remain required for repository release hygiene, but customer documentation and release notes must describe them as internal quality gates rather than customer operation steps.
+
+P1-65 Wiki ACL 收口复核入口（2026-11-20）：上述 `wiki-upload-acl-recheck.mjs` 是已授权后手动执行的 demo／前台浏览器 UAT，不映射到 CI job；断言 helper 的 Node 测试为本机补充，不新增 required check。

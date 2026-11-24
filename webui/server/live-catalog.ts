@@ -1,4 +1,5 @@
-import { showDatabasesFromCatalogSql, splitCatalogDatabase } from "./catalog-database";
+import { catalogSchemataSql, catalogTablesSql, CATALOG_SCAN_TIMEOUT_MS, CATALOG_TABLE_NAME_LIMIT, splitCatalogDatabase } from "./catalog-database";
+import { runCatalogShow } from "./catalog-show";
 import { readConnections } from "./project";
 import { KtxCliError, runSql, type SqlResult } from "./ktx";
 import type { ConnectionInfo, LiveSchemaSummary, LiveSchemasResponse } from "./model";
@@ -63,6 +64,7 @@ const cache = new Map<string, CacheEntry>();
 export type ListLiveSchemasDeps = {
   readConnectionsImpl?: typeof readConnections;
   runSqlImpl?: typeof runSql;
+  runCatalogShowImpl?: typeof runCatalogShow;
   now?: () => number;
   ttlMs?: number;
   /** Spec 174 §5 — only reuse / store results of this config generation. */
@@ -127,9 +129,54 @@ function sqlForProtocol(protocol: CatalogProtocol): string {
 function sqlForConnection(conn: ConnectionInfo, protocol: CatalogProtocol): string {
   if (protocol === "mysql") {
     const catalog = splitCatalogDatabase(conn.database);
-    if (catalog) return showDatabasesFromCatalogSql(catalog.catalog);
+    if (catalog) return catalogSchemataSql(catalog.catalog);
   }
   return sqlForProtocol(protocol);
+}
+
+function rowCount(json: unknown): number {
+  if (!json || typeof json !== "object") return 0;
+  const rows = (json as { rows?: unknown }).rows;
+  return Array.isArray(rows) ? rows.length : 0;
+}
+
+/**
+ * Each external schema's table count is the row count of one direct SHOW TABLES.
+ * A failed count fails the whole catalog read. It is not published as zero.
+ */
+async function countExternalCatalogTables(
+  projectRoot: string,
+  conn: ConnectionInfo,
+  schemas: LiveSchemaSummary[],
+  runShow: typeof runCatalogShow
+): Promise<{ ok: true; schemas: LiveSchemaSummary[] } | { ok: false; reason: string }> {
+  const catalog = splitCatalogDatabase(conn.database);
+  if (!catalog) return { ok: true, schemas };
+  const counted: LiveSchemaSummary[] = [];
+  for (const item of schemas) {
+    let sql: string;
+    try {
+      sql = catalogTablesSql(catalog.catalog, item.schema);
+    } catch {
+      return { ok: false, reason: `无法读取目录 ${catalog.catalog}.${item.schema} 的表。` };
+    }
+    const result = await runShow(projectRoot, conn.id, sql, {
+      maxRows: CATALOG_TABLE_NAME_LIMIT,
+      timeoutMs: CATALOG_SCAN_TIMEOUT_MS
+    });
+    if (!result.ok || result.json == null || typeof result.json !== "object") {
+      const reason =
+        (result.stderr || result.stdout).trim() ||
+        "读取库内目录失败。";
+      return { ok: false, reason };
+    }
+    const count = rowCount(result.json);
+    if (count >= CATALOG_TABLE_NAME_LIMIT) {
+      return { ok: false, reason: "读取结果超过一次可读取的上限。" };
+    }
+    counted.push({ schema: item.schema, tableCount: count });
+  }
+  return { ok: true, schemas: counted };
 }
 
 function parseRows(json: unknown): LiveSchemaSummary[] {
@@ -234,11 +281,13 @@ export async function listLiveSchemas(
     );
   }
 
+  const external = wireProtocol === "mysql" && splitCatalogDatabase(conn.database) !== null;
+  const execute = external ? (deps.runCatalogShowImpl ?? runCatalogShow) : runSqlImpl;
   let sqlResult: SqlResult;
   try {
-    sqlResult = await runSqlImpl(projectRoot, connId, sqlForConnection(conn, wireProtocol), {
+    sqlResult = await execute(projectRoot, connId, sqlForConnection(conn, wireProtocol), {
       maxRows: 2000,
-      timeoutMs: 30_000
+      timeoutMs: CATALOG_SCAN_TIMEOUT_MS
     });
   } catch (err) {
     if (err instanceof KtxCliError) {
@@ -263,7 +312,14 @@ export async function listLiveSchemas(
     );
   }
 
-  const schemas = filterSystemSchemas(parseRows(sqlResult.json), wireProtocol);
+  let schemas = filterSystemSchemas(parseRows(sqlResult.json), wireProtocol);
+  if (wireProtocol === "mysql" && splitCatalogDatabase(conn.database)) {
+    const counted = await countExternalCatalogTables(projectRoot, conn, schemas, deps.runCatalogShowImpl ?? runCatalogShow);
+    if (!counted.ok) {
+      return errorPayload(connId, counted.reason, wireProtocol, fetchedAt);
+    }
+    schemas = counted.schemas;
+  }
   const payload: LiveSchemasResponse = {
     status: "ok",
     connectionId: connId,

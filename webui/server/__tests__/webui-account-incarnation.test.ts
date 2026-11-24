@@ -1,4 +1,5 @@
 import { copyFile, readFile, rm, writeFile } from "node:fs/promises";
+import { createEmptyAuditDbStub } from "./helpers/audit-db-stub.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetSessionSecretCache } from "../auth/session.js";
 import { closeSecurityStore } from "../security/instance.js";
@@ -17,11 +18,7 @@ import {
 } from "./webui-auth-fixture.js";
 
 vi.mock("../admin/audit.js", () => ({
-  getAuditDb: vi.fn(() => ({
-    prepare: vi.fn(() => ({ get: vi.fn(), all: vi.fn(() => []), run: vi.fn() })),
-    exec: vi.fn(),
-    pragma: vi.fn()
-  })),
+  getAuditDb: vi.fn(() => createEmptyAuditDbStub()),
   recordConfigChange: vi.fn(async () => 1),
   updateConfigChangeStatus: vi.fn(async () => undefined),
   registerAgentAuditRoutes: vi.fn(),

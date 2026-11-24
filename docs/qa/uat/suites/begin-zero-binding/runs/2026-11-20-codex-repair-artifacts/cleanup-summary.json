@@ -1,0 +1,194 @@
+[
+  {
+    "fixture": "77e2ad84-early/candidate/cleanup.json",
+    "at": "2026-11-20T04:39:55.528506+00:00",
+    "volumeRemoved": true,
+    "privateRemoved": true,
+    "containersRemoved": true,
+    "networkRemoved": true
+  },
+  {
+    "fixture": "77e2ad84-early/draft/cleanup.json",
+    "at": "2026-11-20T04:39:07.426486+00:00",
+    "volumeRemoved": true,
+    "privateRemoved": true,
+    "containersRemoved": true,
+    "networkRemoved": true
+  },
+  {
+    "fixture": "77e2ad84-early/i1/cleanup.json",
+    "at": "2026-11-20T04:37:38.717448+00:00",
+    "volumeRemoved": true,
+    "privateRemoved": true,
+    "containersRemoved": true,
+    "networkRemoved": true
+  },
+  {
+    "fixture": "77e2ad84-early/i3/cleanup.json",
+    "at": "2026-11-20T04:38:36.468829+00:00",
+    "volumeRemoved": true,
+    "privateRemoved": true,
+    "containersRemoved": true,
+    "networkRemoved": true
+  },
+  {
+    "fixture": "77e2ad84-early/i2/cleanup.json",
+    "at": "2026-11-20T04:38:05.266051+00:00",
+    "volumeRemoved": true,
+    "privateRemoved": true,
+    "containersRemoved": true,
+    "networkRemoved": true
+  },
+  {
+    "fixture": "77e2ad84-late/uncommitted-published/cleanup.json",
+    "at": "2026-11-20T04:37:58.058936+00:00",
+    "volumeRemoved": true,
+    "privateRemoved": true,
+    "containersRemoved": true,
+    "networkRemoved": true
+  },
+  {
+    "fixture": "77e2ad84-late/restart-l0/cleanup.json",
+    "at": "2026-11-20T04:42:26.582833+00:00",
+    "volumeRemoved": true,
+    "privateRemoved": true,
+    "containersRemoved": true,
+    "networkRemoved": true
+  },
+  {
+    "fixture": "77e2ad84-late/restart-i4/cleanup.json",
+    "at": "2026-11-20T04:40:49.921484+00:00",
+    "volumeRemoved": true,
+    "privateRemoved": true,
+    "containersRemoved": true,
+    "networkRemoved": true
+  },
+  {
+    "fixture": "77e2ad84-late/candidate/cleanup.json",
+    "at": "2026-11-20T04:42:58.366121+00:00",
+    "volumeRemoved": true,
+    "privateRemoved": true,
+    "containersRemoved": true,
+    "networkRemoved": true
+  },
+  {
+    "fixture": "77e2ad84-late/restart-i3/cleanup.json",
+    "at": "2026-11-20T04:40:12.155091+00:00",
+    "volumeRemoved": true,
+    "privateRemoved": true,
+    "containersRemoved": true,
+    "networkRemoved": true
+  },
+  {
+    "fixture": "77e2ad84-late/restart-l1/cleanup.json",
+    "at": "2026-11-20T04:42:57.004831+00:00",
+    "volumeRemoved": true,
+    "privateRemoved": true,
+    "containersRemoved": true,
+    "networkRemoved": true
+  },
+  {
+    "fixture": "77e2ad84-late/restart-i2/cleanup.json",
+    "at": "2026-11-20T04:39:38.195624+00:00",
+    "volumeRemoved": true,
+    "privateRemoved": true,
+    "containersRemoved": true,
+    "networkRemoved": true
+  },
+  {
+    "fixture": "77e2ad84-late/restart-i4-valid/cleanup.json",
+    "at": "2026-11-20T04:41:29.429905+00:00",
+    "volumeRemoved": true,
+    "privateRemoved": true,
+    "containersRemoved": true,
+    "networkRemoved": true
+  },
+  {
+    "fixture": "77e2ad84-late/restart-i0/cleanup.json",
+    "at": "2026-11-20T04:38:32.047360+00:00",
+    "volumeRemoved": true,
+    "privateRemoved": true,
+    "containersRemoved": true,
+    "networkRemoved": true
+  },
+  {
+    "fixture": "77e2ad84-late/restart-i1/cleanup.json",
+    "at": "2026-11-20T04:39:02.994190+00:00",
+    "volumeRemoved": true,
+    "privateRemoved": true,
+    "containersRemoved": true,
+    "networkRemoved": true
+  },
+  {
+    "fixture": "77e2ad84-late/revoke-delete/cleanup.json",
+    "at": "2026-11-20T04:37:35.124317+00:00",
+    "volumeRemoved": true,
+    "privateRemoved": true,
+    "containersRemoved": true,
+    "networkRemoved": true
+  },
+  {
+    "fixture": "77e2ad84-strong-client/uncommitted-published/cleanup.json",
+    "at": "2026-11-20T04:45:20.256514+00:00",
+    "volumeRemoved": true,
+    "privateRemoved": true,
+    "containersRemoved": true,
+    "networkRemoved": true
+  },
+  {
+    "fixture": "77e2ad84-strong-client/candidate/cleanup.json",
+    "at": "2026-11-20T04:47:12.766699+00:00",
+    "volumeRemoved": true,
+    "privateRemoved": true,
+    "containersRemoved": true,
+    "networkRemoved": true
+  },
+  {
+    "fixture": "77e2ad84-strong-client/restart-l1/cleanup.json",
+    "at": "2026-11-20T04:46:06.236817+00:00",
+    "volumeRemoved": true,
+    "privateRemoved": true,
+    "containersRemoved": true,
+    "networkRemoved": true
+  },
+  {
+    "fixture": "77e2ad84-strong-client/restart-u0/cleanup.json",
+    "at": "2026-11-20T04:46:44.664196+00:00",
+    "volumeRemoved": true,
+    "privateRemoved": true,
+    "containersRemoved": true,
+    "networkRemoved": true
+  },
+  {
+    "fixture": "77e2ad84-strong-client/revoke-delete/cleanup.json",
+    "at": "2026-11-20T04:44:53.551932+00:00",
+    "volumeRemoved": true,
+    "privateRemoved": true,
+    "containersRemoved": true,
+    "networkRemoved": true
+  },
+  {
+    "fixture": "77e2ad84-client/cleanup.json",
+    "at": "2026-11-20T04:50:56.559529+00:00",
+    "volumeRemoved": true,
+    "privateRemoved": true,
+    "containersRemoved": true,
+    "networkRemoved": true
+  },
+  {
+    "fixture": "77e2ad84-performance/candidate/cleanup.json",
+    "at": "2026-11-20T04:45:38.620729+00:00",
+    "volumeRemoved": true,
+    "privateRemoved": true,
+    "containersRemoved": true,
+    "networkRemoved": true
+  },
+  {
+    "fixture": "77e2ad84-performance/baseline/cleanup.json",
+    "at": "2026-11-20T04:45:39.672985+00:00",
+    "volumeRemoved": true,
+    "privateRemoved": true,
+    "containersRemoved": true,
+    "networkRemoved": true
+  }
+]

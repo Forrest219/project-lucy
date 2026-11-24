@@ -1,0 +1,16 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 80.288,
+  "body": {
+    "jsonrpc": "2.0",
+    "id": 174,
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\n  \"semantics\": \"permission_forced_predicate_diagnostic\",\n  \"upstreamForwarded\": false,\n  \"containsResultRows\": false,\n  \"finalRowsNonTrue\": false,\n  \"forcedPredicateAst\": null,\n  \"executionPath\": {\n    \"tool\": \"lucy_query\",\n    \"upstreamForcedPredicateProven\": true,\n    \"wouldDeny\": false,\n    \"note\": \"Explain is a local diagnostic only. FinalRows is TRUE for requested sources; this response is not a data return.\"\n  },\n  \"allowed\": true,\n  \"executionMode\": \"plan_only\",\n  \"executed\": false,\n  \"upstreamTool\": \"sl_query\",\n  \"requestedSources\": [\n    {\n      \"connectionId\": \"uat-mysql\",\n      \"sourceName\": \"uat_begin_zero_orders\",\n      \"physicalTable\": \"uat.uat_begin_zero_orders\"\n    }\n  ],\n  \"resultRows\": null,\n  \"sampleRows\": null,\n  \"aggregateResults\": null,\n  \"guardrails\": {\n    \"rawSqlAllowed\": false,\n    \"writeOperationsAllowed\": false,\n    \"defaultLimit\": 100,\n    \"maxLimit\": 1000,\n    \"maxConcurrentQueries\": 4,\n    \"effectiveLimit\": 100,\n    \"resultTruncation\": \"responses are audited with row/column counts and truncation flags when upstream exposes them\"\n  },\n  \"policy\": {\n    \"roleIds\": [\n      \"a\"\n    ],\n    \"connections\": [\n      \"uat-mysql\"\n    ],\n    \"sourceMapVersion\": \"9933be71e9430f0e\",\n    \"permissionSnapshotHash\": \"cabeefd9a92aa79371f955b7401157c5e1c4b41916d1447f1f52daf363c8db55\",\n    \"capabilityDigest\": \"9fba8fd3704486cd\"\n  },\n  \"provenance\": {\n    \"decision\": \"allowed\",\n    \"explanation\": \"Explain is a local diagnostic only. FinalRows is TRUE for requested sources; this response is not a data return.\"\n  }\n}"
+        }
+      ]
+    }
+  }
+}

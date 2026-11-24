@@ -5,9 +5,9 @@
  * The proxy calls `applyLucyCallGuard` before it forwards. Customer YAML is
  * read from the published semantic layer at runtime and is not committed.
  */
-import { glob, readFile } from "node:fs/promises";
+import { glob } from "node:fs/promises";
 import path from "node:path";
-import { parse } from "yaml";
+import { readCatalogYaml } from "../catalog-yaml-cache.js";
 import { loadContentPaths } from "../paths.js";
 import { resolveProjectRoot } from "../project.js";
 import {
@@ -88,7 +88,7 @@ export async function loadAmbiguityCatalogFromDir(semanticLayerDir: string): Pro
     const absolute = path.join(semanticLayerDir, relative);
     let parsed: SourceYaml & SchemaYaml;
     try {
-      parsed = parse(await readFile(absolute, "utf8")) as SourceYaml & SchemaYaml;
+      parsed = await readCatalogYaml(absolute) as SourceYaml & SchemaYaml;
     } catch {
       continue;
     }

@@ -1,0 +1,27 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 33.856,
+  "body": {
+    "jsonrpc": "2.0",
+    "id": 182,
+    "result": {
+      "isError": true,
+      "content": [
+        {
+          "type": "text",
+          "text": "Access denied: table_forbidden:invisible_source 可用连接：uat-mysql。 可用来源：uat_begin_zero_orders。 请改用当前角色已授权的来源：uat_begin_zero_orders。"
+        }
+      ],
+      "data": {
+        "reason": "table_forbidden:invisible_source",
+        "failureDimension": "权限拒绝",
+        "connections": [
+          "uat-mysql"
+        ],
+        "sources": [
+          "uat_begin_zero_orders"
+        ]
+      }
+    }
+  }
+}

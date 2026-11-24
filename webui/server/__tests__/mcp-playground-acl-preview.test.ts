@@ -5,14 +5,11 @@ import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildServer } from "../index";
 import { decisionReasonDetail, decisionReasonLabel } from "../../src/lib/decisionReasonLabels.js";
+import { createEmptyAuditDbStub } from "./helpers/audit-db-stub.js";
 
 // Mock audit db so tests don't need a real sqlite (same shape as admin-agents.test.ts).
 vi.mock("../admin/audit.js", () => ({
-  getAuditDb: vi.fn(() => ({
-    prepare: vi.fn(() => ({ get: vi.fn(() => undefined), all: vi.fn(() => []), run: vi.fn() })),
-    exec: vi.fn(),
-    pragma: vi.fn()
-  })),
+  getAuditDb: vi.fn(() => createEmptyAuditDbStub()),
   recordConfigChange: vi.fn(async () => 1),
   registerAgentAuditRoutes: vi.fn(),
   registerAuditRoutes: vi.fn()

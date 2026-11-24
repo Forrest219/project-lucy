@@ -1,0 +1,21 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 95.952,
+  "body": {
+    "jsonrpc": "2.0",
+    "id": 7,
+    "result": {
+      "isError": true,
+      "content": [
+        {
+          "type": "text",
+          "text": "Access denied: caliber_binding_unresolved（口径绑定无法解析）：本次问询的口径绑定状态不可信"
+        }
+      ],
+      "data": {
+        "reason": "caliber_binding_unresolved",
+        "failureDimension": "口径绑定"
+      }
+    }
+  }
+}

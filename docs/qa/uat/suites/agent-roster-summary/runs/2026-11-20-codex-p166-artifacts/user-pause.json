@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-20T14:57:25.530240+08:00",
+  "reason": "User requested progress report and decision before continuing",
+  "stopped": [
+    {
+      "pid": 33546,
+      "kind": "orchestrator"
+    },
+    {
+      "pid": 48484,
+      "kind": "measurement"
+    }
+  ]
+}

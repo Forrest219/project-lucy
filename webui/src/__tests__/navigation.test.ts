@@ -71,20 +71,21 @@ describe("navigation (shared sidebar config)", () => {
     expect(new Set(iconKeys).size).toBe(iconKeys.length);
   });
 
-  it("navGroups contains 26 second-level items in total", () => {
+  it("navGroups contains 27 second-level items in total", () => {
     const totalItems = navGroups.reduce((sum, g) => sum + g.items.length, 0);
-    expect(totalItems).toBe(26);
+    expect(totalItems).toBe(27);
   });
 
   it("flat sidebar entries match Spec 143 Runtime Status IA", () => {
     const flat: Array<Pick<NavItem, "id" | "label" | "to"> & { group: string }> = navGroups.flatMap(
       (g) => g.items.map((item) => ({ group: g.title, id: item.id, label: item.label, to: item.to }))
     );
-    expect(flat.length).toBe(26);
+    expect(flat.length).toBe(27);
     expect(flat).toEqual([
       { group: "运行状态", id: "overview", label: "系统概览", to: "/overview" },
       { group: "运行状态", id: "ops-calls", label: "调用监控", to: "/ops/calls" },
       { group: "运行状态", id: "admin-governance", label: "使用概况", to: "/admin/usage" },
+      { group: "运行状态", id: "admin-ops-steps", label: "运维步骤", to: "/admin/ops-steps" },
       { group: "数据接入", id: "connections-overview", label: "连接概览", to: "/connections" },
       { group: "数据接入", id: "connections-enabled-tables", label: "启用表范围", to: "/connections/enabled-tables" },
       { group: "业务上下文", id: "semantic-catalog", label: "语义资产", to: "/catalog" },
@@ -167,6 +168,7 @@ describe("navigation (shared sidebar config)", () => {
       "eval-field-questions": "审定访问日志里反复出现的业务问法，补问法后收成评测用例。",
       "eval-security-candidates": "从访问拒绝日志中提取权限与数据隔离场景，审定后转为安全评测用例。",
       "admin-governance": "查看 Agent、Token、数据表的活跃率，以及 WebUI 页面访问情况。",
+      "admin-ops-steps": "按操作号查看进行中、已结束的运维步骤及写入降级。",
       "admin-agents": "管理 Agent 身份、角色、Token 及数据访问边界。",
       "admin-tokens": "全局查看、签发与定向吊销 Agent 访问凭据。",
       "admin-roles": "管理角色的数据库连接、数据表与 MCP 工具授权范围。",
@@ -220,6 +222,7 @@ describe("navigation (shared sidebar config)", () => {
       expect(findGroupIdForPathname("/overview")).toBe("runtime-status");
       expect(findGroupIdForPathname("/ops/calls")).toBe("runtime-status");
       expect(findGroupIdForPathname("/admin/usage")).toBe("runtime-status");
+      expect(findGroupIdForPathname("/admin/ops-steps")).toBe("runtime-status");
       expect(findGroupIdForPathname("/connections")).toBe("connections");
       expect(findGroupIdForPathname("/connections/enabled-tables")).toBe("connections");
       expect(findGroupIdForPathname("/connections/whitelist")).toBe("connections");

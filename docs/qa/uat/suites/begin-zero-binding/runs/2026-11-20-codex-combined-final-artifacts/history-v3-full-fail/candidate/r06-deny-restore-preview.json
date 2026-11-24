@@ -1,0 +1,50 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 23.77,
+  "body": {
+    "ok": true,
+    "data": {
+      "diff": "Index: webui/config/access.yaml\n===================================================================\n--- webui/config/access.yaml\tcurrent\n+++ webui/config/access.yaml\tproposed\n@@ -1,1 +1,118 @@\n-{\"roles\": {\"a\": {\"permission_model_version\": 2, \"allow\": {\"connections\": [\"uat-mysql\"], \"tableSelectors\": [{\"connection\": \"uat-mysql\", \"schema\": \"uat\", \"names\": [\"uat_begin_zero_orders\"], \"row_access\": \"all\"}], \"tools\": [\"lucy_catalog\", \"lucy_query\", \"lucy_read_source\", \"lucy_explain_query\", \"lucy_begin_question\", \"lucy_continue_question\", \"connection_list\"]}}, \"b\": {\"permission_model_version\": 2, \"allow\": {\"connections\": [\"uat-mysql\"], \"tableSelectors\": [{\"connection\": \"uat-mysql\", \"schema\": \"uat\", \"names\": [\"uat_begin_zero_orders\"], \"row_access\": \"scoped\", \"row_policy\": {\"predicates\": [{\"field\": \"tenant\", \"op\": \"eq\", \"value\": \"NORTH\"}]}}], \"tools\": [\"lucy_catalog\", \"lucy_query\", \"lucy_read_source\", \"lucy_explain_query\", \"lucy_begin_question\", \"lucy_continue_question\", \"connection_list\"]}}, \"c\": {\"permission_model_version\": 2, \"allow\": {\"connections\": [\"uat-mysql\"], \"tableSelectors\": [{\"connection\": \"uat-mysql\", \"schema\": \"uat\", \"names\": [\"uat_begin_zero_orders\"], \"row_access\": \"all\"}], \"tools\": [\"lucy_catalog\", \"lucy_query\", \"lucy_read_source\", \"lucy_explain_query\", \"lucy_continue_question\", \"connection_list\"]}}}, \"users\": [{\"id\": \"uat_zb_a\", \"name\": \"ZB a\", \"enabled\": true, \"role\": \"a\", \"tokens\": [{\"hash\": \"[REDACTED]\", \"label\": \"isolated-a\", \"created\": \"2026-11-20\"}]}, {\"id\": \"uat_zb_b\", \"name\": \"ZB b\", \"enabled\": true, \"role\": \"b\", \"tokens\": [{\"hash\": \"[REDACTED]\", \"label\": \"isolated-b\", \"created\": \"2026-11-20\"}]}, {\"id\": \"uat_zb_c\", \"name\": \"ZB c\", \"enabled\": true, \"role\": \"c\", \"tokens\": [{\"hash\": \"[REDACTED]\", \"label\": \"isolated-c\", \"created\": \"2026-11-20\"}]}, {\"id\": \"uat_zb_expired\", \"name\": \"ZB expired\", \"enabled\": true, \"role\": \"a\", \"tokens\": [{\"hash\": \"[REDACTED]\", \"label\": \"isolated-expired\", \"created\": \"2026-11-20\", \"expires_at\": \"2020-01-01T00:00:00Z\"}]}, {\"id\": \"uat_zb_disabled\", \"name\": \"ZB disabled\", \"enabled\": true, \"role\": \"a\", \"tokens\": [{\"hash\": \"[REDACTED]\", \"label\": \"isolated-disabled\", \"created\": \"2026-11-20\"}]}, {\"id\": \"uat_zb_denied\", \"name\": \"ZB denied\", \"enabled\": true, \"role\": \"a\", \"tokens\": [{\"hash\": \"[REDACTED]\", \"label\": \"isolated-denied\", \"created\": \"2026-11-20\"}]}], \"defaults\": {\"deny_tools\": [\"sl_query\", \"sl_read_source\", \"sql_execution\"]}}\n\\ No newline at end of file\n+roles:\n+  a:\n+    permission_model_version: 2\n+    allow:\n+      connections:\n+        - uat-mysql\n+      tableSelectors:\n+        - connection: uat-mysql\n+          schema: uat\n+          names:\n+            - uat_begin_zero_orders\n+          row_access: all\n+      tools:\n+        - lucy_catalog\n+        - lucy_query\n+        - lucy_read_source\n+        - lucy_explain_query\n+        - lucy_begin_question\n+        - lucy_continue_question\n+        - connection_list\n+  b:\n+    permission_model_version: 2\n+    allow:\n+      connections:\n+        - uat-mysql\n+      tableSelectors:\n+        - connection: uat-mysql\n+          schema: uat\n+          names:\n+            - uat_begin_zero_orders\n+          row_access: scoped\n+          row_policy:\n+            predicates:\n+              - field: tenant\n+                op: eq\n+                value: NORTH\n+      tools:\n+        - lucy_catalog\n+        - lucy_query\n+        - lucy_read_source\n+        - lucy_explain_query\n+        - lucy_begin_question\n+        - lucy_continue_question\n+        - connection_list\n+  c:\n+    permission_model_version: 2\n+    allow:\n+      connections:\n+        - uat-mysql\n+      tableSelectors:\n+        - connection: uat-mysql\n+          schema: uat\n+          names:\n+            - uat_begin_zero_orders\n+          row_access: all\n+      tools:\n+        - lucy_catalog\n+        - lucy_query\n+        - lucy_read_source\n+        - lucy_explain_query\n+        - lucy_continue_question\n+        - connection_list\n+users:\n+  - id: uat_zb_a\n+    name: ZB a\n+    enabled: true\n+    role: a\n+    tokens:\n+      - hash: [REDACTED]\n+        label: isolated-a\n+        created: 2026-11-20\n+  - id: uat_zb_b\n+    name: ZB b\n+    enabled: true\n+    role: b\n+    tokens:\n+      - hash: [REDACTED]\n+        label: isolated-b\n+        created: 2026-11-20\n+  - id: uat_zb_c\n+    name: ZB c\n+    enabled: true\n+    role: c\n+    tokens:\n+      - hash: [REDACTED]\n+        label: isolated-c\n+        created: 2026-11-20\n+  - id: uat_zb_expired\n+    name: ZB expired\n+    enabled: true\n+    role: a\n+    tokens:\n+      - hash: [REDACTED]\n+        label: isolated-expired\n+        created: 2026-11-20\n+        expires_at: 2020-01-01T00:00:00Z\n+  - id: uat_zb_disabled\n+    name: ZB disabled\n+    enabled: true\n+    role: a\n+    tokens:\n+      - hash: [REDACTED]\n+        label: isolated-disabled\n+        created: 2026-11-20\n+  - id: uat_zb_denied\n+    name: ZB denied\n+    enabled: true\n+    role: a\n+    tokens:\n+      - hash: [REDACTED]\n+        label: isolated-denied\n+        created: 2026-11-20\n+    note: isolated UAT control r06-deny-restore\n+defaults:\n+  deny_tools:\n+    - sl_query\n+    - sl_read_source\n+    - sql_execution\n",
+      "proposedYaml": "roles:\n  a:\n    permission_model_version: 2\n    allow:\n      connections:\n        - uat-mysql\n      tableSelectors:\n        - connection: uat-mysql\n          schema: uat\n          names:\n            - uat_begin_zero_orders\n          row_access: all\n      tools:\n        - lucy_catalog\n        - lucy_query\n        - lucy_read_source\n        - lucy_explain_query\n        - lucy_begin_question\n        - lucy_continue_question\n        - connection_list\n  b:\n    permission_model_version: 2\n    allow:\n      connections:\n        - uat-mysql\n      tableSelectors:\n        - connection: uat-mysql\n          schema: uat\n          names:\n            - uat_begin_zero_orders\n          row_access: scoped\n          row_policy:\n            predicates:\n              - field: tenant\n                op: eq\n                value: NORTH\n      tools:\n        - lucy_catalog\n        - lucy_query\n        - lucy_read_source\n        - lucy_explain_query\n        - lucy_begin_question\n        - lucy_continue_question\n        - connection_list\n  c:\n    permission_model_version: 2\n    allow:\n      connections:\n        - uat-mysql\n      tableSelectors:\n        - connection: uat-mysql\n          schema: uat\n          names:\n            - uat_begin_zero_orders\n          row_access: all\n      tools:\n        - lucy_catalog\n        - lucy_query\n        - lucy_read_source\n        - lucy_explain_query\n        - lucy_continue_question\n        - connection_list\nusers:\n  - id: uat_zb_a\n    name: ZB a\n    enabled: true\n    role: a\n    tokens:\n      - hash: [REDACTED]\n        label: isolated-a\n        created: 2026-11-20\n  - id: uat_zb_b\n    name: ZB b\n    enabled: true\n    role: b\n    tokens:\n      - hash: [REDACTED]\n        label: isolated-b\n        created: 2026-11-20\n  - id: uat_zb_c\n    name: ZB c\n    enabled: true\n    role: c\n    tokens:\n      - hash: [REDACTED]\n        label: isolated-c\n        created: 2026-11-20\n  - id: uat_zb_expired\n    name: ZB expired\n    enabled: true\n    role: a\n    tokens:\n      - hash: [REDACTED]\n        label: isolated-expired\n        created: 2026-11-20\n        expires_at: 2020-01-01T00:00:00Z\n  - id: uat_zb_disabled\n    name: ZB disabled\n    enabled: true\n    role: a\n    tokens:\n      - hash: [REDACTED]\n        label: isolated-disabled\n        created: 2026-11-20\n  - id: uat_zb_denied\n    name: ZB denied\n    enabled: true\n    role: a\n    tokens:\n      - hash: [REDACTED]\n        label: isolated-denied\n        created: 2026-11-20\n    note: isolated UAT control r06-deny-restore\ndefaults:\n  deny_tools:\n    - sl_query\n    - sl_read_source\n    - sql_execution\n",
+      "version": "1795149836612-bcad43e26141a28f",
+      "gate": {
+        "traceId": "gate-c82ac7c0-ee32-46a9-8aff-3fc56275f5d6",
+        "targetKind": "agent",
+        "targetId": "uat_zb_denied",
+        "decision": "allow",
+        "tierSummary": {
+          "P0": {
+            "count": 0,
+            "reasons": []
+          },
+          "P1": {
+            "count": 0,
+            "reasons": []
+          },
+          "P2": {
+            "count": 0,
+            "reasons": []
+          }
+        },
+        "findings": [],
+        "evidenceRefs": [
+          {
+            "kind": "permission_snapshot",
+            "ref": "cabeefd9a92aa79371f955b7401157c5e1c4b41916d1447f1f52daf363c8db55",
+            "relation": "used"
+          },
+          {
+            "kind": "permission_snapshot",
+            "ref": "cabeefd9a92aa79371f955b7401157c5e1c4b41916d1447f1f52daf363c8db55",
+            "relation": "observed"
+          },
+          {
+            "kind": "role_diff_hash",
+            "ref": "f6b45dfe20fd949d2768c1b07e9be5d5",
+            "relation": "observed"
+          }
+        ]
+      }
+    }
+  }
+}

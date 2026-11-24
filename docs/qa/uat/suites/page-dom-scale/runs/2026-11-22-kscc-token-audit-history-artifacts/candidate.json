@@ -1,0 +1,26 @@
+{
+  "source": {
+    "status": "ok",
+    "gitSha": "8fe7cebc0e73d98aba3e687899fb83e34651e0aa",
+    "gitDirty": false,
+    "lucyVersion": "0.30.0"
+  },
+  "imageId": "sha256:e4ad33064b9cb6df1451cbe4141a33118c24e5c2657d40c83b79c5bb32bd7713",
+  "isolated": "sha256:e4ad33064b9cb6df1451cbe4141a33118c24e5c2657d40c83b79c5bb32bd7713 2026-11-22T10:14:01.840196674Z 0 2000000000 4294967296",
+  "shared": "sha256:ffac27e7d869e43e363ee1b579be0e1606a3e2282b2b5d11984c1c59e0b90600 2026-11-22T09:18:43.460439346Z 0 0 0",
+  "hostDockerResources": "12 CPUs, 8216776704 bytes, aarch64",
+  "chromeViewport": [
+    1920,
+    1080
+  ],
+  "counts": [
+    0,
+    300,
+    1500
+  ],
+  "browserSamplesPerStage": 7,
+  "observationSpaMs": 1000,
+  "launchedAt": "2026-11-22T10:13:51.013Z",
+  "browserProtocol": "foreground cold navigation, first SPA, three warm, search and clear",
+  "auditProtocol": "successful real single-flight MCP read-only calls at >=500ms interval"
+}

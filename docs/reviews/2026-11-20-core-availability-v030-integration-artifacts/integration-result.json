@@ -1,0 +1,30 @@
+{
+  "at": "2026-11-20T13:58:22.813981+00:00",
+  "rootHead": "f865775dd017757d98f71ab2025ad2b39bb22737",
+  "protectedNonoverlapFiles": 37,
+  "protectedNonoverlapUnchanged": true,
+  "P168CurrentStatusPreservedInSixSharedDocs": true,
+  "P168NewFilesRemainUntracked": true,
+  "specLintExistingP168MissingApiCount": 8,
+  "specLintExistingP168MissingApis": [
+    "/api/admin/ops-step-uat/background",
+    "/api/admin/ops-step-uat/console-probe",
+    "/api/admin/ops-step-uat/diagnostic",
+    "/api/admin/ops-step-uat/read-failure",
+    "/api/admin/ops-step-uat/reset",
+    "/api/admin/ops-step-uat/stdout-failure",
+    "/api/admin/ops-step-uat/sync-section",
+    "/api/admin/ops-steps"
+  ],
+  "combinedRegressionFirst": "419/420 PASS, one unexpected HTTP401",
+  "focusedOriginalCase": "1/1 PASS unchanged",
+  "combinedRegressionSecond": "38 files 420/420 PASS unchanged",
+  "typecheck": 0,
+  "specDocs": 0,
+  "terminology": 0,
+  "iaBoundary": 0,
+  "e2eLedger": 0,
+  "specLint": 1,
+  "unexpected401Cause": "not established; first failure retained",
+  "scope": "Working tree includes unchanged uncommitted P168; branch commit excludes that task runtime/UI"
+}

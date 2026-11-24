@@ -92,7 +92,23 @@ type EnabledTablesWrite = {
   oldEnabledTables: string[];
   newEnabledTables: string[];
   warnings?: EnabledTableWarning[];
+  /** Spec 14 §0.3 / P1-64 D11 — success UI only when runtimeAck === true. */
+  runtimeAck?: boolean;
+  policyRuntimeAck?: boolean;
+  policyRuntimeIssues?: Array<{ agentId?: string; reason?: string }>;
 };
+
+function summarizePolicyRuntimeIssues(
+  issues: Array<{ reason?: string }> | undefined
+): string {
+  const sourceMapReasons = (issues ?? [])
+    .map((issue) => issue.reason ?? "")
+    .filter((reason) => reason.startsWith("source_map_compile_failed:"));
+  if (sourceMapReasons.length > 0) {
+    return `Source Map 编译失败：${sourceMapReasons.slice(0, 3).join("；")}`;
+  }
+  return "策略运行态未确认（runtimeAck≠true）";
+}
 
 const STATUS_LABELS: Record<WhitelistStatus, string> = {
   enabled_complete: "已启用，语义完成",
@@ -291,11 +307,20 @@ export function TableWhitelist() {
     return map;
   }, [sourcesQuery.data]);
 
-  // Build all connection rows (before filters)
+  // Build all connection rows (before filters).
+  // P1-80: only treat tables as scanned when the connection tables query succeeded;
+  // pending／error must not fall back to [] and invent「无效启用／缺少 Manifest」.
   const connectionRows = useMemo(() => {
     return connections.map((conn, idx) => {
-      const tablesData = tablesQueries[idx]?.data;
-      const tables = tablesData?.tables ?? [];
+      const query = tablesQueries[idx];
+      if (!query || query.isError) {
+        return { conn, rows: [] as WhitelistTableRow[], tablesLoadState: "error" as const };
+      }
+      if (query.isPending || query.data === undefined) {
+        return { conn, rows: [] as WhitelistTableRow[], tablesLoadState: "loading" as const };
+      }
+      const tablesData = query.data;
+      const tables = tablesData.tables ?? [];
       const scannedSet = new Set(tables);
       const persisted = conn.enabledTables;
       const draft = draftByConnection[conn.id] ?? persisted;
@@ -340,7 +365,7 @@ export function TableWhitelist() {
           invalidEnabled: true
         });
       }
-      return { conn, rows };
+      return { conn, rows, tablesLoadState: "ready" as const };
     });
   }, [connections, tablesQueries, sourceByKey, draftByConnection]);
 
@@ -462,7 +487,9 @@ export function TableWhitelist() {
 
   const configuredSchemasWithoutTables = useMemo(() => {
     if (search.trim()) return [];
-    return connectionFilteredRows.flatMap(({ conn, rows }) => {
+    return connectionFilteredRows.flatMap(({ conn, rows, tablesLoadState }) => {
+      // P1-80 C2: only success／ready connections contribute to「缺少 Manifest」.
+      if (tablesLoadState !== "ready") return [];
       const scannedSchemas = new Set(
         rows.filter((row) => !row.invalidEnabled).map((row) => row.schema).filter(Boolean)
       );
@@ -472,6 +499,11 @@ export function TableWhitelist() {
         .map((schema) => ({ conn, schema }));
     });
   }, [connectionFilteredRows, search, schemaFilter]);
+
+  const tablesListNotReady = useMemo(
+    () => connectionFilteredRows.some(({ tablesLoadState }) => tablesLoadState !== "ready"),
+    [connectionFilteredRows]
+  );
 
   const showFocusedMissingManifest =
     schemaFilter !== "all" && configuredSchemasWithoutTables.length === 1;
@@ -747,6 +779,33 @@ export function TableWhitelist() {
         return;
       }
 
+      // Spec 14 §0.3 / P1-64 D11 — written alone is not success; missing ack fails closed.
+      const ackFailed = results.filter((r) => r.write.runtimeAck !== true);
+      if (ackFailed.length > 0) {
+        const issueSummary = summarizePolicyRuntimeIssues(
+          ackFailed.flatMap((r) => r.write.policyRuntimeIssues ?? [])
+        );
+        toast.error(
+          `启用表范围已写入磁盘，但策略运行态未确认。${issueSummary}。请修复 Source Map 冲突后重新保存。`
+        );
+        setStatusMessage(
+          `启用表范围已写入，策略运行态未确认：${issueSummary}`
+        );
+        setStatusTone("danger");
+        setDraftByConnection((prev) => {
+          const next = { ...prev };
+          for (const r of results) delete next[r.connId];
+          return next;
+        });
+        setPreviewOpen(false);
+        void queryClient.invalidateQueries({ queryKey: queryKeys.connections });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.sources });
+        for (const r of results) {
+          void queryClient.invalidateQueries({ queryKey: queryKeys.connectionTables(r.connId) });
+        }
+        return;
+      }
+
       // Sync drafts to the just-persisted state for the changed connections.
       setDraftByConnection((prev) => {
         const next = { ...prev };
@@ -918,8 +977,14 @@ export function TableWhitelist() {
                   type="button"
                   className="pl-btn pl-btn--secondary"
                   onClick={removeInvalidEnabled}
+                  disabled={tablesListNotReady}
                   data-testid="whitelist-remove-invalid-enabled"
                   translate="no"
+                  title={
+                    tablesListNotReady
+                      ? "表清单未就绪，请待读取完成后再移出无效启用"
+                      : undefined
+                  }
                 >
                   移出无效启用
                 </button>
@@ -949,6 +1014,46 @@ export function TableWhitelist() {
             </div>
           </div>
         )}
+
+      {connectionFilteredRows
+        .filter(({ tablesLoadState }) => tablesLoadState === "loading" || tablesLoadState === "error")
+        .map(({ conn, tablesLoadState }) => {
+          const connIdx = connections.findIndex((c) => c.id === conn.id);
+          const isError = tablesLoadState === "error";
+          return (
+            <div
+              key={`${conn.id}-tables-${tablesLoadState}`}
+              className={`pl-validation-banner mt-4 notranslate ${
+                isError ? "pl-validation-banner--danger" : ""
+              }`}
+              translate="no"
+              role="status"
+              data-testid={
+                isError
+                  ? `whitelist-tables-error-${conn.id}`
+                  : `whitelist-tables-loading-${conn.id}`
+              }
+            >
+              <span className="notranslate" translate="no">
+                {isError
+                  ? `连接 ${conn.id}：表清单读取失败，请重试。`
+                  : `连接 ${conn.id}：正在读取表清单…`}
+              </span>
+              {isError && connIdx >= 0 ? (
+                <button
+                  type="button"
+                  className="pl-btn pl-btn--ghost pl-btn--sm"
+                  onClick={() => {
+                    void tablesQueries[connIdx]?.refetch();
+                  }}
+                  data-testid={`whitelist-tables-retry-${conn.id}`}
+                >
+                  重试
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
 
       {configuredSchemasWithoutTables.length > 0 && !showFocusedMissingManifest ? (
         <div
@@ -1295,7 +1400,8 @@ export function TableWhitelist() {
       {connections.length > 0 &&
         visibleGroups.length === 0 &&
         visibleInvalidGroups.length === 0 &&
-        configuredSchemasWithoutTables.length === 0 && (
+        configuredSchemasWithoutTables.length === 0 &&
+        !tablesListNotReady && (
         <div className="pl-empty-state mt-4">
           当前筛选条件下没有可启用的表。
         </div>

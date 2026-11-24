@@ -71,6 +71,15 @@ vi.mock("../admin/audit", async (importOriginal) => {
   };
 });
 
+const ktxMcpReload = vi.hoisted(() => ({
+  reloadKtxMcpAfterConfigWrite: vi.fn(async (): Promise<{ status: "reloaded" | "started" | "skipped" | "failed"; detail: string }> => ({ status: "reloaded", detail: "ok" }))
+}));
+
+vi.mock("../ktx-mcp-reload.js", () => ({
+  reloadKtxMcpAfterConfigWrite: ktxMcpReload.reloadKtxMcpAfterConfigWrite,
+  reloadKtxMcpExecutionRuntime: ktxMcpReload.reloadKtxMcpAfterConfigWrite
+}));
+
 import { buildServer } from "../index";
 import { displayGenerations, hasPendingDisplayWrite, resetDisplayGenerationsForTests } from "../display-generation";
 import { resetDisplaySnapshotsForTests, startDisplayReconciler, stopDisplayReconciler } from "../display-snapshot";

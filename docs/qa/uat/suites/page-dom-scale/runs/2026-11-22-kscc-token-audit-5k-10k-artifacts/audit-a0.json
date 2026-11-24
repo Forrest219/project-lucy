@@ -1,0 +1,65 @@
+{
+  "at": "2026-11-22T10:37:10.412Z",
+  "stage": "a0",
+  "target": 0,
+  "offset": 0,
+  "design": "20 fixed credentials across two agents; 10 independent sequential seed lanes; successful read-only tools/call",
+  "intervalMs": 500,
+  "lanes": 10,
+  "healthChecks": 0,
+  "laneObservations": [],
+  "tools": {
+    "connection_list": 0,
+    "lucy_catalog": 0
+  },
+  "successful": 0,
+  "byUser": {},
+  "errors": [],
+  "before": {
+    "at": "2026-11-22T10:37:10.451Z",
+    "all": 0,
+    "toolRows": 0,
+    "ok": 0,
+    "protocol": 0,
+    "byUser": {
+      "demo_agent": {
+        "total": 0,
+        "ok": 0
+      },
+      "demo_ops": {
+        "total": 0,
+        "ok": 0
+      }
+    },
+    "recent7d": 0,
+    "recent30d": 0,
+    "tokens": 202,
+    "inventorySha256": "85ce921c42a2c5ac085469ca0014843cdb0deb05b2840bd38f750e1822a9a3f9"
+  },
+  "settledCounts": [
+    0,
+    0
+  ],
+  "after": {
+    "at": "2026-11-22T10:37:11.092Z",
+    "all": 0,
+    "toolRows": 0,
+    "ok": 0,
+    "protocol": 0,
+    "byUser": {
+      "demo_agent": {
+        "total": 0,
+        "ok": 0
+      },
+      "demo_ops": {
+        "total": 0,
+        "ok": 0
+      }
+    },
+    "recent7d": 0,
+    "recent30d": 0,
+    "tokens": 202,
+    "inventorySha256": "85ce921c42a2c5ac085469ca0014843cdb0deb05b2840bd38f750e1822a9a3f9"
+  },
+  "completed": "2026-11-22T10:37:11.096Z"
+}

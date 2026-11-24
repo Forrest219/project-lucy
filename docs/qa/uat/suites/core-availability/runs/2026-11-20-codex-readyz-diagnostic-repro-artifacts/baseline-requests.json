@@ -1,0 +1,12 @@
+{
+  "readyz": {
+    "error": "timed out"
+  },
+  "livez": {
+    "httpStatus": 200,
+    "elapsedMs": 3.743,
+    "body": {
+      "ok": true
+    }
+  }
+}

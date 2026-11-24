@@ -12,6 +12,7 @@ import {
   buildPreserveCheckScript,
   diffPreserveSnapshots,
   fullVolumeName,
+  parseKtxInstallLayerStatus,
   parsePreserveSnapshot,
   readLucyVolumeFromCompose,
   resolveComposeProjectName
@@ -284,4 +285,38 @@ test("demo compose files mount the bootstrap secret as a file secret", () => {
     assert.match(text, new RegExp(tokenFile), name);
     assert.match(text, /webui-bootstrap-token/, name);
   }
+});
+
+test("demo compose declares cache_from for project-lucy:demo", () => {
+  const text = readFileSync(path.join(repoRoot, "deploy/compose/docker-compose.demo.yml"), "utf8");
+  assert.match(text, /cache_from:\s*\n\s*-\s*project-lucy:demo/);
+});
+
+test("parseKtxInstallLayerStatus detects CACHED and MISS", () => {
+  assert.equal(
+    parseKtxInstallLayerStatus(`
+#12 [ 5/17] RUN sh /tmp/docker-build-mirrors.sh npm install -g "@kaelio/ktx@0.16.0"
+#12 CACHED
+#13 [ 6/17] COPY scripts/runtime/patch-ktx-mysql-starrocks-compat.js /tmp/patch-ktx-mysql-starrocks-compat.js
+`),
+    "CACHED"
+  );
+  assert.equal(
+    parseKtxInstallLayerStatus(`
+#13 [ 5/17] RUN sh /tmp/docker-build-mirrors.sh npm install -g "@kaelio/ktx@0.16.0"
+#13 0.095 docker-build-mirrors: npm https://mirrors.cloud.tencent.com/npm/
+#13 DONE 12.0s
+`),
+    "MISS"
+  );
+  assert.equal(parseKtxInstallLayerStatus("no ktx layer here"), "UNKNOWN");
+});
+
+test("upgrade-lucy.sh applies demo mirror defaults and reports ktx layer", () => {
+  const text = readFileSync(path.join(repoRoot, "scripts/upgrade/upgrade-lucy.sh"), "utf8");
+  assert.match(text, /apply_demo_build_defaults/);
+  assert.match(text, /mirrors\.cloud\.tencent\.com\/npm/);
+  assert.match(text, /LUCY_DEMO_BUILD_MIRRORS/);
+  assert.match(text, /ktx install layer/);
+  assert.match(text, /BUILDKIT_PROGRESS=plain/);
 });

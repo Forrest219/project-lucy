@@ -1,20 +1,36 @@
 # project-lucy Agent 开发入口
 
-本仓库的开发治理规则只以 [`docs/governance/DEVELOPMENT.md`](docs/governance/DEVELOPMENT.md) 为正文。本文件不复述第二套口径。功能闭口、发布取证、状态登记和新 Spec 的文件名，都见该文件「功能闭口与发布取证」。
+本仓库的开发治理规则只以 [`docs/governance/DEVELOPMENT.md`](docs/governance/DEVELOPMENT.md) 为正文。本文件不复述第二套口径。功能闭口、发布取证、状态登记、**产品线执行总账（SOT）**、**端到端三台账**和新 Spec 的文件名，都见该文件「功能闭口与发布取证」。
 
-功能的现行状态只以 Spec 头部「状态」行为准。改状态时按该文件改完现值镜像。历史变更行、复核快照和实施笔记不是现值。已作废的「未执行且不排期」和「不可交付 UAT」不得抄回。机器检查是 `lint:spec-docs` 的 `stale-status`。
+日常修复的验收、收口汇报及客户侧证据的适用范围，见 [DEVELOPMENT.md「产品侧修复收口」](docs/governance/DEVELOPMENT.md#产品侧修复收口)。
+
+**第一性原理（强制）**：**主路径可用性优先**——迭代／新功能可以加约束，但不得把最终用户既有主路径变成无逃生的不可用；验收须同时覆盖「约束生效」与「合法用户仍可用」（含纯 MCP）。正文只在 DEVELOPMENT「第一性原理：主路径可用性优先」，本文件不另写第二套。
+
+**用户画像（强制）**：评审任何新功能 Spec 前，先看 [`docs/governance/user-personas.md`](docs/governance/user-personas.md)——4 画像（问数方／治理方／运维方／管理层）＋ `↑／＝／↓` 体验判定。新功能 Spec 必含「受影响画像」小节；判为 `↓` 必须写补偿路径并挂验收编号，否则不得收口。
+
+**Docker 对齐（强制）**：开发与测试以**功能**为主（总账 / Spec / UAT），环境与验证路径对齐 **Docker**（本机 compose / demo），**默认不关心客户部署环境**。除非用户或当前任务明确要求出包、发布取证或客户现场交付，否则不要把解释、排期、实现或验证默认导向 Helm / K8s / 客户拓扑。正文见 DEVELOPMENT「Docker 对齐：功能优先，默认不谈客户部署环境」。
+
+**导航 IA 变更（强制）**：增删改一级分组、二级菜单项或二级页内分页 Tab，必须获得委托人针对当次清单的**独立明示确认**；终稿确权／开发授权／功能合同收口均不代替。Spec／Plan 可提案，未确认前不得改运行导航。正文只在 DEVELOPMENT「导航信息架构变更：委托人独立确认」，本文件不另写第二套。
+
+**产品线 `0.30.0` / 分支 `lucy-v0.30`**：**需求台（执行总账 SOT）**＝[`docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md`](docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)；**开发台**＝各 Spec 头部「状态」；**测试台**＝[`docs/qa/uat/INDEX.md`](docs/qa/uat/INDEX.md)；勾连／基准线追评＝[`docs/governance/e2e-ledger.md`](docs/governance/e2e-ledger.md)。方向见 [`docs/plans/lucy-20261107-lucy-0-30-core-direction.md`](docs/plans/lucy-20261107-lucy-0-30-core-direction.md)。**先入总账再动手／再叙事**；主张 UAT 须挂测试台。**功能合同收口 ≠ UAT PASS ≠ 可上线**。中间态出口或 `user-facing` 定稿前做差集补录（见 DEVELOPMENT）。**P0 立项 ≠ 开发授权**。**终稿确权**＝Codex CLI 终审，或无 Codex 时委托人明示确权。未授权条目禁止改运行代码。
+
+功能的现行状态只以 Spec 头部「状态」行为准；总账「跟进状态」是其镜像，须同句。改状态时按 DEVELOPMENT 改完现值镜像。历史变更行、复核快照和实施笔记不是现值。已作废的「未执行且不排期」和「不可交付 UAT」不得抄回。机器检查是 `lint:spec-docs` 的 `stale-status`；三台勾连可选 `node scripts/uat/check-e2e-ledger.mjs`。
 数据问答运行时指导走 Lucy MCP Proxy 的 `initialize` instructions 注入（内容来源 [`webui/config/data-qa-instructions.md`](webui/config/data-qa-instructions.md)，机制见 [`webui/docs/07-mcp-auth-proxy-spec.md`](webui/docs/07-mcp-auth-proxy-spec.md) §4.4），不再由 [`CLAUDE.md`](CLAUDE.md) 承载——`CLAUDE.md` 现在只做指引，不得再写入数据问答规则正文；如发现回归，请改回纯引用。
 
 Vibe coding 双核角色协作（thinker / builder）的可选完整交付流水线见 [`docs/agent-pipeline.md`](docs/agent-pipeline.md)，按需调用，非必经流程。
 
-## 环境与交付背景（勿混淆）
+**错题本（发现入口）**：已核实事故／问题／经验的登记在 [`docs/lessons/`](docs/lessons/README.md)。口语别名含「事故清单」「问题清单」「经验清单」「复盘清单」——先打开该目录索引，不要默认当成交付 runbook 勾选表。登记 ≠ 开发授权；落位细则见 DEVELOPMENT「Spec 落位规则」。客户 amd64 出包操作 SOT 仍是 [`docs/runbooks/customer-amd64-image-build-checklist.md`](docs/runbooks/customer-amd64-image-build-checklist.md)（原 `customer-delivery-preflight-checklist` 已作废，仅留重定向 stub）。
+
+## 环境与交付背景（仅出包／交付任务时用；日常功能工作对齐 Docker）
+
+> 日常开发/测试对齐 **Docker**（compose / demo）与功能合同，不是本节默认话题。本节是**交付任务**的硬约束事实源；只有明确做 amd64 出包、K8s 安装升级、客户现场验收时才按本节执行。
 
 | 环境 | 硬件 / 平台 | 用途 |
 |---|---|---|
 | 开发环境 | Apple Silicon Mac（arm64）+ Docker Desktop | 本地开发、demo、冒烟验证、出客户镜像包 |
 | 客户环境 | amd64（x86_64）服务器；部署方式按客户环境确定 | 最终交付与运行；当前已验证的正式交付形态为 Kubernetes |
 
-由此派生的硬约束：
+由此派生的硬约束（**交付任务适用**）：
 
 - **客户镜像是 linux/amd64 单架构**，但构建发生在 arm64 Mac 上：允许 `lucy-amd64` builder + QEMU 跨架构构建，**必须**完整过 G1–G4 硬门禁（ELF 架构门禁不得以元数据代替），禁止 `FROM --platform=$BUILDPLATFORM`，禁止 `docker buildx create --use`（会污染本机 demo 默认 builder）。口径见 [`docs/specs/lucy-customer-amd64-offline-delivery-spec.md`](docs/specs/lucy-customer-amd64-offline-delivery-spec.md) v0.3+ 与 [`docs/runbooks/customer-amd64-image-build-checklist.md`](docs/runbooks/customer-amd64-image-build-checklist.md)。
 - **本地脚本必须兼容 stock macOS bash 3.2**（`readarray` / `mapfile` / 负数数组下标均不可用），相关回归门禁见 `scripts/upgrade/upgrade-lucy.test.mjs`。
@@ -51,9 +67,13 @@ KTX 是 Lucy 引用的上游依赖。本仓库只使用 KTX 提供的 CLI、接�
 
 ## 浏览器测试约束
 
-正式治理见 [`docs/governance/DEVELOPMENT.md`](docs/governance/DEVELOPMENT.md) 的“验证策略：浏览器测试约束”。
+正式治理见 [`docs/governance/DEVELOPMENT.md`](docs/governance/DEVELOPMENT.md) 的「验证策略：浏览器测试约束」；测试台细则见 [`docs/qa/uat/CONVENTIONS.md`](docs/qa/uat/CONVENTIONS.md)「WebUI：浏览器＋计时强制」。
 
-简要规则：正常开发任务默认不需要做浏览器测试；Lucy 项目默认不需要做移动窄屏测试。只有在用户、当前任务说明或已批准计划明确要求浏览器测试 / 移动窄屏验证时，才执行对应测试。
+简要规则：
+
+- **WebUI 用户可见面**：开发验证与 UAT **必须**真实前台浏览器＋即时计时（与 API 耗时分列）；禁止只验后端 HTTP 却主张页面／WebUI 已通过。
+- **非 WebUI**（纯 MCP／后端／脚本等）：默认不强制浏览器测试。
+- Lucy 默认不做移动窄屏测试；除非用户、任务说明或已批准计划明确要求。
 
 ## 全系统术语规范
 

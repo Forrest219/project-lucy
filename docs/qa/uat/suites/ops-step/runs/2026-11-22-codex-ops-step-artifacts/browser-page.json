@@ -1,0 +1,161 @@
+{
+  "engine": "page",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "startedAt": "2026-11-22T10:29:24.971Z",
+  "headless": false,
+  "cases": [
+    {
+      "name": "E1-E5-E8-navigation-filters",
+      "result": "PASS",
+      "finished": "ops_07b56b52e40d86cbbb42cf59353a859b"
+    },
+    {
+      "name": "E3-stale-content-during-refresh",
+      "result": "PASS",
+      "apiMs": 2018.1,
+      "pageMs": 2064.6
+    },
+    {
+      "name": "E3-loading-visible",
+      "result": "PASS"
+    },
+    {
+      "name": "E4-one-server-error-visible",
+      "result": "FAIL",
+      "error": "E4 expects visible error after one 500. Observed HTTP 500 → 200 with existing rows retained and no error alert.\n\nfalse !== true\n"
+    },
+    {
+      "name": "E7-E9-history-limit-and-inflight",
+      "result": "FAIL",
+      "error": "timed out waiting for expected state"
+    }
+  ],
+  "samples": [
+    {
+      "name": "ops-sidebar-navigation",
+      "clock": "click",
+      "start": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      },
+      "api": {
+        "method": "GET",
+        "path": "/api/admin/ops-steps",
+        "status": 200,
+        "ms": 4,
+        "operationId": null,
+        "requestId": null
+      },
+      "pageMs": 83.7,
+      "end": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      }
+    },
+    {
+      "name": "ops-delayed-refresh",
+      "clock": "click",
+      "start": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      },
+      "api": {
+        "method": "GET",
+        "path": "/api/admin/ops-steps",
+        "status": 200,
+        "ms": 2018.1,
+        "operationId": null,
+        "requestId": null
+      },
+      "pageMs": 2064.6,
+      "end": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      }
+    },
+    {
+      "name": "ops-single-error",
+      "clock": "click",
+      "start": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      },
+      "api": {
+        "method": "GET",
+        "path": "/api/admin/ops-steps",
+        "status": 500,
+        "ms": 8.8,
+        "operationId": null,
+        "message": "运维步骤读取失败，请刷新重试",
+        "requestId": null
+      },
+      "pageMs": 1328.8,
+      "end": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      }
+    },
+    {
+      "name": "ops-row-limit-refresh",
+      "clock": "click",
+      "start": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      },
+      "api": {
+        "method": "GET",
+        "path": "/api/admin/ops-steps",
+        "status": 200,
+        "ms": 8.2,
+        "operationId": null,
+        "requestId": null
+      },
+      "pageMs": 262.5,
+      "end": {
+        "focused": true,
+        "visibility": "visible",
+        "width": 1920,
+        "height": 1080
+      }
+    }
+  ],
+  "captures": [
+    "page-E5-zero.png",
+    "page-E3-loading.png",
+    "page-fail-E4-one-server-error-visible.png",
+    "page-E7-row-limit.png",
+    "page-fail-E7-E9-history-limit-and-inflight.png"
+  ],
+  "browser": "157.0.8103.79",
+  "anonymous": {
+    "status": 401,
+    "code": "AUTH_REQUIRED"
+  },
+  "oneError": {
+    "responses": [
+      500,
+      200
+    ],
+    "errorVisible": false,
+    "retained": true
+  },
+  "result": "FAIL",
+  "finishedAt": "2026-11-22T10:30:10.604Z"
+}

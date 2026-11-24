@@ -13,6 +13,7 @@ import type {
   SemanticScopeResponse,
   SemanticTableIdentity
 } from "../../lib/types";
+import { ApiDownloadLink } from "../ApiDownloadLink";
 
 /**
  * Lucy v0.25 / L25-11 §3.1 — the Catalog batch action panel.
@@ -227,13 +228,14 @@ export function CatalogBatchPanel(props: CatalogBatchPanelProps) {
                 语义维护包已生成，包含 {exportResult.entryCount} 个条目（可编辑覆盖层 + 只读上下文）。
                 导出基线有效期至 <span className="notranslate" translate="no">{exportResult.expiresAt}</span>。
               </p>
-              <a
+              <ApiDownloadLink
                 className="pl-btn pl-btn--primary"
                 href={exportResult.downloadUrl}
+                fallbackFilename="semantic-assets-package.zip"
                 data-testid="catalog-batch-download"
               >
                 下载语义维护包
-              </a>
+              </ApiDownloadLink>
             </div>
           ) : null}
 
@@ -261,13 +263,14 @@ export function CatalogBatchPanel(props: CatalogBatchPanelProps) {
                 </button>
               ) : null}
               {operation.reportCsvUrl ? (
-                <a
+                <ApiDownloadLink
                   className="pl-btn pl-btn--ghost"
                   href={`/api/semantic-assets/operations/${encodeURIComponent(operation.taskId)}/report.csv`}
+                  fallbackFilename="semantic-batch-report.csv"
                   data-testid="catalog-batch-report-csv"
                 >
                   下载 CSV 报告
-                </a>
+                </ApiDownloadLink>
               ) : null}
               <ul className="list-none p-0 text-xs" data-testid="catalog-batch-results">
                 {operation.results.map((result) => (

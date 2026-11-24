@@ -1,0 +1,171 @@
+[
+  {
+    "fixture": "BAL-1",
+    "candidate": "a",
+    "round": 1,
+    "apiFailures": [
+      "cold snapshot[0] TimeoutError: The operation was aborted due to timeout",
+      "cold snapshot[1] TimeoutError: The operation was aborted due to timeout",
+      "cold snapshot[2] TimeoutError: The operation was aborted due to timeout",
+      "cold snapshot[3] TimeoutError: The operation was aborted due to timeout",
+      "cold snapshot[4] TimeoutError: The operation was aborted due to timeout"
+    ],
+    "browserFailures": [],
+    "apiP95": {
+      "roster": 169.98370800000066,
+      "full": 734.4449590000004,
+      "statistics": 114.81845800000156,
+      "detail": 352.08087499999965
+    },
+    "browserP95": {
+      "cold-navigation": {
+        "n": 5,
+        "primaryReadyMs": 941.1000000014901,
+        "statsReadyMs": 1525.3000000044703
+      },
+      "no-cache-spa": {
+        "n": 20,
+        "primaryReadyMs": 409.69999999552965,
+        "statsReadyMs": 889.9000000059605
+      },
+      "hot-spa": {
+        "n": 20,
+        "primaryReadyMs": 933.7999999970198,
+        "statsReadyMs": 967.3999999985099
+      },
+      "refresh": {
+        "n": 20,
+        "primaryReadyMs": 1271.5,
+        "statsReadyMs": 1304.6999999955297
+      },
+      "drawer": {
+        "n": 20,
+        "primaryReadyMs": 640.1000000014901,
+        "statsReadyMs": null
+      },
+      "editor": {
+        "n": 20,
+        "primaryReadyMs": 1469.3999999985099,
+        "statsReadyMs": null
+      }
+    }
+  },
+  {
+    "fixture": "BAL-1",
+    "candidate": "b",
+    "round": 1,
+    "apiFailures": [
+      "cold snapshot[0] TimeoutError: The operation was aborted due to timeout",
+      "cold snapshot[1] TimeoutError: The operation was aborted due to timeout",
+      "cold snapshot[2] TimeoutError: The operation was aborted due to timeout",
+      "cold snapshot[3] TimeoutError: The operation was aborted due to timeout",
+      "cold snapshot[4] TimeoutError: The operation was aborted due to timeout"
+    ],
+    "browserFailures": [
+      {
+        "kind": "cold-navigation",
+        "error": "p95 1046.9000000059605 > 1000"
+      },
+      {
+        "kind": "cold-navigation",
+        "error": "statsReady p95 budget"
+      }
+    ],
+    "apiP95": {
+      "roster": 167.05770799999937,
+      "full": 609.6657500000001,
+      "statistics": 74.16237499999988,
+      "detail": 359.9528329999994,
+      "summary": 82.34766699999818
+    },
+    "browserP95": {
+      "cold-navigation": {
+        "n": 5,
+        "primaryReadyMs": 1046.9000000059605,
+        "statsReadyMs": 2439.7000000029802
+      },
+      "no-cache-spa": {
+        "n": 20,
+        "primaryReadyMs": 532,
+        "statsReadyMs": 1243.8999999985099
+      },
+      "hot-spa": {
+        "n": 20,
+        "primaryReadyMs": 168.80000000447035,
+        "statsReadyMs": 192.30000000447035
+      },
+      "refresh": {
+        "n": 20,
+        "primaryReadyMs": 351.29999999701977,
+        "statsReadyMs": 1627.7000000029802
+      },
+      "drawer": {
+        "n": 20,
+        "primaryReadyMs": 335.8999999985099,
+        "statsReadyMs": null
+      },
+      "editor": {
+        "n": 20,
+        "primaryReadyMs": 1506.2999999970198,
+        "statsReadyMs": null
+      }
+    }
+  },
+  {
+    "fixture": "BAL-1",
+    "candidate": "a",
+    "round": 2,
+    "apiFailures": [],
+    "browserFailures": [
+      {
+        "kind": "network",
+        "errors": [
+          {
+            "at": "2026-11-20T06:53:21.228Z",
+            "path": "/api/admin/roles?includeTemplates=false",
+            "status": 503,
+            "method": "GET"
+          }
+        ]
+      }
+    ],
+    "apiP95": {
+      "roster": 418.90445799999907,
+      "full": 2752.3798749999987,
+      "statistics": 90.60954099999799,
+      "detail": 623.3506249999991
+    },
+    "browserP95": {
+      "cold-navigation": {
+        "n": 5,
+        "primaryReadyMs": 876.6000000014901,
+        "statsReadyMs": 892.6000000014901
+      },
+      "no-cache-spa": {
+        "n": 20,
+        "primaryReadyMs": 462.79999999701977,
+        "statsReadyMs": 746.3000000044703
+      },
+      "hot-spa": {
+        "n": 20,
+        "primaryReadyMs": 333.70000000298023,
+        "statsReadyMs": 350.20000000298023
+      },
+      "refresh": {
+        "n": 20,
+        "primaryReadyMs": 802,
+        "statsReadyMs": 834.8999999985099
+      },
+      "drawer": {
+        "n": 20,
+        "primaryReadyMs": 2107.4000000059605,
+        "statsReadyMs": null
+      },
+      "editor": {
+        "n": 20,
+        "primaryReadyMs": 1674.1999999955297,
+        "statsReadyMs": null
+      }
+    }
+  }
+]

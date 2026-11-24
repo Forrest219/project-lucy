@@ -1,0 +1,4 @@
+{
+  "status": "REPRODUCED",
+  "error": "diag-22-query query failed: {\"httpStatus\": 503, \"elapsedMs\": 60.534, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 69, \"error\": {\"code\": -32000, \"message\": \"audit_unavailable\", \"data\": {\"reason\": \"question_budget_unavailable\"}}}}"
+}

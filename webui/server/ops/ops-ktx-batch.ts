@@ -27,6 +27,7 @@ import { readHiveConnections } from "../hive/config.js";
 import { resolveContentPaths } from "../paths.js";
 import { withOpsWriteLocks } from "./ops-locks.js";
 import { Outcome } from "./ops-outcome.js";
+import { createOpsStepId, getOpsStepJournal } from "../runtime/ops-step-journal.js";
 import type {
   OpsGroupContext,
   OpsGroupVerifyResult,
@@ -357,6 +358,8 @@ export class OpsConnectionTablesAdapter implements OpsToolAdapter {
     const targets = ctx.members.map(
       (member) => member.payload as unknown as OpsConnectionTableTargetInput & { baseline?: KtxBaseline }
     );
+    const journal = getOpsStepJournal();
+    const opId = createOpsStepId();
 
     await withOpsWriteLocks(
       {
@@ -365,69 +368,81 @@ export class OpsConnectionTablesAdapter implements OpsToolAdapter {
         publishWindow: false
       },
       async () => {
-        const ktxPath = path.join(ctx.projectRoot, "ktx.yaml");
-        const currentText = await readFile(ktxPath, "utf8");
-        // 组级暂存：写入前的内容 + 「是否真的写过」。
-        const state: KtxGroupState = { preImage: currentText, wrote: false };
-        KTX_GROUP_STATES.set(ctx.executionId, state);
+        await journal.runStep({
+          op: "runtime_reload",
+          opId,
+          step: "write_config",
+          body: async () => {
+            const ktxPath = path.join(ctx.projectRoot, "ktx.yaml");
+            const currentText = await readFile(ktxPath, "utf8");
+            // 组级暂存：写入前的内容 + 「是否真的写过」。
+            const state: KtxGroupState = { preImage: currentText, wrote: false };
+            KTX_GROUP_STATES.set(ctx.executionId, state);
 
-        // 锁内逐连接复算基线——检测到外部修改即整批拒绝。
-        for (const target of targets) {
-          const baseline = target.baseline;
-          if (!baseline) continue;
-          const state = readConnectionState(currentText, target.connectionId);
-          if (!state) {
-            throw new OpsConnectionTableError(
-              "ops_connection_not_found",
-              `连接 '${target.connectionId}' 在写入前消失`
-            );
+            // 锁内逐连接复算基线——检测到外部修改即整批拒绝。
+            for (const target of targets) {
+              const baseline = target.baseline;
+              if (!baseline) continue;
+              const state = readConnectionState(currentText, target.connectionId);
+              if (!state) {
+                throw new OpsConnectionTableError(
+                  "ops_connection_not_found",
+                  `连接 '${target.connectionId}' 在写入前消失`
+                );
+              }
+              if (
+                !sameList(state.enabledTables, baseline.enabledTables) ||
+                !sameList(state.schemas, baseline.schemas)
+              ) {
+                throw new OpsConnectionTableError(
+                  OPS_EXTERNAL_MODIFICATION_DETECTED,
+                  `连接 '${target.connectionId}' 在预览后被外部修改，整批拒绝`
+                );
+              }
+            }
+
+            // 一次合并补丁（内存），最后只写一次。
+            // 顺序：先把各连接的 enabled_tables 行级补丁合并好，再处理 Schema 移除
+            // （Schema 移除要裁剪 enabled_tables，必须在最后生效）。
+            let proposedYaml = currentText;
+            const tableEntries: Array<{ connId: string; enabledTables: string[] }> = [];
+            for (const target of targets) {
+              if (target.removeSchema) continue;
+              tableEntries.push({
+                connId: target.connectionId,
+                enabledTables: target.enabledTables ?? []
+              });
+            }
+            if (tableEntries.length > 0) {
+              proposedYaml = patchConnectionsEnabledTablesYaml(proposedYaml, tableEntries).proposedYaml;
+            }
+            for (const target of targets) {
+              if (!target.removeSchema) continue;
+              proposedYaml = patchRemoveSchemaYaml(proposedYaml, target.connectionId, target.removeSchema)
+                .proposedYaml;
+            }
+
+            // 写入（一次）。
+            const paths = await resolveContentPaths(ctx.projectRoot);
+            await safeWriteAtomic(paths, ctx.projectRoot, "ktx.yaml", proposedYaml);
+            state.wrote = true;
+            for (const target of targets) {
+              // 持久态按目标 id 索引（`tables:<conn>` / `schema:<conn>:<schema>`），
+              // 不能传 connectionId，否则崩溃恢复会把已写入当成「无效果」。
+              ctx.setEffectPhase(connectionTableTargetId(target), "written");
+            }
           }
-          if (
-            !sameList(state.enabledTables, baseline.enabledTables) ||
-            !sameList(state.schemas, baseline.schemas)
-          ) {
-            throw new OpsConnectionTableError(
-              OPS_EXTERNAL_MODIFICATION_DETECTED,
-              `连接 '${target.connectionId}' 在预览后被外部修改，整批拒绝`
-            );
-          }
-        }
-
-        // 一次合并补丁（内存），最后只写一次。
-        // 顺序：先把各连接的 enabled_tables 行级补丁合并好，再处理 Schema 移除
-        // （Schema 移除要裁剪 enabled_tables，必须在最后生效）。
-        let proposedYaml = currentText;
-        const tableEntries: Array<{ connId: string; enabledTables: string[] }> = [];
-        for (const target of targets) {
-          if (target.removeSchema) continue;
-          tableEntries.push({
-            connId: target.connectionId,
-            enabledTables: target.enabledTables ?? []
-          });
-        }
-        if (tableEntries.length > 0) {
-          proposedYaml = patchConnectionsEnabledTablesYaml(proposedYaml, tableEntries).proposedYaml;
-        }
-        for (const target of targets) {
-          if (!target.removeSchema) continue;
-          proposedYaml = patchRemoveSchemaYaml(proposedYaml, target.connectionId, target.removeSchema)
-            .proposedYaml;
-        }
-
-        // 写入（一次）。
-        const paths = await resolveContentPaths(ctx.projectRoot);
-        await safeWriteAtomic(paths, ctx.projectRoot, "ktx.yaml", proposedYaml);
-        state.wrote = true;
-        for (const target of targets) {
-          // 持久态按目标 id 索引（`tables:<conn>` / `schema:<conn>:<schema>`），
-          // 不能传 connectionId，否则崩溃恢复会把已写入当成「无效果」。
-          ctx.setEffectPhase(connectionTableTargetId(target), "written");
-        }
+        });
 
         // 生效确认：catalog 重载 + 策略提交。
         try {
           for (const connectionId of new Set(targets.map((target) => target.connectionId))) {
-            await reloadCatalog(ctx.projectRoot, { connectionId });
+            await journal.runStep({
+              op: "runtime_reload",
+              opId,
+              step: "catalog_reload",
+              body: () => reloadCatalog(ctx.projectRoot, { connectionId })
+            });
           }
         } catch (err) {
           throw Object.assign(
@@ -436,8 +451,15 @@ export class OpsConnectionTablesAdapter implements OpsToolAdapter {
           );
         }
         try {
-          const { commitEffectivePolicy } = await import("../proxy/acl.js");
-          await commitEffectivePolicy();
+          await journal.runStep({
+            op: "runtime_reload",
+            opId,
+            step: "policy_commit",
+            body: async () => {
+              const { commitEffectivePolicy } = await import("../proxy/acl.js");
+              await commitEffectivePolicy();
+            }
+          });
         } catch (err) {
           throw Object.assign(
             new Error(`策略提交失败：${String(err)}`),

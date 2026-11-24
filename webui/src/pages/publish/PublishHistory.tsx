@@ -26,6 +26,7 @@ import type {
   SemanticAssetReleasesResponse,
   SemanticAssetValidationRow
 } from "../../lib/types";
+import { ApiDownloadLink } from "../../components/ApiDownloadLink";
 
 const SCOPE_PREVIEW_LIMIT = 2;
 const DEFAULT_TIME_WINDOW = "24h";
@@ -472,9 +473,15 @@ export function PublishHistory() {
         title="发布记录"
         description="查看历次语义发布的变更范围、执行结果与操作记录。"
         actions={
-          <a href={exportUrl} className="pl-btn pl-btn--secondary text-sm" data-testid="publish-history-export-csv">
+          <ApiDownloadLink
+            href={exportUrl}
+            fallbackFilename="publish-history.csv"
+            failurePrefix="导出失败"
+            className="pl-btn pl-btn--secondary text-sm"
+            data-testid="publish-history-export-csv"
+          >
             导出 CSV
-          </a>
+          </ApiDownloadLink>
         }
       />
 

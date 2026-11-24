@@ -21,6 +21,75 @@
 - **适用**：修改 `webui/`、`ktx.yaml`、`semantic-layer/`、`skills/`、`.ktx/` 等仓库源码与配置的任何会话
 - **不适用**：纯数据问答场景——那部分规则在 `webui/config/data-qa-instructions.md`（由 Lucy MCP Proxy 注入，见 `webui/docs/07-mcp-auth-proxy-spec.md` §4.4），不要把本文档内容同步进去
 
+## 第一性原理：主路径可用性优先（迭代／新功能）
+
+> 触发：错题 [`docs/lessons/2026-11-16-source-ambiguity-gate-deadlock.md`](../lessons/2026-11-16-source-ambiguity-gate-deadlock.md)（P0-3 表级歧义门闩「拦得住」收口后，纯 MCP 主路径无逃生）。委托人 2026-11-16 批准写入本文件为**每一次迭代版本或功能分支开新功能时的第一性原理**。
+
+**一句话：** 新功能可以增加约束，但**不得**把最终用户既有主路径变成无逃生的不可用，也不得以「安全／正确性已验」为借口降低真实可用体验。
+
+### 强制含义
+
+1. **用户主路径可用性 ≥ 「只证明新约束生效」。** Spec／UAT 若只验「拦住／拒绝／门禁触发」而不验「合法用户在部署实况下仍能完成原任务」，不得主张功能合同收口，更不得叙事为「用户已可用」。
+2. **部署实况必须点名。** 开 Spec／开分支时写清目标客户端（至少含：纯 MCP＝Cursor／Claude／WorkBuddy 等；若依赖 WebUI／person／宿主 attestation，须写明，且不得默认「有宿主」）。缺宿主时的逃生或降级必须是合同的一部分，不能标成可选／BLOCKED 却仍收口。
+3. **拒绝必须有可执行下一步。** 用户可见拒绝不得只有误导性故障文案（例如假「Schema 不可判定」）且无可引用重试／确认／钉选路径。
+4. **功能合同收口 ≠ 用户可用 ≠ 可上线。** 「拦得住」PASS 不能单独结案；主路径成交或合同写明的 MCP 可达逃生未验通＝未完成。
+5. **允许加硬门禁，禁止无逃生硬门禁。** 防误报／防越权仍然要做；但必须同时设计并验收放行／钉选／确认／降级之一，且该路径在声明的客户端上可达。kill switch／口头改问法／只改 instructions **不得**冒充本原则下的正式修复。
+
+**画像维度：**「最终用户」不是一个整体。本文件把它拆成 4 个可定位画像（问数方／治理方／运维方／管理层）：受影响画像、体验判定（`↑`／`＝`／`↓`）与负向补偿门槛见 [`user-personas.md`](user-personas.md)。本条只保护**主路径可用性**，不替代画像判定；两者都要答。
+
+### 开 Spec／开分支／写 UAT 时的检查（须能答「是」或显式记 GAP）
+
+| # | 问题 |
+|---|---|
+| 1 | 本条生效后，最终用户（含纯 MCP）原先能完成的主任务是否仍能完成？ |
+| 2 | 若增加拒绝／门禁，逃生或钉选路径是否在**同一部署实况**下可执行且纳入必做 UAT？ |
+| 3 | 验收是否同时覆盖「约束触发」与「合法路径成交」，而不是只覆盖前者？ |
+| 4 | 是否避免把「宿主缺席／凭据缺席」记成用例前置 BLOCKED，从而掩盖产品不可用？ |
+
+`AGENTS.md` 与 Cursor 规则只**指向**本节，不另写第二套口径。
+
+## 导航信息架构变更：委托人独立确认（强制）
+
+> 触发：2026-11-22 委托人发现二级菜单出现未预期页签（如 `/admin/ops-steps`／P1-68）。功能合同收口或开发授权**不能**顺带批准导航可见面变更。委托人批准写入本文件为**全库强制规则**。
+
+### 强制含义
+
+1. **增删改一级分组、二级菜单项，或二级页内的分页 Tab**（会进入主导航、改侧栏结构、或改变页内主导分页／URL 可读结构者），**必须获得委托人的独立明示确认**，与终稿确权、开发授权、功能合同收口互不替代。
+2. Spec／Plan／UAT **可以提案**导航变更（写清增删项、分组、路由、受影响画像），但**不得**在未获该独立确认前改运行导航或把它当成已批准交付面。
+3. **一次确认只覆盖当次列出的导航变更清单**；同 Spec 后续再增删导航项须重新确认。
+
+### 需要独立确认
+
+| 变更类型 | 典型落点 |
+|---|---|
+| 一级分组增删／改名／重排 | `navGroups` 分组、`06-navigation-ia.md` 分组树 |
+| 二级菜单项增删／改名／改 `to`／改分组归属 | `webui/src/app/navigation.ts`、主导航事实表 |
+| 二级页内分页 Tab 增删／改名／改默认 Tab（进入 URL 或主导航可读结构） | 页面路由 Tab、IA 文档中的「页面内二级入口」 |
+
+### 一般不必（仍须遵守术语／设计规范）
+
+- 页内筛选、状态 pill、表格列、空／加载／错误态文案
+- Drawer／Modal／页内链接（**不进**主导航）
+- 兼容重定向、历史书签路由保留（主导航已移除或不展示）
+- 仅实现已确认清单、不改变可见导航结构的代码修复
+
+### 改代码前的检查（须能答「是」）
+
+1. 本次 diff 是否触及上表「需要独立确认」任一类？若是 → 会话里是否已有委托人**针对该导航清单**的明示确认？
+2. 若尚无确认 → **停手**：只允许在 Spec／Plan／IA 文档中提案，不得改 `navigation.ts`、主导航挂载、`06-navigation-ia.md` 事实表中的对应行，也不得把未确认项写进 `user-facing` 交付主张。
+3. 确认后落地时，同批更新 [`webui/docs/06-navigation-ia.md`](../../webui/docs/06-navigation-ia.md) 与实现，并在 Spec／收口记录中写明确认日期与确认范围。
+
+**与机器门禁的关系：** `lint:ia-boundary` 只校路由／边界一致性，**不**代替本条人工确认。门禁全绿 ≠ 导航变更已获批准。
+
+## Docker 对齐：功能优先，默认不谈客户部署环境
+
+开发和测试以**功能本身**为准（需求台总账、Spec 功能合同、测试台 UAT），运行与验证环境对齐 **Docker**（本机 compose / demo），不是客户用什么环境部署。
+
+- **默认对齐功能 + Docker**：解释概念、排期、实现、验收、日常对话，都以功能合同与可观察行为为准；本地跑通与回归默认走 Docker demo / compose，不默认假设客户 K8s / Helm。
+- **默认不关心客户部署环境**：除非用户或当前任务**明确**要求出包、发布取证、客户现场、Helm / K8s / 离线镜像等交付工作，否则不要把讨论、解释或验证默认导向客户拓扑、Helm Chart、K8s 契约或客户环境证据。
+- **仓库里仍有交付章节与 runbook**：那是交付任务的事实源，不是日常开发/测试的默认上下文。看到 Helm、Chart、客户 amd64 等词，先按制品/路径名理解；不要自动展开成「我们必须关心客户怎么部署」。
+- 与下文「证据等级门槛」一致：**客户环境证据不是功能合同收口的必要条件**；功能收口 ≠ 可上线 ≠ 客户现场已验。
+
 ## 强制流程：Plan Mode
 
 以下改动，必须先输出计划（Claude Code 用 Plan Mode / EnterPlanMode，Codex 用等价的"先列步骤"机制），经人工确认后才能落地：
@@ -37,11 +106,23 @@
 
 ## 验证策略：浏览器测试约束
 
-正常开发任务默认不需要做浏览器测试。只有在用户、当前任务说明或已批准计划明确要求浏览器测试、端到端浏览器验证、截图验证、Playwright/Cypress 浏览器运行，或交付标准本身以浏览器行为验证为准时，才执行浏览器测试。
+### WebUI 变更／WebUI UAT（强制）
+
+凡触及 **WebUI 用户可见面**（页面、路由、列表／表单／抽屉、导航、Toast、复制／下载反馈、名册／统计展示等）的开发验证或测试台主张，**不得只验后端 HTTP／API**。必须同时具备：
+
+1. **真实浏览器**（前台可视会话；禁止仅后台标签／无焦点页冒充合同计时）。
+2. **即时计时**：至少记录导航→关键内容可见（或合同中的 `primaryReady`／等价里程碑）的端到端时延；与同场景 API 耗时分列，**不得**用 API p95 代替页面体感。
+3. 证据进 Plan「浏览器验证」、UAT `runs/` 或约定的 reviews／ui-ux 槽；INDEX／Spec 状态句不得把「仅 API smoke／HTTP 压测」写成 WebUI 已验。
+
+只跑 `/api/...`、vitest、CR 或脚本造数压测而声称「Roles／Agent 页／WebUI 已通过」视为**严重验证缺口**，测试台最多 `PASS WITH GAP`／`BLOCKED`（须写明缺浏览器＋计时），不得记整套 WebUI PASS，更不得功能收口。细则与判定见 [`docs/qa/uat/CONVENTIONS.md`](../qa/uat/CONVENTIONS.md)「WebUI：浏览器＋计时强制」。
+
+### 非 WebUI 任务（默认）
+
+纯 MCP／后端／脚本／镜像／无用户可见面的任务，默认不强制浏览器测试；仅当用户、任务说明、已批准 Plan 或交付标准明确要求时才做。
 
 Lucy 项目默认不做移动窄屏测试。除非用户、当前任务说明或已批准计划明确要求移动端、窄屏、响应式断点验证，不要主动执行 mobile viewport、narrow viewport 或 mobile emulation 相关测试。
 
-现有 E2E 套件与 release gate 文档仍作为“被明确要求执行浏览器/E2E 验证时”的测试事实源；它们不改变普通开发任务的默认验证范围。
+现有 E2E 套件与 release gate 仍是浏览器／E2E 执行时的事实源。触发交互合同的 Plan 必须把当次浏览器验证（含计时）写入「浏览器验证」；WebUI 变更即使未触发交互合同四段式，仍适用上一节强制条款。
 
 ## 部署拓扑与并发一致性边界
 
@@ -57,6 +138,7 @@ Lucy 当前只支持**单实例、单副本**部署，不支持多个 WebUI / MC
 - `.ktx/secrets/` 下的密码/密钥文件：禁止读取内容后输出、禁止提交到 git
 - `ktx.yaml` 中的数据库连接信息：改动前必须先确认，不能静默修改
 - 生产数据库（Aliyun RDS MySQL）：只读查询，禁止 DDL/DML 写操作
+- **主导航／二级菜单／页内分页 Tab 的增删改**：无委托人针对当次导航清单的独立明示确认前，禁止改运行导航或主张为已批准交付面（正文见「导航信息架构变更：委托人独立确认」）
 
 ## Spec 落位规则
 
@@ -66,6 +148,7 @@ Lucy 当前只支持**单实例、单副本**部署，不支持多个 WebUI / MC
 - 子模块自带的架构 / API / 数据模型等实现细节允许放在 `<module>/docs/`（当前实例：`webui/docs/01–06`），并在 `docs/governance/project-overview.md` 注册索引
 - `webui` 的 M0–M5 开发已由 Codex 串行完成，对应工单包 `webui/docs/codex/` 作为执行历史归档保留，不再领取；后续若新增工单仍遵循「就近放 `<module>/docs/`」原则
 - 个人分析 / 协作笔记不进本仓库，按既有约定放 Obsidian
+- **错题本**落 [`docs/lessons/`](../lessons/README.md)：已核实错误的复盘与举一反三；按周可增。登记 ≠ 开发授权，也不替代 Spec／发布取证。**发现别名**（Agent／口语）：事故清单、问题清单、经验清单、复盘清单 → 均指本目录，不是交付 runbook 勾选表；`AGENTS.md` 有同句发现入口
 - eval cases（YAML，agent 测）与 quiz HTML（人类测）的设计原则、命名约定、数据获取路径见 `docs/governance/eval-quiz-conventions.md`；新增 dataset 的 eval/quiz 前必读
 
 ## 功能闭口与发布取证
@@ -79,15 +162,25 @@ Lucy 当前只支持**单实例、单副本**部署，不支持多个 WebUI / MC
 | 功能合同 | 这一条用户可观察的承诺，在它自己的接口上成立 | 这些承诺叠在目标拓扑上仍能一起成立。功能收口不能当成可以上线 |
 | 发布取证 | 这一批已收口的承诺，在这次跑到的系统路径上没有互相拆掉。它是兜底，用来抓住组合、时序、拓扑和环境编排才会露出的问题 | 每个模块的合同都成立。没跑到的分支、失败关闭、并发和权限边角仍然可以是错的 |
 
-功能合同的出口使用能打假这条承诺的检查。事务边界、失败关闭、持久化这类只有在真实进程里才成立的不变量，留在功能合同里。证明这些不变量所需的真实进程检查和局部故障注入也留在功能合同里，例如写入失败不能返回成功、事务中途失败不能留下半份数据。整库旅程、Agent 路径、跨模块或系统级故障演练，以及证据等级（本机 / CI / 客户环境）归发布取证。
+功能合同的出口使用能打假这条承诺的检查。事务边界、失败关闭、持久化这类只有在真实进程里才成立的不变量，留在功能合同里。证明这些不变量所需的真实进程检查和局部故障注入也留在功能合同里，例如写入失败不能返回成功、事务中途失败不能留下半份数据。用于验证候选版本整体表现的整库旅程、Agent 路径、跨模块或系统级故障演练及其证据等级要求，归发布取证。
 
 发布取证失败时，只打回被证伪的那一条功能合同，不把整批已收口的模块重新打开。发布取证必须有主人和触发点：这一批已收口功能组成候选。把发布取证写成功能合同的出口，并标注「未执行且不排期」或「不可交付 UAT」，已作废，不得当作现值。这种句子出现在 Spec、Plan、登记册、概览、索引或审阅记录时，作废标记必须紧贴这句：紧挨引号前写「不再写」或「不构成功能阻断」，或紧挨引号后写「已作废」「不再写」「不得当作现值」或「不构成功能阻断」。同一行别处的「作废」不算，「未作废」也不算。`lint:spec-docs` 的 `stale-status` 检查这一条，并且不走基线豁免。索引包括 `docs/README.md` 与 `docs/plans/README.md`。
 
 上线只发生在第三件事：这一批模块都已按自己的合同收口，并且这次兜底跑在目标拓扑上、证据等级也够。
 
-#### 证据等级门槛：本机 ＋ CI 即可
+### 产品侧修复收口
 
-功能合同收口的验收证据以**本机自动化**（单元／组件／接口测试、真实进程内自动化）与 **CI job** 两级为准。
+产品侧修复收口须同时满足以下条件。
+
+1. **修复 Spec 已按功能合同收口。** Spec 写清受影响的用户场景、修复后可观察的行为和对应验收项。
+2. **模拟用户场景的 UAT 已执行。** 默认在 Docker demo／compose 中，通过受影响用户的实际入口执行用例。涉及约束或门禁时，同时验证约束生效与合法用户仍可完成主路径，覆盖受影响的纯 MCP 入口。涉及 WebUI 用户可见面时，执行前台浏览器验证并记录计时。测试台 INDEX 须能定位套件和 `runs/` 跑次证据。
+3. **UAT 结果为 `PASS` 或 `PASS WITH GAP`。** `PASS` 表示验收项全部通过。`PASS WITH GAP` 用于必做项全部通过、仍有可选项未覆盖的情况，须在跑次中写清具体用例、未覆盖的场景及原因，并在 INDEX 的判定中注明。必做项失败或尚未验证时，产品侧修复仍未收口。
+
+日常修复按上述条件报告产品侧结论。无需索取客户侧证据，也不得在状态汇报或收口结论中把「客户侧证据仍缺」列为待办或阻塞。仅在任务明确要求发布取证或客户交付，且对应验收项确实需要客户环境时，才报告具体缺失的现场证据及其影响。
+
+### 证据等级门槛：本机 ＋ CI 即可
+
+功能合同的自动化验收证据以**本机自动化**（单元／组件／接口测试、真实进程内自动化）与 **CI job** 两级为准。用户场景 UAT 按上文「产品侧修复收口」执行和登记。
 
 **客户环境证据不是功能合同收口的必要条件。** 只有客户目标服务、真实升级、真实备份恢复、现场实例或真实身份源才能取得的结论，归**发布取证**与**交付**层。在功能合同里，这类项按「不在本条出口」登记，或在验收矩阵里逐条记 `blocked` 并写明阻塞原因——**两者都不构成把整条 Spec 挂成未收口的理由**。
 
@@ -108,6 +201,138 @@ Lucy 当前只支持**单实例、单副本**部署，不支持多个 WebUI / MC
 同一文件里，头部「状态」、验收行和文末检查点互相矛盾时，以头部「状态」为准，并在同一次改动里改齐。实施笔记已经写「完成」，状态行仍写「待实施」「可交付开发」或「未验收」，这次登记没有完成。
 
 独占维护某几处登记，不能成为少写一处的理由。发现镜像过期，就在这次改动里改正。改之前先读 Spec 头部，不要用另一份文档的旧状态行当事实源。
+
+#### 状态措辞用中文
+
+Spec 与 Plan 头部「状态」行禁止使用下列**英文状态词**。匹配须同时满足：
+（1）大小写敏感；（2）词边界（匹配处左右两侧皆非 `[A-Za-z]`）；（3）**显式版本段排除**——
+版本号豁免不得只靠（1）或（2）。表头写「状态」，不写 `Status`。扫描面是头部元数据表（前 60 行）；
+正文引用英文词不受本条约束。缺「状态」行不归本条，归 `lint:spec-docs` 的 `metadata` 规则。
+
+禁用状态词（硬门禁；`lint:spec-docs` 规则 `status-vocab`；PR CI 独立入口 `npm run lint:status-vocab`，
+与全量门禁同一实现、同一份词表）：
+`Implemented`、`Approved for planning`、`Superseded`、`Draft`、`Ready for Review`。
+
+推荐状态词（软约束；lint 不强制；近义中文不改写存量）。阶段码对照官方表见
+[`docs/specs/lucy-20261122-spec-status-funnel-gate-spec.md`](../specs/lucy-20261122-spec-status-funnel-gate-spec.md)
+§3.1（S4／X_DEF 一对多）：
+
+| 状态词 | 阶段码（软） | 含义 |
+|---|---|---|
+| 草案 | S1 | 设计未定稿，终稿未确权，未获开发授权 |
+| 终稿已确权 | S2 | 文档级闸门通过，设计冻结 |
+| 开发授权已获得 | S3 | 允许改运行代码（与 lint 授权口令同句） |
+| 实现已落地 | S4 | 代码已合入工作树或已提交 |
+| 待验收 | S4 | 实现完成，验收条目未关闭 |
+| 功能合同已收口 | S5 | SC 全部关闭且有收口记录（**仅**闭口层级＝功能合同） |
+| 发布取证已收口 | X_REL | 发布取证 Spec 的收口终态（**不是**第二条进度链） |
+| 被取代 | X_SUP | 被后继 Spec 取代 |
+| 延期 | X_DEF | 委托人裁定延至后续产品线 |
+| 结案不做 | X_DEF | 委托人裁定不做 |
+
+说明：「已实现」「功能合同收口」（缺「已」）「未授权实现」等近义为存量常见写法；本条不拦、
+不强制迁移。状态行授权口令近义统一（须含「开发授权已获得」）属独立工作，不在本条出口。
+
+匹配规则（硬门禁实现约束；唯一实现为 `scripts/lint-spec-docs.mjs`，禁止第二份词表拷贝）：
+版本段 `/[vV]?\d[\w.]*-draft\b/` 命中的子串先从单元格剔除、不参与禁用词扫描；`Approved for planning`、
+`Ready for Review` 按整短语匹配；表头 `Status` 由规则独立扫描前 60 行表格行判定，不经 `statusCell()`。
+
+#### 开发台漏斗阶段码
+
+Spec 头部须恰好一行「阶段」元数据；单元格去掉空白与全部 `*` 后整格等于阶段码（大小写敏感）：
+`S1` `S2` `S3` `S4` `S5` `X_DEF` `X_SUP` `X_REL`。字典与全部裁定（D1–D18、文法、伪代码）以
+[`docs/specs/lucy-20261122-spec-status-funnel-gate-spec.md`](../specs/lucy-20261122-spec-status-funnel-gate-spec.md)
+为准；阶段码 ↔ 推荐中文的一对多映射以该 Spec §3.1 为准，本条不另拷词表。UAT／可上线不是阶段；
+「收口范围」行仅 S5 可写。
+
+**不是两套漏斗（降熵口径；委托人 2026-11-22 选 A＋B＋C）**
+
+1. **一条主进度**：所有 Spec（含发布取证）实施期只走 `S1→S2→S3→S4`。禁止把 `X_REL` 当成第二条从零爬的进度链。
+2. **终态按闭口层级分叉**：功能合同收口 → `S5`；发布取证收口 → `X_REL`；不做／延期 → `X_DEF`；被取代 → `X_SUP`。发布取证 **禁止** 标 `S5`。
+3. **口语**：对发布取证说「推进到收口（X_REL）」，不要说「推进到 S5」。
+4. **总账完成率分列**：`S5` 桶与 `X_REL` 桶分开统计，**禁止相加**冒充同一「总完成率」。在途发布取证留在 S1–S4，不进 `X_REL` 桶。
+5. **登记纪律**：仅在收口瞬间把阶段改成终态码；未收口却写 `X_REL`／`S5` 视为登记缺陷（门禁见漏斗 Spec D8／D8b）。
+
+机器门禁＝`lint:spec-docs` 规则 `status-funnel`（PR CI 独立入口 `npm run lint:status-funnel`，同一实现）。
+grandfather＝`docs/governance/spec-status-funnel-grandfather.json`：名单内 Spec 的状态行不含
+「开发授权已获得」、且正文无标记行「状态漏斗门禁：纳入检查」时本规则直接通过；口令或标记行取消跳过。
+Plan「状态」行去首尾空白与前导 `*` 后，须以 `阶段:<CODE>`／`<CODE>｜`／`<CODE>。` 开头镜像 Spec 阶段码。
+S5 的状态行不得含「未收口」显式短语表（含 `≠功能已收口`、`实现进行中` 等，见 Spec D4）；`X_REL` 不得含在途短语（见 Spec D8b）；S1／S2 的状态行
+不得含「开发授权已获得」；状态行首个「阶段:」之后不得把 `可上线`／`UAT PASS`／`测试台PASS` 当作阶段码，
+「≠」-前缀否定式（DEVELOPMENT 标准写法）放行。
+
+**总账跟进状态 ↔ Spec 阶段（P1-73 v1.1＋降熵补丁）**：执行总账「跟进状态」须以阶段码 `｜` 开头；有主 Spec
+（链接文案 `Spec`／`主 Spec`）时，须与 Spec「阶段」格同码。机器门禁＝规则 `inventory-stage`
+（`npm run lint:inventory-stage`，PR CI 同跑）。无主 Spec 的行仍须带合法阶段前缀。回填脚本
+`npm run mig:funnel-inventory`（仅授权 MIG 时用）。完成率分列规则见上条第 4 点与现行总账「收口分列」小节。
+
+### 产品线执行总账（SOT）
+
+每条**已开线**的产品线必须有一份**执行总账表**。它是该产品线上「有哪些新功能、对旧功能的修复／事故修复、尚未开发／冻结／结案不做」的**唯一跟进 SOT**。对话纪要、中间态盘点、`user-facing` 草稿、发布说明**都不是**这份全集的替代品；它们只能引用总账行，或触发下面的差集补录。
+
+| 角色 | 文件 | 回答什么 |
+|---|---|---|
+| **执行总账（SOT）** | 该产品线的功能清单池（现行 `0.30.0`／`lucy-v0.30` → [`docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md`](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)） | 本产品线工作项**全集**与跟进序 |
+| **需求正文** | 该产品线需求池（现行 → [`docs/plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md`](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)） | 缺口来源与正文；与总账 REQ 双向可追 |
+| **单条功能合同现值** | 该功能 Spec 头部「状态」行 | 这一条承诺现在到哪一步（见上一小节）；总账「跟进状态」是它的**镜像**，须同句 |
+
+下一产品线开线时，必须另立同角色总账（可新文件，但职责不变）。未开线的想法仍先入对应需求池／总账草稿，不得无行改运行代码。
+
+**强制入账（先入账，再动手／再叙事）：**
+
+1. 新功能、对旧功能的修复、事故修复、尚未开发项、委托人结案不做——**都必须在总账有行**（并回写需求池 REQ）。禁止「旁路落地」却无总账行。
+2. **「不入核心分母／不挡 P0／不进产品闭口判据」只是总账行上的属性**，用来区分成败判据；**绝不是**「可以不入账」或「终审／agent 可以当不存在」。
+3. **入账 ≠ 立项 ≠ 终稿确权 ≠ 开发授权**。总账有行只证明工作项被跟踪；改运行代码仍须该条授权规则（产品线清单池／Spec 头部）允许。
+
+**兜底：差集探查与补录**
+
+日常纪律仍是先入账。另外固定**至少一个**探查点，防止漏网：
+
+| 时机（主门，至少择一执行；建议两者都做） | 动作 |
+|---|---|
+| 中间态出口（或等价「可站得住的增量出口」）出门前 | 用事实面减总账，差集当日补录 |
+| `user-facing`／发版用户叙事定稿出门前 | 同上；叙事句须挂总账清单 ID（或显式「工程向不入叙事」且仍在总账） |
+
+事实面至少包括：本产品线已收口 Spec、中间态／收口盘点标 CLOSED 的项、`user-facing`／Fixes 已写句、本分支已合入且用户／运维可观察的修复。
+
+口令：
+
+- **事实有、总账无 → 当日补行**（可标「不入核心分母」），再出门。
+- **总账有、事实无却已主张交付 → 改跟进状态或撤回主张**，禁止假装已交付。
+
+`AGENTS.md`、产品线 Cursor 规则只指向本节与现行总账路径，不另写第二套 SOT 口径。
+
+### 端到端三台账（需求台／开发台／测试台）
+
+产品线执行总账回答「全集有哪些行」。端到端交付还缺两台：**开发台**（单条合同到哪）与**测试台**（客户场景 UAT 是否复现过）。三台**各一个 SOT**，用指针勾连，**禁止**把另一台的结论抄成自己的状态句。
+
+| 台 | 唯一真实来源（SOT） | 回答什么 | 明确不回答 |
+|---|---|---|---|
+| **需求台** | 产品线执行总账（上节）＋需求池正文 | 要不要做、优先级、核心分母、跟进序、REQ | 单条 Spec 合同是否收口；UAT 是否绿 |
+| **开发台** | 该功能 Spec 头部「状态」行（镜像规则见「状态登记只有一份现值」） | 功能合同／实现／CR 到哪一步 | 「已 UAT」「可上线」 |
+| **测试台** | [`docs/qa/uat/INDEX.md`](../qa/uat/INDEX.md)（套件＋最近跑次；树根 [`docs/qa/uat/`](../qa/uat/README.md) 为**唯一** UAT SOT；旧 `docs/uat/` 仅归档） | 哪套 UAT、最近结果 PASS／PASS WITH GAP／FAIL／SKIPPED | 改写 Spec 合同状态；代替发布取证整包；用 `docs/uat/` 历史稿冒充现行 PASS |
+
+**勾连图（只链 ID，不复制状态）：** 总账清单 ID／REQ → Spec 文件名 → UAT Suite ID。现行产品线勾连表与缺口见 [`docs/governance/e2e-ledger.md`](e2e-ledger.md)。
+
+**强制：**
+
+1. 主张「客户场景已复现／UAT 已过」时，必须能指向测试台 INDEX 的套件行与 `runs/`；不得用功能合同收口或 live-e2e 聊天记录冒充。
+2. 新开客户场景复现套件：先在测试台建 suite，再在 `e2e-ledger.md` 挂总账 ID；总账 Spec／Plan 列可回链 Suite，**不得**在「跟进状态」里写 UAT 判定句代替 INDEX。
+3. 发布取证仍是另一层（见本节「功能闭口与发布取证」）；测试台绿灯 ≠ 发布取证通过 ≠ 可上线。
+4. **测试台第一性原则**（细则 [`docs/qa/uat/CONVENTIONS.md`](../qa/uat/CONVENTIONS.md)）：交叉验证／对抗性测试必须**全真模拟构建并执行用例**；**禁止**用 Code Review 冒充 UAT。若环境或凭据导致无法全真，须向**委托人独立授权**后才可降级；未授权不得主张已验证。
+
+**兜底（测试台／勾连）：**
+
+| 时机 | 动作 |
+|---|---|
+| 中间态出口或 `user-facing` 定稿出门前 | 除总账差集外：对「已主张用户／运维可观察修复」核对 `e2e-ledger.md`；无 UAT 套件则标 `UAT: not_registered` 或当日补套件，禁止假装已测 |
+| 日常／CI 可选 | `node scripts/uat/check-e2e-ledger.mjs`：勾连表文件存在、INDEX 有对应 Suite、runs 指针非空（若行声明已跑） |
+
+口令：
+
+- **总账有交付主张、测试台无套件 → `not_registered`，不得写 UAT PASS**
+- **测试台 PASS、开发台未收口 → 允许（复现可先于合同收口），但不得倒推「合同已收口」**
+- **两边结果分叉 → 各以本台 SOT 为准，在 `e2e-ledger.md` 缺口表记分叉，禁止静默改 cases 期望**
 
 ### 新 Spec 只有一个身份
 
@@ -213,6 +438,25 @@ Lucy 当前只支持**单实例、单副本**部署，不支持多个 WebUI / MC
 | 10 | **落盘后跑一遍机器门禁并逐条勾销本表**；不得以「门禁全绿」替代形态自查 | 本节 | `lint:spec-docs` + `lint:spec` + `lint:terminology` + `lint:ia-boundary` |
 | 11 | **功能 Spec 含「闭口层级」**。层级只能是「功能合同」或「发布取证」，并写明本条承诺、本条出口、不在本条出口、上线关系。功能合同写「本条收口不表示可上线」；发布取证写「本条通过不表示各模块无问题」 | 本文件「功能闭口与发布取证」 | `lint:spec-docs`（规则 `close-layer`） |
 | 12 | **已作废的状态句不得裸写**。「未执行且不排期」「未执行且未排期」「不可交付 UAT」若出现，作废标记必须紧贴该句。「未作废」和同一行里另一件事的「作废」不算。本规则不走基线豁免 | 本文件「功能闭口与发布取证」 | `lint:spec-docs`（规则 `stale-status`） |
+| 13 | **触发的 Spec 写交互合同或豁免**。触发、豁免、文法以本 Spec 为准；机器门禁是 `lint:spec-docs` | [`lucy-20261107-ui-interaction-contract-gate-spec.md`](../specs/lucy-20261107-ui-interaction-contract-gate-spec.md) | `lint:spec-docs`（规则 `interaction-contract`） |
+| 14 | **挂在已开线产品线上的新功能／修复：先入该产品线执行总账（SOT）并回写需求池**。无总账行不得改运行代码，也不得写进 `user-facing`／Fixes 主张交付。「不入核心分母」须写在总账行属性上，不得省略入账 | 本文件「产品线执行总账（SOT）」；现行 `0.30` 总账见 [`lucy-20261107-lucy-0-30-feature-inventory-pool.md`](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) | 无（人工／出门差集补录） |
+| 15 | **端到端三台账**：需求台＝总账；开发台＝Spec 头部状态；测试台＝`docs/qa/uat/INDEX.md`。主张 UAT／客户场景复现必须挂测试台；勾连与缺口见 [`e2e-ledger.md`](e2e-ledger.md)；可选 `node scripts/uat/check-e2e-ledger.mjs` | 本文件「端到端三台账」 | `scripts/uat/check-e2e-ledger.mjs`（文件／Suite 存在性） |
+| 16 | **主路径可用性优先**：新功能／门禁不得把最终用户主路径变成无逃生不可用；Spec／UAT 须同时覆盖「约束生效」与「合法用户仍可用」（含纯 MCP 部署实况）。只验「拦住」不得收口 | 本文件「第一性原理：主路径可用性优先」 | 无（评审／出门人工；错题举一反三） |
+| 17 | **新功能 Spec 必含「受影响画像」小节**：4 画像（问数方／治理方／运维方／管理层）逐行判定 `↑`／`＝`／`↓`，写明变更前后体验与**可核对依据**；判 `↓` 必须写补偿路径并挂验收编号，否则不得收口。事实源与模板见 [`user-personas.md`](user-personas.md) | 本文件「Review 要求」＋ [`user-personas.md`](user-personas.md) §4／§5 | 无（评审／出门人工；`lint:spec-docs` 的 `persona-impact` 规则属第二阶段，**未实现**） |
+| 18 | **WebUI 验证强制浏览器＋计时**：触及 WebUI 用户可见面时，开发验证与测试台不得只验后端 HTTP；须真实前台浏览器＋导航／primaryReady（或等价）计时，并与 API 耗时分列。仅 API smoke 不得记 WebUI PASS／收口 | 本文件「验证策略：浏览器测试约束」＋ [`docs/qa/uat/CONVENTIONS.md`](../qa/uat/CONVENTIONS.md) | 无（评审／UAT 出门人工） |
+| 19 | **Spec／Plan「状态」行禁止英文状态词，表头写「状态」不写 `Status`**（匹配规则见「状态措辞用中文」） | [`lucy-20261122-spec-status-vocabulary-chinese-plan.md`](../plans/lucy-20261122-spec-status-vocabulary-chinese-plan.md) | `lint:spec-docs`（规则 `status-vocab`）＋ `lint:status-vocab`（PR CI） |
+| 20 | **Spec 头部须恰好一行可解析「阶段」；「状态」不得与阶段机器可判矛盾；Plan「状态」行须镜像阶段码前缀；执行总账「跟进状态」须 `CODE｜` 且与主 Spec「阶段」同码**（口径见「开发台漏斗阶段码」） | [`lucy-20261122-spec-status-funnel-gate-spec.md`](../specs/lucy-20261122-spec-status-funnel-gate-spec.md) | `lint:spec-docs`（`status-funnel`＋`inventory-stage`）＋ `lint:status-funnel`／`lint:inventory-stage`（PR CI） |
+| 21 | **导航 IA 变更须委托人独立确认**：增删改一级分组、二级菜单项或二级页内分页 Tab 时，Spec／Plan 可提案，但改运行导航前必须有针对当次清单的明示确认；终稿确权／开发授权／功能收口均不代替。确认后同批更新 `06-navigation-ia.md` | 本文件「导航信息架构变更：委托人独立确认」 | 无（人工；`lint:ia-boundary` 不代替） |
+
+### 交互合同
+
+- 落盘清单一行：触发、豁免、文法以本 Spec 为准；机器门禁是 `lint:spec-docs`。
+- 唯一能让 lint 取消 grandfather 的状态短语是「开发授权已获得」。其他说法不取消跳过，也不构成通过本门禁。
+- 请求开发授权时，六问只适用于触发且没有有效豁免的 Spec。只有这些 Spec 才确认 Q1–Q6 全为「通过」。有效豁免不写六问，授权人只核对豁免两行。这一步不是 lint。
+- grandfather 文件若要在授权前就接受检查，作者写标记行；否则等状态口令出现。发版走查仍是后置兜底。
+- **WebUI 变更**：无论是否触发交互合同，验证都必须含真实浏览器＋即时计时（见「验证策略：浏览器测试约束」）；触发的 Plan 还须把当次写入「浏览器验证」。
+- **非 WebUI** 且未触发交互合同：默认不做浏览器测试。
+- 触发且没有有效豁免时，合同里的每条路由有一份元素清单。列是编号、路由、元素、区域、期望。当次结果只写在浏览器证据里，并且恰好覆盖清单编号。新发现先补进行，再记结果。清单不写 DOM、`class=` 和间距像素。没有这份合同的旧页面，不在本轮补清单。
 
 ### 索引登记的判据（避免误判）
 
@@ -247,10 +491,12 @@ Lucy 当前只支持**单实例、单副本**部署，不支持多个 WebUI / MC
 
 ### Review 要求
 
-- Spec / Plan 评审必须检查：本清单 12 条是否逐条可答；回答不得是「门禁全绿」。
+- Spec / Plan 评审必须检查：本清单各条是否逐条可答；回答不得是「门禁全绿」。
 - 评审发现形态不合规时，**先修文档形态**，再论内容。
+- 「受影响画像」小节缺失、四个画像行留空或写「所有用户」——属形态不合规，先退回形态；判定内容（依据是否可核对、判 `↓` 有无补偿路径、有无触发最差口径）按内容退回，并按 [`user-personas.md`](user-personas.md) §6.1 五问逐项回答。
 - 缺「闭口层级」，或功能合同的出口写入整库旅程、Agent 路径、跨模块或系统级故障演练、证据等级，先退回形态。这些内容属于发布取证。证明本条不变量所需的局部故障注入留在功能合同里。
 - 同一功能的 Spec 与 Plan 编号不一致（日期或 slug 不同），先退回形态。
+- 提案或落地触及一级／二级导航或页内分页 Tab 时，核对是否已有委托人针对当次清单的独立确认；无确认不得把运行导航变更当作已批准（清单第 21 条）。
 
 ## 全系统术语规范
 
@@ -282,17 +528,32 @@ New terms:
 - Code Review 必须检查术语一致性、禁用词和浏览器翻译防御。
 - WebUI 变更提交前运行 `cd webui && npm run lint:terminology`；根目录也可运行 `npm run lint:terminology`。
 
-## WebUI 设计规范（Design System）
+## WebUI UI/UX 标准总入口
 
-Lucy WebUI 的设计规范事实源在
-[`webui/docs/design-system/README.md`](../../webui/docs/design-system/README.md)。
+WebUI 的 UI/UX 约束分散在下表几处；**各自只有一份正文**，本节只做导航和硬规则，不复述内容。
+
+| 约束 | 事实源（正文） | 机器检查 |
+|---|---|---|
+| 视觉与交互规范（颜色、网格、字体、按钮、数据网格、指标卡、Toast、筛选输入、浮层、页面布局、空／加载／错误态） | [`webui/docs/design-system/README.md`](../../webui/docs/design-system/README.md) | `lint:spec-docs` 规则 `ds-shape`（形态）、`ds-ref`（引用章节存在）、`ds-index`／`ds-meta`（章节入 README、头部有版本与日期）、「新模式」引用规则 |
+| 设计规范缺口与临时决策 | [`webui/docs/design-system/99-governance.md`](../../webui/docs/design-system/99-governance.md) | `lint:spec-docs` 规则 `ds-td-expiry`（每条须有「升级期限：YYYY-MM-DD」且未过期） |
+| 术语与浏览器翻译防御 | [`webui/docs/00-product-terminology-standard.md`](../../webui/docs/00-product-terminology-standard.md) | `lint:terminology` |
+| 信息架构边界（结构事实） | [`webui/docs/06-navigation-ia.md`](../../webui/docs/06-navigation-ia.md) | `lint:ia-boundary` |
+| 导航 IA 变更批准（增删改一级／二级／页内分页 Tab） | 本文件「导航信息架构变更：委托人独立确认」 | 无（人工；与 `lint:ia-boundary` 分工） |
+| 受控输入与 IME | [`14-components-filter-input.md`](../../webui/docs/design-system/14-components-filter-input.md) | `lint:url-driven-input` |
+| UI 交互合同 | [交互合同门禁 Spec](../specs/lucy-20261107-ui-interaction-contract-gate-spec.md) | 见该 Spec |
+| 发版前界面检查 | [`docs/runbooks/webui-release-ux-checklist.md`](../runbooks/webui-release-ux-checklist.md) · [发版 UX 评审 Spec](../specs/lucy-20261030-webui-release-ux-review-spec.md) | `release-ux-invariants.test.ts` |
+| 页面级问题与验收事实 | [`docs/ui-ux-feedback/README.md`](../ui-ux-feedback/README.md) | 无 |
+| 浏览器测试边界（WebUI 强制含计时；非 WebUI 默认不测） | 本文件「验证策略：浏览器测试约束」 | 无 |
 
 强约束如下：
 
 - 涉及 UI 视觉或交互的改动，必须先对照对应章节（Foundations / Components / Patterns / Governance）。
 - 新增视觉模式（如新按钮分层、新网格策略、新颜色语义）必须先补规范再落代码。
 - PR / 交付说明必须包含 `Design System Compliance` 小节，至少写明“引用章节 + 本次遵循点”。
-- 若需求超出已定义章节，先在 `webui/docs/design-system/99-governance.md` 记录临时决策，再在后续迭代升级为正式规范。
+- 若需求超出已定义章节，先在 `webui/docs/design-system/99-governance.md` 记录临时决策，再在后续迭代升级为正式规范；临时决策对应 Spec 收口后，应升格为正式章节并归档，不得长期悬挂。
+- 设计规范的现行版本以各章头部「版本」为准；改规范正文时同步更新该章版本与日期。
+- 未经 Spec 登记，不得新增与既有章节并列的另一套组件类名族。
+- 未经委托人针对当次清单的独立确认，不得增删改一级分组、二级菜单项或二级页内分页 Tab（见「导航信息架构变更：委托人独立确认」）。
 
 ## Onboarding（首次拉取本仓库）
 
@@ -338,8 +599,26 @@ Lucy WebUI 的设计规范事实源在
 - **空目标卷是失败，不是 `preserved=true`**：解析出的目标 named volume 已存在且挂载点下文件数为 0，同时有运行中的容器挂载了另一个同逻辑卷名（例如 `lucy-demo-data`）且其中有文件时，升级失败，不会把 preserve check 报成 ok。
 - 等价手写：`BUILDX_BUILDER=default bash scripts/upgrade/upgrade-lucy.sh -f deploy/compose/docker-compose.demo.yml`。
 - amd64 开发者覆盖：脚本已按 host 自动选择；若直接 compose，传 `TARGETPLATFORM=linux/amd64 TARGETARCH=amd64`。
-- 客户 amd64 离线包 / K8s integration 大包：推荐 `bash scripts/release/build-customer-amd64-image.sh`（含 G1–G4 + G4b + **G8** 门禁）；或 `docker buildx build --builder lucy-amd64 ...` 并显式 `--build-arg TARGETPLATFORM=linux/amd64 --build-arg TARGETARCH=amd64`（创建 builder 时**不要** `--use`，结束后 `docker buildx use default`）。交付前**必须**完整走一遍 [`docs/runbooks/customer-delivery-preflight-checklist.md`](../runbooks/customer-delivery-preflight-checklist.md) 与 [`docs/runbooks/customer-amd64-image-build-checklist.md`](../runbooks/customer-amd64-image-build-checklist.md)（含 `assert-image-elf-arch.sh` 对 **node+tini** 架构、Python runtime 离线预装 G4b、镜像 UID 10001 + git init **G8**、Helm MCP URL 守卫、**H3 N-1 旧 PVC 升级**及现场验收命令）。K8s 升级方案见 [`deploy/k8s/helm/lucy/UPGRADE.md`](../../deploy/k8s/helm/lucy/UPGRADE.md)。详见 `docs/specs/lucy-customer-amd64-offline-delivery-spec.md` 与 `docs/specs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md`。
+- 客户 amd64 离线包 / K8s integration 大包：推荐 `bash scripts/release/build-customer-amd64-image.sh`（含 G1–G4 + G4b + **G8** 门禁）；或 `docker buildx build --builder lucy-amd64 ...` 并显式 `--build-arg TARGETPLATFORM=linux/amd64 --build-arg TARGETARCH=amd64`（创建 builder 时**不要** `--use`，结束后 `docker buildx use default`）。交付前**必须**完整走一遍 [`docs/runbooks/customer-amd64-image-build-checklist.md`](../runbooks/customer-amd64-image-build-checklist.md)（含 `assert-image-elf-arch.sh` 对 **node+tini** 架构、Python runtime 离线预装 G4b、镜像 UID 10001 + git init **G8**、Helm MCP URL 守卫、**H3 N-1 旧 PVC 升级**及现场验收命令）。交付事故经验见 [`docs/lessons/`](../lessons/README.md)（原 preflight 大清单已作废）。K8s 升级方案见 [`deploy/k8s/helm/lucy/UPGRADE.md`](../../deploy/k8s/helm/lucy/UPGRADE.md)。详见 `docs/specs/lucy-customer-amd64-offline-delivery-spec.md` 与 `docs/specs/lucy-202608-08-image-arch-and-ktx-baseline-fix.md`。
 - Demo 使用 `LUCY_TEMPLATE_ROOT=examples/docker-demo/project-template`（本地 `demo-mysql`），**不会**把内网测试库打进客户默认 seed。
+
+#### 镜像依赖层缓存原则（默认）
+
+日常「让最新代码生效」应**优先复用已装依赖**，不要因为改了一句 Dockerfile `RUN` 就整层重拉 npm / apt。
+
+| 变更类型 | 期望行为 |
+|---|---|
+| 只改业务源码（`COPY . .` 之后） | 依赖层 `CACHED`；只重建源码拷贝 + `vite build` |
+| `package.json` / `package-lock.json`（或 KTX / 系统包版本）变更 | 才重跑对应 `npm ci` / install 层 |
+| 集团或现场强制镜像源 | 用构建参数 `NPM_REGISTRY` / `UV_INDEX_URL` / `APT_MIRROR`，**不要**为换源去改 `RUN` 安装命令文案 |
+| 明确要求无缓存 | 才用 `--no-cache` |
+
+落地约束（`Dockerfile`）：
+
+1. **依赖层 lockfile 驱动**：`COPY package*.json` → `npm ci`；安装命令与 flags **冻结**，不因临时排障随意改 `RUN`（改一行即作废该层及之后所有层）。
+2. **下载缓存可复用**：npm 安装步骤使用 BuildKit `--mount=type=cache,id=lucy-npm,target=/root/.npm`。即使 lockfile 变更必须重跑 `npm ci`，也应尽量吃本地包缓存，而不是每次从镜像站完整重下。
+3. **WebUI 安装策略冻结为** `npm ci --include=dev --include=optional`（`NODE_ENV=production` 否则会丢掉 `@tailwindcss/oxide-*` 等 optional 原生包）。需要调整时单独评审，并接受一次依赖层失效。
+4. Agent / 文档操作默认走 `npm run demo:upgrade`（有缓存），禁止把「改 Dockerfile 安装参数」当成同步代码的常规手段。
 
 ## 语义层（semantic-layer）分层
 
@@ -461,13 +740,14 @@ Claude Desktop 的"添加自定义连接器" UI 要求 HTTPS，且 URL 由 Anthr
 
 ## Skills 当前状态
 
-`skills/` 是 project-lucy 的增量能力补齐，**当前不被 KTX MCP server 自动加载**。data agent 仅能通过 Read 工具主动读取 `skills/**/SKILL.md`。
+`skills/` 是 project-lucy 的业务 Skill 文件事实源。KTX MCP server **不**自动加载这些文件。
 
-- `skills/` = single source of truth（lucy 增量补齐能力）
+- `skills/` = single source of truth（业务 Skill 资产）
 - `.ktx/skills/` 已废弃移除，不要再写入
-- 自动加载 / 按需触发能力将由独立的 `lucy-skills` MCP server 提供（P1.5 立项中）
+- 业务 Skill 的 Agent 读取通道：现行经 Lucy MCP Proxy 主面 `/mcp` 的 `lucy_skill_search` / `lucy_skill_read`（受 Role 通道授予 + Skill `roles_allowed`）
+- 独立 `lucy-skills` MCP server / `/mcp/skills` passthrough：规划见 `docs/specs/lucy-skills-mcp-spec.md`，**不是**当前客户端默认接入；仓库 `.mcp.json` 不得再指向该路径（门禁见 `scripts/smoke/mcp-client-config-guard.mjs`）
 
-KTX 上游不承担 skill 加载职责（KTX 定位是语义层 + wiki 通用 MCP server）；skill 由 lucy 自行起 MCP server 暴露，与 KTX 并列向 data agent 提供服务。
+KTX 上游不承担 skill 加载职责（KTX 定位是语义层 + wiki 通用 MCP server）。现行对外问数入口是单一 Lucy Proxy `/mcp`。
 
 ## 语境分工（详细说明）
 

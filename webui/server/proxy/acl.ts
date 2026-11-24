@@ -5,6 +5,12 @@ import path from "node:path";
 import { parse } from "yaml";
 import { resolveProjectRoot, readConnections } from "../project.js";
 import { loadContentPaths } from "../paths.js";
+import { readCatalogYaml } from "../catalog-yaml-cache.js";
+import { normalizeSourceRef } from "../source-name-registry.js";
+import {
+  enrichCatalogSources,
+  type CatalogSourceEntry
+} from "./source-descriptions.js";
 import {
   OPS_EVIDENCE_CONNECTION_CONFLICT,
   OPS_EVIDENCE_CONNECTION_ID,
@@ -24,7 +30,6 @@ import {
   buildForcedFiltersPayload,
   compileScopedRowGrant,
   formatRowPolicyAttribution,
-  isUpstreamForcedPredicateProven,
   mergeRowGrants,
   rowGrantDigest,
   validateProtectedLucyQueryArgs,
@@ -53,6 +58,15 @@ import {
   isControlPlaneTool
 } from "../ops/control-plane.js";
 import { collectOpsGrants, normalizeOpsGrant, type OpsGrant } from "../ops/ops-grants.js";
+import {
+  admitToolsCallEntry,
+  afterAuthFieldExposureHook,
+  loadServingGeneration,
+  SENSITIVE_META_PASSTHROUGH_TOOLS,
+  TABLE_TOUCHING_PASSTHROUGH_TOOLS,
+  validateQueryFieldsAgainstExposure,
+  type SourceMapLookup
+} from "./field-exposure.js";
 
 export interface AclDecision {
   allowed: boolean;
@@ -308,6 +322,8 @@ interface SourceMapState {
   compileError?: string;
 }
 
+export type { SourceMapState };
+
 let sourceMapState: SourceMapState = {
   forward: new Map(),
   reverse: new Map(),
@@ -374,8 +390,7 @@ async function buildSourceMapFromDisk(now: number): Promise<SourceMapState | nul
 
   for (const schemaFile of schemaFiles) {
     try {
-      const content = await readFile(schemaFile, "utf-8");
-      const yaml = parse(content) as SchemaYaml;
+      const yaml = await readCatalogYaml(schemaFile) as SchemaYaml;
       if (!yaml?.tables) continue;
       const rel = path.relative(semanticLayerDir, schemaFile);
       const parts = rel.split(path.sep);
@@ -451,8 +466,9 @@ export async function getSourceMapDiagnostics(options: { fresh?: boolean } = {})
   };
 }
 
+/** Reuse connection-scoped sourceName normalize helper (P1-64); denial flow unchanged. */
 function normalizeRef(value: string): string {
-  return value.trim().replace(/[`"']/g, "").toLowerCase();
+  return normalizeSourceRef(value);
 }
 
 /**
@@ -511,7 +527,16 @@ function addTableRefsFromText(
   text: string,
   tables: Set<string>,
   state: SourceMapState,
-  options: { fallbackUnknown?: boolean; connectionId?: string } = {}
+  options: {
+    fallbackUnknown?: boolean;
+    connectionId?: string;
+    /**
+     * P0-3 §4.5／F-R2-04：当 `fallbackUnknown:false` 时仍把未知 dotted 引用
+     * 保留进集合，供 `collectCanonicalSourceKeys` 记入 `unresolved`。
+     * 默认 true（门闩／口径采集路径）；历史静默丢弃行为须显式关闭。
+     */
+    retainUnresolved?: boolean;
+  } = {}
 ): void {
   const entries = sourceMapEntries(state);
   let matchedKnownRef = false;
@@ -523,12 +548,19 @@ function addTableRefsFromText(
     }
   }
 
-  if (matchedKnownRef || options.fallbackUnknown === false) return;
+  if (matchedKnownRef) return;
 
   const dottedRef = normalizeRef(text).match(/[A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)+/);
   if (!dottedRef?.[0]) return;
   const parts = dottedRef[0].split(".");
   const candidate = parts.length >= 3 ? `${parts[0]}.${parts[1]}` : parts[0];
+
+  if (options.fallbackUnknown === false) {
+    // P0-3／D9：未知字面**不得**进入 ACL 的 table 能力集合（否则会误判 table_forbidden）。
+    // 保留到 unresolved 侧通道见 collectUnresolvedDottedRefs／collectCanonicalSourceKeys。
+    return;
+  }
+
   tables.add(sourceNameToTable(candidate, state, options.connectionId));
 }
 
@@ -1983,17 +2015,197 @@ export async function extractTables(
   return [...tables].filter(Boolean);
 }
 
-export async function lucyCatalog(identity: Identity): Promise<{
+/**
+ * P0-1（Spec D3／D7）— 把 `(connectionId, sourceName)` 解析成不可变的
+ * `CanonicalSourceKey`。
+ *
+ * **严格作用域**：只接受同一连接上的 sourceName。资产侧的 `boundKey` 由这条
+ * 路径解析（D3「`connectionId`＋`source` 必须能解析为唯一 `boundKey`」）；
+ * 跨连接同名 logical source 不会被这里的全局唯一回退掩盖 —— 那会让
+ * 「另一连接上的同名 source」被当成命中（SC-07 要求 violation）。
+ */
+export async function resolveCanonicalSourceKey(
+  connectionId: string,
+  sourceName: string,
+  options: { fresh?: boolean; sourceMap?: SourceMapState } = {}
+): Promise<CanonicalSourceKey | null> {
+  const state = options.sourceMap ?? await loadSourceMap(options);
+  const normalizedConnection = normalizeRef(connectionId);
+  const normalizedSource = normalizeRef(sourceName);
+  if (!normalizedConnection || !normalizedSource) return null;
+  const entry = state.forward.get(forwardSourceKey(normalizedConnection, normalizedSource));
+  if (!entry) return null;
+  return {
+    connectionId: entry.connectionId,
+    schema: entry.schema,
+    sourceName: entry.sourceName,
+    physicalTable: entry.physicalTable
+  };
+}
+
+/**
+ * P0-1 —— 与 ACL 裁决**同一份**已提交 sourceMap。
+ *
+ * 口径绑定的请求侧键采集必须与 ACL 用同一份，否则两侧会对「哪个 source 是
+ * 哪个」产生分歧（SC-07 的双连接同名 logical source）。
+ */
+export async function committedSourceMap(): Promise<SourceMapState> {
+  const runtime = await ensurePolicyRuntime();
+  return runtime.sourceMap;
+}
+
+/**
+ * P0-1（Spec D7②）— 请求侧的规范源键采集。
+ *
+ * 采集集与 ACL 对 query／explain 的键集**同源**（复用 `extractTables`），
+ * 禁止在口径绑定模块里另写一套前缀拼接。解析不到的引用（既不是已知
+ * sourceName 也不是已知物理表）进 `unresolved`，由调用方按 fail-closed 处理。
+ */
+/**
+ * P0-3 §4.5：从 filters／order_by 等字段采集未知 dotted 字面，供门闩 unresolved deny。
+ * 与 ACL extractTables 分离，避免改写 table_forbidden 裁决。
+ */
+function collectUnresolvedDottedRefs(
+  toolName: string,
+  args: unknown,
+  state: SourceMapState
+): string[] {
+  if (toolName !== "lucy_query" && toolName !== "lucy_explain_query" && toolName !== "sl_query") {
+    return [];
+  }
+  const a = args && typeof args === "object" && !Array.isArray(args)
+    ? args as Record<string, unknown>
+    : undefined;
+  if (!a) return [];
+  const connectionId = firstString(a, ["connectionId", "connection_id", "connection", "database"]);
+  const unresolved = new Set<string>();
+  const visit = (value: unknown): void => {
+    if (typeof value === "string") {
+      const entries = sourceMapEntries(state);
+      let matchedKnownRef = false;
+      for (const { source, physical, connectionId: entryConnection } of entries) {
+        if (connectionId && entryConnection !== normalizeRef(connectionId)) continue;
+        if (hasDelimitedRef(value, physical) || hasDelimitedRef(value, source)) {
+          matchedKnownRef = true;
+          break;
+        }
+      }
+      if (matchedKnownRef) return;
+      const dottedRef = normalizeRef(value).match(/[A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)+/);
+      if (dottedRef?.[0]) unresolved.add(dottedRef[0]);
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    if (value && typeof value === "object") {
+      for (const item of Object.values(value as Record<string, unknown>)) visit(item);
+    }
+  };
+  for (const key of ["filters", "where", "segments", "joins", "join", "orderBy", "order_by", "sort", "sorts", "having", "groupBy", "group_by"]) {
+    visit(a[key]);
+  }
+  return [...unresolved];
+}
+
+export async function collectCanonicalSourceKeys(
+  toolName: string,
+  args: unknown,
+  options: { fresh?: boolean } = {}
+): Promise<{ keys: CanonicalSourceKey[]; unresolved: string[] }> {
+  const state = options.fresh ? await loadSourceMap(options) : await committedSourceMap();
+  const tables = await extractTables(toolName, args, { sourceMap: state });
+  const argsRecord = args && typeof args === "object" && !Array.isArray(args)
+    ? args as Record<string, unknown>
+    : undefined;
+  const requestConnectionId = firstString(argsRecord ?? {}, ["connectionId", "connection_id", "connection", "database"]);
+  const keys: CanonicalSourceKey[] = [];
+  const unresolved: string[] = [];
+  const seen = new Set<string>();
+  for (const table of tables) {
+    const entry = lookupReverse(table, state, requestConnectionId);
+    if (!entry) {
+      if (!unresolved.includes(table)) unresolved.push(table);
+      continue;
+    }
+    const key: CanonicalSourceKey = {
+      connectionId: entry.connectionId,
+      schema: entry.schema,
+      sourceName: entry.sourceName,
+      physicalTable: entry.physicalTable
+    };
+    const id = canonicalSourceKeyDisplay(key);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    keys.push(key);
+  }
+  for (const ref of collectUnresolvedDottedRefs(toolName, args, state)) {
+    if (!unresolved.includes(ref)) unresolved.push(ref);
+  }
+  return { keys, unresolved };
+}
+
+/** P0-1 — 两个规范源键是否指向同一个 (connection, source, physical table)。 */
+export function canonicalSourceKeyEquals(a: CanonicalSourceKey, b: CanonicalSourceKey): boolean {
+  return canonicalSourceKeyDisplay(a) === canonicalSourceKeyDisplay(b);
+}
+
+/**
+ * P0-1 —— 当前 sourceMap 版本。绑定资产的 `boundKey` 由 sourceMap 解析，sourceMap
+ * 漂移必须让已提交注册表失效（O1 §4.1⑤「解析依赖的完整核验」）。
+ */
+export async function currentSourceMapVersion(options: { fresh?: boolean; sourceMap?: SourceMapState } = {}): Promise<string> {
+  const state = options.sourceMap ?? await loadSourceMap(options);
+  return state.version;
+}
+
+/** P0-1 —— sourceMap 编译错误。存在即不可用（fail-closed）。 */
+export async function currentSourceMapCompileError(options: { fresh?: boolean; sourceMap?: SourceMapState } = {}): Promise<string | undefined> {
+  const state = options.sourceMap ?? await loadSourceMap(options);
+  return state.compileError;
+}
+
+/**
+ * P0-1 —— 读取 sourceMap 快照。调用方可在一次装载里复用同一份，避免重复重建。
+ */
+export async function loadSourceMapSnapshot(options: { fresh?: boolean } = {}): Promise<SourceMapState> {
+  return loadSourceMap(options);
+}
+
+export interface LucyCatalogOptions {
+  /**
+   * P1-75 §2.2 — 默认 true。握手只消费四元组与示例，不消费描述／grain，
+   * 传 false 则不扫描 Manifest／Overlay（描述全部 missing）。独立 `lucy_catalog` 不传此项。
+   */
+  enrichDescriptions?: boolean;
+  /** P1-75 §2.2 — 取消信号：在各异步阶段之间检查，已取消则抛出 AbortError。 */
+  signal?: AbortSignal;
+  /** P1-75 增量 B — 只加观测：调用方传入则写入各阶段毫秒数（permission_ms／enrich_ms／examples_ms）。 */
+  timings?: Record<string, number>;
+}
+
+export async function lucyCatalog(identity: Identity, options: LucyCatalogOptions = {}): Promise<{
   connections: string[];
-  sources: Array<{ connectionId: string; schema: string; sourceName: string; table: string }>;
+  sources: CatalogSourceEntry[];
   examples: string[];
 }> {
+  const signal = options.signal;
+  const timings = options.timings;
+  let stageStart = performance.now();
+  const markStage = (name: string): void => {
+    const now = performance.now();
+    if (timings) timings[name] = Math.round((now - stageStart) * 10) / 10;
+    stageStart = now;
+  };
   // Spec 98 §8.2 / §8.5 — committed policy only; under global degrade Meta catalog is empty.
   const runtime = await ensurePolicyRuntime();
+  signal?.throwIfAborted();
   if (runtime.degradedGlobal) {
     return { connections: [], sources: [], examples: [] };
   }
   const resolved = await effectivePermissions(identity);
+  signal?.throwIfAborted();
   if (!resolved.ok) {
     return { connections: [], sources: [], examples: [] };
   }
@@ -2001,10 +2213,12 @@ export async function lucyCatalog(identity: Identity): Promise<{
   const opsEvidenceHidden = resolved.permissions.connections.some((id) => isOpsEvidenceConnection(id))
     ? (await opsEvidenceReadinessDenial()) !== undefined
     : false;
+  signal?.throwIfAborted();
   const connections = opsEvidenceHidden
     ? resolved.permissions.connections.filter((id) => !isOpsEvidenceConnection(id))
     : resolved.permissions.connections;
-  const sources = resolved.permissions.sources
+  // D0：先得到与现行相同的最终可返回集合，再增补描述／grain（D10）。
+  const finalSources = resolved.permissions.sources
     .filter((source) => !(opsEvidenceHidden && isOpsEvidenceConnection(source.connectionId)))
     .map((source) => ({
       connectionId: source.connectionId,
@@ -2013,24 +2227,59 @@ export async function lucyCatalog(identity: Identity): Promise<{
       table: source.table
     }))
     .sort((a, b) => a.sourceName.localeCompare(b.sourceName));
+
+  markStage("permission_ms");
+  let sources: CatalogSourceEntry[] = finalSources.map((source) => ({
+    ...source,
+    description: null,
+    descriptionState: "missing" as const
+  }));
+  if (options.enrichDescriptions !== false) {
+    try {
+      const paths = await loadContentPaths();
+      // D4a：索引扫盘范围 ⊆ 最终可见连接。legacy allow.tables 可能 connections=[]
+      // 但仍有 sources——此时以 finalSources 的 connectionId 为准，避免空 scope 漏装描述。
+      const connectionScope = uniqueSorted([
+        ...connections,
+        ...finalSources.map((source) => source.connectionId)
+      ]);
+      sources = await enrichCatalogSources(finalSources, {
+        semanticLayerRoot: paths.semanticLayer,
+        connectionScope,
+        timings
+      });
+    } catch {
+      // 整根装载失败：目录本体仍返回，描述全部 missing（SC-09）
+    }
+  }
+
+  markStage("enrich_ms");
   const hasPocAdRevenue = sources.some((source) => source.connectionId === "poc-mysql-aliyun" && source.sourceName === "poc_ad_revenue_daily");
   const hasKxSources = sources.some((source) => source.sourceName.startsWith("kx_") || source.table.includes(".kx_"));
 
-  return {
-    connections,
-    sources,
-    examples: hasPocAdRevenue
-      ? [
-          "For 本年各月广告收入, call sl_query with exactly this shape: {\"connectionId\":\"poc-mysql-aliyun\",\"measures\":[\"poc_ad_revenue_daily.ad_revenue\"],\"dimensions\":[{\"field\":\"poc_ad_revenue_daily.dt\",\"granularity\":\"month\"}],\"segments\":[\"poc_ad_revenue_daily.domestic\"],\"order_by\":[{\"field\":\"poc_ad_revenue_daily.dt\",\"direction\":\"asc\"}],\"limit\":20}.",
-          "Do not rewrite semantic keys to short names such as ad_revenue/dt/domestic; ACL requires explicit source-qualified keys. Do not wrap semantic measures as objects; object measures are only for ad hoc expr/name aggregates.",
-          "POC ad revenue data currently covers 2026-01-01 through 2026-05-31."
-        ]
-      : hasKxSources
+  const rawExamples = hasPocAdRevenue
+    ? [
+        "For 本年各月广告收入, call sl_query with exactly this shape: {\"connectionId\":\"poc-mysql-aliyun\",\"measures\":[\"poc_ad_revenue_daily.ad_revenue\"],\"dimensions\":[{\"field\":\"poc_ad_revenue_daily.dt\",\"granularity\":\"month\"}],\"segments\":[\"poc_ad_revenue_daily.domestic\"],\"order_by\":[{\"field\":\"poc_ad_revenue_daily.dt\",\"direction\":\"asc\"}],\"limit\":20}.",
+        "Do not rewrite semantic keys to short names such as ad_revenue/dt/domestic; ACL requires explicit source-qualified keys. Do not wrap semantic measures as objects; object measures are only for ad hoc expr/name aggregates.",
+        "POC ad revenue data currently covers 2026-01-01 through 2026-05-31."
+      ]
+    : hasKxSources
       ? [
           "Use connectionId=mysql-aliyun with kx_fact_financial_amount joined to kx_dim_company and kx_dim_financial_item.",
           "For company operation questions, filter company_name in kx_dim_company and period/year in kx_fact_financial_amount or kx_vw_* detail views."
         ]
-      : []
+      : [];
+
+  // REQ-030-012 / SC-21 — examples／initialize 同源裁剪未暴露列名。
+  const { rewriteCatalogExamplesForExposure } = await import("./field-exposure-discovery.js");
+  const examples = await rewriteCatalogExamplesForExposure(rawExamples);
+  signal?.throwIfAborted();
+  markStage("examples_ms");
+
+  return {
+    connections,
+    sources,
+    examples
   };
 }
 
@@ -2041,15 +2290,19 @@ export async function kxCatalog(identity: Identity): Promise<{
 }> {
   const catalog = await lucyCatalog(identity);
   const hasKxSources = catalog.sources.some((source) => source.sourceName.startsWith("kx_") || source.table.includes(".kx_"));
+  // REQ-030-012 / SC-21 — 与 lucyCatalog 同源：examples 经 rewriteCatalogExamplesForExposure。
+  const rawExamples = hasKxSources
+    ? [
+        "Use connectionId=mysql-aliyun with kx_fact_financial_amount joined to kx_dim_company and kx_dim_financial_item.",
+        "For company operation questions, filter company_name in kx_dim_company and period/year in kx_fact_financial_amount or kx_vw_* detail views."
+      ]
+    : [];
+  const { rewriteCatalogExamplesForExposure } = await import("./field-exposure-discovery.js");
+  const examples = await rewriteCatalogExamplesForExposure(rawExamples);
   return {
     connections: catalog.connections,
     sources: catalog.sources,
-    examples: hasKxSources
-      ? [
-          "Use connectionId=mysql-aliyun with kx_fact_financial_amount joined to kx_dim_company and kx_dim_financial_item.",
-          "For company operation questions, filter company_name in kx_dim_company and period/year in kx_fact_financial_amount or kx_vw_* detail views."
-        ]
-      : []
+    examples
   };
 }
 
@@ -2357,6 +2610,39 @@ export async function compileRoleForAdmin(
     sources: compiled.role.sources,
     dataPlaneTools: compiled.role.dataPlaneTools,
     metaTools: compiled.role.metaTools
+  };
+}
+
+/** P1-59: fresh, target-scoped compiler inputs, never a display-cache version.
+ * Use the compiler's own template expansion and selector predicate. In particular,
+ * a new matching source or enabled membership changes this closure, whereas an
+ * unrelated source outside an explicit selector does not invalidate a preview.
+ */
+export async function roleCompileInputClosureForAdmin(roleId: string, context: AdminPermissionContext): Promise<unknown> {
+  const role = context.config.roles?.[roleId];
+  const model = normalizePermissionModelVersion(role);
+  const expansion = expandTemplateSelectorsForCompile(
+    roleId, role?.allow?.tableSelectors ?? [], rowPolicyTemplateCatalogOf(context.config),
+    model.ok ? model.version : 2
+  );
+  const declared = configList(role?.allow?.connections, [], { normalize: true });
+  const catalogBound = role?.allow?.source_scope === "catalog_bound";
+  const connections = catalogBound
+    ? resolveCatalogConnections(roleId, declared, context.enabledTables)
+    : { ok: true as const, connections: declared };
+  const entries = [...context.sourceMap.forward.values()].filter((entry) =>
+    catalogBound
+      ? connections.ok && connections.connections.includes(entry.connectionId)
+      : expansion.ok && expansion.selectors.some((selector) => selectorMatches(selector, entry))
+  ).map((entry) => ({ ...entry, enabled: isInEnabledTableRange(entry, context.enabledTables) }))
+    .sort((a, b) => canonicalSourceKeyDisplay({ ...a, physicalTable: a.physicalTable }).localeCompare(
+      canonicalSourceKeyDisplay({ ...b, physicalTable: b.physicalTable })
+    ));
+  return {
+    classification: context.toolClassificationVersion,
+    sourceCompileError: context.sourceMap.compileError ?? null,
+    connections, entries,
+    compiled: await compileRoleForAdmin(roleId, context)
   };
 }
 
@@ -3022,6 +3308,37 @@ export async function resolveAdmissionSubject(
   return { ok: true, subject: { roleIds: [], legacyDirectAllow: true } };
 }
 
+/** REQ-030-012 — SourceMap → field-exposure lookup (same committed map as ACL). */
+function sourceMapLookup(state: SourceMapState | undefined): SourceMapLookup {
+  if (!state) return {};
+  return {
+    resolveSource(sourceName: string, connectionId?: string) {
+      const normalized = normalizeRef(sourceName);
+      if (!normalized) return null;
+      if (connectionId) {
+        const scoped = state.forward.get(forwardSourceKey(connectionId, normalized));
+        if (scoped) {
+          return {
+            connectionId: scoped.connectionId,
+            schema: scoped.schema,
+            sourceName: scoped.sourceName
+          };
+        }
+      }
+      const matches = [...state.forward.values()].filter(
+        (entry) => normalizeRef(entry.sourceName) === normalized
+      );
+      if (matches.length !== 1) return null;
+      const entry = matches[0]!;
+      return {
+        connectionId: entry.connectionId,
+        schema: entry.schema,
+        sourceName: entry.sourceName
+      };
+    }
+  };
+}
+
 /**
  * Spec 98 §4.6 / Spec 99 §5 — the single data gate. Every upstream data call must pass through here.
  * Hot path prefers the committed EffectivePolicy snapshot (Spec 98 §8).
@@ -3036,6 +3353,12 @@ export async function authorizeAndRewrite(
   // policy recompile would keep serving rows under an unverified policy.
   if (isAccessRecoveryRequired() && isDegradedBlockedTool(toolName)) {
     return { allowed: false, reason: "policy_degraded_deny" };
+  }
+  // REQ-030-012 — pin ServingGeneration + AdmissionMode before any upstream-bound path.
+  const exposureSnapshot = await loadServingGeneration();
+  const admission = admitToolsCallEntry(toolName, exposureSnapshot);
+  if (!admission.allow) {
+    return { allowed: false, reason: admission.reason };
   }
   const runtime = await ensurePolicyRuntime();
   const config = runtime.config;
@@ -3114,6 +3437,23 @@ export async function authorizeAndRewrite(
     return { allowed: false, reason: "sensitive_metadata_forbidden:kx" };
   }
 
+  // REQ-030-012 / D26 路径 A：sensitiveMetadata 授权通过后、转发前（dictionary_search／discover_data）。
+  // 禁止只嵌在下方 tableTouching 分支——本路径根本不会进入该分支。
+  if (
+    policy.sensitiveMetadataTools.has(toolName) &&
+    SENSITIVE_META_PASSTHROUGH_TOOLS.has(toolName)
+  ) {
+    const pt = afterAuthFieldExposureHook(
+      toolName,
+      args,
+      exposureSnapshot,
+      sourceMapLookup(sourceMap ?? runtime.sourceMap)
+    );
+    if (!pt.allow) {
+      return { allowed: false, reason: pt.reason };
+    }
+  }
+
   // 3. Table-level check (only for tools that touch tables)
   if (policy.tableTouchingTools.has(toolName)) {
     const argsRecord = args as Record<string, unknown> | undefined;
@@ -3160,6 +3500,55 @@ export async function authorizeAndRewrite(
         return { allowed: false, reason: `explicit_table_required:${table}` };
       }
     }
+    // REQ-030-012 / D20／D24 — 对象授权已全部通过后：查数面字段暴露（含 tables:["*"]）。
+    // 通配表权限仍须做暴露检查；越权路径已在上方 return 原 ACL 码。
+    // 插入点：行策略 protectedSources 提前 return 之前；禁止全局化 validateProtectedLucyQueryArgs。
+    if (toolName === "lucy_query" || toolName === "lucy_explain_query") {
+      const lookup = sourceMapLookup(runtime.sourceMap);
+      const exposureVerdict = validateQueryFieldsAgainstExposure(args, lookup, exposureSnapshot);
+      if (exposureVerdict.denyReason != null) {
+        return { allowed: false, reason: exposureVerdict.denyReason };
+      }
+    }
+
+    // REQ-030-012 / §3.2 — lucy_read_source 上行前台账可用性（零上游可断言）。
+    if (toolName === "lucy_read_source") {
+      const { admitSourceForDiscovery, snapshotHasAnyTrimmed } = await import("./field-exposure.js");
+      const lookup = sourceMapLookup(runtime.sourceMap);
+      const argsRecord = args && typeof args === "object" && !Array.isArray(args)
+        ? (args as Record<string, unknown>)
+        : {};
+      const connectionId = firstString(argsRecord, ["connectionId", "connection_id", "connection", "database"]);
+      const sourceName = firstString(argsRecord, ["sourceName", "source_name", "source", "table"]);
+      if (connectionId && sourceName) {
+        const resolved = lookup.resolveSource?.(sourceName, connectionId);
+        if (resolved) {
+          const admitted = admitSourceForDiscovery(resolved, exposureSnapshot, toolName);
+          if (!admitted.allow) {
+            return { allowed: false, reason: admitted.reason };
+          }
+        } else if (
+          exposureSnapshot.expectedSetLoad.state === "unavailable" ||
+          snapshotHasAnyTrimmed(exposureSnapshot)
+        ) {
+          return { allowed: false, reason: "field_exposure_unavailable" };
+        }
+      }
+    }
+
+    // REQ-030-012 / D26 路径 B：tableTouching 授权通过后（entity_details／sl_validate）。
+    if (TABLE_TOUCHING_PASSTHROUGH_TOOLS.has(toolName)) {
+      const pt = afterAuthFieldExposureHook(
+        toolName,
+        args,
+        exposureSnapshot,
+        sourceMapLookup(runtime.sourceMap)
+      );
+      if (!pt.allow) {
+        return { allowed: false, reason: pt.reason };
+      }
+    }
+
     if (!allowedTables.includes("*") && sourceMap) {
       const requestedConnection = argsRecord && typeof argsRecord === "object" && !Array.isArray(argsRecord)
         ? firstString(argsRecord, ["connectionId", "connection_id", "connection", "database"])
@@ -3195,12 +3584,9 @@ export async function authorizeAndRewrite(
           return { allowed: false, reason: "row_policy_requires_wrapped_tool" };
         }
         if (toolName === "lucy_query") {
-          // BY-02…05 / BY-12…16 — shape fail-closed before proven gate.
+          // BY-02…05 / BY-12…16 — shape fail-closed before mandatory predicate injection.
           const shapeDeny = validateProtectedLucyQueryArgs(args);
           if (shapeDeny) return { allowed: false, reason: shapeDeny };
-          if (!isUpstreamForcedPredicateProven()) {
-            return { allowed: false, reason: "row_policy_upstream_unproven" };
-          }
           if (protectedSources.length > 1) {
             return { allowed: false, reason: "row_policy_query_shape_forbidden" };
           }

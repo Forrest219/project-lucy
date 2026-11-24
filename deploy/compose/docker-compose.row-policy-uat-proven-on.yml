@@ -1,0 +1,8 @@
+# P1-72: legacy-env compatibility fixture only. The variable is ignored; row policies always enforce.
+# UAT-SUITE-ROW-POLICY Gate-On.
+# Use the same compose project as the running demo container.
+# Do not pass -p lucy-ac-p1-by01 (that project replaces the data volume).
+services:
+  lucy:
+    environment:
+      LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN: "true"

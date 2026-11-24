@@ -215,8 +215,7 @@ describe("ROW25 execution descriptors (W2-ACCESS, Plan §5.3)", () => {
       ["ROW25-V05", "row_policy_field_unknown"],
       ["ROW25-V06", "row_policy_field_unresolved:measure"],
       ["ROW25-V07", "row_policy_op_forbidden"],
-      ["ROW25-V17", "row_policy_requires_wrapped_tool"],
-      ["ROW25-V18", "row_policy_upstream_unproven"]
+      ["ROW25-V17", "row_policy_requires_wrapped_tool"]
     ]);
     for (const [id, code] of expected) {
       assert.equal(accessCase(id).refusal.reasonCode, code, `${id} reason code`);

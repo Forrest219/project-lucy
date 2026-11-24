@@ -1,0 +1,241 @@
+{
+  "session": "5fe9053b-0a30-4f25-9cdb-c0dec19daa0c",
+  "enabledTools": [
+    "mcp__local_uat__read_sanitized_uat_status"
+  ],
+  "reviewedSnapshot": {
+    "phase": "complete",
+    "completedStages": [
+      {
+        "stage": "a0",
+        "toolRows": 0,
+        "all": 0,
+        "complete": true
+      },
+      {
+        "stage": "a1500",
+        "toolRows": 1500,
+        "all": 1500,
+        "complete": true
+      },
+      {
+        "stage": "a5000",
+        "toolRows": 5000,
+        "all": 5000,
+        "complete": true
+      },
+      {
+        "stage": "a10000",
+        "toolRows": 10000,
+        "all": 10000,
+        "complete": true
+      }
+    ],
+    "verdict": "PASS",
+    "findings": 0,
+    "metrics": [
+      {
+        "stage": "a0",
+        "rawRows": 0,
+        "auditedSuccessful": 0,
+        "inventory": 202,
+        "pageMs": [
+          247.3,
+          329,
+          97.7,
+          79.6,
+          79.9,
+          86.4,
+          70.7
+        ],
+        "apiMs": [
+          [
+            30.9
+          ],
+          [
+            15
+          ],
+          [
+            41.9
+          ],
+          [
+            62.1
+          ],
+          [
+            30.3
+          ],
+          [
+            21.2
+          ],
+          [
+            15.3
+          ]
+        ],
+        "longestTaskMs": [
+          61,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "foreground": true,
+        "complete": true
+      },
+      {
+        "stage": "a1500",
+        "rawRows": 1500,
+        "auditedSuccessful": 1500,
+        "inventory": 202,
+        "pageMs": [
+          158.6,
+          330,
+          97.5,
+          63.9,
+          81.9,
+          101.3,
+          68.1
+        ],
+        "apiMs": [
+          [
+            37.3
+          ],
+          [
+            30.1
+          ],
+          [
+            24.2
+          ],
+          [
+            27.2
+          ],
+          [
+            34.3
+          ],
+          [
+            17.5
+          ],
+          [
+            17
+          ]
+        ],
+        "longestTaskMs": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "foreground": true,
+        "complete": true
+      },
+      {
+        "stage": "a5000",
+        "rawRows": 5000,
+        "auditedSuccessful": 5000,
+        "inventory": 202,
+        "pageMs": [
+          165.2,
+          327.6,
+          80.2,
+          64.3,
+          97.6,
+          116.1,
+          84.6
+        ],
+        "apiMs": [
+          [
+            44.1
+          ],
+          [
+            34.8
+          ],
+          [
+            79.8
+          ],
+          [
+            29.2
+          ],
+          [
+            60
+          ],
+          [
+            32.8
+          ],
+          [
+            30.9
+          ]
+        ],
+        "longestTaskMs": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "foreground": true,
+        "complete": true
+      },
+      {
+        "stage": "a10000",
+        "rawRows": 10000,
+        "auditedSuccessful": 10000,
+        "inventory": 202,
+        "pageMs": [
+          204.5,
+          355.8,
+          96.7,
+          64.1,
+          81.2,
+          117.5,
+          84.1
+        ],
+        "apiMs": [
+          [
+            65
+          ],
+          [
+            37.3
+          ],
+          [
+            80.8
+          ],
+          [
+            42.7
+          ],
+          [
+            56.5
+          ],
+          [
+            37.9
+          ],
+          [
+            43
+          ]
+        ],
+        "longestTaskMs": [
+          0,
+          55,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "foreground": true,
+        "complete": true
+      }
+    ],
+    "cleanup": {
+      "revoked": 200,
+      "inventoryRestored": true,
+      "resourcesRemaining": 0,
+      "privateRemoved": true
+    }
+  }
+}

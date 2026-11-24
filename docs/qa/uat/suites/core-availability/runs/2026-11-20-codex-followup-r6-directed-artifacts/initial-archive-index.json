@@ -1,0 +1,31 @@
+{
+  "at": "2026-11-20T12:31:58.163577+00:00",
+  "files": {
+    "core10-25.tar.gz": {
+      "sha256": "b6dc3188bc4f2972a1fe7cbc7c74440a1f5f7de55373cf257268b6e2bed4dfe0",
+      "bytes": 54638,
+      "source": "/Users/zhangxingchen/Projects/project-lucy/inbox/core-availability-followup/20261120-execution/06-reload/r6-core10-25"
+    },
+    "direct-cli-v2-fail.tar.gz": {
+      "sha256": "5842748658d764451ceb14a052ba70b7e29c6ec81132adf98c3ebaad7d52a66a",
+      "bytes": 131929,
+      "source": "/Users/zhangxingchen/Projects/project-lucy/inbox/core-availability-followup/20261120-execution/06-reload/r6-direct-cli-v2"
+    },
+    "direct-cli-v3-fail.tar.gz": {
+      "sha256": "790da1b8c9d64f1ec6ced07743e0a5555a1cf8f6d7cc750f7dda21da3696b2aa",
+      "bytes": 142680,
+      "source": "/Users/zhangxingchen/Projects/project-lucy/inbox/core-availability-followup/20261120-execution/06-reload/r6-direct-cli-v3"
+    },
+    "direct-cli-v4.tar.gz": {
+      "sha256": "380e0cfb76420f08941b1eb6d0653236d37142bf5e1c6e2b7deec379461a377a",
+      "bytes": 202923,
+      "source": "/Users/zhangxingchen/Projects/project-lucy/inbox/core-availability-followup/20261120-execution/06-reload/r6-direct-cli-v4"
+    },
+    "p170-normal-revision2-fail.tar.gz": {
+      "sha256": "3583f35ed746e718da4312fd33a4567ec6e68f67b520722edadb74dabd0053a7",
+      "bytes": 7356619,
+      "source": "/Users/zhangxingchen/Projects/project-lucy/inbox/core-availability-followup/20261120-execution/10-semantic-read-delta/docker-driver/r6-prepared/normal"
+    }
+  },
+  "scope": "Preserve actual selected results and original failures; final P170 cases pending"
+}

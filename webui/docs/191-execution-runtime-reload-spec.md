@@ -4,15 +4,18 @@
 |---|---|
 | Document name | 执行层重载 Spec（Execution Runtime Reload） |
 | Document type | Product / Architecture Spec |
-| Version | **v0.2（按交叉审阅意见修订，待复审）** |
+| Version | **v0.3（写路径自动尝试重载）** |
 | Written date | 2026-10-26 |
-| Revised | 2026-10-27（依 `docs/reviews/2026-10-26-spec-191-execution-runtime-reload-plan-review.md` 8 项批准条件修订） |
+| Revised | 2026-10-27（依 `docs/reviews/2026-10-26-spec-191-execution-runtime-reload-plan-review.md` 8 项批准条件修订）；**2026-11-10**（写路径在 `ktx.yaml` 写入后自动尝试重载；成功不再标 pending；失败仍留待确认重试）；**2026-11-13**（AC-12 `--container` 本机验收通过）；**2026-11-20**（P1-63／REQ-030-084：整实例 TERM／INT **先**通知 Lucy DRAINING 有界排空，**再**走既有 supervisor／KTX 清理；§4.2.3／§4.4 具名顺序修订；执行层单独 reload 不触发本协议） |
 | Scope | WebUI 写 ktx.yaml 后的执行层生效、KTX daemon 进程编排、MCP Runtime 状态面与 UI 提示 |
 | 前置 | `docs/specs/lucy-mcp-execution-runtime-ack-debug-spec.md`（分层模型与 stale 分类） |
 | 排查记录 | `inbox/2026-10-26-ktx-config-restart-only-investigation.md`（过程性材料，未入版本库） |
 | 实施计划 | `webui/docs/plans/wo-20261027-ktx-execution-runtime-reload.md` |
-| 决策 | 只重载 KTX daemon；**用户点确认**触发；失败**不回滚** ktx.yaml；不推进上游 KTX reload 能力 |
-| 实施状态 | **已实现，未验收**（2026-10-27）。实施记录见 `webui/docs/plans/wo-20261027-ktx-execution-runtime-reload.md` §8；容器生命周期验收（AC-12）待镜像重建后执行 |
+| 决策 | 只重载 KTX daemon；**写路径自动尝试重载**（失败或跳过时仍可由用户点确认重试）；失败**不回滚** ktx.yaml；不推进上游 KTX reload 能力 |
+| 阶段 | S5 |
+| 状态 | S5｜功能合同已收口（2026-11-22，漏斗镜像·文档收口；总账 P1-15／REQ-030-036）。create＋C01＋live E2E／UAT-01；Edit 成功面三段事实 CLOSED；测试台 `UAT-SUITE-CONN-RELOAD`＝PASS。收口范围不含可选 UAT-CONN-RELOAD-02。不入核心分母。≠ 可上线 |
+| 收口范围 | 本条出口＝create／Edit 成功面诚实 ack＋supervisor 写路径重载＋C01＋live E2E／UAT-01；**不含**可选 UAT-CONN-RELOAD-02（失败可观测） |
+| 实施状态 | S5｜**功能合同已收口（2026-11-22，漏斗镜像）**。已实现，本机验收通过（2026-10-27 实现；2026-11-10 写路径自动重载；**2026-11-13** VERIFY-191-C01 **25/25 PASSED**；B 轨关闭 E2E-CON-07／E2E-MCP-02／UAT-CONN-RELOAD-01）。见 [`docs/reviews/2026-11-13-connection-reload-middev-closure.md`](../../docs/reviews/2026-11-13-connection-reload-middev-closure.md)。实施记录见 `webui/docs/plans/wo-20261027-ktx-execution-runtime-reload.md` §8／§8.6 |
 
 ## v0.2 修订摘要
 
@@ -56,7 +59,7 @@ KTX 的 `ktx mcp start` 常驻进程在**启动时**把 `ktx.yaml` 解析为内�
 
 ### 2.1 目标
 
-- G1：用户点确认后，**只重载 KTX daemon**，Pod / WebUI / Proxy 进程存活。
+- G1：写路径自动尝试或用户点确认后，**只重载 KTX daemon**，Pod / WebUI / Proxy 进程存活。
 - G2（v0.2 重写）：重载**过程**与**配置生效**是两个独立事实，分别报告：
   - G2a：daemon 完成重启（进程级事实）。
   - G2b：目标配置通过**连接级证据**验证已加载（配置级事实）。
@@ -73,7 +76,7 @@ KTX 的 `ktx mcp start` 常驻进程在**启动时**把 `ktx.yaml` 解析为内�
 ### 2.2 非目标
 
 - NG1：不修改 KTX 源码（AGENTS.md 上游边界）。
-- NG2：不实现自动触发（首版由用户点确认）。
+- NG2（v0.3 修订）：不把自动重载做成静默后台任务或定时轮询；写 `ktx.yaml` 的同步写路径**可以**自动尝试一次重载，失败或跳过时由用户点确认重试。
 - NG3：不实现 KTX 会话内热重载。
 - NG4：不支持多副本 / 双实例并存。
 - NG5：不推进上游 KTX reload 能力。
@@ -143,8 +146,8 @@ entrypoint (PID 1, bash)
 |---|---|---|
 | 1 | 父 shell 等待谁 | 父 shell 等待 `SUPERVISOR_PID` 与 `LUCY_PID`；**不再**等待 `KTX_PID` |
 | 2 | KTX PID 归属 | KTX 是 supervisor 的子进程。supervisor 负责其生命周期；**当前 KTX PID 写入 `.ktx-ui/ktx.pid`** 供诊断，不作为父子关系依据 |
-| 3 | 信号转发顺序 | 收到 TERM/INT 时，父 shell **先**向 supervisor 发 TERM，supervisor **再**向 KTX 子进程发 TERM 并等待其退出；父 shell 等待两者都结束后再退出 |
-| 4 | supervisor 死但 KTX 活 | supervisor 退出前必须清理其 KTX 子进程；若 supervisor 被 SIGKILL（不可捕获），父 shell 的退出清理以**进程组**兜底（见 §4.4） |
+| 3 | 信号转发顺序 | 收到**整实例** TERM/INT 时，父 shell **先**经本实例内部确认通道通知 Lucy 进入 `DRAINING` 并等待有界排空（默认 ≤20s；此间**不得**提前停 KTX，以便已受理依赖查询可完成）；排空归零或截止并记录剩余状态后，再向 supervisor 发 TERM，supervisor **再**向 KTX 子进程发 TERM 并等待其退出；随后孤儿清理与 Lucy 收尾。重复 TERM/INT/EXIT 并入同一关停过程。**执行层单独 reload 不得触发本整实例 drain。**（P1-63／REQ-030-084；取代「先停 supervisor／KTX、后停 Lucy」的旧整实例顺序） |
+| 4 | supervisor 死但 KTX 活 | supervisor 退出前必须清理其 KTX 子进程；若 supervisor 被 SIGKILL（不可捕获），父 shell 的退出清理以**进程组**兜底（见 §4.4）。整实例排空阶段尚未进入依赖清理前，不得借本条提前杀 KTX |
 | 5 | 首次启动失败 | KTX 首次拉起失败**不阻止** WebUI 启动（保持现状语义：现状 `wait_for_port` 失败会 `exit 1`）。**决策：保持现状**——首次启动失败即容器启动失败，避免带病运行。实现须保持这一点 |
 | 6 | KTX 自发退出 | 触发 supervisor 的**有限退避重启**；超过上限（§4.3）后 supervisor 退出，父 shell 据此让容器退出 |
 | 7 | 退避上限 | 连续失败 N 次（默认 5）后放弃；退避间隔 1s→2s→4s→8s→16s（上限 16s） |
@@ -185,12 +188,17 @@ entrypoint (PID 1, bash)
 
 ### 4.4 优雅退出与遗留进程
 
-- 父 shell 的 `trap` 链（`docker-entrypoint.sh:435-436`）扩展为：TERM/INT ⇒
-  `kill -TERM $SUPERVISOR_PID` ⇒ 等 supervisor 清理 KTX ⇒ `kill -TERM $LUCY_PID` ⇒ 退出。
+- 父 shell 的整实例 `trap` 链（`docker-entrypoint.sh` 的 `shutdown`）为：TERM/INT/EXIT ⇒
+  **先**通知 Lucy 排空（内部信号／`.ktx-ui` 确认文件，无凭据、无公开 HTTP 关停端点）⇒
+  等待 Lucy `DRAINING` 确认与有界排空（默认 ≤20s；取消通知与剩余状态记录含在此预算内）⇒
+  `kill -TERM $SUPERVISOR_PID` ⇒ 等 supervisor 清理 KTX（默认 10s）⇒
+  孤儿 KTX 清理（≤5s）⇒ Lucy 关闭与其余收尾（剩余预算，合计整实例退出 ≤40s）⇒ 退出。
+  外部 stop／grace 须 ≥45s 才承诺完整预算（标准 Docker demo 显式 `stop_grace_period: 45s`）。
+- **不再**把「先停 supervisor／KTX、再停 Lucy」当作现行整实例顺序；该旧顺序仅作历史对照，现值以本段与 P1-63 Spec 为准。
 - **进程组兜底**：entrypoint 以 `setsid`（若可用）启动 supervisor，使 supervisor + KTX
-  处于独立进程组；父 shell 退出前对该进程组发 TERM，避免 supervisor 被 SIGKILL 时遗留 KTX。
+  处于独立进程组；父 shell 在**依赖清理阶段**对该进程组发 TERM，避免 supervisor 被 SIGKILL 时遗留 KTX。
   `setsid` 不可用时降级为「父 shell 显式 kill KTX_PID（从 pid 文件读）」。
-- **验收必须包含**（审阅明确要求）：真实 SIGTERM、子进程退出、端口未就绪、**无遗留进程**。
+- **验收必须包含**（审阅明确要求）：真实 SIGTERM、子进程退出、端口未就绪、**无遗留进程**；以及 P1-63 的 drain-first 顺序与退出码／supervisor 异常清理合同不回退。
 
 ### 4.5 bash 3.2 约束
 
@@ -269,7 +277,7 @@ entrypoint (PID 1, bash)
 
 ```text
 请求（Node → supervisor，单文件通道）
-  { requestId, requestedDigest, requestedAt }
+  { requestId, requestedDigest, requestedAt, deadlineAt }
 
 回执（supervisor → Node，同一 result 文件）
   { requestId, actualDigest, status, detail?, finishedAt }
@@ -310,11 +318,19 @@ async function reloadExecutionRuntime(input) {
   }
   // ③ 发请求（P2），置 inflight
   // ④ 等回执；超时后走 P7/P9
-  // ⑤ 无论成败都清 inflight、写状态、落审计
+  // ⑤ 写状态／审计；只有真实owner终态确认才撤自己的临时屏障和slot（P1-69）
 }
 ```
 
 ---
+
+### 6.4 2026-11-20具名增补：热重载排空与统一截止（P1-69／REQ-030-090）
+
+[热重载保护合同](../../docs/specs/lucy-20261120-runtime-reload-drain-spec.md)已由Codex CLI终审确权。热重载使用MCP专属真实settle集合与可逆准入屏障，不能调用整实例shutdown或等待包含当前保存HTTP的全局计数。短在途排空至多20秒；超时须在stop前失败，不杀旧查询。新RPC明确503 EXECUTION_RUNTIME_RELOADING，纯MCP同身份可在结束后重试原任务，无自动业务重放。既有未执行业务的上游会话握手恢复仍按§7边界，不扩展成已受理业务重放。
+
+原60秒回执超时上界改为从调用入口起的60秒共享总deadline，包含排队／前置、drain≤20秒、stop加端口释放≤10秒、start就绪≤20秒、verify≤10秒；每段截到剩余时间，不逐段重置。原requestId／digest通道新增deadlineAt（Unix epoch毫秒）；消费前后检查过期，未消费过期请求不得迟到重启。caller超时不等于真实owner结束，不能据此释放屏障／slot。TERM优先且finally不得重开SERVING；实际owner终态、配置核验与保存事实分列。直接自动CLI兜底沿相同约束，显式API无supervisor仍unsupported。
+
+私有capability的兼容增量`completedRequestId`只在supervisor实际stop／start或失败清理已经终结后，与idle／busy=false放进同一原子快照。Node只有精确匹配当前owner的终态receipt，或精确completedRequestId且通道确已不busy，才能撤销本方屏障；自身未消费请求可通过原子取消证明结束。请求文件消失、更新的idle心跳或其他请求终态均不能代替本owner终态。该字段不构成配置verified或授权current证据，原连接级核验与digest规则仍生效。
 
 ## 7. MCP 会话语义（v0.2 收敛，审阅条件⑤）
 
@@ -452,10 +468,13 @@ open mode 下 `attachAdminContext` 无 session ⇒ `admin === null` ⇒ `require
 写 ktx.yaml 成功后，返回体增加：
 
 ```ts
-executionRuntimePending: boolean;   // 该连接是否待重载
+executionRuntimePending: boolean;   // 该连接是否仍待重载（自动重载未成功时为 true）
 ```
 
-**不自动触发重载**（首版由用户点确认）。写路径的改动点见实施计划 Step 5。
+**v0.3**：写路径在落盘后**自动尝试**一次执行层重载（supervisor 优先，必要时 CLI stop/start）。  
+- 重载结果为 `reloaded` / `started` → **不得**再标 `reload_required`，`executionRuntimePending=false`。  
+- 重载 `failed` / `skipped` → 标记 pending，`executionRuntimePending=true`，用户可在 MCP 调试台点确认重试。  
+写路径的改动点见实施计划 Step 5。
 
 ### 11.2 状态面扩展
 

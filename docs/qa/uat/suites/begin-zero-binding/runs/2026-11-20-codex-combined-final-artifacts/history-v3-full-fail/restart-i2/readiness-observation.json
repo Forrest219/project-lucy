@@ -1,0 +1,84 @@
+{
+  "ports": [
+    {
+      "web": "http://127.0.0.1:64761",
+      "mcp": "http://127.0.0.1:64762"
+    }
+  ],
+  "last": {
+    "httpStatus": 200,
+    "elapsedMs": 7.973,
+    "body": {
+      "ok": true,
+      "data": {
+        "status": "ok",
+        "insecureTestProfile": true,
+        "lucyVersion": "0.30.0",
+        "gitSha": "902190734e1daf8b1e80ea3ffbf1db674c92edfe",
+        "gitDirty": true,
+        "bundledKtxVersion": "0.16.0",
+        "ktxRuntime": {
+          "ready": true,
+          "status": "ready",
+          "detail": "status: ready"
+        },
+        "policy": {
+          "policyVersion": "a9e33e11b4f9f23cdc43d9a9b764948536e2507a558c42a655cfc8833ee093b6",
+          "degradedGlobal": false,
+          "degradedAgents": [],
+          "healthy": true
+        },
+        "execution": {
+          "status": "unknown",
+          "lastCheckedAt": "2026-11-20T04:52:28.453Z",
+          "unknownConnections": [
+            "lucy-ops",
+            "uat-mysql"
+          ],
+          "activation": "unknown",
+          "reload": {
+            "state": "idle"
+          },
+          "verification": {
+            "state": "unverified"
+          }
+        },
+        "dataQaInstructions": {
+          "source": "missing",
+          "length": 0,
+          "lastError": null,
+          "loadedAt": null
+        },
+        "contentLayout": {
+          "contentRoot": "/data/lucy/config",
+          "contentRootSource": "env",
+          "authoring": {
+            "semanticLayer": "/data/lucy/config/semantic-layer",
+            "wiki": "/data/lucy/config/wiki",
+            "evals": "/data/lucy/config/evals",
+            "skills": "/data/lucy/config/skills"
+          },
+          "mirror": {
+            "semanticLayer": "/data/lucy/semantic-layer",
+            "wiki": "/data/lucy/wiki",
+            "evals": "/data/lucy/evals",
+            "skills": "/data/lucy/skills"
+          },
+          "mirrorActive": true,
+          "drift": [],
+          "driftTruncated": false
+        },
+        "eventLoop": {
+          "p99Ms": 87.359,
+          "maxMs": 87.359,
+          "windowSeconds": 60
+        }
+      },
+      "diagnostics": {
+        "observedAt": "2026-11-20T04:52:28.864Z",
+        "ageMs": 216,
+        "freshness": "fresh"
+      }
+    }
+  }
+}

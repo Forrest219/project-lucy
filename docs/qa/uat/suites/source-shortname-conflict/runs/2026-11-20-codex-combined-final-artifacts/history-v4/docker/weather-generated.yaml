@@ -1,0 +1,19 @@
+tables:
+  city:
+    table: weather.city
+    columns:
+      - name: id
+        type: number
+        nullable: false
+        pk: true
+      - name: name
+        type: string
+        nullable: true
+  zebra:
+    table: weather.zebra
+    columns:
+      - name: id
+        type: number
+        nullable: false
+        pk: true
+

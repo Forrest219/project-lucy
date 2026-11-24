@@ -1,0 +1,78 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 5,
+  "body": {
+    "ok": true,
+    "data": {
+      "status": "degraded",
+      "insecureTestProfile": true,
+      "lucyVersion": "0.30.0",
+      "gitSha": "1fb73f721d8df4bd149f99c27aca69feada51556",
+      "gitDirty": true,
+      "bundledKtxVersion": "0.16.0",
+      "ktxRuntime": {
+        "ready": true,
+        "status": "ready",
+        "detail": "status: ready"
+      },
+      "policy": {
+        "policyVersion": "68879bf9907b0c94cbda3291cc96d2a2502af7b2d1b688f49ca608750b3b654a",
+        "degradedGlobal": false,
+        "degradedAgents": [
+          "repro_reader"
+        ],
+        "healthy": false
+      },
+      "execution": {
+        "status": "unknown",
+        "lastCheckedAt": "2026-11-20T02:36:45.040Z",
+        "unknownConnections": [
+          "hive-1",
+          "lucy-ops"
+        ],
+        "activation": "unknown",
+        "reload": {
+          "state": "idle"
+        },
+        "verification": {
+          "state": "unverified"
+        }
+      },
+      "dataQaInstructions": {
+        "source": "missing",
+        "length": 0,
+        "lastError": null,
+        "loadedAt": null
+      },
+      "contentLayout": {
+        "contentRoot": "/data/lucy/config",
+        "contentRootSource": "env",
+        "authoring": {
+          "semanticLayer": "/data/lucy/config/semantic-layer",
+          "wiki": "/data/lucy/config/wiki",
+          "evals": "/data/lucy/config/evals",
+          "skills": "/data/lucy/config/skills"
+        },
+        "mirror": {
+          "semanticLayer": "/data/lucy/semantic-layer",
+          "wiki": "/data/lucy/wiki",
+          "evals": "/data/lucy/evals",
+          "skills": "/data/lucy/skills"
+        },
+        "mirrorActive": true,
+        "drift": [],
+        "driftTruncated": false
+      },
+      "eventLoop": {
+        "p99Ms": 66.159,
+        "maxMs": 66.159,
+        "windowSeconds": 60
+      }
+    },
+    "diagnostics": {
+      "observedAt": "2026-11-20T02:36:45.302Z",
+      "ageMs": 114,
+      "freshness": "fresh"
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 21.252,
+  "body": {
+    "jsonrpc": "2.0",
+    "id": 140,
+    "result": {
+      "isError": true,
+      "content": [
+        {
+          "type": "text",
+          "text": "Access denied: tool_forbidden_global"
+        }
+      ]
+    }
+  }
+}

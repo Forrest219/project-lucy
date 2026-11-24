@@ -5,12 +5,10 @@ import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Identity } from "../proxy/identity";
 
+import { createEmptyAuditDbStub } from "./helpers/audit-db-stub.js";
+
 vi.mock("../admin/audit.js", () => ({
-  getAuditDb: vi.fn(() => ({
-    prepare: vi.fn(() => ({ get: vi.fn(() => undefined), all: vi.fn(() => []), run: vi.fn() })),
-    exec: vi.fn(),
-    pragma: vi.fn()
-  })),
+  getAuditDb: vi.fn(() => createEmptyAuditDbStub()),
   recordConfigChange: vi.fn(async () => 1),
   updateConfigChangeStatus: vi.fn(async () => {}),
   registerAgentAuditRoutes: vi.fn(),
@@ -357,11 +355,11 @@ describe("WP-I4 permission_model_version", () => {
       expect(scopedOk.permissions.capabilities).toHaveLength(1);
       expect(scopedOk.permissions.capabilities[0]?.rowGrant.kind).toBe("scoped");
     }
-    // Proven flag defaults false → lucy_query still denies until Gate C.
+    // P1-72: configured scoped permissions enforce automatically.
     await expect(authorizeAndRewrite(identity("v2_scoped_ok_agent"), "lucy_query", {
       connectionId: "warehouse",
       measures: ["fin_ledger.amount"]
-    })).resolves.toEqual({ allowed: false, reason: "row_policy_upstream_unproven" });
+    })).resolves.toMatchObject({ allowed: true, forcedFilters: { or: expect.any(Array) } });
 
     await expect(authorizeAndRewrite(identity("v2_scoped_agent"), "lucy_query", {
       connectionId: "warehouse",

@@ -33,6 +33,7 @@
  */
 
 import type Database from "better-sqlite3";
+import { queryInChunks } from "./sqlite-in-chunks.js";
 
 /** 证明规则版本（与 `derivationVersion` 同批冻结，v2p5-1）。 */
 export const AS_OF_PROOF_VERSION = "v2p5-1";
@@ -210,14 +211,15 @@ export function proveExactAsOfS(input: ProveExactAsOfSInput): AsOfSProof {
   if (tableExists(db, "access_log_attribution_mutations")) {
     const scopeIds = rows.map((row) => row.id);
     if (scopeIds.length > 0) {
-      const placeholders = scopeIds.map(() => "?").join(",");
-      const mutations = db
-        .prepare(
-          `SELECT id, access_log_id, ledger_seq
-             FROM access_log_attribution_mutations
-            WHERE access_log_id IN (${placeholders})`
-        )
-        .all(...scopeIds) as Array<{ id: number; access_log_id: number; ledger_seq: number | null }>;
+      const mutations = queryInChunks(scopeIds, (chunk, placeholders) =>
+        db
+          .prepare(
+            `SELECT id, access_log_id, ledger_seq
+               FROM access_log_attribution_mutations
+              WHERE access_log_id IN (${placeholders})`
+          )
+          .all(...chunk) as Array<{ id: number; access_log_id: number; ledger_seq: number | null }>
+      ).sort((a, b) => a.access_log_id - b.access_log_id || a.id - b.id);
       const replayed = new Set(input.replayedMutationIds ?? []);
       for (const mutation of mutations) {
         if (mutation.ledger_seq === null) {
@@ -237,14 +239,15 @@ export function proveExactAsOfS(input: ProveExactAsOfSInput): AsOfSProof {
     } else {
       const scopeTurnIds = [...new Set(rows.map((row) => row.turnId).filter((id): id is string => !!id))];
       if (scopeTurnIds.length > 0) {
-        const placeholders = scopeTurnIds.map(() => "?").join(",");
-        const revisions = db
-          .prepare(
-            `SELECT id, ledger_seq
-               FROM association_revisions
-              WHERE original_turn_id IN (${placeholders})`
-          )
-          .all(...scopeTurnIds) as Array<{ id: number; ledger_seq: number | null }>;
+        const revisions = queryInChunks(scopeTurnIds, (chunk, placeholders) =>
+          db
+            .prepare(
+              `SELECT id, ledger_seq
+                 FROM association_revisions
+                WHERE original_turn_id IN (${placeholders})`
+            )
+            .all(...chunk) as Array<{ id: number; ledger_seq: number | null }>
+        ).sort((a, b) => a.id - b.id);
         for (const revision of revisions) {
           if (revision.ledger_seq === null) {
             missingSets.revisions.push(`undated_association_revision:${revision.id}`);
@@ -267,14 +270,15 @@ export function proveExactAsOfS(input: ProveExactAsOfSInput): AsOfSProof {
   } else {
     const scopeIds = rows.map((row) => row.id);
     if (scopeIds.length > 0) {
-      const placeholders = scopeIds.map(() => "?").join(",");
-      const sources = db
-        .prepare(
-          `SELECT id, ledger_seq
-             FROM access_log_sources
-            WHERE access_log_id IN (${placeholders})`
-        )
-        .all(...scopeIds) as Array<{ id: number; ledger_seq: number | null }>;
+      const sources = queryInChunks(scopeIds, (chunk, placeholders) =>
+        db
+          .prepare(
+            `SELECT id, access_log_id, ledger_seq
+               FROM access_log_sources
+              WHERE access_log_id IN (${placeholders})`
+          )
+          .all(...chunk) as Array<{ id: number; access_log_id: number; ledger_seq: number | null }>
+      ).sort((a, b) => a.access_log_id - b.access_log_id || a.id - b.id);
       const excludedSources = new Set(input.excludedSourceIds ?? []);
       for (const source of sources) {
         if (source.ledger_seq === null) {
@@ -384,24 +388,26 @@ export function projectAttributionAsOfS<T extends ReplayableRow>(
     const names = new Set(info.map((column) => column.name));
     const canReplay = names.has("before_turn_id") && names.has("before_association_status");
     const ids = projected.map((row) => Number(row.id));
-    const placeholders = ids.map(() => "?").join(",");
     const selected = canReplay
       ? "id, access_log_id, ledger_seq, before_turn_id, before_association_status"
       : "id, access_log_id, ledger_seq";
-    const mutations = db
-      .prepare(
-        `SELECT ${selected}
-           FROM access_log_attribution_mutations
-          WHERE access_log_id IN (${placeholders})
-          ORDER BY id DESC`
-      )
-      .all(...ids) as Array<{
-      id: number;
-      access_log_id: number;
-      ledger_seq: number | null;
-      before_turn_id?: string | null;
-      before_association_status?: string | null;
-    }>;
+    // Newest first, as one global order: a row's oldest mutation must be applied last.
+    const mutations = queryInChunks(ids, (chunk, placeholders) =>
+      db
+        .prepare(
+          `SELECT ${selected}
+             FROM access_log_attribution_mutations
+            WHERE access_log_id IN (${placeholders})
+            ORDER BY id DESC`
+        )
+        .all(...chunk) as Array<{
+        id: number;
+        access_log_id: number;
+        ledger_seq: number | null;
+        before_turn_id?: string | null;
+        before_association_status?: string | null;
+      }>
+    ).sort((a, b) => b.id - a.id);
     for (const mutation of mutations) {
       if (mutation.ledger_seq === null || mutation.ledger_seq < seqUpperBound) continue;
       if (!canReplay) {
@@ -424,13 +430,14 @@ export function projectAttributionAsOfS<T extends ReplayableRow>(
     projected.length > 0
   ) {
     const ids = projected.map((row) => Number(row.id));
-    const placeholders = ids.map(() => "?").join(",");
-    const late = db
-      .prepare(
-        `SELECT id FROM access_log_sources
-          WHERE access_log_id IN (${placeholders}) AND ledger_seq > ?`
-      )
-      .all(...ids, seqUpperBound) as Array<{ id: number }>;
+    const late = queryInChunks(ids, (chunk, placeholders) =>
+      db
+        .prepare(
+          `SELECT id, access_log_id FROM access_log_sources
+            WHERE access_log_id IN (${placeholders}) AND ledger_seq > ?`
+        )
+        .all(...chunk, seqUpperBound) as Array<{ id: number; access_log_id: number }>
+    ).sort((a, b) => a.access_log_id - b.access_log_id || a.id - b.id);
     for (const source of late) excludedSourceIds.push(Number(source.id));
   }
 

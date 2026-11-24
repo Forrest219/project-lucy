@@ -1,0 +1,11 @@
+
+ RUN  v4.1.9 /Users/zhangxingchen/Projects/project-lucy/webui
+
+{"level":30,"time":1795183045916,"pid":40248,"hostname":"localhost","reqId":"req-1","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:63095","remoteAddress":"::ffff:127.0.0.1","remotePort":63096},"msg":"incoming request"}
+{"level":30,"time":1795183045922,"pid":40248,"hostname":"localhost","reqId":"req-1","res":{"statusCode":200},"responseTime":5.604207999999971,"msg":"request completed"}
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 38 skipped (39)
+   Start at  21:57:24
+   Duration  1.81s (transform 1.11s, setup 58ms, import 441ms, tests 1.25s, environment 0ms)
+

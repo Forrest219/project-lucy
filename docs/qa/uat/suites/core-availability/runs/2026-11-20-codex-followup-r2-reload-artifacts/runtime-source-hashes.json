@@ -1,0 +1,40 @@
+{
+  "task": "CA-06 review remediation / candidate2 freeze",
+  "baseSha": "7dded5478a05e256aa23d33567b49beb3820ec3b",
+  "productionFiles": [
+    "scripts/runtime/docker-entrypoint.sh",
+    "webui/server/admin/mcp-runtime-reload.ts",
+    "webui/server/ktx-mcp-reload.ts",
+    "webui/server/proxy/mcp-proxy.ts",
+    "webui/server/runtime/mcp-process-work.ts",
+    "webui/server/security/response-commit.ts"
+  ],
+  "testFiles": [
+    "scripts/runtime/ktx-reload-deadline.test.mjs",
+    "webui/server/__tests__/mcp-runtime-reload.test.ts",
+    "webui/server/__tests__/ktx-mcp-reload.test.ts",
+    "webui/server/__tests__/mcp-reload-inflight.test.ts",
+    "webui/server/__tests__/audit-release-barrier.test.ts"
+  ],
+  "hashes": {
+    "scripts/runtime/docker-entrypoint.sh": "c9359f9de74b3035210acb20d6d08e28aa1ef6408c504e1753165a08d3eec7fb",
+    "webui/server/admin/mcp-runtime-reload.ts": "5bf1f796419be4fc8f39259e22cd74d24e1218e728aa460ba5b8428ab714dafc",
+    "webui/server/ktx-mcp-reload.ts": "8779e4101f5f594802e05185865bc9e65c1f71bdbd9c7b706e1403cd803a2e3e",
+    "webui/server/proxy/mcp-proxy.ts": "36a8fba8844fb4bc11a6b3b1e76b6987be886a792c9b20c8904a2dd9556f4e0a",
+    "webui/server/runtime/mcp-process-work.ts": "59d898c367330b76fb49e327b5ea45d5a824d0988c1f7dc1b8ef2075fec3cfb7",
+    "webui/server/security/response-commit.ts": "70a199ff6b66818bd264933316f331fd70eb160894fd1bfed3a40837d29ee323",
+    "scripts/runtime/ktx-reload-deadline.test.mjs": "70d82be74680806a98d39740e1c74005b3c2d720166711f7e3596e8eb62ca293",
+    "webui/server/__tests__/mcp-runtime-reload.test.ts": "56719250f2c9bfee7bff496d6a1bdb5cb0a43e3beddd752212cc0197295d68b3",
+    "webui/server/__tests__/ktx-mcp-reload.test.ts": "0cd4a3402911613144a6d7d99e2512c2011664a9b0131b3ae4bb81a8fabe4e13",
+    "webui/server/__tests__/mcp-reload-inflight.test.ts": "d47d7f25737fea4f598bbfc647b7f382a7438cfd8b9fd52e2bbb8c0b316947fb",
+    "webui/server/__tests__/audit-release-barrier.test.ts": "f8cb58b855c88de09d3898254d88ae5ef28ca6c3f36911a79bd6c5c338c87c3b"
+  },
+  "checks": {
+    "candidate2-vitest-final.log": "7 files / 79 tests PASS / exit0",
+    "candidate2-shell-final.log": "6 actual shell+child tests PASS / exit0",
+    "candidate2-typecheck-final.log": "PASS / exit0",
+    "git diff --check": "PASS"
+  },
+  "history": "candidate1 60/60 + original entrypoint22/22 are historical checks only; new gate/TERM/stage counterexamples retain their red logs",
+  "notClaimed": "Real KTX/MySQL Docker driver, SC02 full UAT, TERM complete matrix, final1h, full F61/F62/F63/R-CAV"
+}

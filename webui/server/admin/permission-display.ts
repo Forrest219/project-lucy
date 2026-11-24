@@ -10,14 +10,17 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import {
   buildAdminPermissionContext,
+  compileRoleForAdmin,
   displayPolicyInputsOf,
   resolveEffectivePermissionsBatchForAdmin,
+  resolveRoleIds,
   type AdminPermissionContext,
   type DisplayPolicyInputs,
   type RoleResolutionResult
 } from "../proxy/acl.js";
 import { parseAccessConfigText, resolveAccessConfigPath, type AccessConfig } from "../proxy/identity.js";
 import { countEntryPerf } from "../entry-performance-timing.js";
+import type { YamlAccessConfig, YamlRole } from "./access-config.js";
 
 export const ACCESS_YAML_REL = "webui/config/access.yaml";
 export const ACCESS_PATH_MISMATCH = "access_config_path_mismatch";
@@ -133,4 +136,83 @@ export function authorizedCountsFromBatch(
 export function enabledUserIdsFromRaw(snapshot: AccessSnapshot): string[] {
   const users = snapshot.runtimeConfig?.users ?? [];
   return users.filter((user) => user && typeof user.id === "string" && user.enabled !== false).map((user) => user.id);
+}
+
+export type RoleListDisplaySource = "yaml" | "template";
+
+export type RoleListDisplayRow = {
+  id: string;
+  description?: string;
+  source: RoleListDisplaySource;
+  tools: string[];
+  connections: string[];
+  source_scope?: "catalog_bound";
+  usageCount: number;
+  users: Array<{ id: string; name?: string; enabled: boolean; tokenCount: number }>;
+  sourceCount: number;
+  sourceNames: string[];
+  invalid: boolean;
+  warnings: string[];
+};
+
+function sourceNamesFromCompilation(
+  compiled: Awaited<ReturnType<typeof compileRoleForAdmin>>
+): string[] {
+  if (!compiled.ok || !compiled.sources) return [];
+  return [
+    ...new Set(
+      compiled.sources.flatMap((source) => {
+        const full = source.table;
+        const short = full.includes(".") ? full.slice(full.lastIndexOf(".") + 1) : full;
+        return [full, short, source.sourceName].filter(
+          (item): item is string => typeof item === "string" && item.length > 0
+        );
+      })
+    )
+  ];
+}
+
+function usersReferencingRole(config: YamlAccessConfig, roleId: string) {
+  return config.users.filter((user) => {
+    const resolved = resolveRoleIds(user);
+    return resolved.ok && resolved.roleIds.includes(roleId);
+  });
+}
+
+/**
+ * Spec 174 / P1-58 §3.2 — one permission context compiles every list row. Runtime
+ * authorization, dryRun and save paths must not read this output.
+ */
+export async function compileAdminRoleListRows(
+  listConfig: YamlAccessConfig,
+  entries: Array<{ id: string; role: YamlRole; source: RoleListDisplaySource }>
+): Promise<{ rows: RoleListDisplayRow[]; policyInputs: DisplayPolicyInputs | null }> {
+  if (!listConfig) return { rows: [], policyInputs: null };
+  const context = await buildAdminPermissionContext(listConfig as unknown as AccessConfig);
+  const rows: RoleListDisplayRow[] = [];
+  for (const entry of entries) {
+    const compiled = await compileRoleForAdmin(entry.id, context);
+    const users = usersReferencingRole(listConfig, entry.id);
+    const allow = entry.role.allow;
+    rows.push({
+      id: entry.id,
+      description: entry.role.description,
+      source: entry.source,
+      tools: allow?.tools ?? [],
+      connections: allow?.connections ?? [],
+      ...(allow?.source_scope ? { source_scope: allow.source_scope } : {}),
+      usageCount: users.length,
+      users: users.map((user) => ({
+        id: user.id,
+        name: user.name,
+        enabled: user.enabled !== false,
+        tokenCount: user.tokens?.length ?? 0
+      })),
+      sourceCount: compiled.ok ? (compiled.sources?.length ?? 0) : 0,
+      sourceNames: sourceNamesFromCompilation(compiled),
+      invalid: !compiled.ok,
+      warnings: compiled.ok ? [] : [compiled.reason ?? "role_resolution_failed"]
+    });
+  }
+  return { rows, policyInputs: displayPolicyInputsOf(context) };
 }

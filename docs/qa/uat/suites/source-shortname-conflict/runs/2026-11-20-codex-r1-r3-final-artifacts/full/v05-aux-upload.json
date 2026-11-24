@@ -1,0 +1,64 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 137,
+  "body": {
+    "ok": true,
+    "data": {
+      "uploaded": true,
+      "record": {
+        "id": "up_20261120_034418_901",
+        "createdAt": "2026-11-20T03:44:18.901Z",
+        "connectionId": "hive-1",
+        "schema": "aux",
+        "assetKind": "schema_manifest",
+        "assetType": "schemaManifest",
+        "targetPath": "semantic-layer/hive-1/_schema/aux.yaml",
+        "originalFilename": "aux.yaml",
+        "sizeBytes": 93,
+        "sha256": "f807f283a1b38a60b445f96c43f71c68ae75ed78e4c9bb37cd739cb3b0c3848b",
+        "tables": 1,
+        "overwritten": false,
+        "warnings": [],
+        "reloadRunId": "rel_20261120_034418_901"
+      },
+      "validation": {
+        "valid": true,
+        "connectionId": "hive-1",
+        "schema": "aux",
+        "assetKind": "schema_manifest",
+        "assetType": "schemaManifest",
+        "targetPath": "semantic-layer/hive-1/_schema/aux.yaml",
+        "originalFilename": "aux.yaml",
+        "sizeBytes": 93,
+        "sha256": "f807f283a1b38a60b445f96c43f71c68ae75ed78e4c9bb37cd739cb3b0c3848b",
+        "errors": [],
+        "warnings": [],
+        "tableNames": [
+          "ods_city"
+        ],
+        "tables": 1,
+        "sourceNameConflicts": [],
+        "exists": false
+      },
+      "reload": {
+        "id": "rel_20261120_034418_901",
+        "status": "success",
+        "startedAt": "2026-11-20T03:44:18.901Z",
+        "finishedAt": "2026-11-20T03:44:18.903Z",
+        "durationMs": 2,
+        "requestedConnectionId": "hive-1",
+        "requestedSchema": "aux",
+        "connections": 1,
+        "connectionIds": [
+          "hive-1"
+        ],
+        "configuredSchemas": 1,
+        "manifestSchemas": 1,
+        "tables": 1,
+        "enabledTables": 0,
+        "warnings": [],
+        "source": "static-yaml"
+      }
+    }
+  }
+}

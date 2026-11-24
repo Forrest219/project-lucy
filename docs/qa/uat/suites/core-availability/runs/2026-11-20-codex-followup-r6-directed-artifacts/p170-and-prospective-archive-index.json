@@ -1,0 +1,51 @@
+{
+  "at": "2026-11-20T13:16:20.579135+00:00",
+  "files": {
+    "p170-normal-revision7.tar.gz": {
+      "sha256": "c96567a64c9166296593f5d62d7c7bcf2622d6457918e8757b8d466cdef3ace9",
+      "bytes": 622821,
+      "source": "inbox/core-availability-followup/20261120-execution/10-semantic-read-delta/docker-driver/r6-revision7/normal"
+    },
+    "p170-deadline-revision7.tar.gz": {
+      "sha256": "44fe8c557bc5d3125c022f6a99d354d1ee3e770b5f8ee6f946fd71d9030f7252",
+      "bytes": 631101,
+      "source": "inbox/core-availability-followup/20261120-execution/10-semantic-read-delta/docker-driver/r6-revision7/deadline"
+    },
+    "p170-revoke-revision7-fail.tar.gz": {
+      "sha256": "d659c8f81c8e98f83831cf88e0da18a5f996b55aaff48c0df9b46df01c1ed939",
+      "bytes": 158241,
+      "source": "inbox/core-availability-followup/20261120-execution/10-semantic-read-delta/docker-driver/r6-revision7/revoke"
+    },
+    "p170-revoke-revision8.tar.gz": {
+      "sha256": "6ddced84edec397eec7d1880b2ee184de7f9848fee363c34cb3a175b26d3c516",
+      "bytes": 1617449,
+      "source": "inbox/core-availability-followup/20261120-execution/10-semantic-read-delta/docker-driver/r6-revision8/revoke"
+    },
+    "p170-term-revision8-fail.tar.gz": {
+      "sha256": "31a808d73d07cffd9d19dff13d4e6a209f6ba31ffb9c1f39b7e943c6e72c4810",
+      "bytes": 161580,
+      "source": "inbox/core-availability-followup/20261120-execution/10-semantic-read-delta/docker-driver/r6-revision8/term"
+    },
+    "p170-term-revision10-fail.tar.gz": {
+      "sha256": "4ced4f9b7988fdf58d862e8ea5fa13369cca7fb88869beac5215b6637c7fac2b",
+      "bytes": 177999,
+      "source": "inbox/core-availability-followup/20261120-execution/10-semantic-read-delta/docker-driver/r6-revision10/term"
+    },
+    "p170-failure-revision10.tar.gz": {
+      "sha256": "f3b16ebbefac5a5ac59950f22bf253e85124fe9958541dba140915065ecd8e3f",
+      "bytes": 2524724,
+      "source": "inbox/core-availability-followup/20261120-execution/10-semantic-read-delta/docker-driver/r6-revision10/failure"
+    },
+    "p170-term-revision11.tar.gz": {
+      "sha256": "53129d9d9eb435f8ec38d524b021ffa94fca1a051fa28ca871a2d708100c9679",
+      "bytes": 2091804,
+      "source": "inbox/core-availability-followup/20261120-execution/10-semantic-read-delta/docker-driver/r6-revision11/term"
+    },
+    "post-run-stdin-prospective.tar.gz": {
+      "sha256": "1831ac571bc58ed26c168aa414a891790a5b26dcf1d575de39a8ae52504cbcf7",
+      "bytes": 411585,
+      "source": "inbox/core-availability-followup/20261120-execution/01-tools/remote-stdin-fix"
+    }
+  },
+  "note": "Independent final SQL pending; post-run stdin candidate is prospective only, not canonical/r6-used code"
+}

@@ -1,0 +1,356 @@
+{
+  "candidate": {
+    "gitSha": "8fe7cebc0e73d98aba3e687899fb83e34651e0aa",
+    "gitDirty": false,
+    "appImageId": "sha256:e4ad33064b9cb6df1451cbe4141a33118c24e5c2657d40c83b79c5bb32bd7713",
+    "mysqlImageId": "sha256:24989179f58856db763f418010c1169fecc944e3ec1ea7e921572d83eb070f70"
+  },
+  "runtimeLineage": {
+    "identity": {
+      "gitSha": "8fe7cebc0e73d98aba3e687899fb83e34651e0aa",
+      "gitDirty": false,
+      "appImageId": "sha256:e4ad33064b9cb6df1451cbe4141a33118c24e5c2657d40c83b79c5bb32bd7713",
+      "mysqlImageId": "sha256:24989179f58856db763f418010c1169fecc944e3ec1ea7e921572d83eb070f70"
+    },
+    "runtimeSourceChecks": {
+      "webui/server/proxy/mcp-proxy.ts": true,
+      "webui/server/proxy/caliber-binding-registry.ts": true,
+      "webui/server/proxy/caliber-binding-session.ts": true,
+      "webui/server/proxy/caliber-binding.ts": true,
+      "webui/server/proxy/source-ambiguity-gate.ts": true,
+      "webui/server/proxy/audit.ts": true
+    },
+    "qualifiedToolHashesMatch": true
+  },
+  "refHeadAtReview": "bc0afabcfa5a68d91be6b823cbf6fb3bfeedeaf5",
+  "relevantRuntimeDiff": [],
+  "independentMatchesProducer": true,
+  "elapsedNaturalSeconds": 1800.0,
+  "windows": [
+    {
+      "name": "natural",
+      "start": "2026-11-22T10:14:57.332529+00:00",
+      "plannedEnd": "2026-11-22T10:44:57.332529+00:00",
+      "cpuProfiler": false,
+      "end": "2026-11-22T10:44:57.332529+00:00"
+    },
+    {
+      "name": "explicit-contract-recovery",
+      "start": "2026-11-22T10:44:57.417261+00:00",
+      "naturalPerformanceWindow": false,
+      "end": "2026-11-22T10:46:50.103118+00:00"
+    },
+    {
+      "name": "diagnostic-fifo-control",
+      "start": "2026-11-22T10:46:50.103153+00:00",
+      "naturalPerformanceWindow": false,
+      "end": "2026-11-22T10:49:05.217497+00:00"
+    }
+  ],
+  "completedCycles": 12,
+  "verdict": "FAIL",
+  "evidenceIntegrity": "VALID",
+  "cases": {
+    "UAT-CAV-STD-01": {
+      "verdict": "PASS",
+      "findings": []
+    },
+    "UAT-CAV-STD-02": {
+      "verdict": "FAIL",
+      "findings": [
+        "probe performance budget failed"
+      ]
+    },
+    "UAT-CAV-STD-03": {
+      "verdict": "PASS",
+      "findings": []
+    },
+    "UAT-CAV-STD-04": {
+      "verdict": "PASS",
+      "findings": []
+    },
+    "UAT-CAV-STD-05": {
+      "verdict": "PASS",
+      "findings": []
+    }
+  },
+  "criteriaFailures": [
+    "STD-02: probe performance budget failed",
+    "runner did not complete its checks"
+  ],
+  "performanceBudget": {
+    "livezP99Ms": 292.4353340000039,
+    "livezMaxMs": 1215.4672919999996,
+    "readyzP99Ms": 299.55504200006544,
+    "gatewayReadyzP99Ms": 336.2595419999934
+  },
+  "laneCounts": {
+    "probe:/api/livez": {
+      "planned": 1800,
+      "dispatched": 1800,
+      "missed": 0,
+      "terminal": 1800,
+      "inflight": 0,
+      "naturalSucceeded": 1800,
+      "censoredSucceeded": 0,
+      "failed": 0,
+      "censored": 0,
+      "settledSucceeded": 1800,
+      "conserved": true,
+      "latencyAllTerminal": {
+        "p50Ms": 11.947749999990265,
+        "p95Ms": 144.12620799998876,
+        "p99Ms": 292.4353340000039,
+        "maxMs": 1215.4672919999996
+      },
+      "latencyNaturalSuccess": {
+        "p50Ms": 11.947749999990265,
+        "p95Ms": 144.12620799998876,
+        "p99Ms": 292.4353340000039,
+        "maxMs": 1215.4672919999996
+      }
+    },
+    "probe:/api/readyz": {
+      "planned": 1800,
+      "dispatched": 1800,
+      "missed": 0,
+      "terminal": 1800,
+      "inflight": 0,
+      "naturalSucceeded": 1800,
+      "censoredSucceeded": 0,
+      "failed": 0,
+      "censored": 0,
+      "settledSucceeded": 1800,
+      "conserved": true,
+      "latencyAllTerminal": {
+        "p50Ms": 12.089209000123446,
+        "p95Ms": 143.99300000002313,
+        "p99Ms": 299.55504200006544,
+        "maxMs": 1152.719042000001
+      },
+      "latencyNaturalSuccess": {
+        "p50Ms": 12.089209000123446,
+        "p95Ms": 143.99300000002313,
+        "p99Ms": 299.55504200006544,
+        "maxMs": 1152.719042000001
+      }
+    },
+    "probe:/api/health": {
+      "planned": 1800,
+      "dispatched": 1800,
+      "missed": 0,
+      "terminal": 1800,
+      "inflight": 0,
+      "naturalSucceeded": 1800,
+      "censoredSucceeded": 0,
+      "failed": 0,
+      "censored": 0,
+      "settledSucceeded": 1800,
+      "conserved": true,
+      "latencyAllTerminal": {
+        "p50Ms": 12.88870900020811,
+        "p95Ms": 159.29312500003334,
+        "p99Ms": 361.5909580000789,
+        "maxMs": 1383.2796250000001
+      },
+      "latencyNaturalSuccess": {
+        "p50Ms": 12.88870900020811,
+        "p95Ms": 159.29312500003334,
+        "p99Ms": 361.5909580000789,
+        "maxMs": 1383.2796250000001
+      }
+    },
+    "http": {
+      "planned": 1800,
+      "dispatched": 1800,
+      "missed": 0,
+      "terminal": 1800,
+      "inflight": 0,
+      "naturalSucceeded": 1800,
+      "censoredSucceeded": 0,
+      "failed": 0,
+      "censored": 0,
+      "settledSucceeded": 1800,
+      "conserved": true,
+      "latencyAllTerminal": {
+        "p50Ms": 29.876332999947408,
+        "p95Ms": 273.196750000011,
+        "p99Ms": 977.8877919999331,
+        "maxMs": 1962.1890839999878
+      },
+      "latencyNaturalSuccess": {
+        "p50Ms": 29.876332999947408,
+        "p95Ms": 273.196750000011,
+        "p99Ms": 977.8877919999331,
+        "maxMs": 1962.1890839999878
+      }
+    },
+    "mcp": {
+      "planned": 360,
+      "dispatched": 360,
+      "missed": 0,
+      "terminal": 360,
+      "inflight": 0,
+      "naturalSucceeded": 321,
+      "censoredSucceeded": 0,
+      "failed": 39,
+      "censored": 0,
+      "settledSucceeded": 321,
+      "conserved": true,
+      "latencyAllTerminal": {
+        "p50Ms": 5292.827041999999,
+        "p95Ms": 20718.586333000076,
+        "p99Ms": 29294.46841700002,
+        "maxMs": 32157.053915999997
+      },
+      "latencyNaturalSuccess": {
+        "p50Ms": 5615.896750000047,
+        "p95Ms": 21041.50400000003,
+        "p99Ms": 29294.46841700002,
+        "maxMs": 32157.053915999997
+      }
+    },
+    "audit-progress": {
+      "planned": 360,
+      "dispatched": 360,
+      "missed": 0,
+      "terminal": 360,
+      "inflight": 0,
+      "naturalSucceeded": 360,
+      "censoredSucceeded": 0,
+      "failed": 0,
+      "censored": 0,
+      "settledSucceeded": 360,
+      "conserved": true,
+      "latencyAllTerminal": {
+        "p50Ms": 124.27054199997656,
+        "p95Ms": 268.0867079999416,
+        "p99Ms": 440.6234169999834,
+        "maxMs": 648.5846659999197
+      },
+      "latencyNaturalSuccess": {
+        "p50Ms": 124.27054199997656,
+        "p95Ms": 268.0867079999416,
+        "p99Ms": 440.6234169999834,
+        "maxMs": 648.5846659999197
+      }
+    },
+    "mutation": {
+      "planned": 12,
+      "dispatched": 12,
+      "missed": 0,
+      "terminal": 12,
+      "inflight": 0,
+      "naturalSucceeded": 12,
+      "censoredSucceeded": 0,
+      "failed": 0,
+      "censored": 0,
+      "settledSucceeded": 12,
+      "conserved": true,
+      "latencyAllTerminal": {
+        "p50Ms": 37536.53112500001,
+        "p95Ms": 62968.66870800001,
+        "p99Ms": 62968.66870800001,
+        "maxMs": 62968.66870800001
+      },
+      "latencyNaturalSuccess": {
+        "p50Ms": 37536.53112500001,
+        "p95Ms": 62968.66870800001,
+        "p99Ms": 62968.66870800001,
+        "maxMs": 62968.66870800001
+      }
+    },
+    "gateway-readyz": {
+      "planned": 1800,
+      "dispatched": 1800,
+      "missed": 0,
+      "terminal": 1800,
+      "inflight": 0,
+      "naturalSucceeded": 1800,
+      "censoredSucceeded": 0,
+      "failed": 0,
+      "censored": 0,
+      "settledSucceeded": 1800,
+      "conserved": true,
+      "latencyAllTerminal": {
+        "p50Ms": 13.983375000179876,
+        "p95Ms": 150.64533399981883,
+        "p99Ms": 336.2595419999934,
+        "maxMs": 1214.0213339999946
+      },
+      "latencyNaturalSuccess": {
+        "p50Ms": 13.983375000179876,
+        "p95Ms": 150.64533399981883,
+        "p99Ms": 336.2595419999934,
+        "maxMs": 1214.0213339999946
+      }
+    }
+  },
+  "gatewayForwarding": {
+    "gateway-readyz:forwarded": 1800,
+    "http:forwarded": 1800,
+    "mcp:forwarded": 360
+  },
+  "approvedMcpRecoveries": 39,
+  "unexpectedFailures": [],
+  "ioControl": {
+    "observedWorkers": [
+      "36014:23842324",
+      "36147:23843325",
+      "36280:23844325",
+      "36463:23845325",
+      "36716:23847326",
+      "36898:23848326",
+      "37152:23850326",
+      "37331:23851326",
+      "37480:23852327",
+      "37613:23853328"
+    ],
+    "blockedWitnesses": [
+      "36014:23842324",
+      "36147:23843325",
+      "36280:23844325",
+      "36463:23845325",
+      "36716:23847326",
+      "36898:23848326",
+      "37152:23850326",
+      "37331:23851326",
+      "37480:23852327"
+    ],
+    "actualTerminated": [
+      "36014:23842324",
+      "36147:23843325",
+      "36280:23844325",
+      "36463:23845325",
+      "36716:23847326",
+      "36898:23848326",
+      "37152:23850326",
+      "37331:23851326",
+      "37480:23852327",
+      "37613:23853328"
+    ],
+    "maxDiagnosticInflight": 1,
+    "sameServerPid": true,
+    "oldFifoReleasedBeforeFresh": false
+  },
+  "auditClosure": {
+    "eligible": 233495,
+    "uniqueLinked": 233495,
+    "historyRows": 233000,
+    "historyUsers": 67,
+    "complete": true
+  },
+  "cleanup": {
+    "at": "2026-11-22T10:49:34.869024+00:00",
+    "resourcesAbsent": {
+      "lucy-core1883-756aee-app": true,
+      "lucy-core1883-756aee-db": true,
+      "lucy-core1883-756aee": true,
+      "lucy-core1883-756aee-data": true
+    },
+    "privateRemoved": true,
+    "errors": [],
+    "complete": true
+  },
+  "sourceEvidenceManifestSha256": "98be94c4b08f2608f298975b8192539249cca6e6534a52be29e7b2f074f43ea9"
+}

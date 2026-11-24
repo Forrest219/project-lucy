@@ -1,0 +1,21 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 3943,
+  "body": {
+    "ok": true,
+    "data": {
+      "schema": "ods",
+      "readable": true,
+      "yaml": "tables:\n  ods_city:\n    table: ods.city\n    columns:\n      - name: id\n        type: number\n        nullable: false\n        pk: true\n      - name: name\n        type: string\n        nullable: true\n  ods_zebra:\n    table: ods.zebra\n    columns:\n      - name: id\n        type: number\n        nullable: false\n        pk: true\n  ods_ods_zebra:\n    table: ods.ods_zebra\n    columns:\n      - name: id\n        type: number\n        nullable: false\n        pk: true\n",
+      "tableCount": 3,
+      "columnCount": 4,
+      "namesOnly": false,
+      "mapped": {
+        "number": 3,
+        "string": 1,
+        "time": 0
+      },
+      "downgraded": []
+    }
+  }
+}

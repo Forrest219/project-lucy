@@ -888,9 +888,16 @@ function keepOf(result: unknown): Record<string, unknown> | undefined {
 
 /** 组执行异常 → 四分类结果。 */
 function outcomeOfError(err: unknown): OpsOutcome & { release?: unknown; activation?: unknown } {
-  const candidate = err as { opsOutcome?: OpsOutcome } | undefined;
+  const candidate = err as { opsOutcome?: OpsOutcome; code?: string } | undefined;
   if (candidate?.opsOutcome && typeof candidate.opsOutcome === "object") {
     return candidate.opsOutcome;
+  }
+  // P1-27 D10：claim 后加载失败保留可控码，供结算 detail 诊断（不短路 D19／D21）
+  if (candidate?.code === "ops_concept_runtime_unavailable") {
+    return Outcome.failed("ops_concept_runtime_unavailable", {
+      stage: "group",
+      detail: err instanceof Error ? err.message : String(err)
+    });
   }
   return Outcome.failed("ops_group_error", { stage: "group", detail: String(err) });
 }

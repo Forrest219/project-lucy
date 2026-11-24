@@ -1,0 +1,73 @@
+{
+  "status": "PASS",
+  "candidate": "sha256:30ec4ae032db81201f35f78a8c1b56592ada53d5577862b1d6e7879db25fec3a",
+  "statusMirrors": [
+    {
+      "feature": "P1-60",
+      "file": "docs/plans/lucy-20261119-webui-publish-caliber-registry-repair-plan.md",
+      "statusMatches": true
+    },
+    {
+      "feature": "P1-60",
+      "file": "docs/README.md",
+      "statusMatches": true
+    },
+    {
+      "feature": "P1-60",
+      "file": "docs/plans/README.md",
+      "statusMatches": true
+    },
+    {
+      "feature": "P1-60",
+      "file": "docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md",
+      "statusMatches": true
+    },
+    {
+      "feature": "P1-60",
+      "file": "docs/governance/e2e-ledger.md",
+      "statusMatches": true
+    },
+    {
+      "feature": "P1-60",
+      "file": "docs/governance/project-overview.md",
+      "statusMatches": true
+    },
+    {
+      "feature": "P1-60",
+      "file": "requirement section REQ-030-081",
+      "statusMatches": true
+    },
+    {
+      "feature": "P1-64",
+      "file": "docs/plans/lucy-20261120-source-shortname-uniqueness-runtime-ack-plan.md",
+      "statusMatches": true
+    },
+    {
+      "feature": "P1-64",
+      "file": "docs/README.md",
+      "statusMatches": true
+    },
+    {
+      "feature": "P1-64",
+      "file": "docs/plans/README.md",
+      "statusMatches": true
+    },
+    {
+      "feature": "P1-64",
+      "file": "docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md",
+      "statusMatches": true
+    },
+    {
+      "feature": "P1-64",
+      "file": "docs/governance/e2e-ledger.md",
+      "statusMatches": true
+    },
+    {
+      "feature": "P1-64",
+      "file": "requirement section REQ-030-085",
+      "statusMatches": true
+    }
+  ],
+  "localLinksChecked": 86,
+  "conclusion": "P1-60/P1-64 closed; full package not approved"
+}

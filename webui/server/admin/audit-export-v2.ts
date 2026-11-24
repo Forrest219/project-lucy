@@ -33,8 +33,9 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { AUDIT_WINDOWS } from "../proxy/ingress-registry.js";
-import { DERIVATION_VERSION } from "../proxy/audit-derivation.js";
+import { SPAN_DERIVATION_VERSION } from "../proxy/audit-trace-span.js";
 import { projectAttributionAsOfS, proveExactAsOfS, type AsOfSProof } from "../proxy/audit-as-of-proof.js";
+import { computeSpanCoverage, countUnsequencedSpans, renderSpansCsv, type SpanCoverage } from "./audit-trace-export.js";
 
 export type ExportMode = "complete" | "diagnostic";
 
@@ -134,6 +135,13 @@ export type ExportV2Manifest = {
   files: Array<{ name: string; sha256: string; rowCount: number }>;
   /** 追平时限（秒）；T3 自捕获 S 起算，等待重试不重置。 */
   catchUpDeadlineSeconds: number;
+  /** P1-36 C7–C9：trace 关联、span 结构、时间一致性（不并入冻结的 combinedComplete）。 */
+  spanCoverage: SpanCoverage;
+  /**
+   * P1-36 D12：`spans.csv` 的截止序号（与 `ledgerUpperSeq` 同一值）。
+   * `unsequenced` 是被排除出文件的 **span 数**；`spanCoverage.unsequenced` 是无序号的 **行数**，量纲不同。
+   */
+  spans: { ledgerUpperSeq: number; unsequenced: number };
 };
 
 export type ExportV2Options = {
@@ -249,7 +257,12 @@ const HEADERS_V2 = [
   "inferred_client",
   "inference_method",
   "inference_confidence",
-  "inference_rule_version"
+  "inference_rule_version",
+  // ─── P1-36 D8：client_ip 取值来源与可信度 ────────────────────────────────
+  "ip_source",
+  "trusted_source",
+  // P1-37 D：被拒请求指纹（HMAC，M3 取数）
+  "rejection_fingerprint"
 ] as const;
 
 /**
@@ -691,7 +704,8 @@ export async function performExportV2(options: ExportV2Options): Promise<ExportV
     provenance,
     crossFileRelations,
     exclusions,
-    derivationVersion: DERIVATION_VERSION,
+    // Spec P1-36 D7：现行派生版本（v2p5-2）；旧行保持 v2p5-1，由行内 derivation_version 与 spanCoverage.legacyUnlinked 如实区分。
+    derivationVersion: SPAN_DERIVATION_VERSION,
     prevExportId: options.prevExportId ?? null,
     exportId: options.exportId ?? randomUUID(),
     sortKey: "access_log.id ASC",
@@ -709,7 +723,9 @@ export async function performExportV2(options: ExportV2Options): Promise<ExportV
     },
     cutoffAt: options.cutoffAt ?? exportedAt,
     files: [{ name: "calls-v2.csv", sha256: csvHash, rowCount: rows.length }],
-    catchUpDeadlineSeconds: AUDIT_WINDOWS.t3ExportCatchupSeconds
+    catchUpDeadlineSeconds: AUDIT_WINDOWS.t3ExportCatchupSeconds,
+    spanCoverage: await computeSpanCoverage(db, upperSeq),
+    spans: { ledgerUpperSeq: upperSeq, unsequenced: countUnsequencedSpans(db, selectedAccessLogIds) }
   };
 
   if (mode === "complete" && !combinedComplete) {
@@ -854,6 +870,8 @@ export async function buildExportPackV2(
   );
   const snaps = renderPermissionSnapshotsCsv(db, exportResult.selectedAccessLogIds);
 
+  const spans = await renderSpansCsv(db, exportResult.selectedAccessLogIds, options.fixedZone);
+
   const fileEntries: Array<{ name: string; data: Buffer }> = [];
   const fileMeta: Array<{ name: string; sha256: string; rowCount: number }> = [];
 
@@ -872,6 +890,11 @@ export async function buildExportPackV2(
     fileMeta.push({ name: "permission_snapshots.csv", sha256: sha256Hex(buf), rowCount: snaps.rowCount });
   }
 
+  if (spans.csv) {
+    const buf = Buffer.from(spans.csv, "utf8");
+    fileEntries.push({ name: "spans.csv", data: buf });
+    fileMeta.push({ name: "spans.csv", sha256: sha256Hex(buf), rowCount: spans.rowCount });
+  }
   // linked_handshake_rows.jsonl: include only when association_status includes
   // handshake-attributable turns. Heuristic: any access_log row has
   // association_status in {confirmed, legacy_unverified} OR is unassigned AND
@@ -902,7 +925,8 @@ export async function buildExportPackV2(
   // Manifest v2 with file hash list and integrity verification
   const manifest = {
     ...exportResult.manifest,
-    files: fileMeta
+    files: fileMeta,
+    spans: { ledgerUpperSeq: exportResult.upperSeq, unsequenced: spans.unsequenced }
   } as ExportV2Manifest & { files: typeof fileMeta };
 
   // B20 / E-4：独立文件校验器 —— **重算每个文件内容的 sha256**。

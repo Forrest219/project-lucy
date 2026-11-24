@@ -1,0 +1,62 @@
+{
+  "at": "2026-11-22T10:16:16.480Z",
+  "stage": "a0",
+  "target": 0,
+  "offset": 0,
+  "design": "20 fixed credentials across two agents, one request in flight, real successful read-only tools/call",
+  "intervalMs": 500,
+  "tools": {
+    "connection_list": 0,
+    "lucy_catalog": 0
+  },
+  "successful": 0,
+  "byUser": {},
+  "errors": [],
+  "before": {
+    "at": "2026-11-22T10:16:16.531Z",
+    "all": 0,
+    "toolRows": 0,
+    "ok": 0,
+    "protocol": 0,
+    "byUser": {
+      "demo_agent": {
+        "total": 0,
+        "ok": 0
+      },
+      "demo_ops": {
+        "total": 0,
+        "ok": 0
+      }
+    },
+    "recent7d": 0,
+    "recent30d": 0,
+    "tokens": 202,
+    "inventorySha256": "2dc73f1a80047278db874c056de7a5fd095388a62b0e94ba45bb8abe2f2623a5"
+  },
+  "settledCounts": [
+    0,
+    0
+  ],
+  "after": {
+    "at": "2026-11-22T10:16:17.180Z",
+    "all": 0,
+    "toolRows": 0,
+    "ok": 0,
+    "protocol": 0,
+    "byUser": {
+      "demo_agent": {
+        "total": 0,
+        "ok": 0
+      },
+      "demo_ops": {
+        "total": 0,
+        "ok": 0
+      }
+    },
+    "recent7d": 0,
+    "recent30d": 0,
+    "tokens": 202,
+    "inventorySha256": "2dc73f1a80047278db874c056de7a5fd095388a62b0e94ba45bb8abe2f2623a5"
+  },
+  "completed": "2026-11-22T10:16:17.185Z"
+}

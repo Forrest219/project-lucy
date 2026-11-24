@@ -1,0 +1,48 @@
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 428B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/project-lucy:uat-readyz-deps-c1cd67a0
+#2 DONE 0.0s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 2B done
+#3 DONE 0.0s
+
+#4 [1/6] FROM docker.io/library/project-lucy:uat-readyz-deps-c1cd67a0@sha256:c1cd67a0df3dffd33b7c9d0c3914ca4a759bb5a6e4e8af3f9fe6b8c66323a218
+#4 resolve docker.io/library/project-lucy:uat-readyz-deps-c1cd67a0@sha256:c1cd67a0df3dffd33b7c9d0c3914ca4a759bb5a6e4e8af3f9fe6b8c66323a218 0.0s done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 17.74MB 0.2s done
+#5 DONE 0.2s
+
+#6 [2/6] RUN rm -rf /app/webui/server /app/scripts /app/webui/config
+#6 CACHED
+
+#7 [3/6] COPY webui/server /app/webui/server
+#7 DONE 0.1s
+
+#8 [4/6] COPY scripts /app/scripts
+#8 DONE 0.1s
+
+#9 [5/6] COPY webui/config /app/webui/config
+#9 DONE 0.0s
+
+#10 [6/6] COPY VERSION package.json BUILD_REVISION /app/
+#10 DONE 0.0s
+
+#11 exporting to image
+#11 exporting layers
+#11 exporting layers 0.3s done
+#11 exporting manifest sha256:100ac6f33678c32c9fd61443f94ab570ea1769931dbe4d18236934b2eac1c270 done
+#11 exporting config sha256:9abd87bd1ba2a5a1668f4d622e6f275300f7fb07a6bffc2fbb040b2444e7a00c 0.0s done
+#11 exporting attestation manifest sha256:3b416ff5fd37cfc3a5efd5124b872ead24e795a6691a43c348749144a181910c 0.0s done
+#11 exporting manifest list sha256:8baa62dc30b8774f7ec443558a12bf72e1f40adb08d83a640036d93288230189 done
+#11 naming to docker.io/library/project-lucy:uat-v030-availability-20261120 done
+#11 unpacking to docker.io/library/project-lucy:uat-v030-availability-20261120 0.1s done
+#11 DONE 0.5s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/la527m2c7lfkepi2ii7bms86c

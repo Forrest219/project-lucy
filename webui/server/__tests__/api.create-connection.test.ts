@@ -54,13 +54,32 @@ vi.mock("../ktx", async () => {
 });
 
 const ktxMcpReload = vi.hoisted(() => ({
-  reloadKtxMcpAfterConfigWrite: vi.fn(async () => ({ status: "reloaded" as const, detail: "ok" }))
+  reloadKtxMcpAfterConfigWrite: vi.fn(async (): Promise<{ status: "reloaded" | "started" | "skipped" | "failed"; detail: string }> => ({ status: "reloaded", detail: "ok" }))
+}));
+
+const mcpRuntimeCanary = vi.hoisted(() => ({
+  runMcpRuntimeCanary: vi.fn(async (): Promise<Pick<
+    Awaited<ReturnType<typeof import("../admin/mcp-runtime.js").runMcpRuntimeCanary>>,
+    "executionRuntimeAck" | "decisionReason" | "checks"
+  >> => ({
+    executionRuntimeAck: false,
+    decisionReason: "execution_runtime_unavailable",
+    checks: [{ name: "execution_query", status: "fail" as const, detail: "no upstream in unit test" }]
+  }))
 }));
 
 vi.mock("../ktx-mcp-reload.js", () => ({
   reloadKtxMcpAfterConfigWrite: ktxMcpReload.reloadKtxMcpAfterConfigWrite,
   reloadKtxMcpExecutionRuntime: ktxMcpReload.reloadKtxMcpAfterConfigWrite
 }));
+
+vi.mock("../admin/mcp-runtime.js", async () => {
+  const actual = await vi.importActual<typeof import("../admin/mcp-runtime.js")>("../admin/mcp-runtime.js");
+  return {
+    ...actual,
+    runMcpRuntimeCanary: mcpRuntimeCanary.runMcpRuntimeCanary
+  };
+});
 
 let projectRoot: string;
 let auditDbPath: string;
@@ -108,6 +127,12 @@ beforeEach(async () => {
   previousAuditDb = process.env.LUCY_AUDIT_DB;
   testConnectionState.reset();
   vi.clearAllMocks();
+  ktxMcpReload.reloadKtxMcpAfterConfigWrite.mockResolvedValue({ status: "reloaded", detail: "ok" });
+  mcpRuntimeCanary.runMcpRuntimeCanary.mockResolvedValue({
+    executionRuntimeAck: false,
+    decisionReason: "execution_runtime_unavailable",
+    checks: [{ name: "execution_query", status: "fail" as const, detail: "no upstream in unit test" }]
+  });
 });
 
 afterEach(async () => {
@@ -163,11 +188,20 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
     expect(yaml).not.toContain("demo-mysql:");
   });
 
-  it("commits secret + yaml when dryRun=false and test succeeds", async () => {
+  it("UT-CONN-01: commits and reports executionRuntimeAck=true when reload + canary pass", async () => {
     await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
     process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
+    ktxMcpReload.reloadKtxMcpAfterConfigWrite.mockResolvedValueOnce({
+      status: "reloaded",
+      detail: "执行层已重读 ktx.yaml"
+    });
+    mcpRuntimeCanary.runMcpRuntimeCanary.mockResolvedValueOnce({
+      executionRuntimeAck: true,
+      decisionReason: "ok",
+      checks: [{ name: "execution_query", status: "pass" as const, detail: "connection loaded" }]
+    });
 
     const app = await buildFreshServer();
     await app.ready();
@@ -190,15 +224,14 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
     expect(response.body.ok).toBe(true);
     expect(response.body.data.written).toBe(true);
     expect(ktxMcpReload.reloadKtxMcpAfterConfigWrite).toHaveBeenCalledTimes(1);
-    expect(ktxMcpReload.reloadKtxMcpAfterConfigWrite).toHaveBeenCalledWith(projectRoot);
+    expect(ktxMcpReload.reloadKtxMcpAfterConfigWrite).toHaveBeenCalledWith(projectRoot, "demo-mysql");
     expect(response.body.data.test.status).toBe("ok");
     expect(response.body.data.policyRuntimeAck).toBe(response.body.data.runtimeAck);
+    expect(Array.isArray(response.body.data.policyRuntimeIssues)).toBe(true);
     expect(typeof response.body.data.catalogRuntimeAck).toBe("boolean");
-    expect(response.body.data.executionRuntimeAck).toBe(false);
-    expect(["unknown", "unavailable", "error"]).toContain(
-      response.body.data.executionRuntimeStatus
-    );
-    expect(response.body.data.executionDecisionReason).toBeTruthy();
+    expect(response.body.data.executionRuntimeAck).toBe(true);
+    expect(response.body.data.executionRuntimeStatus).toBe("ok");
+    expect(response.body.data.executionDecisionReason).toBe("ok");
     expect(JSON.stringify(response.body)).not.toContain("plain-secret-value");
 
     await expect(
@@ -209,6 +242,87 @@ describe("POST /api/connections (Spec 124 Phase A)", () => {
     expect(yaml).toContain("demo-mysql:");
     expect(yaml).not.toContain("plain-secret-value");
     expect(yaml).toMatch(/password:\s*file:/);
+  });
+
+  it("UT-CONN-01: keeps executionRuntimeAck=false with a non-empty reason when canary fails after reload", async () => {
+    await makeProject();
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
+    process.env.LUCY_AUDIT_DB = auditDbPath;
+    ktxMcpReload.reloadKtxMcpAfterConfigWrite.mockResolvedValueOnce({
+      status: "reloaded",
+      detail: "ok"
+    });
+    mcpRuntimeCanary.runMcpRuntimeCanary.mockResolvedValueOnce({
+      executionRuntimeAck: false,
+      decisionReason: "execution_connection_not_loaded",
+      checks: [{ name: "execution_query", status: "fail" as const, detail: "connection missing from daemon" }]
+    });
+
+    const app = await buildFreshServer();
+    await app.ready();
+
+    const response = await request(app.server)
+      .post("/api/connections")
+      .send({
+        id: "demo-mysql",
+        driver: "mysql",
+        host: "db.internal",
+        port: 3306,
+        database: "analytics",
+        username: "lucy_ro",
+        password: "plain-secret-value",
+        schemas: ["analytics"],
+        dryRun: false
+      })
+      .expect(200);
+
+    expect(response.body.ok).toBe(true);
+    expect(response.body.data.written).toBe(true);
+    expect(response.body.data.executionRuntimeAck).toBe(false);
+    expect(response.body.data.executionDecisionReason).toBe("execution_connection_not_loaded");
+    expect(response.body.data.executionRuntimeStatus).not.toBe("ok");
+    expect(response.body.data.executionRuntimeError).toContain("connection missing");
+  });
+
+  it("does not report success when the execution runtime did not load the new connection", async () => {
+    await makeProject();
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
+    process.env.LUCY_AUDIT_DB = auditDbPath;
+    ktxMcpReload.reloadKtxMcpAfterConfigWrite.mockResolvedValueOnce({
+      status: "failed",
+      detail: "执行层已重启，但没有确认新连接已加载"
+    });
+
+    const app = await buildFreshServer();
+    await app.ready();
+
+    const response = await request(app.server)
+      .post("/api/connections")
+      .send({
+        id: "demo-mysql",
+        driver: "mysql",
+        host: "db.internal",
+        port: 3306,
+        database: "analytics",
+        username: "lucy_ro",
+        password: "plain-secret-value",
+        schemas: ["analytics"],
+        dryRun: false
+      })
+      .expect(503);
+
+    expect(response.body.ok).toBe(false);
+    expect(response.body.error.code).toBe("EXECUTION_RUNTIME_NOT_LOADED");
+    expect(response.body.error.message).toBe("配置已保存，但执行层未加载。");
+    const yaml = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
+    expect(yaml).toContain("demo-mysql:");
+    const state = JSON.parse(await readFile(path.join(projectRoot, ".ktx-ui", "ktx-reload.state.json"), "utf8")) as {
+      activation: string;
+    };
+    expect(state.activation).toBe("reload_required");
+    expect(JSON.stringify(response.body)).not.toContain("plain-secret-value");
   });
 
   it("commits secret + yaml when connection test fails", async () => {

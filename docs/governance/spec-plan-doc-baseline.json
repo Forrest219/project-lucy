@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-10-29",
-  "purpose": "Spec/Plan 文档形态门禁（scripts/lint-spec-docs.mjs）的存量豁免清单。**只减不增**：新违规必须修，不得写入本清单；清单条目在违规消失后应被移除（门禁会报 STALE）。 **只覆盖已进入 HEAD 的存量文档**；未入库的在途文档不在豁免范围（它们须自行合规，或由其 owner 单独立条豁免并写明理由）。",
+  "generatedAt": "2026-11-18",
+  "purpose": "Spec/Plan 文档形态门禁（scripts/lint-spec-docs.mjs）的存量豁免清单。**只减不增**：新违规必须修，不得写入本清单；清单条目在违规消失后应被移除（门禁会报 STALE）。 2026-11-18 经委托人批复（方案 B，FDE 打包门禁）一次性登记 0.30 批次存量（lucy-20261104–20261116 的 Spec／Plan）新增 163 条，原因与确权来源见 ruleNotes.batch-0.30-2026-11-18；此次扩充是一次性批复，不改变「新违规必须修、基线只减不增」的口径，此后不得再加。 **只覆盖已进入 HEAD 的存量文档**；未入库的在途文档不在豁免范围（它们须自行合规，或由其 owner 单独立条豁免并写明理由）。",
   "ruleNotes": {
     "index": "存量 Spec/Plan 未登记进对应索引 README。索引为策展式，存量覆盖不完整；自本清单生效起新增文档必须登记。",
     "ds-shape": "存量 Spec 含 Design System Compliance 小节但未采用 webui/docs/design-system/30-pr-compliance-template.md 的四段式模板。",
@@ -9,7 +9,8 @@
     "plan-parts": "存量 Plan 缺少目标/开工前置/验收/完成定义/风险 五类小节中的若干。",
     "metadata": "存量文档头部元数据缺少文档类型/版本/状态（Spec）或状态/授权边界/验收（Plan）。",
     "filename": "2026-10-30 起新 Spec 与 Plan 共用编号 lucy-YYYYMMDD-<slug>，文件名分别为 lucy-YYYYMMDD-<slug>-spec.md 与 lucy-YYYYMMDD-<slug>-plan.md。机器拒绝的版本段只有 v<数字>p<数字>（如 v0p25、v2p5）；v8 这类技术专名不拒绝。本条豁免的是引入该规则时已跟踪、尚未符合该文件名的存量文件，以及已存在的模块 docs 数字流水号 Spec（含子目录、一位及以上数字）。此后不得再加。",
-    "close-layer": "2026-10-30 起新功能 Spec 必须有「闭口层级」。本条豁免的是该日已跟踪、尚无此小节的存量 Spec。此后不得再加。"
+    "close-layer": "2026-10-30 起新功能 Spec 必须有「闭口层级」。本条豁免的是该日已跟踪、尚无此小节的存量 Spec。此后不得再加。",
+    "batch-0.30-2026-11-18": "0.30 批次存量，委托人 2026-11-18 批复一次性登记（FDE 打包门禁，方案 B）。范围：docs/specs/lucy-20261104…20261116-* 与 docs/plans/lucy-20261107…20261116-* 以及 docs/plans/2026-11-06-lucy-v0.25.0-formal-release-plan.md 在 HEAD bd14e0da 已跟踪、当日仍有的 index（Plan 索引 docs/plans/README.md 未登记）、filename、plan-parts、metadata、close-layer、pseudocode、term-shape 违规，每条为「该文件 + 该规则」。确权来源：委托人本次批复，不是 Codex 终审；登记不表示这些文档形态合规，也不表示功能收口。2026-11-18 当日新文件（lucy-20261118-*）不在此批，须自行合规。此后不得再加。"
   },
   "entries": [
     {
@@ -3499,6 +3500,654 @@
     {
       "file": "docs/plans/2026-10-30-lucy-sqlserver-table-identity-plan.md",
       "rule": "filename"
+    },
+    {
+      "file": "docs/specs/lucy-20261111-question-budget-threshold-relax-spec.md",
+      "rule": "close-layer"
+    },
+    {
+      "file": "docs/specs/lucy-20261111-question-budget-threshold-relax-spec.md",
+      "rule": "pseudocode"
+    },
+    {
+      "file": "docs/specs/lucy-20261113-access-map-outcome-vocabulary-spec.md",
+      "rule": "close-layer"
+    },
+    {
+      "file": "docs/specs/lucy-20261113-access-map-outcome-vocabulary-spec.md",
+      "rule": "pseudocode"
+    },
+    {
+      "file": "docs/specs/lucy-20261113-access-map-outcome-vocabulary-spec.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261113-access-map-outcome-vocabulary-spec.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261113-access-map-sankey-empty-fix-spec.md",
+      "rule": "close-layer"
+    },
+    {
+      "file": "docs/specs/lucy-20261113-access-map-sankey-empty-fix-spec.md",
+      "rule": "pseudocode"
+    },
+    {
+      "file": "docs/specs/lucy-20261113-access-map-sankey-empty-fix-spec.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261113-access-map-sankey-empty-fix-spec.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261114-field-exposure-ledger-landing-fix-spec.md",
+      "rule": "close-layer"
+    },
+    {
+      "file": "docs/specs/lucy-20261114-field-exposure-ledger-landing-fix-spec.md",
+      "rule": "close-layer"
+    },
+    {
+      "file": "docs/specs/lucy-20261114-field-exposure-ledger-landing-fix-spec.md",
+      "rule": "pseudocode"
+    },
+    {
+      "file": "docs/specs/lucy-20261114-field-exposure-ledger-landing-fix-spec.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/specs/lucy-20261114-field-exposure-ledger-landing-fix-spec.md",
+      "rule": "term-shape"
+    },
+    {
+      "file": "docs/plans/2026-11-06-lucy-v0.25.0-formal-release-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/2026-11-06-lucy-v0.25.0-formal-release-plan.md",
+      "rule": "filename"
+    },
+    {
+      "file": "docs/plans/2026-11-06-lucy-v0.25.0-formal-release-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-11-06-lucy-v0.25.0-formal-release-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-11-06-lucy-v0.25.0-formal-release-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-11-06-lucy-v0.25.0-formal-release-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/2026-11-06-lucy-v0.25.0-formal-release-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/lucy-20261107-dual-layer-release-notes-design.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/lucy-20261107-dual-layer-release-notes-design.md",
+      "rule": "filename"
+    },
+    {
+      "file": "docs/plans/lucy-20261107-dual-layer-release-notes-design.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261107-dual-layer-release-notes-design.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261107-dual-layer-release-notes-design.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261107-dual-layer-release-notes-design.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261107-dual-layer-release-notes-design.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/lucy-20261107-lucy-0-30-core-direction.md",
+      "rule": "filename"
+    },
+    {
+      "file": "docs/plans/lucy-20261107-lucy-0-30-core-direction.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261107-lucy-0-30-core-direction.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261107-lucy-0-30-core-direction.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md",
+      "rule": "filename"
+    },
+    {
+      "file": "docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261112-connection-create-execution-runtime-reload-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261112-connection-create-execution-runtime-reload-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261112-connection-create-execution-runtime-reload-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261112-connection-create-execution-runtime-reload-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-access-map-sankey-empty-fix-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-access-map-sankey-empty-fix-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-case-and-structure-diff-uat-fix-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-case-and-structure-diff-uat-fix-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-case-and-structure-diff-uat-fix-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-case-and-structure-diff-uat-fix-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-case-and-structure-diff-uat-fix-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-connection-reload-and-catalog-scan-docker-uat-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-connection-reload-and-catalog-scan-docker-uat-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-connection-reload-and-catalog-scan-docker-uat-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-connection-reload-and-catalog-scan-docker-uat-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-connection-reload-and-catalog-scan-docker-uat-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-connection-reload-live-e2e-uat-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-connection-reload-live-e2e-uat-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-connection-reload-live-e2e-uat-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-event-loop-relief-uat-execution-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-event-loop-relief-uat-execution-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-event-loop-relief-uat-execution-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-event-loop-relief-uat-execution-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-event-loop-relief-uat-execution-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-event-loop-relief-uat-execution-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-landed-middev-closure-batch-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-landed-middev-closure-batch-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-landed-middev-closure-batch-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-landed-middev-closure-batch-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-midstate-exit-closure-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-midstate-exit-closure-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-midstate-exit-closure-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-midstate-exit-closure-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-midstate-exit-closure-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-p0-governance-optimization-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-p0-governance-optimization-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-p0-governance-optimization-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-p0-qa-uat-six-suites-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-p0-qa-uat-six-suites-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-p0-qa-uat-six-suites-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-p0-qa-uat-six-suites-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-p0-qa-uat-six-suites-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-p0-qa-uat-six-suites-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-p0-qa-uat-six-suites-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-schema-read-dual-mode-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-schema-read-dual-mode-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-schema-read-dual-mode-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-schema-read-dual-mode-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-schema-read-dual-mode-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-schema-read-dual-mode-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261113-schema-read-dual-mode-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-cloud-enterprise-smoke-adversarial-review-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-cloud-enterprise-smoke-adversarial-review-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-cloud-enterprise-smoke-adversarial-review-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-cloud-enterprise-smoke-adversarial-review-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-cloud-enterprise-smoke-adversarial-review-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-cloud-enterprise-smoke-adversarial-review-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-cloud-enterprise-smoke-adversarial-review-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-cloud-enterprise-smoke-design.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-cloud-enterprise-smoke-design.md",
+      "rule": "filename"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-cloud-enterprise-smoke-design.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-cloud-enterprise-smoke-design.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-cloud-enterprise-smoke-design.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-cloud-enterprise-smoke-design.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-p0-mac-mini-uat-cursor-claude-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-p0-mac-mini-uat-cursor-claude-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-p0-mac-mini-uat-cursor-claude-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-p0-mac-mini-uat-cursor-claude-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-p0-post-upgrade-uat-cursor-claude-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-p0-post-upgrade-uat-cursor-claude-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-p0-post-upgrade-uat-cursor-claude-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-p0-post-upgrade-uat-cursor-claude-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-p0-post-upgrade-uat-cursor-claude-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-p0-post-upgrade-uat-cursor-claude-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-p0-post-upgrade-uat-cursor-claude-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-p0-wave-b-caliber-exposure-uat-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-p0-wave-b-caliber-exposure-uat-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-p0-wave-b-caliber-exposure-uat-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-p0-wave-b-caliber-exposure-uat-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-p0-wave-b-caliber-exposure-uat-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-p0-wave-b-caliber-exposure-uat-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-p0-wave-b-caliber-exposure-uat-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-p1-19-access-map-uat-multi-agent-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-p1-19-access-map-uat-multi-agent-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-p1-19-access-map-uat-multi-agent-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-p1-19-access-map-uat-multi-agent-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261114-p1-19-access-map-uat-multi-agent-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-p1-11-12-14-uat-cursor-claude-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-p1-11-12-14-uat-cursor-claude-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-p1-11-12-14-uat-cursor-claude-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-p1-11-12-14-uat-cursor-claude-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-p1-11-12-14-uat-cursor-claude-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-p1-11-12-14-uat-cursor-claude-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-p1-27-28-12-14-uat-cursor-claude-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-p1-27-28-12-14-uat-cursor-claude-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-p1-27-28-12-14-uat-cursor-claude-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-p1-27-28-12-14-uat-cursor-claude-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-p1-27-28-12-14-uat-cursor-claude-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-p1-27-28-12-14-uat-cursor-claude-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-p1-27-28-12-14-uat-cursor-claude-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-post-030-trust-evidence-requirement-pool.md",
+      "rule": "filename"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-post-030-trust-evidence-requirement-pool.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-post-030-trust-evidence-requirement-pool.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-post-030-trust-evidence-requirement-pool.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-post-030-trust-evidence-requirement-pool.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-trust-evidence-capability-split.md",
+      "rule": "filename"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-trust-evidence-capability-split.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-trust-evidence-capability-split.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-trust-evidence-capability-split.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-trust-evidence-capability-split.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-trust-evidence-capability-split.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-trust-evidence-capability-split.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-uat-context-content-landing-plan.md",
+      "rule": "index"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-uat-context-content-landing-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-uat-context-content-landing-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-uat-context-content-landing-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-uat-context-content-landing-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-uat-context-content-landing-plan.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261115-uat-context-content-landing-plan.md",
+      "rule": "metadata"
+    },
+    {
+      "file": "docs/plans/lucy-20261116-post-030-dual-caliber-selection-concept-pool.md",
+      "rule": "filename"
+    },
+    {
+      "file": "docs/plans/lucy-20261116-post-030-dual-caliber-selection-concept-pool.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261116-post-030-dual-caliber-selection-concept-pool.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261116-post-030-dual-caliber-selection-concept-pool.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261116-post-030-dual-caliber-selection-concept-pool.md",
+      "rule": "plan-parts"
+    },
+    {
+      "file": "docs/plans/lucy-20261116-post-030-dual-caliber-selection-concept-pool.md",
+      "rule": "metadata"
     }
   ]
 }

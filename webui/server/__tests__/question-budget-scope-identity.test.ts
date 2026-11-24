@@ -548,9 +548,34 @@ defaults:
 
     try {
       // ── 第一次运行：开两轮问询 + 18 次数据调用 ──────────────────────────
+      // P1-60: this begin budget control needs a genuinely committed active registry.
+      // Inactive N has separate coverage; preserve the original round/attribution assertions.
+      await mkdir(path.join(projectRoot, "caliber-bindings"), { recursive: true });
+      await writeFile(path.join(projectRoot, "caliber-bindings", "active.yaml"), `bindingId: restart_control
+title: 重启预算负控
+status: published
+triggers: [固定订单数]
+connectionId: mysql-aliyun
+source: superstore_orders
+caliber:
+  measures: [superstore_orders.order_count]
+  dimensions: []
+  segments: []
+  filterFields: []
+  requireMeasures: [superstore_orders.order_count]
+`);
+      const registry = await import("../proxy/caliber-binding-registry.js");
+      const candidate = await registry.loadCaliberBindingCandidate();
+      expect(candidate.ok).toBe(true);
+      if (!candidate.ok) throw new Error(candidate.reason);
+      expect((await registry.commitCaliberBindingRegistry(candidate, {
+        releaseId: "budget-restart-control", attemptId: "budget-restart-control"
+      })).ok).toBe(true);
       const first = await startProxy();
-      await callTool(first.port, "lucy_begin_question", { intentSummary: "第一轮" }, "begin-1");
-      await callTool(first.port, "lucy_begin_question", { intentSummary: "第二轮" }, "begin-2");
+      const firstBegin = JSON.parse(await callTool(first.port, "lucy_begin_question", { intentSummary: "第一轮" }, "begin-1"));
+      const secondBegin = JSON.parse(await callTool(first.port, "lucy_begin_question", { intentSummary: "第二轮" }, "begin-2"));
+      expect(firstBegin.result.isError).not.toBe(true);
+      expect(secondBegin.result.isError).not.toBe(true);
       for (let i = 0; i < 18; i += 1) {
         await callTool(first.port, "lucy_read_source", {
           connectionId: "mysql-aliyun",

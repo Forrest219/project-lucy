@@ -301,6 +301,17 @@ function parseStoredZipEntries(zip: Buffer): Map<string, Buffer> {
 
 beforeEach(async () => {
   vi.resetModules();
+  // P1-60：无 caliber 注册表时 begin 隐藏／call 返回 begin_not_available；
+  // smoke 覆盖 begin 可见与本地处理，需将参与态钉为 active（inactive 路径见 begin-hide-inactive）。
+  vi.doMock("../proxy/caliber-binding-registry.js", async () => {
+    const actual = await vi.importActual<typeof import("../proxy/caliber-binding-registry.js")>(
+      "../proxy/caliber-binding-registry.js"
+    );
+    return {
+      ...actual,
+      classifyCaliberParticipation: async () => "active" as const
+    };
+  });
   projectRoot = await makeProject();
   auditDbPath = path.join(projectRoot, "audit.sqlite");
   previousRoot = process.env.KTX_PROJECT_ROOT;
@@ -336,6 +347,9 @@ afterEach(async () => {
   else process.env.LUCY_QUERY_MAX_INFLIGHT = previousQueryMaxInflight;
   delete process.env.LUCY_FILTER_PUSHDOWN_GUARD;
   delete process.env.LUCY_QUESTION_BUDGET;
+  delete process.env.LUCY_MCP_AGENT_MAX_INFLIGHT;
+  delete process.env.LUCY_PROXY_UPSTREAM_HARD_DEADLINE_MS;
+  delete process.env.LUCY_MCP_CANCEL_HOLD_MS;
   await rm(projectRoot, { recursive: true, force: true });
 });
 
@@ -895,8 +909,23 @@ describe("MCP proxy smoke", () => {
       // AC-W3-02: export the evidence pack from the same DB populated by the
       // real Proxy call; do not seed a second synthetic access_log row.
       const { buildServer } = await import("../index");
+      const { runProjection } = await import("../security/projector");
+      const { getSecurityStore } = await import("../security/instance");
+      const { getAuditDb } = await import("../admin/audit");
       const app = buildServer();
       await app.ready();
+      // Drive the security projection to completion before exporting so that
+      // manifest.completeness.complete is true (buildServer does not start the
+      // scheduler; we run the projection synchronously here instead).
+      const storeResult = await getSecurityStore();
+      if (storeResult.ok) {
+        const target = await getAuditDb();
+        for (let i = 0; i < 20; i++) {
+          const run = runProjection(storeResult.value, target);
+          if (run.status.complete) break;
+          await new Promise<void>((resolve) => setTimeout(resolve, 50));
+        }
+      }
       try {
         const pack = await app.inject({
           method: "GET",
@@ -1536,6 +1565,203 @@ describe("MCP proxy smoke", () => {
     }
   });
 
+  it("P1-82: the per-Token cap also covers lucy_read_source (no bypass of the Token slots)", async () => {
+    process.env.LUCY_QUERY_MAX_INFLIGHT = "1";
+    const upstreamSeen: string[] = [];
+    let releaseFirst: (() => void) | undefined;
+    const firstCanFinish = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    const upstream = createServer(async (req, res) => {
+      const body = JSON.parse(await readRequestBody(req)) as Record<string, unknown>;
+      upstreamSeen.push(String(body.id));
+      await firstCanFinish;
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ jsonrpc: "2.0", id: body.id, result: { content: [{ type: "text", text: "ok" }] } }));
+    });
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String((upstream.address() as AddressInfo).port);
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+    const call = (id: string, name: string, args: Record<string, unknown>) => fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+      body: JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: args } })
+    });
+    const readSource = { connectionId: "mysql-aliyun", sourceName: "superstore_orders" };
+    try {
+      const first = call("tok-first", "lucy_read_source", readSource);
+      const deadline = Date.now() + 2000;
+      while (upstreamSeen.length === 0 && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(upstreamSeen).toHaveLength(1);
+      const second = await call("tok-second", "lucy_read_source", readSource);
+      const secondBody = await second.json() as { result: { isError?: boolean; _meta?: { lucy?: { capacityScope?: string } } } };
+      expect(secondBody.result.isError).toBe(true);
+      expect(secondBody.result._meta?.lucy?.capacityScope).toBe("token");
+      expect(upstreamSeen).toHaveLength(1);
+    } finally {
+      releaseFirst?.();
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
+  it("P1-82: a client that disconnects mid-query does not free its slot early; the slot returns after the hold", async () => {
+    process.env.LUCY_MCP_AGENT_MAX_INFLIGHT = "1";
+    process.env.LUCY_MCP_CANCEL_HOLD_MS = "600";
+    const upstreamSeen: string[] = [];
+    const upstream = createServer(async (req, res) => {
+      const body = JSON.parse(await readRequestBody(req)) as Record<string, unknown>;
+      upstreamSeen.push(String(body.id));
+      if (upstreamSeen.length === 1) { await new Promise((resolve) => setTimeout(resolve, 600)); }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ jsonrpc: "2.0", id: body.id, result: { content: [{ type: "text", text: "ok" }] } }));
+    });
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String((upstream.address() as AddressInfo).port);
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    const { getMcpExecutionCapacity } = await import("../runtime/mcp-execution-capacity");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+    const call = (id: string, signal?: AbortSignal) => fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+      method: "POST",
+      signal,
+      headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+      body: JSON.stringify({ jsonrpc: "2.0", id, method: "tools/call", params: { name: "lucy_read_source", arguments: { connectionId: "mysql-aliyun", sourceName: "superstore_orders" } } })
+    });
+    try {
+      const abort = new AbortController();
+      const first = call("hold-first", abort.signal).then((r) => r.text()).catch(() => "aborted");
+      const deadline = Date.now() + 2000;
+      while (upstreamSeen.length === 0 && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 10));
+      abort.abort();
+      expect(await first).toBe("aborted");
+      // Even after the upstream socket is gone the slot stays held: an immediate retry is refused.
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const early = await call("hold-early").then((r) => r.json()) as { result: { isError?: boolean; _meta?: { lucy?: { capacityScope?: string } } } };
+      expect(early.result.isError).toBe(true);
+      expect(early.result._meta?.lucy?.capacityScope).toBe("agent");
+      // Real end (upstream finished) plus the hold: the slot comes back and the retry succeeds.
+      const until = Date.now() + 5000;
+      while (getMcpExecutionCapacity().snapshot().global.active > 0 && Date.now() < until) await new Promise((resolve) => setTimeout(resolve, 25));
+      expect(getMcpExecutionCapacity().snapshot().global.active).toBe(0);
+      const later = await call("hold-later").then((r) => r.json()) as { result: { isError?: boolean } };
+      expect(later.result.isError).not.toBe(true);
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
+  it("P1-82: an upstream that keeps dripping bytes is cut at the hard deadline and the lease is freed", async () => {
+    process.env.LUCY_PROXY_UPSTREAM_HARD_DEADLINE_MS = "400";
+    let dripping = true;
+    const upstream = createServer(async (req, res) => {
+      await readRequestBody(req);
+      res.writeHead(200, { "content-type": "application/json" });
+      const timer = setInterval(() => { if (dripping) res.write(" "); }, 50);
+      res.on("close", () => clearInterval(timer));
+    });
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String((upstream.address() as AddressInfo).port);
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    const { getMcpExecutionCapacity } = await import("../runtime/mcp-execution-capacity");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+    try {
+      const startedAt = performance.now();
+      const res = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+        method: "POST",
+        signal: AbortSignal.timeout(10_000),
+        headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+        body: JSON.stringify({ jsonrpc: "2.0", id: "drip", method: "tools/call", params: { name: "lucy_read_source", arguments: { connectionId: "mysql-aliyun", sourceName: "superstore_orders" } } })
+      }).then((r) => r.text()).catch(() => "aborted");
+      void res;
+      expect(performance.now() - startedAt).toBeLessThan(5000);
+      const settleDeadline = Date.now() + 3000;
+      while (getMcpExecutionCapacity().snapshot().global.active > 0 && Date.now() < settleDeadline) await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(getMcpExecutionCapacity().snapshot().global.active).toBe(0);
+    } finally {
+      dripping = false;
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
+  it("P1-82: lucy_read_source shares the Agent budget, refuses fast without upstream work, and the lease returns after the upstream finishes", async () => {
+    process.env.LUCY_QUERY_MAX_INFLIGHT = "4";
+    process.env.LUCY_MCP_AGENT_MAX_INFLIGHT = "1";
+    const upstreamSeen: string[] = [];
+    let releaseFirst: (() => void) | undefined;
+    const firstCanFinish = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    const upstream = createServer(async (req, res) => {
+      const body = JSON.parse(await readRequestBody(req)) as Record<string, unknown>;
+      upstreamSeen.push(String(body.id));
+      if (upstreamSeen.length === 1) await firstCanFinish;
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ jsonrpc: "2.0", id: body.id, result: { content: [{ type: "text", text: "ok" }] } }));
+    });
+    await new Promise<void>((resolve) => upstream.listen(0, "127.0.0.1", resolve));
+    process.env.LUCY_PROXY_UPSTREAM_HOST = "127.0.0.1";
+    process.env.LUCY_PROXY_UPSTREAM_PORT = String((upstream.address() as AddressInfo).port);
+
+    const { buildProxy } = await import("../proxy/mcp-proxy");
+    const { getMcpExecutionCapacity } = await import("../runtime/mcp-execution-capacity");
+    const { server, host } = buildProxy();
+    await new Promise<void>((resolve) => server.listen(0, host, resolve));
+    const proxyPort = (server.address() as AddressInfo).port;
+    const call = (id: string) => fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id,
+        method: "tools/call",
+        params: { name: "lucy_read_source", arguments: { connectionId: "mysql-aliyun", sourceName: "superstore_orders" } }
+      })
+    });
+
+    try {
+      const first = call("cap-first");
+      const deadline = Date.now() + 2000;
+      while (upstreamSeen.length === 0 && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(upstreamSeen).toHaveLength(1);
+      expect(getMcpExecutionCapacity().snapshot().global.active).toBe(1);
+
+      const startedAt = performance.now();
+      const denied = await call("cap-denied");
+      const deniedMs = performance.now() - startedAt;
+      const deniedBody = await denied.json() as { result: { isError?: boolean; content?: Array<{ text: string }>; _meta?: { lucy?: { capacityScope?: string; retryAfterMs?: number } } } };
+      expect(deniedBody.result.isError).toBe(true);
+      expect(deniedBody.result.content?.[0]?.text).toContain("query_concurrency_exceeded");
+      expect(deniedBody.result._meta?.lucy).toMatchObject({ capacityScope: "agent", retryAfterMs: 1000 });
+      expect(deniedMs).toBeLessThan(1000);
+      expect(upstreamSeen).toHaveLength(1); // refused before any upstream work
+      const deniedAudit = await waitForAuditRow("cap-denied");
+      expect(deniedAudit.outcome).toBe("denied");
+      expect(String(deniedAudit.error_detail)).toContain("scope=agent");
+
+      releaseFirst?.();
+      expect((await first).status).toBe(200);
+      const settleDeadline = Date.now() + 2000;
+      while (getMcpExecutionCapacity().snapshot().global.active > 0 && Date.now() < settleDeadline) await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(getMcpExecutionCapacity().snapshot()).toMatchObject({ global: { active: 0 }, activeByAgent: {}, acquired: 1, released: 1 });
+
+      const third = await call("cap-after-release");
+      expect(third.status).toBe(200);
+      expect(((await third.json()) as { result: { isError?: boolean } }).result.isError).not.toBe(true);
+    } finally {
+      releaseFirst?.();
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+      await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
   it("serves lucy_explain_query and lucy_freshness locally", async () => {
     const { buildProxy } = await import("../proxy/mcp-proxy");
     const { server, host } = buildProxy();
@@ -1632,7 +1858,9 @@ describe("MCP proxy smoke", () => {
       expect(initRes.status).toBe(200);
       const initBody = await initRes.json() as { result: { serverInfo: { version: string }; instructions: string } };
       expect(initBody.result.serverInfo.version).toBe("local-fallback");
-      expect(initBody.result.instructions).toContain("Visible Scope");
+      // protocol_fallback：上游不可用时走基础指引，不拼动态 Visible Scope（见 decideInstructions）。
+      expect(initBody.result.instructions).toContain("Lucy Data QA Runtime Instructions");
+      expect(initBody.result.instructions).not.toContain("## Visible Scope");
 
       const listRes = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
         method: "POST",
@@ -1757,8 +1985,8 @@ describe("MCP proxy smoke", () => {
       const listBody = await listRes.json() as { result: { tools: Array<{ name: string; description?: string; inputSchema?: { required?: string[] } }> } };
       const beginTool = listBody.result.tools.find((tool) => tool.name === "lucy_begin_question");
       expect(beginTool).toBeDefined();
-      expect(beginTool?.description).toContain("Optional but recommended");
-      expect(beginTool?.description).toContain("never blocks");
+      expect(beginTool?.description).toContain("Recommended at the start of each new user business question");
+      expect(beginTool?.description).toContain("Skipping begin does not bypass");
       expect(beginTool?.inputSchema?.required).toEqual(["intentSummary"]);
 
       const beginRes = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
@@ -1882,10 +2110,11 @@ describe("MCP proxy smoke", () => {
       const auditB = await waitForAuditRow("follow-session-b");
       expect(auditA.lucy_turn_id).toBe(turnA);
       expect(auditB.lucy_turn_id).toBe(turnB);
-      expect(auditA.turn_attribution_mode).toBe("session_bound");
-      expect(auditB.turn_attribution_mode).toBe("session_bound");
-      expect(auditA.turn_attribution_confidence).toBe("low");
-      expect(auditB.turn_attribution_confidence).toBe("low");
+      // 空桑基修复 Spec §2 D3：同会话 begin 后无 header 的 tools/call → 显式延续（explicit + confirmed）。
+      expect(auditA.turn_attribution_mode).toBe("explicit");
+      expect(auditB.turn_attribution_mode).toBe("explicit");
+      expect(auditA.turn_attribution_confidence).toBe("high");
+      expect(auditB.turn_attribution_confidence).toBe("high");
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
       await new Promise<void>((resolve, reject) => upstream.close((err) => err ? reject(err) : resolve()));
@@ -2368,7 +2597,8 @@ describe("MCP proxy smoke", () => {
       });
       const listBody = await listRes.json() as { result: { tools: Array<{ name: string }> } };
       const names = listBody.result.tools.map((tool) => tool.name);
-      expect(names).toEqual(["lucy_read_source"]);
+      // P1-74：问数工具可见时预算逃生会注入 lucy_continue_question（ACL 未列亦可）。
+      expect(names).toEqual(["lucy_read_source", "lucy_continue_question"]);
       expect(names).not.toContain("lucy_begin_question");
       expect(names).not.toContain("kx_catalog");
     } finally {
@@ -2584,21 +2814,26 @@ describe("MCP proxy smoke", () => {
       upstreamIds.push(id);
       res.writeHead(200, { "content-type": "application/json" });
       if (id === "pushdown-query" || id === "pushdown-off") {
+        // content[0].text must be a valid JSON object so AV assembly can inject
+        // answer_verifiability; the STRUCT/AS-field patterns must survive to the
+        // outer body string so that isFilterPushdownText fires for pushdown-query
+        // while pushdown-off (guard off) forwards the STRUCT-containing response.
         res.end(JSON.stringify({
           jsonrpc: "2.0",
           id,
           result: {
             structuredContent: { sql: pushdownSql },
-            content: [{ type: "text", text: pushdownSql }]
+            content: [{ type: "text", text: JSON.stringify({ sql: pushdownSql, rows: [], totalRows: 0 }) }]
           }
         }));
         return;
       }
       if (id === "truncated-query") {
+        // Same: valid JSON object so AV assembly succeeds; ...RUCT( pattern survives.
         res.end(JSON.stringify({
           jsonrpc: "2.0",
           id,
-          result: { content: [{ type: "text", text: "detailMessage = ...RUCT(" }] }
+          result: { content: [{ type: "text", text: JSON.stringify({ detail: "detailMessage = ...RUCT(" }) }] }
         }));
         return;
       }
@@ -2657,8 +2892,9 @@ describe("MCP proxy smoke", () => {
       const bound = await post("bind-query", "lucy_query", queryArgs, { "mcp-session-id": "session-bind" });
       expect(bound.result?.isError).not.toBe(true);
       const bindAudit = await waitForAuditRow("bind-query");
-      expect(bindAudit.turn_attribution_mode).toBe("session_bound");
-      expect(bindAudit.turn_attribution_confidence).toBe("low");
+      // 空桑基修复 Spec §2 D3：same-session begin 后无 header 的 tools/call → explicit + high。
+      expect(bindAudit.turn_attribution_mode).toBe("explicit");
+      expect(bindAudit.turn_attribution_confidence).toBe("high");
       const beginText = begun.result?.content?.[0]?.text ?? "";
       const { turnId } = JSON.parse(beginText) as { turnId: string };
       const turnDb = new Database(auditDbPath, { readonly: true });
@@ -2667,7 +2903,8 @@ describe("MCP proxy smoke", () => {
       turnDb.close();
 
       await post("budget-begin", "lucy_begin_question", { intentSummary: "问询预算" }, { "mcp-session-id": "session-budget" });
-      for (let i = 0; i < 20; i += 1) {
+      const { QUESTION_BUDGET_MAX_CALLS } = await import("../proxy/question-experience.js");
+      for (let i = 0; i < QUESTION_BUDGET_MAX_CALLS; i += 1) {
         const ok = await post(`budget-${i}`, "lucy_query", queryArgs, { "mcp-session-id": "session-budget" });
         expect(ok.result?.isError).not.toBe(true);
       }

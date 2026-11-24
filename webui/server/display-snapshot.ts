@@ -17,22 +17,29 @@
  * health is tracked per dependency scope, so a broken overlay cannot take the
  * Agent permission display down with it.
  */
+import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
 import { watch, type FSWatcher } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
-import { countEntryPerf, markDisplayBuild, markDisplayCache } from "./entry-performance-timing";
+import { getAccessRecoveryStateSync } from "./access-recovery";
+import { countEntryPerf, markDisplayBuild, markDisplayCache, markDisplayDegraded } from "./entry-performance-timing";
+import { createSharedPriorityScheduler } from "./runtime/shared-priority-scheduler";
+import { eventLoopDelaySnapshot } from "./runtime/event-loop-delay";
 import {
   bumpDisplayGeneration,
   canonicalFileId,
   currentScopeContext,
   DISPLAY_SCOPES,
   generationKey,
+  displayGenerations,
   hasPendingDisplayWrite,
   isIgnoredSemanticPath,
+  onDisplayGenerationChange,
   scopesForPath,
   waitForDisplayWritesSettled,
   type DisplayScope,
+  type DisplayWriteToken,
   type ScopeContext
 } from "./display-generation";
 import {
@@ -61,6 +68,8 @@ export const DISPLAY_BUILD_FAILURE_BACKOFF_MS = 1000;
 export const MAX_DISPLAY_ATTEMPTS = 3;
 /** Spec 195 §6 — the total recovery wait of one request (shared, never reset). */
 export const DISPLAY_RECOVERY_WAIT_BUDGET_MS = 1500;
+/** P1-75 SC-08 — leave time for the browser to receive a retryable response. */
+const DISPLAY_BUILD_WAIT_BUDGET_MS = 4000;
 /** Spec 195 §6 — file I/O starts with two concurrent workers. */
 export const DISPLAY_FILE_IO_CONCURRENCY = 2;
 
@@ -69,6 +78,9 @@ const FULL_DIGEST_INTERVAL_MS = 30_000;
 /** Metadata older than this, or a full digest older than 31 s, means "not verified". */
 const METADATA_FRESH_MS = 3000;
 const FULL_DIGEST_FRESH_MS = 31_000;
+/** P0-1 — bounded degraded read: serve the committed slot while only the freshness window has lapsed. */
+const METADATA_GRACE_MS = 120_000;
+const FULL_DIGEST_GRACE_MS = 180_000;
 
 /** Scopes a display snapshot may depend on. `sources` needs D+P+C, Agent permissions need P+C. */
 export const SOURCES_SCOPES: readonly DisplayScope[] = ["D", "P", "C"];
@@ -80,6 +92,7 @@ export type DisplayBusyReason =
   | "reconcile_failed"
   | "write_pending"
   | "build_capacity"
+  | "build_wait_timeout"
   | "generation_changed"
   | "context_mismatch";
 
@@ -96,22 +109,66 @@ export class DisplaySnapshotBusyError extends Error {
   }
 }
 
-type Slot = { key: string; payload: string; sidecar?: string; version: string; builtAt: number };
-type Entry = { current?: Slot; inflight: Map<string, Promise<Slot>>; failure?: { key: string; until: number; error: unknown } };
+type Slot = { key: string; payload: string; sidecar?: string; version: string; builtAt: number; incarnation: symbol };
+type BuildOutcome = { slot: Slot; context: ScopeContext } | { reason: DisplayBusyReason } | { error: unknown };
+type BuildTask = { readers: Set<(outcome: BuildOutcome) => void> };
+type Entry = { current?: Slot; inflight: Map<string, BuildTask>; failure?: { key: string; until: number; error: unknown } };
 
 const entries = new Map<string, Entry>();
 let inflightBuilds = 0;
-let stats = { builds: 0, hits: 0, misses: 0, busy: 0 };
+let stats = { builds: 0, hits: 0, misses: 0, busy: 0, graceServes: 0 };
 const busyByReason = new Map<DisplayBusyReason, number>();
 /** Spec 195 §7 — request correlation for the diagnostics (no payload, no secrets). */
 let lastRequest: { name: string; scopes: DisplayScope[]; attempts: number; reason?: DisplayBusyReason } | null = null;
 
-export type DisplaySnapshotResult = { payload: string; sidecar?: string; version: string; cache: "hit" | "miss" };
+/**
+ * 现场取证：最近 N 次忙碌（503）事件的内存记录，随 `/api/health` 一并导出，
+ * 不依赖容器日志是否保留。只含页面名、原因码、时间、核对年龄和运行态读数，无 payload、路径或密钥。
+ */
+const BUSY_EVENT_LIMIT = 30;
+const busyEvents: Array<Record<string, unknown>> = [];
+function recordBusyEvent(fields: Record<string, unknown>): void {
+  busyEvents.push({
+    at: new Date().toISOString(),
+    uptimeS: Math.round(process.uptime()),
+    inflightBuilds,
+    eventLoopMaxMs: eventLoopDelaySnapshot().maxMs,
+    ...fields
+  });
+  if (busyEvents.length > BUSY_EVENT_LIMIT) busyEvents.shift();
+}
+
+/** `/api/health` 用：忙碌累计、按原因分布、宽限服务次数与最近事件。 */
+export function displayBusySummary(): {
+  busy: number;
+  graceServes: number;
+  byReason: Record<string, number>;
+  recent: Array<Record<string, unknown>>;
+} {
+  return {
+    busy: stats.busy,
+    graceServes: stats.graceServes,
+    byReason: Object.fromEntries(busyByReason),
+    recent: busyEvents.map((event) => ({ ...event }))
+  };
+}
+
+export type DisplaySnapshotResult = { payload: string; sidecar?: string; version: string; cache: "hit" | "miss"; incarnation: symbol };
 /**
  * A build returns the serialized payload, optionally with a small serialized
  * sidecar (e.g. compile inputs) the handler evaluates per response.
  */
 export type DisplayBuild = (version: string) => Promise<string | { payload: string; sidecar: string }>;
+
+/** Compare the slot instance, not its key-derived version (same-key rebuilds keep that version). */
+export function evictDisplaySnapshotSlot(name: string, incarnation: symbol): boolean {
+  const entry = entries.get(name);
+  if (!entry?.current || entry.current.incarnation !== incarnation) return false;
+  entry.current = undefined;
+  entry.failure = undefined;
+  return true;
+}
+
 
 /**
  * Spec 195 §6 — one request budget: at most three attempts in total and one
@@ -121,13 +178,15 @@ export type DisplayBuild = (version: string) => Promise<string | { payload: stri
 export type DisplayRequestBudget = {
   attemptsLeft: number;
   deadline: number;
+  buildDeadline: number;
 };
 
 export function createDisplayRequestBudget(
   attempts: number = MAX_DISPLAY_ATTEMPTS,
-  waitBudgetMs: number = DISPLAY_RECOVERY_WAIT_BUDGET_MS
+  waitBudgetMs: number = DISPLAY_RECOVERY_WAIT_BUDGET_MS,
+  buildWaitBudgetMs: number = DISPLAY_BUILD_WAIT_BUDGET_MS
 ): DisplayRequestBudget {
-  return { attemptsLeft: attempts, deadline: Date.now() + waitBudgetMs };
+  return { attemptsLeft: attempts, deadline: Date.now() + waitBudgetMs, buildDeadline: performance.now() + buildWaitBudgetMs };
 }
 
 function entryFor(name: string): Entry {
@@ -148,19 +207,15 @@ function versionOf(key: string): string {
 }
 
 async function buildSlot(key: string, build: DisplayBuild): Promise<Slot> {
-  inflightBuilds += 1;
   stats.builds += 1;
   countEntryPerf("displayBuilds");
   markDisplayBuild();
-  try {
-    const version = versionOf(key);
-    const built = await build(version);
-    return typeof built === "string"
-      ? { key, payload: built, version, builtAt: Date.now() }
-      : { key, payload: built.payload, sidecar: built.sidecar, version, builtAt: Date.now() };
-  } finally {
-    inflightBuilds -= 1;
-  }
+  const version = versionOf(key);
+  const built = await build(version);
+  const incarnation = Symbol("display-slot");
+  return typeof built === "string"
+    ? { key, payload: built, version, builtAt: Date.now(), incarnation }
+    : { key, payload: built.payload, sidecar: built.sidecar, version, builtAt: Date.now(), incarnation };
 }
 
 function sameContext(a: ScopeContext, b: ScopeContext): boolean {
@@ -190,35 +245,19 @@ let reconciler: ReconcilerState | null = null;
  * file-I/O scheduler. It starts with two concurrent workers; the metadata scan
  * and the known changed paths have priority over the digest fallback.
  */
-let fileIoInFlight = 0;
-let fileIoPeak = 0;
-let fileIoActive = 0;
-const fileIoHighPriority: Array<() => void> = [];
-const fileIoNormalPriority: Array<() => void> = [];
-
-function drainFileIo(): void {
-  while (fileIoActive < DISPLAY_FILE_IO_CONCURRENCY) {
-    const job = fileIoHighPriority.shift() ?? fileIoNormalPriority.shift();
-    if (!job) return;
-    fileIoActive += 1;
-    job();
-  }
-}
+/**
+ * P1-81 — metadata keeps priority, but at most this many metadata jobs run back-to-back while the
+ * digest pass is waiting. Without it the digest watermark never advanced (f5e4b14d) and display
+ * reads stayed 503 until restart.
+ */
+export const DISPLAY_FILE_IO_MAX_CONSECUTIVE_HIGH = 2;
+const fileIoScheduler = createSharedPriorityScheduler({
+  concurrency: DISPLAY_FILE_IO_CONCURRENCY,
+  maxConsecutiveHigh: DISPLAY_FILE_IO_MAX_CONSECUTIVE_HIGH
+});
 
 function withFileIoSlot<T>(fn: () => Promise<T>, priority: "high" | "normal"): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const job = () => {
-      fileIoInFlight += 1;
-      if (fileIoInFlight > fileIoPeak) fileIoPeak = fileIoInFlight;
-      void fn().then(resolve, reject).finally(() => {
-        fileIoInFlight -= 1;
-        fileIoActive -= 1;
-        drainFileIo();
-      });
-    };
-    (priority === "high" ? fileIoHighPriority : fileIoNormalPriority).push(job);
-    drainFileIo();
-  });
+  return fileIoScheduler.run(fn, priority);
 }
 
 /** Bounded executor over the shared file-I/O scheduler. */
@@ -241,6 +280,14 @@ async function runBounded<T, R>(
   await Promise.all(runners);
   return results;
 }
+
+/** P0-1 measurement — one structured line per notable event; no payloads, no secrets. */
+function probeLog(event: string, fields: Record<string, unknown>): void {
+  console.warn(`[display-probe] ${JSON.stringify({ event, t: Date.now(), ...fields })}`);
+}
+let lastGraceRefusal = "none";
+/** Only passes slower than this are logged. */
+const PROBE_SLOW_PASS_MS = 1000;
 
 function isEnoent(error: unknown): boolean {
   return (error as NodeJS.ErrnoException | undefined)?.code === "ENOENT";
@@ -432,7 +479,10 @@ async function runMetadataPass(state: ReconcilerState): Promise<void> {
   }
 
   const commit = ledger.commit(candidates);
-  if (commit.changedScopes.length > 0) bumpDisplayGeneration(commit.changedScopes);
+  if (commit.changedScopes.length > 0) {
+    probeLog("generation_bump", { pass: "metadata", scopes: commit.changedScopes, candidates: candidates.length });
+    bumpDisplayGeneration(commit.changedScopes);
+  }
   state.error = undefined;
   // A scope whose digest coverage failed only recovers through a full digest
   // pass — run one now instead of waiting for the 30 s fallback.
@@ -490,18 +540,23 @@ async function runFullDigestPass(state: ReconcilerState): Promise<void> {
   }
 
   const commit = ledger.commit(candidates);
-  if (commit.changedScopes.length > 0) bumpDisplayGeneration(commit.changedScopes);
+  if (commit.changedScopes.length > 0) {
+    probeLog("generation_bump", { pass: "digest", scopes: commit.changedScopes, candidates: candidates.length });
+    bumpDisplayGeneration(commit.changedScopes);
+  }
   state.error = undefined;
 }
 
 /** One shared metadata pass — concurrent readers attach to the same task. */
 function sharedMetadataPass(state: ReconcilerState): Promise<void> {
   if (!state.metadataTask) {
+    const startedAt = Date.now();
     const task = runMetadataPass(state)
       .catch((error) => {
         state.error = errorMessage(error);
       })
       .finally(() => {
+        if (Date.now() - startedAt >= PROBE_SLOW_PASS_MS) probeLog("pass", { pass: "metadata", ms: Date.now() - startedAt, files: state.ledger.size, error: state.error ? true : false });
         if (state.metadataTask === task) state.metadataTask = undefined;
       });
     state.metadataTask = task;
@@ -512,11 +567,13 @@ function sharedMetadataPass(state: ReconcilerState): Promise<void> {
 /** One shared full digest pass — concurrent readers attach to the same task. */
 function sharedFullDigestPass(state: ReconcilerState): Promise<void> {
   if (!state.fullTask) {
+    const startedAt = Date.now();
     const task = runFullDigestPass(state)
       .catch((error) => {
         state.error = errorMessage(error);
       })
       .finally(() => {
+        if (Date.now() - startedAt >= PROBE_SLOW_PASS_MS) probeLog("pass", { pass: "digest", ms: Date.now() - startedAt, files: state.ledger.size, error: state.error ? true : false });
         if (state.fullTask === task) state.fullTask = undefined;
       });
     state.fullTask = task;
@@ -564,14 +621,19 @@ function busyReasonFor(scopes: readonly DisplayScope[]): DisplayBusyReason {
 }
 
 /**
- * Spec 195 §6 — share the verification task and wait for recovery inside the
- * request's own budget. The task outlives the HTTP subscriber: a cancelled
- * request never releases the work early.
+ * P1-81 — would a display read of the default scopes be served right now (verified or within the
+ * bounded grace)? Used by the stuck-state watchdog as the "display read" business probe; it never
+ * builds, waits or touches the disk.
  */
-async function ensureVerified(scopes: readonly DisplayScope[], budget: DisplayRequestBudget): Promise<boolean> {
-  if (displayCacheVerified(scopes)) return true;
-  const state = reconciler;
-  if (!state) return false;
+export function displayReadServable(): { ok: boolean; reason?: string } {
+  if (!reconciler) return { ok: false, reason: "no_reconciler" };
+  if (reconciler.error) return { ok: false, reason: "reconciler_error" };
+  if (displayCacheWithinGrace(SOURCES_SCOPES)) return { ok: true };
+  return { ok: false, reason: busyReasonFor(SOURCES_SCOPES) };
+}
+
+/** Start (or attach to) the shared passes the scopes need; does not wait. */
+function startVerificationTasks(state: ReconcilerState, scopes: readonly DisplayScope[]): Promise<void>[] {
   const health = scopeHealthSnapshot();
   const tasks: Promise<void>[] = [];
   const needsMetadata = scopes.some((scope) => {
@@ -584,6 +646,66 @@ async function ensureVerified(scopes: readonly DisplayScope[], budget: DisplayRe
   });
   if (needsMetadata) tasks.push(sharedMetadataPass(state));
   if (needsDigest) tasks.push(sharedFullDigestPass(state));
+  return tasks;
+}
+
+/**
+ * P0-1 — verification is only *aged* (no error, no pending write, same context
+ * and generation): the scopes were verified recently enough for a bounded
+ * degraded read. Any recorded error or an age beyond the grace limits fails.
+ */
+function displayCacheWithinGrace(scopes: readonly DisplayScope[], now: number = Date.now()): boolean {
+  if (!reconciler || reconciler.error) return false;
+  const health = scopeHealthSnapshot();
+  for (const scope of scopes) {
+    const entry = health[scope];
+    if (!entry || entry.metadataError || entry.digestError) return false;
+    if (now - entry.metadataCompletedAt >= METADATA_GRACE_MS) return false;
+    if (now - entry.digestCompletedAt >= FULL_DIGEST_GRACE_MS) return false;
+  }
+  return true;
+}
+
+/**
+ * P0-1 — instead of failing the page with 503 when only the freshness window has
+ * lapsed (typically a starved event loop delaying the background pass), serve the
+ * already-committed slot for the same key and re-verify in the background. Never
+ * builds, never serves across a context or generation change or a pending write.
+ */
+async function serveWithinGrace(name: string, scopes: readonly DisplayScope[], extraKey: string): Promise<DisplaySnapshotResult | undefined> {
+  const state = reconciler;
+  const refuse = (cause: string): undefined => { lastGraceRefusal = cause; return undefined; };
+  if (!state) return refuse("no_reconciler");
+  if (state.error) return refuse("reconciler_error");
+  if (!displayCacheWithinGrace(scopes)) return refuse("outside_grace_or_scope_error");
+  if (hasPendingDisplayWrite(scopes)) return refuse("write_pending");
+  const context = await currentScopeContext();
+  if (!displayCacheWithinGrace(scopes)) return refuse("outside_grace_after_context");
+  if (hasPendingDisplayWrite(scopes)) return refuse("write_pending_after_context");
+  if (!sameContext(state.context, context)) return refuse("context_mismatch");
+  const entry = entries.get(name);
+  const slot = entry?.current;
+  if (!slot) return refuse("no_committed_slot");
+  if (slot.key !== keyFor(name, scopes, context, extraKey)) return refuse("slot_key_changed");
+  void Promise.all(startVerificationTasks(state, scopes));
+  stats.hits += 1;
+  stats.graceServes += 1;
+  countEntryPerf("displayHits");
+  markDisplayCache("hit");
+  markDisplayDegraded("grace");
+  return { payload: slot.payload, sidecar: slot.sidecar, version: slot.version, cache: "hit", incarnation: slot.incarnation };
+}
+
+/**
+ * Spec 195 §6 — share the verification task and wait for recovery inside the
+ * request's own budget. The task outlives the HTTP subscriber: a cancelled
+ * request never releases the work early.
+ */
+async function ensureVerified(scopes: readonly DisplayScope[], budget: DisplayRequestBudget): Promise<boolean> {
+  if (displayCacheVerified(scopes)) return true;
+  const state = reconciler;
+  if (!state) return false;
+  const tasks = startVerificationTasks(state, scopes);
   if (tasks.length === 0) return false;
   const remaining = budget.deadline - Date.now();
   if (remaining <= 0) return displayCacheVerified(scopes);
@@ -602,24 +724,233 @@ function verifiedFor(context: ScopeContext, scopes: readonly DisplayScope[]): bo
   return displayCacheVerified(scopes) && reconciler !== null && sameContext(reconciler.context, context);
 }
 
+function invalidBuildReason(name: string, entry: Entry, scopes: readonly DisplayScope[], context: ScopeContext, slot: Slot, extraKey: string): DisplayBusyReason | undefined {
+  if (!verifiedFor(context, scopes)) {
+    return reconciler && !sameContext(reconciler.context, context) ? "context_mismatch" : busyReasonFor(scopes);
+  }
+  if (entries.get(name) !== entry || hasPendingDisplayWrite(scopes) || keyFor(name, scopes, context, extraKey) !== slot.key) {
+    return "generation_changed";
+  }
+}
+
+/** Shared work owns validation and publication even after all readers have timed out. */
+function startDisplayBuild(name: string, entry: Entry, key: string, scopes: readonly DisplayScope[], extraKey: string, build: DisplayBuild): BuildTask {
+  const task: BuildTask = { readers: new Set() };
+  entry.inflight.set(key, task);
+  inflightBuilds += 1;
+  const finish = (outcome: BuildOutcome) => {
+    entry.inflight.delete(key);
+    inflightBuilds -= 1;
+    for (const notify of task.readers) notify(outcome);
+  };
+  const publish = async (): Promise<BuildOutcome> => {
+    let slot: Slot;
+    try {
+      slot = await buildSlot(key, build);
+    } catch (error) {
+      entry.failure = { key, until: Date.now() + DISPLAY_BUILD_FAILURE_BACKOFF_MS, error };
+      return { error };
+    }
+    const context = await currentScopeContext();
+    const reason = invalidBuildReason(name, entry, scopes, context, slot, extraKey);
+    if (reason) return { reason };
+    entry.current = slot;
+    entry.failure = undefined;
+    return { slot, context };
+  };
+  void publish().then(finish, (error: unknown) => finish({ error }));
+  return task;
+}
+
+function waitForDisplayBuild(task: BuildTask, deadline: number): Promise<BuildOutcome> {
+  return new Promise((resolve) => {
+    const unsubscribe = () => task.readers.delete(onComplete);
+    const timedOut: BuildOutcome = { reason: "build_wait_timeout" };
+    const timer = setTimeout(() => {
+      unsubscribe();
+      resolve(timedOut);
+    }, Math.max(0, Math.ceil(deadline - performance.now())));
+    const onComplete = (outcome: BuildOutcome) => {
+      clearTimeout(timer);
+      unsubscribe();
+      resolve(performance.now() < deadline ? outcome : timedOut);
+    };
+    task.readers.add(onComplete);
+  });
+}
+
+// ─── committed view served during a note-only write (P1-75 §2.1) ────────────
+
+/**
+ * A verified, complete committed view that independent readers may keep using
+ * while ONE write barrier is pending. `companion` carries the inputs the
+ * reader needs to stay on that same committed revision (e.g. the raw access
+ * text the slot was built from), so a reader never stitches live mid-write
+ * content with the committed slot.
+ *
+ * Eligibility is deliberately narrow and short-lived: it is opened as the very
+ * first synchronous action inside the write's own barrier. The write's OWN
+ * nested file barriers (same async chain, see `runWithCommittedViewServe`) do
+ * not count as change; any other generation movement — another writer, an
+ * external change seen by the reconciler, the end of this write — withdraws it
+ * synchronously, before that mutation can touch the disk.
+ */
+export type CommittedDisplayView<T = unknown> = {
+  readonly name: string;
+  readonly scopes: readonly DisplayScope[];
+  readonly companion: T;
+  /** @internal */ readonly slot: Slot;
+  /** @internal */ readonly context: ScopeContext;
+  /** @internal generations observed when the view was captured (no write pending) */
+  readonly capturedGenerations: Readonly<Record<DisplayScope, number>>;
+  /** @internal true while readers may be served */
+  open: boolean;
+};
+
+const serveLeases = new Map<string, CommittedDisplayView<unknown>>();
+const ownWrite = new AsyncLocalStorage<CommittedDisplayView>();
+let leaseListenerInstalled = false;
+
+/** A generation bump that does not come from the owning write withdraws its view at once. */
+function installLeaseListener(): void {
+  if (leaseListenerInstalled) return;
+  leaseListenerInstalled = true;
+  onDisplayGenerationChange((changed) => {
+    const own = ownWrite.getStore();
+    for (const view of [...serveLeases.values()]) {
+      if (view !== own && changed.some((scope) => view.scopes.includes(scope))) withdrawCommittedViewServe(view);
+    }
+  });
+}
+
+/** Run the write so its own nested barrier bumps are recognised as this view's own. */
+export function runWithCommittedViewServe<R>(view: CommittedDisplayView | null, fn: () => Promise<R>): Promise<R> {
+  return view ? ownWrite.run(view, fn) : fn();
+}
+
+/**
+ * Capture the current verified committed view (async part, BEFORE the barrier
+ * begins). Returns null unless the entry's current slot is exactly the
+ * `extraKey` revision at the current generation, nothing is pending and the
+ * reconciler verifies these scopes for this context.
+ */
+export async function captureCommittedDisplayView<T>(
+  name: string,
+  scopes: readonly DisplayScope[],
+  extraKey: string,
+  companion: T
+): Promise<CommittedDisplayView<T> | null> {
+  const capturedGenerations = displayGenerations();
+  const context = await currentScopeContext();
+  if (hasPendingDisplayWrite(scopes) || !verifiedFor(context, scopes)) return null;
+  const current = entries.get(name)?.current;
+  if (!current || current.key !== keyFor(name, scopes, context, extraKey)) return null;
+  // A barrier that began and ended while we awaited would have moved a generation.
+  const now = displayGenerations();
+  if (scopes.some((scope) => now[scope] !== capturedGenerations[scope])) return null;
+  return { name, scopes: [...scopes], companion, slot: current, context, capturedGenerations, open: false };
+}
+
+/**
+ * Open the view for readers. MUST be the first synchronous action inside the
+ * write barrier callback: the only generation movement since capture may be
+ * this write's own begin (+1 on exactly its scopes).
+ */
+export function openCommittedViewServe(view: CommittedDisplayView, token: DisplayWriteToken): boolean {
+  if (token.ended || !hasPendingDisplayWrite(view.scopes)) return false;
+  const now = displayGenerations();
+  const exact = view.scopes.every(
+    (scope) => now[scope] === view.capturedGenerations[scope] + (token.scopes.includes(scope) ? 1 : 0)
+  );
+  if (!exact || !token.scopes.some((scope) => view.scopes.includes(scope))) return false;
+  installLeaseListener();
+  view.open = true;
+  serveLeases.set(view.name, view);
+  return true;
+}
+
+/** Withdraw eligibility. Safe to call repeatedly or for a view that never opened. */
+export function withdrawCommittedViewServe(viewOrName: CommittedDisplayView | string): void {
+  const name = typeof viewOrName === "string" ? viewOrName : viewOrName.name;
+  const open = serveLeases.get(name);
+  if (!open || (typeof viewOrName !== "string" && open !== viewOrName)) return;
+  open.open = false;
+  serveLeases.delete(name);
+}
+
+/** The view is still open, its write still pending, its slot current and the scopes verified right now. */
+export function committedViewServeValid(view: CommittedDisplayView): boolean {
+  if (!view.open || serveLeases.get(view.name) !== view) return false;
+  // Recovery state is part of the equivalence: a closed recovery latch refuses (and withdraws) the view.
+  if (getAccessRecoveryStateSync().required) {
+    withdrawCommittedViewServe(view);
+    return false;
+  }
+  if (!hasPendingDisplayWrite(view.scopes) || entries.get(view.name)?.current !== view.slot) return false;
+  return displayCacheVerified(view.scopes) && reconciler !== null && sameContext(reconciler.context, view.context);
+}
+
+/** The open committed view for `name` that independent readers may use now, if any. */
+export function activeCommittedView<T = unknown>(name: string): CommittedDisplayView<T> | null {
+  const view = serveLeases.get(name);
+  return view && committedViewServeValid(view) ? (view as CommittedDisplayView<T>) : null;
+}
+
+function serveCommittedView(
+  name: string,
+  scopes: readonly DisplayScope[],
+  view: CommittedDisplayView,
+  budget: DisplayRequestBudget
+): DisplaySnapshotResult {
+  // A served attempt is an attempt: the route's retry loop shares this budget.
+  const hadAttempt = budget.attemptsLeft > 0;
+  if (hadAttempt) budget.attemptsLeft -= 1;
+  const sameScopes = view.name === name && view.scopes.length === scopes.length && scopes.every((scope) => view.scopes.includes(scope));
+  if (hadAttempt && sameScopes && committedViewServeValid(view)) {
+    lastRequest = { name, scopes: [...scopes], attempts: 1 };
+    stats.hits += 1;
+    countEntryPerf("displayHits");
+    markDisplayCache("hit");
+    const slot = view.slot;
+    return { payload: slot.payload, sidecar: slot.sidecar, version: slot.version, cache: "hit", incarnation: slot.incarnation };
+  }
+  stats.busy += 1;
+  busyByReason.set("generation_changed", (busyByReason.get("generation_changed") ?? 0) + 1);
+  recordBusyEvent({ name, reason: "generation_changed", attempts: 1, committedView: true });
+  lastRequest = { name, scopes: [...scopes], attempts: 1, reason: "generation_changed" };
+  throw new DisplaySnapshotBusyError("generation_changed");
+}
+
 /**
  * getSnapshot(keyScope) from Spec 174 §7. Auth already ran in the onRequest
  * hook for this request (cache hit, miss and in-flight attach alike).
+ *
+ * `committedView` (P1-75): serve this already-committed view while its single
+ * note-only write is pending; if the view is no longer valid the call fails
+ * with a retryable busy error and never builds from its (stale) companion.
  */
 export async function getDisplaySnapshot(
   name: string,
   scopes: readonly DisplayScope[],
   build: DisplayBuild,
-  options: { extraKey?: string; budget?: DisplayRequestBudget } = {}
+  options: { extraKey?: string; budget?: DisplayRequestBudget; committedView?: CommittedDisplayView } = {}
 ): Promise<DisplaySnapshotResult> {
   const extraKey = options.extraKey ?? "";
   const budget = options.budget ?? createDisplayRequestBudget();
+  if (options.committedView) return serveCommittedView(name, scopes, options.committedView, budget);
   let reason: DisplayBusyReason = "metadata_overdue";
   let attempts = 0;
   for (let attempt = 1; attempt <= MAX_DISPLAY_ATTEMPTS; attempt += 1) {
     if (budget.attemptsLeft <= 0) break;
     budget.attemptsLeft -= 1;
     attempts += 1;
+    if (!displayCacheVerified(scopes)) {
+      const grace = await serveWithinGrace(name, scopes, extraKey);
+      if (grace) {
+        lastRequest = { name, scopes: [...scopes], attempts };
+        return grace;
+      }
+    }
     if (!(await ensureVerified(scopes, budget))) {
       reason = busyReasonFor(scopes);
       break;
@@ -637,6 +968,12 @@ export async function getDisplaySnapshot(
     }
     const context = await currentScopeContext();
     if (!verifiedFor(context, scopes)) {
+      // P0-1：等待上下文期间新鲜窗可能刚好过期（事件循环被占）；仍在宽限内则服务已提交快照。
+      const grace = await serveWithinGrace(name, scopes, extraKey);
+      if (grace) {
+        lastRequest = { name, scopes: [...scopes], attempts };
+        return grace;
+      }
       reason = reconciler && !sameContext(reconciler.context, context) ? "context_mismatch" : busyReasonFor(scopes);
       break;
     }
@@ -647,60 +984,53 @@ export async function getDisplaySnapshot(
       stats.hits += 1;
       countEntryPerf("displayHits");
       markDisplayCache("hit");
-      return { payload: entry.current.payload, sidecar: entry.current.sidecar, version: entry.current.version, cache: "hit" };
+      return { payload: entry.current.payload, sidecar: entry.current.sidecar, version: entry.current.version, cache: "hit", incarnation: entry.current.incarnation };
     }
     if (entry.failure && entry.failure.key === key && Date.now() < entry.failure.until) {
       throw entry.failure.error;
     }
-    let promise = entry.inflight.get(key);
-    const owner = !promise;
-    if (!promise) {
+    if (performance.now() >= budget.buildDeadline) {
+      reason = "build_wait_timeout";
+      break;
+    }
+    let task = entry.inflight.get(key);
+    if (!task) {
       if (inflightBuilds >= MAX_CONCURRENT_DISPLAY_BUILDS) {
         reason = "build_capacity";
         break;
       }
-      promise = buildSlot(key, build);
-      entry.inflight.set(key, promise);
+      task = startDisplayBuild(name, entry, key, scopes, extraKey, build);
     }
-    const started = promise;
-    // The owner keeps the in-flight entry until its publish decision, so
-    // late arrivals attach instead of starting a duplicate build.
-    const release = () => {
-      if (owner && entry.inflight.get(key) === started) entry.inflight.delete(key);
-    };
-    let slot: Slot;
-    try {
-      slot = await started;
-    } catch (error) {
-      if (owner) entry.failure = { key, until: Date.now() + DISPLAY_BUILD_FAILURE_BACKOFF_MS, error };
-      release();
-      throw error;
-    }
-    // Publish / return only if still verified and nothing changed while building;
-    // otherwise retry with the new key (or end busy).
-    let nowContext: ScopeContext;
-    try {
-      nowContext = await currentScopeContext();
-    } finally {
-      release();
-    }
-    if (!verifiedFor(nowContext, scopes)) {
-      reason = reconciler && !sameContext(reconciler.context, nowContext) ? "context_mismatch" : busyReasonFor(scopes);
+    const outcome = await waitForDisplayBuild(task, budget.buildDeadline);
+    if ("error" in outcome) throw outcome.error;
+    if ("reason" in outcome) {
+      reason = outcome.reason;
+      if (reason === "generation_changed") continue;
       break;
     }
-    if (!hasPendingDisplayWrite(scopes) && keyFor(name, scopes, nowContext, extraKey) === slot.key) {
-      if (entry.current?.key !== slot.key) entry.current = slot;
-      entry.failure = undefined;
-      lastRequest = { name, scopes: [...scopes], attempts };
-      stats.misses += 1;
-      countEntryPerf("displayMisses");
-      markDisplayCache("miss");
-      return { payload: slot.payload, sidecar: slot.sidecar, version: slot.version, cache: "miss" };
+    const { slot, context: publishedContext } = outcome;
+    const invalid = invalidBuildReason(name, entry, scopes, publishedContext, slot, extraKey);
+    if (invalid) {
+      reason = invalid;
+      if (reason === "generation_changed") continue;
+      break;
     }
-    reason = "generation_changed";
+    lastRequest = { name, scopes: [...scopes], attempts };
+    stats.misses += 1;
+    countEntryPerf("displayMisses");
+    markDisplayCache("miss");
+    return { payload: slot.payload, sidecar: slot.sidecar, version: slot.version, cache: "miss", incarnation: slot.incarnation };
   }
   stats.busy += 1;
   busyByReason.set(reason, (busyByReason.get(reason) ?? 0) + 1);
+  {
+    const now = Date.now();
+    const ages = Object.fromEntries(Object.entries(scopeHealthSnapshot()).map(([scope, e]) => [scope, { m: now - e.metadataCompletedAt, d: now - e.digestCompletedAt, me: Boolean(e.metadataError), de: Boolean(e.digestError) }]));
+    const metaTask = Boolean(reconciler?.metadataTask);
+    const fullTask = Boolean(reconciler?.fullTask);
+    probeLog("busy", { name, reason, graceRefusal: lastGraceRefusal, attempts, ages, metaTask, fullTask });
+    recordBusyEvent({ name, reason, lastGraceRefusal, attempts, ages, metaTask, fullTask });
+  }
   lastRequest = { name, scopes: [...scopes], attempts, reason };
   throw new DisplaySnapshotBusyError(reason);
 }
@@ -814,6 +1144,7 @@ export async function startDisplayReconciler(options: { metadataIntervalMs?: num
   }
   // Nothing that happened while unverified was observed: no earlier snapshot or build may be served.
   entries.clear();
+  serveLeases.clear();
   bumpDisplayGeneration(["D", "P", "C"]);
   installWatchers(state);
   const metaTimer = setInterval(() => void reconcileMetadata(state), options.metadataIntervalMs ?? METADATA_INTERVAL_MS);
@@ -869,8 +1200,10 @@ export async function prewarmDisplaySnapshots(): Promise<void> {
 /** Test / fixture IPC hook: drop every snapshot, failure and in-flight reference. */
 export function resetDisplaySnapshotsForTests(): void {
   entries.clear();
-  stats = { builds: 0, hits: 0, misses: 0, busy: 0 };
+  serveLeases.clear();
+  stats = { builds: 0, hits: 0, misses: 0, busy: 0, graceServes: 0 };
   busyByReason.clear();
+  busyEvents.length = 0;
   resetRevisionLedger();
 }
 
@@ -893,8 +1226,9 @@ export function displaySnapshotDiagnostics() {
     reconcilerRunning: reconciler !== null,
     reconcilerError: reconciler?.error ? sanitizeDiagnosticMessage(reconciler.error) : null,
     inflightBuilds,
-    fileIoInFlight,
-    fileIoPeak,
+    fileIoInFlight: fileIoScheduler.stats().active,
+    fileIoPeak: fileIoScheduler.stats().peak,
+    fileIoNormalShareDispatches: fileIoScheduler.stats().normalShareDispatches,
     entries: [...entries.entries()].map(([name, entry]) => ({
       name,
       hasCurrent: Boolean(entry.current),

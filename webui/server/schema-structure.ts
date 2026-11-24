@@ -1,11 +1,37 @@
 import { stringify } from "yaml";
-import { quoteMysqlIdent, showFullColumnsSql, showTablesFromCatalogSql, splitCatalogDatabase } from "./catalog-database";
+import {
+  catalogTablesSql,
+  CATALOG_SCAN_TIMEOUT_MS,
+  CATALOG_TABLE_NAME_LIMIT,
+  describeCatalogTableSql,
+  describeTableSql,
+  quoteMysqlIdent,
+  showColumnsSql,
+  splitCatalogDatabase
+} from "./catalog-database";
+import { runCatalogShow } from "./catalog-show";
+import {
+  CALL_BUDGET_MS,
+  channelAsShow,
+  COLUMN_READ_ROW_LIMIT,
+  createChannelHolder,
+  PER_TABLE_TIMEOUT_MS,
+  readMysqlTablesBatch
+} from "./schema-structure-batch";
+import { MetadataChannelUnavailable, openMetadataChannel } from "./metadata-channel";
 import { readConnections } from "./project";
 import { runSql, type SqlResult } from "./ktx";
 import type { ConnectionInfo } from "./model";
+import { SchemaReadDeadline, SchemaReadTimeout } from "./schema-read-deadline.js";
+import { getOpsStepJournal, opsStepReasonFromError } from "./runtime/ops-step-journal.js";
+import { readSchemaTableRejection } from "../shared/schema-table-rejection.js";
+import {
+  allocateSourceNames,
+  readConnectionSourceManifests,
+  type ConnectionSourceRegistry
+} from "./source-name-registry";
 
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const CATALOG_STRUCTURE_MAX_TABLES = 200;
 
 const NUMBER_TYPES = new Set([
   "int",
@@ -74,10 +100,32 @@ export type SchemaColumnRow = {
  * onto its own vocabulary — Spec 190 needs `TABLE_LIST_TOO_LARGE` where Spec
  * 164 reports a plain read failure.
  */
+export type SchemaColumnRejection = {
+  table: string;
+  reason: "missing" | "ambiguous" | "unreadable" | "permission" | "timeout" | "too_large" | "too_wide";
+};
+
 export type SchemaColumnsRead =
-  | { status: "ok"; columns: SchemaColumnRow[] }
+  | {
+      status: "ok";
+      columns: SchemaColumnRow[];
+      tables?: string[];
+      /** Requested tables that must not be written with an empty or mixed column list. */
+      rejections?: SchemaColumnRejection[];
+      /** Requested tables a call budget left unread; the caller asks again. */
+      deferred?: string[];
+    }
   | { status: "too_large" }
-  | { status: "error"; message: string };
+  | {
+      status: "error";
+      message: string;
+      detail?: {
+        connectionId?: string | null;
+        schema?: string | null;
+        table?: string | null;
+        phase?: string | null;
+      };
+    };
 
 export type SchemaStructurePreview = {
   schema: string;
@@ -85,22 +133,35 @@ export type SchemaStructurePreview = {
   yaml: string;
   tableCount: number;
   columnCount: number;
+  /** True when this response lists table names and has not read their columns. */
+  namesOnly: boolean;
   mapped: { number: number; string: number; time: number };
   downgraded: SchemaStructureColumn[];
+  /** Batch reads only: tables that could not be read, with a sentence naming the table. */
+  rejections?: Array<{ table: string; reason: SchemaColumnRejection["reason"]; message: string }>;
+  /** Batch reads only: tables left unread by the call budget; ask again. */
+  deferred?: string[];
 };
 
-/** `ktx sql --max-rows` accepts 1–10000. A full page is treated as truncated. */
+/** `ktx sql --max-rows` accepts 1–10000. A full page is treated as truncated / too_large. */
 const SCHEMA_STRUCTURE_MAX_ROWS = 10_000;
 
 export class SchemaStructureError extends Error {
   code: "CONNECTION_NOT_FOUND" | "SCHEMA_UNSUPPORTED" | "INVALID_SCHEMA" | "READ_FAILED";
   statusCode: number;
+  detail?: unknown;
 
-  constructor(code: SchemaStructureError["code"], message: string, statusCode = 400) {
+  constructor(
+    code: SchemaStructureError["code"],
+    message: string,
+    statusCode = 400,
+    detail?: unknown
+  ) {
     super(message);
     this.name = "SchemaStructureError";
     this.code = code;
     this.statusCode = statusCode;
+    if (detail !== undefined) this.detail = detail;
   }
 }
 
@@ -129,7 +190,27 @@ type ColumnInput = {
   comment: string;
 };
 
-export function buildMinimalSchemaManifest(schema: string, columns: ColumnInput[]): SchemaStructurePreview {
+export type SchemaManifestAllocContext = {
+  /** Connection-scoped registry; when omitted, bare physical names are used as sourceNames. */
+  registry?: ConnectionSourceRegistry;
+};
+
+export function buildMinimalSchemaManifest(
+  schema: string,
+  columns: ColumnInput[],
+  ensureTables: string[] = [],
+  alloc?: SchemaManifestAllocContext
+): SchemaStructurePreview {
+  const physicalNames = [
+    ...new Set([
+      ...columns.map((column) => column.table).filter(Boolean),
+      ...ensureTables.filter(Boolean)
+    ])
+  ].sort((a, b) => a.localeCompare(b));
+  const assignments = alloc?.registry
+    ? allocateSourceNames(schema, physicalNames, alloc.registry)
+    : new Map(physicalNames.map((name) => [name, name]));
+
   const tables: Record<string, { table: string; columns: Array<Record<string, unknown>> }> = {};
   const mapped = { number: 0, string: 0, time: 0 };
   const downgraded: SchemaStructureColumn[] = [];
@@ -139,7 +220,8 @@ export function buildMinimalSchemaManifest(schema: string, columns: ColumnInput[
     if (mappedType.downgraded) {
       downgraded.push({ table: column.table, column: column.column, rawType: column.dataType });
     }
-    const entry = tables[column.table] ?? {
+    const sourceName = assignments.get(column.table) ?? column.table;
+    const entry = tables[sourceName] ?? {
       table: `${schema}.${column.table}`,
       columns: []
     };
@@ -151,7 +233,15 @@ export function buildMinimalSchemaManifest(schema: string, columns: ColumnInput[
     if (column.primaryKey) spec.pk = true;
     if (column.comment.trim()) spec.descriptions = { db: column.comment.trim() };
     entry.columns.push(spec);
-    tables[column.table] = entry;
+    tables[sourceName] = entry;
+  }
+  // External catalogs may list tables while every column probe is rejected.
+  // Keep those names in the manifest so "启用表范围" can still select them.
+  for (const name of ensureTables) {
+    if (!name) continue;
+    const sourceName = assignments.get(name) ?? name;
+    if (tables[sourceName]) continue;
+    tables[sourceName] = { table: `${schema}.${name}`, columns: [] };
   }
   const yaml = stringify({ tables });
   return {
@@ -160,6 +250,7 @@ export function buildMinimalSchemaManifest(schema: string, columns: ColumnInput[
     yaml,
     tableCount: Object.keys(tables).length,
     columnCount: columns.length,
+    namesOnly: false,
     mapped,
     downgraded
   };
@@ -211,34 +302,295 @@ ORDER BY c.table_name, c.ordinal_position
 `.trim().replace(/\s+/g, " ");
 }
 
-function structureRows(result: SqlResult): unknown[] {
+/**
+ * A schema-wide column scan that used up its deadline should be retried in
+ * smaller pieces. Connection failures stay out of this bucket: "connect timed
+ * out" is not a slow metadata scan.
+ */
+export function columnScanTimedOut(result: SqlResult, timeoutMs = CATALOG_SCAN_TIMEOUT_MS): boolean {
+  const text = `${result.stderr ?? ""}\n${result.stdout ?? ""}`;
+  if (/can't connect|cannot connect|connection refused|connection timed out|connect timed out|unknown host|no such host/i.test(text)) {
+    return false;
+  }
+  // Match probe/driver timeouts (incl. "Catalog connection/query timed out") against the
+  // statement budget that was actually passed — not the 120s schema-wide default alone.
+  if (/timed out|max_execution_time|maximum statement execution time|query execution was interrupted/i.test(text)) {
+    return true;
+  }
+  return !result.ok && result.latencyMs >= Math.max(0, timeoutMs - 1_500);
+}
+
+/** Truncate noisy SQL / driver text for container logs (upgrade / field triage). */
+function clipLogText(value: string | undefined | null, max = 500): string {
+  const text = (value ?? "").trim().replace(/\s+/g, " ");
+  if (!text) return "";
+  return text.length <= max ? text : `${text.slice(0, max)}…`;
+}
+
+type SchemaStructureLogContext = {
+  connectionId?: string;
+  schema?: string;
+  table?: string;
+  phase?: string;
+  sql?: string;
+};
+
+/**
+ * Keep a short, readable sentence on the WebUI; put the rejected SQL and driver
+ * text in container logs for upgrades when the customer build still fails.
+ */
+export function logSchemaStructureFailure(
+  context: SchemaStructureLogContext,
+  result?: Pick<SqlResult, "ok" | "exitCode" | "stderr" | "stdout" | "latencyMs">
+): void {
+  console.error("[schema-structure] read failed", {
+    connectionId: context.connectionId ?? null,
+    schema: context.schema ?? null,
+    table: context.table ?? null,
+    phase: context.phase ?? null,
+    sql: clipLogText(context.sql, 300) || null,
+    ok: result?.ok ?? null,
+    exitCode: result?.exitCode ?? null,
+    latencyMs: result?.latencyMs ?? null,
+    stderr: clipLogText(result?.stderr, 500) || null,
+    stdout: clipLogText(result?.stdout, 300) || null
+  });
+}
+
+function describeSchemaStructurePhase(
+  phase: string | undefined,
+  schema?: string,
+  table?: string
+): string {
+  const schemaLabel = schema ? `「${schema}」` : "";
+  const tableLabel = table ? `「${table}」` : "";
+  switch (phase) {
+    case "catalog-list-tables":
+    case "mysql-name-list":
+      return `无法列出 Schema${schemaLabel}下的表`;
+    case "catalog-columns":
+      return `无法读取表${tableLabel}的字段`;
+    case "schema-wide-columns":
+      return `无法一次读取 Schema${schemaLabel}的字段`;
+    case "table-columns":
+      return `无法读取表${tableLabel}的字段`;
+    case "mysql-wide-fallback-list-tables":
+      return `无法列出 Schema${schemaLabel}下的表`;
+    case "mysql-wide-fallback-columns":
+      return `无法读取表${tableLabel}的字段`;
+    default:
+      return schemaLabel ? `读取 Schema${schemaLabel}时出错` : "读取时出错";
+  }
+}
+
+/** User-visible READ_FAILED copy: phase only. SQL / driver text stay in logs. */
+export function formatSchemaStructureUserMessage(context: SchemaStructureLogContext): string {
+  const action = describeSchemaStructurePhase(context.phase, context.schema, context.table);
+  return `读取表结构失败：${action}。`;
+}
+
+function safeStructureDetail(context: SchemaStructureLogContext): {
+  connectionId: string | null;
+  schema: string | null;
+  table: string | null;
+  phase: string | null;
+} {
+  return {
+    connectionId: context.connectionId ?? null,
+    schema: context.schema ?? null,
+    table: context.table ?? null,
+    phase: context.phase ?? null
+  };
+}
+
+function structureRows(result: SqlResult, context: SchemaStructureLogContext = {}): unknown[] {
   const json = result.json;
   const rows =
     json && typeof json === "object" && Array.isArray((json as { rows?: unknown }).rows)
       ? (json as { rows: unknown[] }).rows
       : null;
   if (!result.ok || rows === null) {
-    throw new SchemaStructureError("READ_FAILED", "读取表结构失败。");
+    const meta = { ...context, sql: context.sql ?? result.command, phase: context.phase ?? "sql" };
+    logSchemaStructureFailure(meta, result);
+    throw new SchemaStructureError(
+      "READ_FAILED",
+      formatSchemaStructureUserMessage(meta),
+      400,
+      safeStructureDetail(meta)
+    );
   }
-  if (rows.length >= SCHEMA_STRUCTURE_MAX_ROWS) {
-    throw new SchemaStructureError("READ_FAILED", "这个 Schema 的字段数超过一次可读取的上限。");
+  if (rows.length >= (
+    context.phase === "table-columns"
+      ? COLUMN_READ_ROW_LIMIT
+      : context.phase === "catalog-list-tables"
+        ? CATALOG_TABLE_NAME_LIMIT
+        : SCHEMA_STRUCTURE_MAX_ROWS
+  )) {
+    const noun = context.phase === "catalog-list-tables" || context.phase === "mysql-name-list"
+      ? "表数"
+      : "字段数";
+    throw new SchemaStructureError("READ_FAILED", `这个 Schema 的${noun}超过一次可读取的上限。`);
   }
   return rows;
 }
 
-function mapShowFullColumn(table: string, row: unknown[]): ColumnInput | null {
+function sqlFailureReason(result: SqlResult, timeoutMs?: number): SchemaColumnRejection["reason"] {
+  if (columnScanTimedOut(result, timeoutMs)) return "timeout";
+  const text = `${result.stderr ?? ""}\n${result.stdout ?? ""}`;
+  if (/超过一次可读取的上限/.test(text)) return "too_large";
+  if (/access denied|command denied|permission denied|\bprivilege\b/i.test(text)) return "permission";
+  if (/unknown table|doesn't exist|does not exist|table not found/i.test(text)) return "missing";
+  return "unreadable";
+}
+
+function answeredRows(
+  result: SqlResult,
+  limit: number,
+  timeoutMs?: number
+): { rows: unknown[] } | { reason: SchemaColumnRejection["reason"] } {
+  const rows = resultRows(result);
+  if (!result.ok || rows === null) return { reason: sqlFailureReason(result, timeoutMs) };
+  if (rows.length >= limit) return { reason: "too_large" };
+  return { rows };
+}
+
+const CONNECTION_FAILURE =
+  /can't connect|cannot connect|connection refused|connection timed out|connect timed out|unknown host|no such host|econnrefused|enotfound|etimedout/i;
+
+/** A failure another statement cannot fix: stop probing instead of paying the deadline again. */
+function isTerminalProbeFailure(result: SqlResult, reason: SchemaColumnRejection["reason"]): boolean {
+  if (reason !== "unreadable") return true;
+  return CONNECTION_FAILURE.test(`${result.stderr ?? ""}\n${result.stdout ?? ""}`);
+}
+
+/**
+ * External-catalog probe classifier (P1-20 §8 C1–C5).
+ * Unlike the global `columnScanTimedOut`, this NEVER uses latency as a timeout signal:
+ * a slow server-side refusal (syntax error, auth denial) is "unreadable" (retriable), not "timeout".
+ * C1: only explicit driver/text timeout signal → "timeout"
+ * C5: budget-capped statement with explicit timeout → "deferred" (not terminal)
+ * C2: all other failures (including slow latency) → "unreadable" (continue probing)
+ */
+function classifyProbeFailure(
+  result: SqlResult,
+  isBudgetCapped: boolean
+): "deferred" | SchemaColumnRejection["reason"] {
+  const text = `${result.stderr ?? ""}\n${result.stdout ?? ""}`;
+  // Connection failures are unreadable (terminal via isTerminalProbeFailure), not timeout.
+  if (CONNECTION_FAILURE.test(text)) return "unreadable";
+  // Explicit timeout signal in driver text (not latency-based inference).
+  const hasExplicitTimeout =
+    /timed out|max_execution_time|maximum statement execution time|query execution was interrupted/i.test(text);
+  if (hasExplicitTimeout) {
+    // C5: budget-capped statement timed out → deferred, not terminal.
+    if (isBudgetCapped) return "deferred";
+    // C4: full per-table timeout with explicit signal → terminal.
+    return "timeout";
+  }
+  // No explicit timeout → classify by error content (slow refusal is "unreadable", not "timeout").
+  if (/超过一次可读取的上限/.test(text)) return "too_large";
+  if (/access denied|command denied|permission denied|\bprivilege\b/i.test(text)) return "permission";
+  if (/unknown table|doesn't exist|does not exist|table not found/i.test(text)) return "missing";
+  return "unreadable";
+}
+
+/**
+ * External catalogs read one table over the same direct MySQL channel as `SHOW TABLES`.
+ * `ktx sql` rejects `DESC`/`DESCRIBE`/`SHOW` (read/write operation), so no probe goes there.
+ * Probes run in order; the next one is tried only after a server-side refusal or a 0-column mapping.
+ */
+async function readCatalogTableColumns(
+  projectRoot: string,
+  connectionId: string,
+  catalog: string,
+  schema: string,
+  table: string,
+  show: typeof runCatalogShow,
+  limits: {
+    rowLimit: number;
+    timeoutMs: number;
+    deadlineMs?: number;
+    now?: () => number;
+  } = { rowLimit: COLUMN_READ_ROW_LIMIT, timeoutMs: CATALOG_SCAN_TIMEOUT_MS }
+): Promise<{ columns: ColumnInput[]; rejection?: SchemaColumnRejection; deferred?: true }> {
+  const probes = [
+    describeCatalogTableSql(catalog, schema, table),
+    showColumnsSql(catalog, schema, table),
+    describeTableSql(catalog, schema, table)
+  ];
+  const now = limits.now ?? Date.now;
+  let reason: SchemaColumnRejection["reason"] = "unreadable";
+  for (const sql of probes) {
+    const remaining =
+      limits.deadlineMs !== undefined ? limits.deadlineMs - now() : limits.timeoutMs;
+    // F2: remaining budget too small to issue a statement — defer without sending anything.
+    if (limits.deadlineMs !== undefined && remaining <= 50) {
+      return { columns: [], deferred: true };
+    }
+    const timeoutMs =
+      limits.deadlineMs !== undefined
+        ? Math.min(limits.timeoutMs, Math.max(0, remaining))
+        : limits.timeoutMs;
+    // F1: detect when the statement timeout was capped by the remaining budget, not by the
+    // per-table limit. A timeout on such a capped statement means the budget ran out, not that
+    // the table is genuinely unreadable. Only a full per-table timeout is terminal.
+    const isBudgetCapped = limits.deadlineMs !== undefined && timeoutMs < limits.timeoutMs;
+    const result = await show(projectRoot, connectionId, sql, {
+      maxRows: limits.rowLimit,
+      timeoutMs
+    });
+    const answered = answeredRows(result, limits.rowLimit, timeoutMs);
+    if ("reason" in answered) {
+      // C1–C5: use dedicated probe classifier (P1-20 §8) that never uses latency as timeout signal.
+      const probeClass = classifyProbeFailure(result, isBudgetCapped);
+      if (probeClass === "deferred") return { columns: [], deferred: true };
+      reason = probeClass;
+      logSchemaStructureFailure({ connectionId, schema, table, phase: "table-columns", sql }, result);
+      if (isTerminalProbeFailure(result, reason)) break;
+      continue;
+    }
+    const columns = mapDescribeColumns(table, answered.rows);
+    if (columns.length > 0) return { columns };
+    reason = "unreadable";
+    logSchemaStructureFailure(
+      { connectionId, schema, table, phase: "table-columns", sql },
+      { ok: true, exitCode: 0, stderr: "probe returned no mappable columns", stdout: "", latencyMs: result.latencyMs }
+    );
+  }
+  return { columns: [], rejection: { table, reason } };
+}
+
+function resultRows(result: SqlResult): unknown[] | null {
+  const json = result.json;
+  if (!result.ok || !json || typeof json !== "object" || !Array.isArray((json as { rows?: unknown }).rows)) {
+    return null;
+  }
+  return (json as { rows: unknown[] }).rows;
+}
+
+function mapDescribeColumn(table: string, row: unknown[]): ColumnInput | null {
   if (!Array.isArray(row) || row.length < 4) return null;
   const column = String(row[0] ?? "").trim();
   if (!column || column.length > 256 || /[\0\r\n]/.test(column)) return null;
-  const comment = row.length >= 9 ? String(row[8] ?? "") : "";
   return {
     table,
     column,
     dataType: String(row[1] ?? ""),
-    nullable: String(row[3] ?? "YES").toUpperCase() !== "NO",
-    primaryKey: String(row[4] ?? "").toUpperCase() === "PRI",
-    comment
+    nullable: String(row[2] ?? "YES").toUpperCase() !== "NO",
+    primaryKey: String(row[3] ?? "").toUpperCase() === "PRI",
+    comment: ""
   };
+}
+
+function mapDescribeColumns(table: string, rows: unknown[] | null): ColumnInput[] {
+  if (!rows) return [];
+  const columns: ColumnInput[] = [];
+  for (const row of rows) {
+    if (!Array.isArray(row)) continue;
+    const mapped = mapDescribeColumn(table, row);
+    if (mapped) columns.push(mapped);
+  }
+  return columns;
 }
 
 function parseColumns(rows: unknown[]): ColumnInput[] {
@@ -260,25 +612,285 @@ function parseColumns(rows: unknown[]): ColumnInput[] {
   return columns;
 }
 
+function sqlStringLiteral(value: string): string {
+  if (!value || value.length > 256 || /[\0\r\n]/.test(value)) {
+    throw new SchemaStructureError("READ_FAILED", "读取表结构失败。");
+  }
+  return `'${value.replace(/'/g, "''")}'`;
+}
+
+function mysqlTableNamesSql(schema: string): string {
+  return `SELECT table_name FROM information_schema.tables WHERE table_schema = ${sqlStringLiteral(schema)} AND table_type = 'BASE TABLE' ORDER BY table_name`;
+}
+
+function mysqlMatchingTablesSql(schema: string, table: string): string {
+  return `SELECT table_name FROM information_schema.tables WHERE table_schema = ${sqlStringLiteral(schema)} AND table_type = 'BASE TABLE' AND LOWER(table_name) = ${sqlStringLiteral(table.toLowerCase())}`;
+}
+
+function mysqlOneTableColumnsSql(schema: string, physicalTable: string): string {
+  return `SELECT column_name, data_type, is_nullable, column_key, column_comment FROM information_schema.columns WHERE table_schema = ${sqlStringLiteral(schema)} AND table_name = ${sqlStringLiteral(physicalTable)} ORDER BY ordinal_position`;
+}
+
+function namesFromRows(rows: unknown[]): string[] {
+  const names: string[] = [];
+  for (const row of rows) {
+    const name = Array.isArray(row) ? String(row[0] ?? "").trim() : "";
+    if (!name) continue;
+    names.push(name);
+  }
+  return names;
+}
+
+function columnsForOneTable(table: string, rows: unknown[]): ColumnInput[] {
+  const columns: ColumnInput[] = [];
+  for (const row of rows) {
+    if (!Array.isArray(row) || row.length < 5) continue;
+    const column = String(row[0] ?? "").trim();
+    if (!column) continue;
+    columns.push({
+      table,
+      column,
+      dataType: String(row[1] ?? ""),
+      nullable: String(row[2] ?? "").toUpperCase() !== "NO",
+      primaryKey: String(row[3] ?? "").toUpperCase() === "PRI",
+      comment: String(row[4] ?? "")
+    });
+  }
+  return columns;
+}
+
+function distinctPhysicalNames(rows: unknown[]): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const name = Array.isArray(row) ? String(row[0] ?? "").trim() : "";
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    names.push(name);
+  }
+  return names;
+}
+
 /**
- * Read the column rows of one Schema.
+ * Resolve one requested MySQL table to a single physical table, then read its columns.
+ * Spec 190 structure-diff and single-table preview use this path so one table's
+ * permission / missing / timeout failure does not blank the others.
+ */
+async function readMysqlTableColumns(
+  projectRoot: string,
+  connectionId: string,
+  schema: string,
+  table: string,
+  execute: typeof runSql
+): Promise<{ columns: ColumnInput[]; rejection?: SchemaColumnRejection }> {
+  try {
+    const matchSql = mysqlMatchingTablesSql(schema, table);
+    const matched = await execute(projectRoot, connectionId, matchSql, {
+      maxRows: 10,
+      timeoutMs: CATALOG_SCAN_TIMEOUT_MS
+    });
+    const matchedRows = answeredRows(matched, 11);
+    if ("reason" in matchedRows) return { columns: [], rejection: { table, reason: matchedRows.reason } };
+    const physical = distinctPhysicalNames(matchedRows.rows);
+    if (physical.length > 1) return { columns: [], rejection: { table, reason: "ambiguous" } };
+    if (physical.length === 0) return { columns: [], rejection: { table, reason: "missing" } };
+    const columnSql = mysqlOneTableColumnsSql(schema, physical[0]);
+    const result = await execute(projectRoot, connectionId, columnSql, {
+      maxRows: COLUMN_READ_ROW_LIMIT,
+      timeoutMs: CATALOG_SCAN_TIMEOUT_MS
+    });
+    const columnRows = answeredRows(result, COLUMN_READ_ROW_LIMIT);
+    if ("reason" in columnRows) return { columns: [], rejection: { table, reason: columnRows.reason } };
+    const columns = columnsForOneTable(table, columnRows.rows);
+    if (columns.length === 0) return { columns: [], rejection: { table, reason: "unreadable" } };
+    return { columns };
+  } catch (error) {
+    logSchemaStructureFailure(
+      { connectionId, schema, table, phase: "table-columns" },
+      { ok: false, exitCode: 1, stderr: error instanceof Error ? error.message : String(error), stdout: "", latencyMs: 0 }
+    );
+    return { columns: [], rejection: { table, reason: "unreadable" } };
+  }
+}
+
+function rejectionMessage(rejection: SchemaColumnRejection): string {
+  switch (rejection.reason) {
+    case "ambiguous":
+      return `表名「${rejection.table}」对应多张表，无法读取字段。`;
+    case "too_large":
+      return "这次读取超过一次可读取的上限。";
+    case "too_wide":
+      return `表「${rejection.table}」的字段数达到 ${COLUMN_READ_ROW_LIMIT} 个，超过一次可读取的上限。`;
+    case "permission":
+      return `没有权限读取表「${rejection.table}」的字段。`;
+    case "timeout":
+      return `读取表「${rejection.table}」的字段超时。`;
+    default:
+      return `表「${rejection.table}」没有读到字段。`;
+  }
+}
+
+/** Explicit read strategies for shared `readSchemaColumns` consumers. */
+export type SchemaReadMode = "list-names" | "schema-wide" | "per-table";
+
+export type ReadSchemaColumnsDeps = {
+  readConnectionsImpl?: typeof readConnections;
+  runSqlImpl?: typeof runSql;
+  runCatalogShowImpl?: typeof runCatalogShow;
+  /**
+   * Direct metadata channel for batch reads. When given it is used even if `runSqlImpl` /
+   * `runCatalogShowImpl` are injected; without it, injecting either keeps the legacy per-table read.
+   */
+  openChannelImpl?: typeof openMetadataChannel;
+  /** Batch reads stop starting new tables after this; the rest returns as `deferred`. */
+  callBudgetMs?: number;
+  /**
+   * Hard HTTP/request envelope shared by connection setup and every metadata probe.
+   * Exhaustion throws SchemaReadTimeout. Distinct from callBudgetMs, which still defers.
+   */
+  requestTimeoutMs?: number;
+  now?: () => number;
+  /** Column rows one statement may return (tests lower it). */
+  columnRowLimit?: number;
+  tables?: string[];
+  /**
+   * When omitted: no `tables` → `list-names`; with `tables` → `per-table`.
+   * Pass `schema-wide` explicitly for catalog-scan SC-06/07 full-schema reads.
+   */
+  mode?: SchemaReadMode;
+  /**
+   * Test / direct-call override for connection-scoped sourceName registry.
+   * Production `previewSchemaStructure` loads the real registry when this is omitted.
+   */
+  sourceNameRegistry?: ConnectionSourceRegistry;
+  readConnectionSourceManifestsImpl?: typeof readConnectionSourceManifests;
+  opsStepId?: string;
+};
+
+type ResolvedSchemaRead =
+  | { mode: "list-names" }
+  | { mode: "schema-wide"; tables?: string[] }
+  | { mode: "per-table"; tables: string[] };
+
+function resolveSchemaReadMode(deps: ReadSchemaColumnsDeps): ResolvedSchemaRead {
+  const tables = deps.tables?.map((table) => table.trim()).filter(Boolean);
+  if (deps.mode === "list-names") {
+    if (tables && tables.length > 0) {
+      throw new SchemaStructureError("READ_FAILED", "list-names 读法不能带 tables。");
+    }
+    return { mode: "list-names" };
+  }
+  if (deps.mode === "schema-wide") {
+    return { mode: "schema-wide", ...(tables && tables.length > 0 ? { tables } : {}) };
+  }
+  if (deps.mode === "per-table") {
+    if (!tables || tables.length === 0) {
+      throw new SchemaStructureError("READ_FAILED", "per-table 读法必须提供 tables。");
+    }
+    return { mode: "per-table", tables };
+  }
+  if (!tables || tables.length === 0) return { mode: "list-names" };
+  return { mode: "per-table", tables };
+}
+
+type BatchChannel = ReturnType<typeof createChannelHolder>;
+
+/** The direct channel for a batch read, or null when the legacy per-table read must run (LS-14). */
+async function openBatchChannel(
+  projectRoot: string,
+  connectionId: string,
+  deps: ReadSchemaColumnsDeps,
+  injectedLegacyImpl: unknown,
+  deadline?: SchemaReadDeadline
+): Promise<BatchChannel | null> {
+  if (process.env.LUCY_SCHEMA_READ_LEGACY === "1") return null;
+  if (!deps.openChannelImpl && injectedLegacyImpl) return null;
+  const open = deps.openChannelImpl ?? openMetadataChannel;
+  const holder = createChannelHolder(async () => {
+    const opening = () =>
+      open(projectRoot, connectionId).then((channel) => {
+        if (deadline && deadline.remaining() <= 0) {
+          channel.close();
+          throw new SchemaReadTimeout();
+        }
+        if (!deadline) return channel;
+        return {
+          run: (sql: string, options: { maxRows: number; timeoutMs: number }) =>
+            deadline.run(
+              () => channel.run(sql, { ...options, timeoutMs: deadline.timeout(options.timeoutMs) }),
+              () => channel.close()
+            ),
+          close: () => channel.close()
+        };
+      });
+    return deadline ? deadline.run(opening) : opening();
+  });
+  try {
+    await holder.ensure();
+  } catch (error) {
+    if (error instanceof MetadataChannelUnavailable) return null;
+    throw error;
+  }
+  return holder;
+}
+
+function uniqueInOrder(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
+type SchemaOpsStepReason = ReturnType<typeof opsStepReasonFromError>;
+
+function classifySchemaReadReturn(
+  read: SchemaColumnsRead,
+  requested: string[] | undefined,
+  errorReason: SchemaOpsStepReason | undefined
+): { ok: true } | { ok: false; reasonCode: SchemaOpsStepReason } {
+  if (read.status === "too_large") return { ok: false, reasonCode: "too_large" };
+  if (read.status === "error") return { ok: false, reasonCode: errorReason ?? "unreadable" };
+  const rejection = requested
+    ?.map((table) => read.rejections?.find((item) => item.table === table))
+    .find((item): item is SchemaColumnRejection => item !== undefined)
+    ?? read.rejections?.[0];
+  if (rejection) {
+    return {
+      ok: false,
+      reasonCode: rejection.reason === "too_wide" ? "too_large" : rejection.reason
+    };
+  }
+  if ((read.deferred?.length ?? 0) > 0) return { ok: false, reasonCode: "timeout" };
+  return { ok: true };
+}
+
+/**
+ * Read table names, or the columns of the requested tables.
  *
- * The query shape is the one Spec 164 established; Spec 190 §7.4 reuses it for
- * the on-demand column-level deep check. A full page means the answer may be
- * truncated, so it is reported as `too_large` instead of a partial list.
+ * - `list-names`: table names only (准备表结构·列名).
+ * - `schema-wide`: one Schema-wide `information_schema.columns` read (catalog-scan SC-06/07).
+ * - `per-table`: bounded per-table reads with typed rejections (Spec 190 structure-diff /
+ *   single-table preview). External catalogs probe one checked table at a time over the direct channel.
  */
 export async function readSchemaColumns(
   projectRoot: string,
   connectionId: string,
   schema: string,
-  deps: {
-    readConnectionsImpl?: typeof readConnections;
-    runSqlImpl?: typeof runSql;
-  } = {}
+  deps: ReadSchemaColumnsDeps = {}
 ): Promise<SchemaColumnsRead> {
   const safeSchema = assertSchemaIdent(schema);
+  // Only the HTTP/request envelope creates SchemaReadDeadline. callBudgetMs still defers (784e7f7e).
+  const deadline =
+    deps.requestTimeoutMs !== undefined
+      ? new SchemaReadDeadline(deps.requestTimeoutMs, deps.now)
+      : undefined;
   const read = deps.readConnectionsImpl ?? readConnections;
-  const connections = await read(projectRoot);
+  let connections: Awaited<ReturnType<typeof readConnections>>;
+  try {
+    connections = deadline ? await deadline.run(() => read(projectRoot)) : await read(projectRoot);
+  } catch (error) {
+    if (error instanceof SchemaReadTimeout) {
+      return { status: "error", message: "读取表结构超时，请稍后重试。" };
+    }
+    throw error;
+  }
   const connection = connections.find((item) => item.id === connectionId);
   if (!connection) {
     throw new SchemaStructureError("CONNECTION_NOT_FOUND", `未找到连接 ${connectionId}`, 404);
@@ -286,19 +898,51 @@ export async function readSchemaColumns(
   if (!canRead(connection)) {
     throw new SchemaStructureError("SCHEMA_UNSUPPORTED", "当前数据库类型请上传 Schema Manifest");
   }
-  const execute = deps.runSqlImpl ?? runSql;
+  const sqlImpl = deps.runSqlImpl ?? runSql;
+  const showImpl = deps.runCatalogShowImpl ?? runCatalogShow;
+  const execute: typeof runSql = (root, id, sql, options) =>
+    deadline
+      ? deadline.run(() =>
+          sqlImpl(root, id, sql, {
+            ...options,
+            timeoutMs: deadline.timeout(options?.timeoutMs ?? CATALOG_SCAN_TIMEOUT_MS)
+          })
+        )
+      : sqlImpl(root, id, sql, options);
   const catalog = protocolOf(connection) === "mysql" ? splitCatalogDatabase(connection.database) : null;
+  let resolved: ResolvedSchemaRead;
   try {
-    if (catalog) {
-      const tablesResult = await execute(
-        projectRoot,
-        connectionId,
-        showTablesFromCatalogSql(catalog.catalog, safeSchema),
-        { maxRows: SCHEMA_STRUCTURE_MAX_ROWS, timeoutMs: 30000 }
-      );
-      const tableNames = structureRows(tablesResult)
-        .map((row) => (Array.isArray(row) ? String(row[0] ?? "").trim() : ""))
-        .filter((name) => {
+    resolved = resolveSchemaReadMode(deps);
+  } catch (error) {
+    if (error instanceof SchemaStructureError) {
+      return { status: "error", message: error.message };
+    }
+    throw error;
+  }
+  const requested = resolved.mode === "list-names" ? undefined : resolved.tables;
+  let returnedErrorReason: SchemaOpsStepReason | undefined;
+  const body = async (): Promise<SchemaColumnsRead> => {
+    try {
+      if (catalog) {
+      if (resolved.mode === "list-names") {
+        const tableSql = catalogTablesSql(catalog.catalog, safeSchema);
+        const tablesResult = await (deadline
+          ? deadline.run(() =>
+              showImpl(projectRoot, connectionId, tableSql, {
+                maxRows: CATALOG_TABLE_NAME_LIMIT,
+                timeoutMs: deadline.timeout(CATALOG_SCAN_TIMEOUT_MS)
+              })
+            )
+          : showImpl(projectRoot, connectionId, tableSql, {
+              maxRows: CATALOG_TABLE_NAME_LIMIT,
+              timeoutMs: CATALOG_SCAN_TIMEOUT_MS
+            }));
+        const tableNames = namesFromRows(structureRows(tablesResult, {
+          connectionId,
+          schema: safeSchema,
+          phase: "catalog-list-tables",
+          sql: tableSql
+        })).filter((name) => {
           try {
             quoteMysqlIdent(name);
             return true;
@@ -306,62 +950,289 @@ export async function readSchemaColumns(
             return false;
           }
         });
-      if (tableNames.length > CATALOG_STRUCTURE_MAX_TABLES) {
-        return { status: "too_large" };
+        if (tableNames.length >= CATALOG_TABLE_NAME_LIMIT) return { status: "too_large" };
+        return { status: "ok", columns: [], tables: tableNames };
+      }
+      // External catalogs have no schema-wide information_schema path; both
+      // schema-wide (with tables) and per-table probe one table at a time over the direct channel.
+      const targetTables = requested ?? [];
+      if (targetTables.length === 0) {
+        return { status: "error", message: "外部目录读字段必须指定 tables。" };
+      }
+      const holder = await openBatchChannel(projectRoot, connectionId, deps, deps.runCatalogShowImpl, deadline);
+      const show = holder ? channelAsShow(holder.run) : showImpl;
+      const now = deps.now ?? Date.now;
+      const started = now();
+      const deadlineMs =
+        deps.callBudgetMs !== undefined ? started + deps.callBudgetMs : undefined;
+      const limits = holder
+        ? {
+            rowLimit: deps.columnRowLimit ?? COLUMN_READ_ROW_LIMIT,
+            timeoutMs: PER_TABLE_TIMEOUT_MS,
+            ...(deadlineMs !== undefined ? { deadlineMs, now } : {})
+          }
+        : undefined;
+      const wanted = holder ? uniqueInOrder(targetTables) : targetTables;
+      const columns: ColumnInput[] = [];
+      const rejections: SchemaColumnRejection[] = [];
+      let deferred: string[] = [];
+      try {
+        for (const [index, table] of wanted.entries()) {
+          if (index > 0 && deps.callBudgetMs !== undefined && now() - started >= deps.callBudgetMs) {
+            deferred = wanted.slice(index);
+            break;
+          }
+          const tableRead = await readCatalogTableColumns(
+            projectRoot,
+            connectionId,
+            catalog.catalog,
+            safeSchema,
+            table,
+            show,
+            limits
+          );
+          // F1/F2: budget-induced deferral — this table and all remaining ones go to deferred.
+          if (tableRead.deferred) {
+            deferred = wanted.slice(index);
+            break;
+          }
+          if (tableRead.rejection) {
+            const { reason } = tableRead.rejection;
+            rejections.push(holder && reason === "too_large" ? { table, reason: "too_wide" } : tableRead.rejection);
+          }
+          columns.push(...tableRead.columns);
+        }
+      } finally {
+        holder?.close();
+      }
+      const unread = new Set([...rejections.map((item) => item.table), ...deferred]);
+      return {
+        status: "ok",
+        columns,
+        tables: wanted.filter((table) => !unread.has(table)),
+        ...(rejections.length > 0 ? { rejections } : {}),
+        ...(deferred.length > 0 ? { deferred } : {})
+      };
+    }
+    const protocol = protocolOf(connection);
+    if (resolved.mode === "list-names" && protocol === "mysql") {
+      const listSql = mysqlTableNamesSql(safeSchema);
+      const holder = await openBatchChannel(projectRoot, connectionId, deps, deps.runSqlImpl, deadline);
+      if (holder) {
+        const context = { connectionId, schema: safeSchema, phase: "catalog-list-tables", sql: listSql };
+        try {
+          const answer = await holder.run(listSql, { maxRows: CATALOG_TABLE_NAME_LIMIT, timeoutMs: CATALOG_SCAN_TIMEOUT_MS });
+          if (answer.truncated) return { status: "too_large" };
+          return { status: "ok", columns: [], tables: namesFromRows(answer.rows) };
+        } catch (error) {
+          logSchemaStructureFailure(context, {
+            ok: false, exitCode: 1, stderr: error instanceof Error ? error.message : String(error), stdout: "", latencyMs: 0
+          });
+          throw new SchemaStructureError("READ_FAILED", formatSchemaStructureUserMessage(context), 400, safeStructureDetail(context));
+        } finally {
+          holder.close();
+        }
+      }
+      const listed = await execute(projectRoot, connectionId, listSql, {
+        maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
+        timeoutMs: CATALOG_SCAN_TIMEOUT_MS
+      });
+      const tableNames = namesFromRows(structureRows(listed, {
+        connectionId,
+        schema: safeSchema,
+        phase: "catalog-list-tables",
+        sql: listSql
+      }));
+      if (tableNames.length >= SCHEMA_STRUCTURE_MAX_ROWS) return { status: "too_large" };
+      return { status: "ok", columns: [], tables: tableNames };
+    }
+    // Postgres has no separate name-list SQL; list-names falls through to schema-wide
+    // columns (pre-dual-mode behavior). MySQL per-table is handled above.
+    if (resolved.mode === "per-table" && protocol === "mysql") {
+      const holder = await openBatchChannel(projectRoot, connectionId, deps, deps.runSqlImpl, deadline);
+      if (holder) {
+        try {
+          const batch = await readMysqlTablesBatch(holder.run, safeSchema, resolved.tables, {
+            rowLimit: deps.columnRowLimit ?? COLUMN_READ_ROW_LIMIT,
+            timeoutMs: PER_TABLE_TIMEOUT_MS,
+            ...(deps.callBudgetMs !== undefined ? { budgetMs: deps.callBudgetMs } : {}),
+            now: deps.now ?? Date.now
+          });
+          const unread = new Set([...batch.rejections.map((item) => item.table), ...batch.deferred]);
+          return {
+            status: "ok",
+            columns: batch.columns,
+            tables: uniqueInOrder(resolved.tables).filter((table) => !unread.has(table)),
+            ...(batch.rejections.length > 0 ? { rejections: batch.rejections } : {}),
+            ...(batch.deferred.length > 0 ? { deferred: batch.deferred } : {})
+          };
+        } finally {
+          holder.close();
+        }
       }
       const columns: ColumnInput[] = [];
-      for (const table of tableNames) {
-        const columnResult = await execute(projectRoot, connectionId, showFullColumnsSql(catalog.catalog, safeSchema, table), {
-          maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
-          timeoutMs: 30000
-        });
-        for (const row of structureRows(columnResult)) {
-          if (!Array.isArray(row)) continue;
-          const mapped = mapShowFullColumn(table, row);
-          if (mapped) columns.push(mapped);
+      const rejections: SchemaColumnRejection[] = [];
+      const now = deps.now ?? Date.now;
+      const started = now();
+      let deferred: string[] = [];
+      for (const [index, table] of resolved.tables.entries()) {
+        if (index > 0 && deps.callBudgetMs !== undefined && now() - started >= deps.callBudgetMs) {
+          deferred = resolved.tables.slice(index);
+          break;
         }
-        if (columns.length >= SCHEMA_STRUCTURE_MAX_ROWS) {
-          return { status: "too_large" };
-        }
+        const tableRead = await readMysqlTableColumns(
+          projectRoot,
+          connectionId,
+          safeSchema,
+          table,
+          execute
+        );
+        if (tableRead.rejection) rejections.push(tableRead.rejection);
+        columns.push(...tableRead.columns);
       }
-      return { status: "ok", columns };
+      const unread = new Set([...rejections.map((item) => item.table), ...deferred]);
+      return {
+        status: "ok",
+        columns,
+        tables: resolved.tables.filter((table) => !unread.has(table)),
+        ...(rejections.length > 0 ? { rejections } : {}),
+        ...(deferred.length > 0 ? { deferred } : {})
+      };
     }
-    const result = await execute(projectRoot, connectionId, sqlFor(protocolOf(connection), safeSchema), {
+    // schema-wide (MySQL/Postgres), or per-table on Postgres (no per-table helper yet).
+    const listSql = sqlFor(protocol, safeSchema);
+    const result = await execute(projectRoot, connectionId, listSql, {
       maxRows: SCHEMA_STRUCTURE_MAX_ROWS,
-      timeoutMs: 30000
+      timeoutMs: CATALOG_SCAN_TIMEOUT_MS
     });
-    const rows = structureRows(result);
+    const rows = structureRows(result, {
+      connectionId,
+      schema: safeSchema,
+      phase: "schema-wide-columns",
+      sql: listSql
+    });
     if (rows.length >= SCHEMA_STRUCTURE_MAX_ROWS) {
       return { status: "too_large" };
     }
-    return { status: "ok", columns: parseColumns(rows) };
-  } catch (error) {
-    if (error instanceof SchemaStructureError) {
-      if (error.message.includes("超过一次可读取的上限")) {
-        return { status: "too_large" };
-      }
-      return { status: "error", message: error.message };
+    const columns = parseColumns(rows);
+    if (requested && requested.length > 0) {
+      const wanted = new Set(requested.map((table) => table.toLowerCase()));
+      const filtered = columns.filter((column) => wanted.has(column.table.toLowerCase()));
+      const found = new Set(filtered.map((column) => column.table.toLowerCase()));
+      const rejections = requested
+        .filter((table) => !found.has(table.toLowerCase()))
+        .map((table) => ({
+          table,
+          reason: (resolved.mode === "per-table" ? "missing" : "unreadable") as SchemaColumnRejection["reason"]
+        }));
+      return {
+        status: "ok",
+        columns: filtered,
+        tables: requested.filter((table) => found.has(table.toLowerCase())),
+        ...(rejections.length > 0 ? { rejections } : {})
+      };
     }
-    return { status: "error", message: "读取表结构失败。" };
-  }
+    return { status: "ok", columns };
+    } catch (error) {
+      if (error instanceof SchemaStructureError) {
+        if (error.message.includes("超过一次可读取的上限")) {
+          return { status: "too_large" };
+        }
+        returnedErrorReason = "unreadable";
+        const detail =
+          error.detail && typeof error.detail === "object"
+            ? (error.detail as {
+                connectionId?: string | null;
+                schema?: string | null;
+                table?: string | null;
+                phase?: string | null;
+              })
+            : undefined;
+        return { status: "error", message: error.message, ...(detail ? { detail } : {}) };
+      }
+      if (error instanceof SchemaReadTimeout) {
+        returnedErrorReason = "timeout";
+        return { status: "error", message: "读取表结构超时，请稍后重试。" };
+      }
+      returnedErrorReason = "unreadable";
+      console.error("[schema-structure] unexpected read failure", {
+        connectionId,
+        schema: safeSchema,
+        detail: error instanceof Error ? error.message : String(error)
+      });
+      return { status: "error", message: "读取表结构失败。" };
+    }
+  };
+  if (!deps.opsStepId) return body();
+  return getOpsStepJournal().runStep({
+    op: "schema_structure_read",
+    opId: deps.opsStepId,
+    step: resolved.mode === "list-names" ? "list_tables" : "read_columns",
+    body,
+    classifyReturn: (read) => classifySchemaReadReturn(read, requested, returnedErrorReason)
+  });
 }
 
 export async function previewSchemaStructure(
   projectRoot: string,
   connectionId: string,
   schema: string,
-  deps: {
-    readConnectionsImpl?: typeof readConnections;
-    runSqlImpl?: typeof runSql;
-  } = {}
+  deps: ReadSchemaColumnsDeps = {}
 ): Promise<SchemaStructurePreview> {
   const safeSchema = assertSchemaIdent(schema);
+  const detailWithOpsStep = (detail?: unknown) => deps.opsStepId
+    ? {
+        ...(detail && typeof detail === "object" ? detail : {}),
+        opsStepId: deps.opsStepId
+      }
+    : detail;
   const read = await readSchemaColumns(projectRoot, connectionId, schema, deps);
   if (read.status === "too_large") {
-    throw new SchemaStructureError("READ_FAILED", "这个 Schema 的字段数超过一次可读取的上限。");
+    throw new SchemaStructureError(
+      "READ_FAILED",
+      "这次读取超过一次可读取的上限。",
+      400,
+      detailWithOpsStep()
+    );
   }
   if (read.status === "error") {
-    throw new SchemaStructureError("READ_FAILED", read.message);
+    throw new SchemaStructureError("READ_FAILED", read.message, 400, detailWithOpsStep(read.detail));
   }
-  return buildMinimalSchemaManifest(safeSchema, read.columns);
+  const requested = deps.tables?.map((table) => table.trim()).filter(Boolean) ?? [];
+  const batch = requested.length > 1;
+  // F03: single-table deferred must be distinguished from single-table failure.
+  // If the read returned deferred (budget exhausted), do NOT throw as rejection.
+  const hasDeferred = (read.deferred?.length ?? 0) > 0;
+  if (!batch && requested.length > 0 && (read.rejections?.length ?? 0) > 0 && !hasDeferred) {
+    const rejection = read.rejections?.[0];
+    const tableRejection = read.rejections?.length === 1 && rejection?.table === requested[0]
+      ? readSchemaTableRejection({ scope: "table", ...rejection })
+      : undefined;
+    throw new SchemaStructureError(
+      "READ_FAILED",
+      rejection ? rejectionMessage(rejection) : `表「${requested[0]}」没有读到字段。`,
+      400,
+      detailWithOpsStep(tableRejection ? { tableRejection } : undefined)
+    );
+  }
+  const readRegistry = deps.readConnectionSourceManifestsImpl ?? readConnectionSourceManifests;
+  const registry =
+    deps.sourceNameRegistry
+    ?? await readRegistry(projectRoot, connectionId);
+  const preview = buildMinimalSchemaManifest(safeSchema, read.columns, read.tables ?? [], {
+    registry
+  });
+  const namesOnly = requested.length === 0 && read.columns.length === 0 && (read.tables?.length ?? 0) > 0;
+  const rejections = (read.rejections ?? []).map((item) => ({
+    table: item.table,
+    reason: item.reason,
+    message: rejectionMessage(item)
+  }));
+  return {
+    ...preview,
+    namesOnly,
+    // F03: pass rejections for batch requests; deferred for any request size (C4 of P1-34 §11).
+    ...(batch && rejections.length > 0 ? { rejections } : {}),
+    ...(read.deferred && read.deferred.length > 0 ? { deferred: read.deferred } : {})
+  };
 }

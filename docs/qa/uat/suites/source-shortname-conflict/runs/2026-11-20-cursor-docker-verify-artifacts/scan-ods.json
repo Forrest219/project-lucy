@@ -1,0 +1,21 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 953,
+  "body": {
+    "ok": true,
+    "data": {
+      "schema": "ods",
+      "readable": true,
+      "yaml": "tables:\n  ods_city_2:\n    table: ods.city\n    columns:\n      - name: id\n        type: number\n        nullable: false\n        pk: true\n      - name: name\n        type: string\n        nullable: true\n",
+      "tableCount": 1,
+      "columnCount": 2,
+      "namesOnly": false,
+      "mapped": {
+        "number": 1,
+        "string": 1,
+        "time": 0
+      },
+      "downgraded": []
+    }
+  }
+}

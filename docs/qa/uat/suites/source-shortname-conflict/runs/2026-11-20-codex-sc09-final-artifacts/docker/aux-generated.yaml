@@ -1,0 +1,9 @@
+tables:
+  aux_City:
+    table: aux.City
+    columns:
+      - name: id
+        type: number
+        nullable: false
+        pk: true
+

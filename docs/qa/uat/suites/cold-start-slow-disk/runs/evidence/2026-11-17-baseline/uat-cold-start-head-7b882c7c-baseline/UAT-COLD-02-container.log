@@ -1,0 +1,49 @@
+[lucy] preserved 2 existing semantic-layer (config) file(s) in /data/lucy/config/semantic-layer
+[lucy] preserved 1 existing wiki (config) file(s) in /data/lucy/config/wiki
+[lucy] preserved 2 existing evals (config) file(s) in /data/lucy/config/evals
+[system_ensure_formal_roles] lucy_admin wrote=false branch=D
+[lucy] reused persistent KTX internal token
+[system_ensure_formal_roles] lucy_ops_reader wrote=false branch=D
+[ops-evidence] connection=unchanged readiness=current assets=15 upgrades=0 conflicts=0 mirror(copied=0,skipped=20,failed=0)
+[lucy] preserved 15 existing runtime mirror semantic-layer file(s) in /data/lucy/runtime/semantic-layer
+[lucy] preserved 2 existing runtime mirror wiki file(s) in /data/lucy/runtime/wiki
+[lucy] preserved 1 existing runtime mirror skills file(s) in /data/lucy/runtime/skills
+[lucy] preserved 2 existing runtime mirror evals file(s) in /data/lucy/runtime/evals
+[ops-evidence] ktx.yaml digest stamped: 0df1fc17580ed30299c2f4f42fa1b8c9245a44e27fcf400053afa77f5baec756
+[lucy] refreshing KTX semantic index
+[lucy] bundled KTX: @kaelio/ktx 0.16.0
+[lucy] project root: /data/lucy
+ktx MCP server listening at http://127.0.0.1:7878/mcp
+
+> webui@1.0.0 start
+> tsx server/index.ts
+
+[system_ensure_formal_roles] lucy_ops_reader wrote=false branch=D
+Project: /data/lucy
+FastifyError: A callback for 'onReady' hook timed out. You may have forgotten to call 'done' function or to resolve a Promise
+    at exit (/app/webui/node_modules/fastify/lib/hooks.js:106:37)
+    at manageTimeout (/app/webui/node_modules/fastify/lib/hooks.js:133:11)
+    at _encapsulateThreeParam (/app/webui/node_modules/avvio/boot.js:614:7)
+    at Boot.timeoutCall (/app/webui/node_modules/avvio/boot.js:508:5)
+    at Boot.callWithCbOrNextTick (/app/webui/node_modules/avvio/boot.js:490:19)
+    at Task.release (/app/webui/node_modules/fastq/queue.js:172:16)
+    at worked (/app/webui/node_modules/fastq/queue.js:258:10)
+    at Boot.timeoutCb (/app/webui/node_modules/avvio/boot.js:517:7)
+    at /app/webui/node_modules/fastify/lib/hooks.js:155:9
+    at _encapsulateThreeParam (/app/webui/node_modules/avvio/boot.js:614:7) {
+  code: 'FST_ERR_HOOK_TIMEOUT',
+  statusCode: 500,
+  cause: FastifyError: Plugin did not start in time: ''. You may have forgotten to call 'done' function or to resolve a Promise
+      at Timeout._onTimeout (/app/webui/node_modules/avvio/boot.js:501:21)
+      at listOnTimeout (node:internal/timers:585:17)
+      at process.processTimers (node:internal/timers:521:7) {
+    code: 'AVV_ERR_READY_TIMEOUT',
+    statusCode: 500,
+    fn: [Function: bound _encapsulateThreeParam] { unwrappedName: '' }
+  }
+}
+npm notice
+npm notice New major version of npm available! 10.9.9 -> 12.2.2
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.2
+npm notice To update run: npm install -g npm@12.2.2
+npm notice

@@ -201,7 +201,8 @@ docker image inspect <导入的镜像> --format '{{.Os}}/{{.Architecture}}'   # 
 
 - [升级后取证与验收](../uat/uat-mcp-session-customer-verification.md)
 - [`deploy/k8s/helm/lucy/UPGRADE.md`](../../deploy/k8s/helm/lucy/UPGRADE.md)、[`ROLLBACK.md`](../../deploy/k8s/helm/lucy/ROLLBACK.md)
-- [客户交付与镜像上线 Checklist](customer-delivery-preflight-checklist.md)
+- [客户 amd64 镜像构建 Checklist](customer-amd64-image-build-checklist.md)（原 preflight 大清单已作废）
+- [交付事故错题本](../lessons/README.md)
 - [客户 2.0 升级交付 Checklist](customer-v2-upgrade-release-checklist.md)
 - [MCP Session 回归 UAT](../uat/uat-mcp-session-regression.md)
 - [`webui/docs/07-mcp-auth-proxy-spec.md`](../../webui/docs/07-mcp-auth-proxy-spec.md) §4.3 / §6.1

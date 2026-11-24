@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -8,7 +8,7 @@ import { RenewTokenDialog } from "../../components/admin/RenewTokenDialog";
 import { DiffViewer } from "../../components/DiffViewer";
 import { PageHeader } from "../../components/PageHeader";
 import { PolicyDegradeNotice } from "../../components/PolicyDegradeBanner";
-import { apiGet, apiPatch, apiDelete } from "../../lib/apiClient";
+import { apiGet, apiPatch, apiDelete, ApiError, userFacingApiErrorMessage } from "../../lib/apiClient";
 import { copyTextWithToast } from "../../lib/clipboard";
 import type {
   AccessWriteAck,
@@ -31,14 +31,30 @@ import {
 import { LucyAdminRoleWarning } from "../../lib/LucyAdminRoleWarning";
 import { OPS_EVIDENCE_ROLE_ID, OPS_EVIDENCE_ROLE_WARNING } from "../../lib/opsEvidence";
 import { queryKeys } from "../../lib/queryKeys";
+import { AccessWriteRecoveryPanel } from "../../components/admin/AccessWriteRecoveryPanel";
+import {
+  accessWriteAckFromCommittedStatus,
+  buildRacsWriteBody,
+  classifyRolesAgentWriteError,
+  extractRacsPreviewBinding,
+  newRolesAgentOperationId,
+  pollAccessWriteStatusBounded,
+  shouldOfferThreeWayCompare,
+  type ClassifiedRolesAgentWriteError,
+  type RacsPreviewBinding
+} from "../../lib/rolesAgentAccessWrite";
+import type { RolePermissionDraft } from "../../lib/rolePermissionDraft";
 
-type AgentDetailResponse = { agent: Agent; version: string };
+type AgentDetailResponse = { agent: Agent; version: string; baseObjectVersion?: string };
 type PatchDryRunResponse = {
   diff: string;
   proposedYaml: string;
   effectivePermissions?: EffectivePermissionsPreview;
+  baseObjectVersion?: string;
+  previewToken?: string;
+  compileInputsDigest?: string;
 };
-type DiffPreview = PatchDryRunResponse & { patch: AgentPatch };
+type DiffPreview = PatchDryRunResponse & { patch: AgentPatch; racs?: RacsPreviewBinding };
 type PatchSaveResponse = AccessWriteAck & { agent: Agent };
 type RolesResponse = { roles: Role[] };
 
@@ -315,6 +331,29 @@ function usesCatalogBoundContext(
   });
 }
 
+function agentSnapshotRoleDraft(agent: Agent, id: string): RolePermissionDraft {
+  return {
+    roleId: id,
+    description: `${agent.name}${agent.note ? ` · ${agent.note}` : ""}`,
+    scope: { mode: "names", tables: [] },
+    tools: agentRoleIds(agent)
+  };
+}
+
+function agentCompareFields(agent: Agent) {
+  return [
+    { label: "显示名", value: agent.name },
+    { label: "备注", value: agent.note || "—" },
+    { label: "状态", value: agent.enabled ? "已启用" : "已禁用" },
+    { label: "角色", value: agentRoleIds(agent).join("\n") || "—" },
+    { label: "强制约束", value: agent.constraints ? JSON.stringify(agent.constraints, null, 2) : "—" }
+  ];
+}
+function agentEditableFingerprint(agent: Agent) {
+  return JSON.stringify({ name: agent.name, note: agent.note ?? "", enabled: agent.enabled,
+    roles: [...agentRoleIds(agent)].sort(), constraints: agent.constraints ?? null });
+}
+
 function buildChangeSummary(
   patch: AgentPatch,
   currentAgent: Agent
@@ -376,7 +415,7 @@ export function AgentDetail() {
     );
   }
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ["admin", "agent", userId],
     queryFn: () => apiGet<AgentDetailResponse>(`/api/admin/agents/${userId}`)
   });
@@ -396,12 +435,25 @@ export function AgentDetail() {
   const [confirmSave, setConfirmSave] = useState<DiffPreview | null>(null);
   const [selectedTokenLabels, setSelectedTokenLabels] = useState<string[]>([]);
   const [renewingTokenLabel, setRenewingTokenLabel] = useState<string | null>(null);
+  const [writeRecoveryError, setWriteRecoveryError] = useState<ClassifiedRolesAgentWriteError | null>(null);
+  const [pendingOperation, setPendingOperation] = useState<{
+    operationId: string;
+    checking?: boolean;
+    status?: import("../../lib/rolesAgentAccessWrite").AccessWriteStatusResult;
+  } | null>(null);
+  const [compareCurrentAgent, setCompareCurrentAgent] = useState<Agent | null>(null);
+  const [compareDraftMatchesCurrent, setCompareDraftMatchesCurrent] = useState(false);
+  const writeInflightOperationIdRef = useRef<string | null>(null);
+  const writeKindRef = useRef<"save" | "delete">("save");
 
+  const editBaselineRef = useRef<AgentDetailResponse | null>(null);
   const agent = data?.agent;
+  const editingAgent = editBaselineRef.current?.agent ?? agent;
   const version = data?.version;
+  const baseObjectVersion = data?.baseObjectVersion;
   const constraintsDirty =
     editConstraints !== null
-    && (!agent || !sameConstraints(editConstraints, constraintsFromAgent(agent)));
+    && (!editingAgent || !sameConstraints(editConstraints, constraintsFromAgent(editingAgent)));
   const hasEdits =
     editName !== null
     || editNote !== null
@@ -415,8 +467,8 @@ export function AgentDetail() {
     if (editNote !== null) patch.note = editNote;
     if (editEnabled !== null) patch.enabled = editEnabled;
     if (editRoles !== null) patch.roles = editRoles;
-    if (editConstraints !== null && agent) {
-      const baseline = constraintsFromAgent(agent);
+    if (editConstraints !== null && editingAgent) {
+      const baseline = constraintsFromAgent(editingAgent);
       if (!sameConstraints(editConstraints, baseline)) {
         patch.constraints = serializeConstraints(editConstraints);
       }
@@ -434,36 +486,42 @@ export function AgentDetail() {
   }
 
   function updateEditName(value: string) {
+    if (!editBaselineRef.current && data) editBaselineRef.current = data;
     clearStaleDiffPreview();
     setEditName(value);
   }
 
   function updateEditNote(value: string) {
+    if (!editBaselineRef.current && data) editBaselineRef.current = data;
     clearStaleDiffPreview();
     setEditNote(value);
   }
 
   function updateEditEnabled(value: boolean) {
+    if (!editBaselineRef.current && data) editBaselineRef.current = data;
     clearStaleDiffPreview();
     setEditEnabled(value);
   }
 
   function updateEditRoles(value: string[]) {
+    if (!editBaselineRef.current && data) editBaselineRef.current = data;
     clearStaleDiffPreview();
     if (!agent) {
       setEditRoles(value);
       return;
     }
-    if (sameRoleSet(value, agentRoleIds(agent)) && !agent.roleResolutionError) setEditRoles(null);
+    if (sameRoleSet(value, agentRoleIds(editingAgent ?? agent)) && !(editingAgent ?? agent).roleResolutionError) setEditRoles(null);
     else setEditRoles(value);
   }
 
   function updateEditConstraints(next: FormConstraintBinding[]) {
+    if (!editBaselineRef.current && data) editBaselineRef.current = data;
     clearStaleDiffPreview();
     setEditConstraints(next);
   }
 
   function clearEditForm() {
+    editBaselineRef.current = null;
     setEditName(null);
     setEditNote(null);
     setEditEnabled(null);
@@ -471,21 +529,133 @@ export function AgentDetail() {
     setEditConstraints(null);
   }
 
+  function clearWriteRecovery() {
+    setWriteRecoveryError(null);
+    setPendingOperation(null);
+    setCompareCurrentAgent(null);
+    setCompareDraftMatchesCurrent(false);
+    writeInflightOperationIdRef.current = null;
+  }
+
+  function currentAgentView(): Agent | null {
+    if (!editingAgent) return null;
+    return {
+      ...editingAgent,
+      name: editName ?? editingAgent.name,
+      note: editNote !== null ? editNote : editingAgent.note,
+      enabled: editEnabled ?? editingAgent.enabled,
+      roles: editRoles ?? editingAgent.roles,
+      role: editRoles?.[0] ?? editingAgent.role,
+      ...(editConstraints !== null ? { constraints: serializeConstraints(editConstraints) ?? undefined } : {})
+    };
+  }
+
+  function handleClassifiedWriteError(error: unknown) {
+    const classified = classifyRolesAgentWriteError(error);
+    const inflight = writeInflightOperationIdRef.current;
+    if (inflight && classified.kind === "transport_uncertain") {
+      setWriteRecoveryError(classified);
+      setPendingOperation({ operationId: inflight, checking: true });
+      void pollAccessWriteStatusBounded(inflight).then((status) => {
+        setPendingOperation({ operationId: inflight, checking: false, status });
+        if (status.outcome === "committed") {
+          if (writeKindRef.current === "delete") { toast.success("Agent 已删除"); void queryClient.invalidateQueries({ queryKey: queryKeys.adminAgents }); navigate("/admin/agents"); return; }
+          const ack = accessWriteAckFromCommittedStatus(status);
+          if (ack && userId && toastAccessWriteAck(ack)) {
+            void queryClient.invalidateQueries({ queryKey: ["admin", "agent", userId] });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.adminAgents });
+            clearWriteRecovery();
+            clearEditForm();
+          }
+        }
+      });
+      writeInflightOperationIdRef.current = null;
+      return;
+    }
+    writeInflightOperationIdRef.current = null;
+    if (classified.kind === "write_terminal_failure") {
+      toast.error(classified.userMessage);
+      return;
+    }
+    if (classified.kind === "auth" || classified.kind === "rate_limited" || classified.kind === "other") {
+      toast.error(classified.userMessage);
+      return;
+    }
+    setWriteRecoveryError(classified);
+    if (shouldOfferThreeWayCompare(classified.kind)) void refreshCurrentAgentForCompare();
+  }
+
+  async function refreshCurrentAgentForCompare() {
+    if (!userId) return;
+    try {
+      const fresh = await apiGet<AgentDetailResponse>(`/api/admin/agents/${userId}`);
+      setCompareCurrentAgent(fresh.agent);
+      const mine = currentAgentView();
+      if (mine) {
+        setCompareDraftMatchesCurrent(
+          agentEditableFingerprint(mine) === agentEditableFingerprint(fresh.agent)
+        );
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "读取最新值失败");
+    }
+  }
+
+  async function recheckPendingOperation() {
+    if (!pendingOperation?.operationId) return;
+    setPendingOperation({ ...pendingOperation, checking: true });
+    const status = await pollAccessWriteStatusBounded(pendingOperation.operationId);
+    setPendingOperation({ operationId: pendingOperation.operationId, checking: false, status });
+    if (status.outcome === "committed") {
+      if (writeKindRef.current === "delete") {
+        toast.success("Agent 已删除");
+        void queryClient.invalidateQueries({ queryKey: queryKeys.adminAgents });
+        navigate("/admin/agents");
+        return;
+      }
+      const ack = accessWriteAckFromCommittedStatus(status);
+      if (ack && userId && toastAccessWriteAck(ack)) {
+        void queryClient.invalidateQueries({ queryKey: ["admin", "agent", userId] });
+        void queryClient.invalidateQueries({ queryKey: queryKeys.adminAgents });
+        clearWriteRecovery();
+        clearEditForm();
+      }
+    }
+  }
+
+  function patchRequestBody(patch: AgentPatch, dryRun: boolean, racs?: RacsPreviewBinding, operationId?: string) {
+    let body: Record<string, unknown> = { dryRun, patch };
+    const basis = editBaselineRef.current ?? data;
+    if (basis?.baseObjectVersion) body.baseObjectVersion = basis.baseObjectVersion;
+    else if (basis?.version) body.version = basis.version;
+    if (!dryRun && racs && operationId) body = buildRacsWriteBody(racs, operationId, body);
+    return body;
+  }
+
   const previewMutation = useMutation({
-    mutationFn: async (patch: AgentPatch) => {
-      const data = await apiPatch<PatchDryRunResponse>(`/api/admin/agents/${userId}`, { dryRun: true, version, patch });
-      return { ...data, patch };
+    mutationFn: async ({ patch, refreshBaseline }: { patch: AgentPatch; refreshBaseline?: boolean }) => {
+      let body = patchRequestBody(patch, true);
+      if (refreshBaseline) {
+        const fresh = await apiGet<AgentDetailResponse>(`/api/admin/agents/${userId}`);
+        editBaselineRef.current = fresh;
+        queryClient.setQueryData(["admin", "agent", userId], fresh);
+        body = { dryRun: true, patch, ...(fresh.baseObjectVersion
+          ? { baseObjectVersion: fresh.baseObjectVersion } : { version: fresh.version }) };
+      }
+      const data = await apiPatch<PatchDryRunResponse>(`/api/admin/agents/${userId}`, body);
+      return { ...data, patch, racs: extractRacsPreviewBinding(data) };
     },
     onSuccess: (data) => {
       setDiffPreview(data);
+      setWriteRecoveryError(null);
       goToTab("diff");
     },
-    onError: (err: Error) => toast.error(err.message)
+    onError: (err: Error) => handleClassifiedWriteError(err)
   });
 
   const saveMutation = useMutation({
-    mutationFn: (patch: AgentPatch) =>
-      apiPatch<PatchSaveResponse>(`/api/admin/agents/${userId}`, { dryRun: false, version, patch }),
+    mutationFn: ({ patch, racs, operationId }: { patch: AgentPatch; racs?: RacsPreviewBinding; operationId?: string }) =>
+      apiPatch<PatchSaveResponse>(`/api/admin/agents/${userId}`, patchRequestBody(patch, false, racs, operationId)),
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ["admin", "policy-runtime"] });
       if (!toastAccessWriteAck(result)) return;
@@ -493,17 +663,27 @@ export function AgentDetail() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.adminAgents });
       setDiffPreview(null);
       setConfirmSave(null);
+      clearWriteRecovery();
       goToTab("info");
       clearEditForm();
     },
-    onError: (err: Error) => toast.error(err.message)
+    onError: (err: Error) => handleClassifiedWriteError(err)
   });
+
+  function commitAgentSave(preview: DiffPreview) {
+    const operationId = preview.racs ? newRolesAgentOperationId() : undefined;
+    if (operationId) { writeInflightOperationIdRef.current = operationId; writeKindRef.current = "save"; }
+    saveMutation.mutate({ patch: preview.patch, racs: preview.racs, operationId });
+  }
 
   const directSaveMutation = useMutation({
     mutationFn: async (patch: AgentPatch) => {
-      if (!version) throw new Error("配置版本未知，请刷新后重试");
-      await apiPatch<PatchDryRunResponse>(`/api/admin/agents/${userId}`, { dryRun: true, version, patch });
-      return apiPatch<PatchSaveResponse>(`/api/admin/agents/${userId}`, { dryRun: false, version, patch });
+      if (!version && !baseObjectVersion) throw new Error("配置版本未知，请刷新后重试");
+      const preview = await apiPatch<PatchDryRunResponse>(`/api/admin/agents/${userId}`, patchRequestBody(patch, true));
+      const racs = extractRacsPreviewBinding(preview);
+      const operationId = racs ? newRolesAgentOperationId() : undefined;
+      if (operationId) { writeInflightOperationIdRef.current = operationId; writeKindRef.current = "save"; }
+      return apiPatch<PatchSaveResponse>(`/api/admin/agents/${userId}`, patchRequestBody(patch, false, racs, operationId));
     },
     onSuccess: (result) => {
       void queryClient.invalidateQueries({ queryKey: ["admin", "policy-runtime"] });
@@ -514,26 +694,35 @@ export function AgentDetail() {
       setConfirmSave(null);
       clearEditForm();
     },
-    onError: (err: Error) => toast.error(err.message)
+    onError: (err: Error) => handleClassifiedWriteError(err)
   });
 
   const confirmPreviewMutation = useMutation({
     mutationFn: async (patch: AgentPatch) => {
-      const data = await apiPatch<PatchDryRunResponse>(`/api/admin/agents/${userId}`, { dryRun: true, version, patch });
-      return { ...data, patch };
+      const data = await apiPatch<PatchDryRunResponse>(`/api/admin/agents/${userId}`, patchRequestBody(patch, true));
+      return { ...data, patch, racs: extractRacsPreviewBinding(data) };
     },
     onSuccess: (data) => setConfirmSave(data),
-    onError: (err: Error) => toast.error(err.message)
+    onError: (err: Error) => handleClassifiedWriteError(err)
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => apiDelete<{ written: boolean }>(`/api/admin/agents/${userId}`),
-    onSuccess: () => {
+    mutationFn: async () => {
+      const preview = await apiDelete<{ baseObjectVersion?: string; previewToken?: string; compileInputsDigest?: string }>(`/api/admin/agents/${userId}`, { dryRun: true });
+      if (!window.confirm(`确认删除 Agent ${userId}？其凭据将被撤销。`)) return null;
+      const binding = extractRacsPreviewBinding(preview);
+      const operationId = binding ? newRolesAgentOperationId() : undefined;
+      if (operationId) { writeInflightOperationIdRef.current = operationId; writeKindRef.current = "delete"; }
+      return apiDelete<{ written: boolean }>(`/api/admin/agents/${userId}`,
+        binding && operationId ? buildRacsWriteBody(binding, operationId, { dryRun: false }) : { dryRun: false });
+    },
+    onSuccess: (result) => {
+      if (!result) return;
       toast.success(`Agent ${userId} 已删除`);
       void queryClient.invalidateQueries({ queryKey: queryKeys.adminAgents });
       navigate("/admin/agents");
     },
-    onError: (err: Error) => toast.error(err.message)
+    onError: (err: Error) => handleClassifiedWriteError(err)
   });
 
   const revokeTokenMutation = useMutation({
@@ -564,7 +753,6 @@ export function AgentDetail() {
   });
 
   function handleDelete() {
-    if (!confirm(`确定要删除 Agent "${userId}" 吗？此操作将同时撤销所有关联 token。`)) return;
     deleteMutation.mutate();
   }
 
@@ -621,7 +809,7 @@ export function AgentDetail() {
       toast.error(constraintError);
       return;
     }
-    previewMutation.mutate(buildPatch());
+    previewMutation.mutate({ patch: buildPatch() });
   }
 
   // Normalize unknown ?tab= values to info via URL replace.
@@ -638,18 +826,18 @@ export function AgentDetail() {
 
   // beforeunload guard when there are unsaved edits.
   useEffect(() => {
-    if (!hasEdits) return;
+    if (!hasEdits && !pendingOperation) return;
     function onBeforeUnload(e: BeforeUnloadEvent) {
       e.preventDefault();
       e.returnValue = "";
     }
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [hasEdits]);
+  }, [hasEdits, pendingOperation]);
 
   // Capture-phase <a> intercept: prompt when navigating away from this agent's page.
   useEffect(() => {
-    if (!hasEdits) return;
+    if (!hasEdits && !pendingOperation) return;
     const agentPathname = `/admin/agents/${userId}`;
     function onCapture(e: MouseEvent) {
       const anchor = (e.target as Element).closest("a[href]") as HTMLAnchorElement | null;
@@ -669,7 +857,7 @@ export function AgentDetail() {
     }
     document.addEventListener("click", onCapture, true);
     return () => document.removeEventListener("click", onCapture, true);
-  }, [hasEdits, userId]);
+  }, [hasEdits, userId, pendingOperation]);
 
   // Cmd+S / Ctrl+S mirrors the sticky-bar save action (low-risk one-step or role confirm).
   useEffect(() => {
@@ -733,8 +921,17 @@ export function AgentDetail() {
     return validateConstraintsForm(rows, grants.groups);
   }
 
-  if (isLoading) return <div className="pl-notice">加载中…</div>;
-  if (error || !agent) return <div className="pl-notice">加载失败：{error ? (error as Error).message : "Agent 不存在"}</div>;
+  if (isLoading) return <div className="pl-notice" role="status" data-testid="agent-detail-read-loading">加载中…</div>;
+  if (error || !agent) {
+    const notFound = error instanceof ApiError && error.httpStatus === 404 && error.code === "AGENT_NOT_FOUND";
+    return <section className="pl-notice" role="alert" data-testid={notFound ? "agent-detail-not-found" : "agent-detail-read-error"}>
+      <p className="notranslate" translate="no">{notFound ? "未找到该 Agent" : error ? userFacingApiErrorMessage(error) : "Agent 详情数据不完整，请重试。"}</p>
+      <div className="mt-3 flex gap-2">
+        <Link className="pl-btn pl-btn--secondary" to="/admin/agents">返回 <span className="notranslate" translate="no">Agent</span></Link>
+        {!notFound && <button type="button" className="pl-btn pl-btn--secondary" disabled={isFetching} onClick={() => void refetch()}>重试</button>}
+      </div>
+    </section>;
+  }
 
   const formalRoles = formalRoleOptions;
   const extraRoleIds = [
@@ -799,6 +996,41 @@ export function AgentDetail() {
             </button>
           </>
         }
+      />
+
+      <AccessWriteRecoveryPanel
+        error={writeRecoveryError}
+        pending={pendingOperation}
+        compare={
+          agent && userId && writeRecoveryError && shouldOfferThreeWayCompare(writeRecoveryError.kind)
+            ? {
+                baseline: {
+                  title: "原始值",
+                  draft: agentSnapshotRoleDraft(editingAgent ?? agent, userId),
+                  fields: agentCompareFields(editingAgent ?? agent),
+                  subtitle: "加载时的基线"
+                },
+                mine: {
+                  title: "我的修改",
+                  draft: agentSnapshotRoleDraft(currentAgentView() ?? agent, userId),
+                  fields: agentCompareFields(currentAgentView() ?? agent)
+                },
+                current: compareCurrentAgent
+                  ? { title: "当前值", draft: agentSnapshotRoleDraft(compareCurrentAgent, userId), fields: agentCompareFields(compareCurrentAgent) }
+                  : null,
+                draftMatchesCurrent: compareDraftMatchesCurrent
+              }
+            : null
+        }
+        onDismiss={clearWriteRecovery}
+        onRepreview={() => {
+          clearWriteRecovery();
+          const patch = buildPatch();
+          if (Object.keys(patch).length) previewMutation.mutate({ patch, refreshBaseline: true });
+        }}
+        onRefreshCurrent={() => void refreshCurrentAgentForCompare()}
+        onRecheckStatus={() => void recheckPendingOperation()}
+        onDiscardDraft={handleDiscardEdits}
       />
 
       <PolicyDegradeNotice
@@ -1595,7 +1827,7 @@ export function AgentDetail() {
                   <button
                     type="button"
                     className="pl-btn pl-btn--primary"
-                    onClick={() => diffPreview && saveMutation.mutate(diffPreview.patch)}
+                    onClick={() => diffPreview && commitAgentSave(diffPreview)}
                     disabled={saveMutation.isPending}
                   >
                     {saveMutation.isPending ? "保存中…" : "保存"}
@@ -1652,7 +1884,7 @@ export function AgentDetail() {
         <div className="pl-modal-backdrop z-[70]" data-testid="agent-leave-confirm-modal">
           <div className="pl-modal-panel max-w-sm">
             <h2 className="text-lg font-semibold mb-2">确认离开</h2>
-            <p className="text-sm text-fg-muted mb-4">您有未保存的修改，离开后将丢失。</p>
+            <p className="text-sm text-fg-muted mb-4">{pendingOperation ? "保存结果仍待确认，离开后请使用请求编号继续核对。" : "您有未保存的修改，离开后将丢失。"}</p>
             <div className="flex justify-end gap-2">
               <button
                 type="button"
@@ -1723,7 +1955,7 @@ export function AgentDetail() {
                 type="button"
                 className="pl-btn pl-btn--primary"
                 data-testid="agent-save-confirm-submit"
-                onClick={() => saveMutation.mutate(confirmSave.patch)}
+                onClick={() => commitAgentSave(confirmSave)}
                 disabled={saveMutation.isPending}
               >
                 {saveMutation.isPending ? "保存中…" : "确认保存"}

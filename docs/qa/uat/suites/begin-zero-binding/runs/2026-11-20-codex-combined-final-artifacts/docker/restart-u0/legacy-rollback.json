@@ -1,0 +1,5 @@
+{
+  "method": "existing D11 restorePriorBindingSession; stopped app, previous bound snapshot preserved",
+  "result": "restored-previous-committed",
+  "at": "2026-11-20T05:22:28.148624+00:00"
+}

@@ -1,0 +1,92 @@
+[
+  {
+    "name": "r07-delete-begin",
+    "tool": "lucy_begin_question",
+    "who": "a",
+    "session": "r07-delete-old",
+    "ok": true,
+    "elapsedMs": 46.608,
+    "rpcId": 1
+  },
+  {
+    "name": "r07-delete-before",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "r07-delete-old",
+    "ok": true,
+    "elapsedMs": 2501.985,
+    "rpcId": 2
+  },
+  {
+    "name": "r07-delete-new-init",
+    "tool": "initialize",
+    "who": "a",
+    "session": "r07-delete-new",
+    "ok": true,
+    "elapsedMs": 32.082,
+    "rpcId": 3
+  },
+  {
+    "name": "r07-delete-new-tools",
+    "tool": "tools/list",
+    "who": "a",
+    "session": "r07-delete-new",
+    "ok": true,
+    "elapsedMs": 22.815,
+    "rpcId": 4
+  },
+  {
+    "name": "r07-delete-new-forced-valid",
+    "tool": "lucy_begin_question",
+    "who": "a",
+    "session": "r07-delete-new",
+    "ok": false,
+    "elapsedMs": 12.796,
+    "rpcId": 5
+  },
+  {
+    "name": "r07-delete-new-forced-missing",
+    "tool": "lucy_begin_question",
+    "who": "a",
+    "session": "r07-delete-new",
+    "ok": false,
+    "elapsedMs": 19.897,
+    "rpcId": 6
+  },
+  {
+    "name": "r07-delete-new-forced-invalid",
+    "tool": "lucy_begin_question",
+    "who": "a",
+    "session": "r07-delete-new",
+    "ok": false,
+    "elapsedMs": 13.118,
+    "rpcId": 7
+  },
+  {
+    "name": "r07-delete-new-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "r07-delete-new",
+    "ok": true,
+    "elapsedMs": 507.14,
+    "rpcId": 8
+  },
+  {
+    "name": "r07-delete-old-allow",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "r07-delete-old",
+    "ok": true,
+    "elapsedMs": 568.919,
+    "rpcId": 9
+  },
+  {
+    "name": "r07-delete-old-deviation",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "r07-delete-old",
+    "ok": false,
+    "elapsedMs": 17.264,
+    "rpcId": 10
+  }
+]

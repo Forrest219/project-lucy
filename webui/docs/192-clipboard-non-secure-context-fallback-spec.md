@@ -4,7 +4,7 @@
 |---|---|
 | 版本 | v0.1 |
 | 日期 | 2026-10-26 |
-| 状态 | 用户已批准执行；尚未走 cross-review（落盘即执行，见 §9 待审阅项） |
+| 状态 | P1-40／REQ-030-061：S5｜功能合同已收口（2026-11-22，S4→S5 并行波次·scoped）。假成功修复已提交 `65f40847`；UAT helper＋十个可点入口 REAL；收口范围不含公网 COPY-04 与 6 个 helper-only 入口。≠ 可上线 |
 | 范围 | WebUI 前端全部复制入口；不涉及后端 API、ACL、MCP endpoint、Session |
 | 关联 Plan | [`plans/wo-M65-clipboard-non-secure-context-fallback.md`](plans/wo-M65-clipboard-non-secure-context-fallback.md) |
 | 关联 Bug 台账 | [`docs/ui-ux-feedback/pages/admin-agents.md`](../../docs/ui-ux-feedback/pages/admin-agents.md) `UX-ADMIN-AGENTS-042` |
@@ -349,3 +349,24 @@ New terms:
 本轮验证覆盖的是**代码与自动化契约**：helper 的三级降级、失败不谎报成功、
 真实浏览器中 `navigator.clipboard` 缺失时的回退路径。
 它**不等价于**客户内网 HTTP 实例上的现场复核，后者留给 S5。
+
+### 13.5 2026-11-17 事故修复记录（假成功）
+
+§5 伪代码要求降级路径对 textarea 做 `select()`＋`setSelectionRange(0, text.length)`，
+首版实现却改成「只给 `document` 选区加一个包住 textarea 内容的 Range、不聚焦」。
+Chromium 对表单控件给出**空选区**，而 `execCommand("copy")` 在空选区下仍返回 `true`，
+于是 helper 报 `{ ok: true }`、界面提示「已复制」、剪贴板未变（AC-04／AC-05 失守）。
+§13.1 的单测与 e2e 都把 `execCommand` 打桩，且 e2e 跑在回环（安全上下文），因此一直是绿的。
+
+委托人 2026-11-17 授权修复（清单 P1-40／REQ-030-061；错题 [clipboard-http-fake-success](../../docs/lessons/2026-11-17-clipboard-http-fake-success.md)）。修复内容：
+
+- `execCommandFallback`：聚焦 textarea 并全选，确认「焦点在 textarea 且选区＝全文」后才调用 `execCommand`；确认不了则返回 `exec-command-rejected`，不谎报成功。
+- 打开的 Radix 对话框／抽屉内触发时，textarea 挂在该对话框内，避免焦点陷阱把焦点抢走。
+- 调用结束后移除 textarea、把焦点还给原元素、还原原选区（用 `cloneRange()` 保存）。
+- 单测改为在 `execCommand` 被调用的瞬间读取「焦点与选区文本」，不再只看 textarea 的 value；新增多行长文本、聚焦失败不报成功、焦点还原、对话框内挂载 4 条。
+
+验证：`clipboard.test.tsx`＋`new-token.test.tsx` 31 passed；先红后绿（改前 4 条失败）。真实浏览器验证见测试台 `UAT-SUITE-COPY-FAKE-SUCCESS` 修复后跑次（局域网明文 HTTP＋真实粘贴读回）。
+
+**2026-11-22 scoped 收口（S4→S5 并行波次·5b）**：功能合同已收口。收口范围＝demo／局域网明文 HTTP 下 R0／01／02a–02j／03；不含公网 UAT-COPY-04（未授权升级）与 6 个 helper-only 入口（另批授权）。≠ 可上线。
+
+补记（同日同类排查）：§13.2 记录过的「把 `{ ok, reason }` 真值对象当布尔用」在 `Onboarding.tsx` 的 `writeMcpConfigToClipboard` 里仍然存在（`if (!copiedOk)` 恒为假，复制失败仍提示「MCP 配置已复制」），§13.1 的回归未覆盖。已改为判 `copied.ok`；`onboarding.test.tsx` 新增「剪贴板失败不得提示已复制／成功才提示已复制」两条（先红后绿）；`lint:copy-surfaces` 新增 R5，要求每个 `copyTextToClipboard` 调用点读取返回值 `.ok`。

@@ -65,6 +65,7 @@ export type NavIconKey =
   | "fieldQuestions"
   | "securityEval"
   | "governanceOverview"
+  | "opsSteps"
   | "agents"
   | "tokens"
   | "roles"
@@ -123,6 +124,16 @@ export const navGroups: Array<{
         active: (path) => path === "/admin/usage" || path === "/admin/governance",
         description: "查看 Agent、Token、数据表的活跃率，以及 WebUI 页面访问情况。",
         keywords: ["Governance", "Dashboard", "使用概况", "活跃率", "界面使用"]
+      },
+      {
+        id: "admin-ops-steps",
+        label: "运维步骤",
+        to: "/admin/ops-steps",
+        handbookSection: "runtime-status-checklist",
+        iconKey: "opsSteps",
+        active: (path) => path === "/admin/ops-steps" || path.startsWith("/admin/ops-steps/"),
+        description: "按操作号查看进行中、已结束的运维步骤及写入降级。",
+        keywords: ["运维步骤", "操作号", "步骤名", "丢行", "Ops Step"]
       }
     ]
   },

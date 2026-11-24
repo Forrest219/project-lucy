@@ -1,0 +1,7 @@
+# Preserve captured evidence byte-for-byte, including original log whitespace
+# and unified-diff context markers. Source and authored docs keep normal checks.
+docs/qa/uat/suites/core-availability/runs/2026-11-20-codex-followup-r3-calibration-artifacts/contract-owner-log.txt -whitespace
+docs/qa/uat/suites/core-availability/runs/2026-11-20-codex-followup-r4-calibration-artifacts/contract-owner-log.txt -whitespace
+docs/qa/uat/suites/core-availability/runs/2026-11-20-codex-followup-r6-directed-artifacts/handoff-checks/owned-code.patch -whitespace
+# Raw stdout from the v0.30 integration checks also retains its final newlines.
+docs/reviews/2026-11-20-core-availability-v030-integration-artifacts/*.log -whitespace

@@ -1,0 +1,51 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 6,
+  "body": {
+    "ok": true,
+    "data": {
+      "valid": false,
+      "connectionId": "hive-1",
+      "schema": "race_a",
+      "assetKind": "schema_manifest",
+      "assetType": "schemaManifest",
+      "targetPath": "semantic-layer/hive-1/_schema/race_a.yaml",
+      "originalFilename": "race_a.yaml",
+      "sizeBytes": 90,
+      "sha256": "426b51ef3e9d9d07d824d8f2ab1de5b36d1b1432056a06577b00facefc8fe6b4",
+      "errors": [
+        {
+          "code": "DUPLICATE_SOURCE_NAME",
+          "message": "短名「city」在最终集合中冲突（物理表：race_a.city、weather.city）。请重新扫描该 Schema，或将冲突短名改为「race_a_city」后再上传。"
+        }
+      ],
+      "warnings": [],
+      "tableNames": [
+        "city"
+      ],
+      "tables": 1,
+      "sourceNameConflicts": [
+        {
+          "sourceName": "city",
+          "entries": [
+            {
+              "targetPath": "hive-1/_schema/race_a.yaml",
+              "schema": "race_a",
+              "physicalTable": "race_a.city",
+              "sourceName": "city"
+            },
+            {
+              "targetPath": "hive-1/_schema/weather.yaml",
+              "schema": "weather",
+              "physicalTable": "weather.city",
+              "sourceName": "city"
+            }
+          ],
+          "involvesCandidate": true,
+          "suggestedSourceName": "race_a_city"
+        }
+      ],
+      "exists": false
+    }
+  }
+}

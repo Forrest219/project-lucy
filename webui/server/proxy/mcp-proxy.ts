@@ -1,10 +1,15 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { createServer, request as httpRequest, type ClientRequest, type IncomingMessage, type ServerResponse } from "node:http";
+import { admitMcpProcessWork, mcpReloadAdmissionError, onMcpWorkSettled, trackMcpResponseCommit, trackMcpUpstreamWork } from "../runtime/mcp-process-work.js";
+import { getMcpExecutionCapacity, resolveCapacityLimits } from "../runtime/mcp-execution-capacity.js";
+import { markUpstreamToolCallResponded } from "../runtime/upstream-liveness.js";
+import { getProcessLifecyclePhase, SERVICE_DRAINING, SERVICE_DRAINING_MESSAGE } from "../runtime/process-drain.js";
 import path from "node:path";
-import { setSessionClient, type Identity } from "./identity.js";
+import { identifyRequestDetailed, setSessionClient, type Identity } from "./identity.js";
 import { admitMcpRequest, MCP_UPSTREAM_PATH, type AdmissionAudit, type AdmittedRequest } from "./admission.js";
 import {
+  AUTHORIZATION_REVOKED_DETAIL,
   AuthorizationRevokedError,
   beginGuardedRequest,
   currentAuthorizationSequence,
@@ -29,13 +34,14 @@ import {
   upstreamSessionKeepaliveEnabled,
   upstreamSessionOwner
 } from "./upstream-session.js";
-import { extractRequestClientMeta, resolveClientIdentity } from "./request-client-meta.js";
+import { extractRequestClientMeta, resolveClientIdentity, resolveClientIpEvidence } from "./request-client-meta.js";
 import { ensureSkillAuditReady, writeLog, writeAccessLogSources, writeConversationTurn, purgeExpiredConversationTurns, bindPriorSessionCalls, loadBudgetState, saveBudgetState, listBudgetScopes, type AccessLogSourceRecord } from "./audit.js";
 import { setLedgerSeqResolver } from "./audit-reconcile.js";
-import { allowedToolNames, authorizeAndRewrite, check as aclCheck, effectivePermissions, extractTables, extractSourceRefs, formatIdentityCompilerReason, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
+import { absoluteDenyOrUnclassifiedReason, allowedToolNames, authorizeAndRewrite, check as aclCheck, effectivePermissions, getPolicyRuntimeStatus, extractTables, extractSourceRefs, formatIdentityCompilerReason, resolveSourceRefsForTables, kxCatalog, lucyCatalog, permissionSnapshot, type SourceRef } from "./acl.js";
 import {
   redactQuestionText,
   summarizeArgsForAudit,
+  summarizeFilters,
   extractQueryTables,
   questionPreviewMaxChars,
   storeQuestionPreviewEnabled,
@@ -47,21 +53,28 @@ import { buildAccessLogAuditMeta } from "./audit-meta.js";
 import { canAccessWikiKey, canonicalWikiKey, searchAccessibleWikiPages } from "./wiki-acl.js";
 import { CONTEXT_NOT_AVAILABLE, CONTEXT_ROLE_REQUIRED } from "./context-acl.js";
 import { loadAllSkillsFresh, getSkillByUri, getSkillByName } from "../skills/loader.js";
+import { readSkillDiscovery, skillDiscoveryMetrics, verifySkillDiscovery, type SkillDiscoveryAsset, type SkillDiscoveryMetrics, type SkillDiscoverySnapshot } from "../skills/discovery.js";
 import type { SkillAsset } from "../skills/types.js";
 import { canAccessSkill, filterAccessibleSkills, type SkillAclDecision, type SkillAclAction } from "./skill-acl.js";
 import { readProject, resolveProjectRoot } from "../project.js";
-import { semanticReadHintsFromArgs, semanticRecoveryReadBlock } from "../semantic-recovery-journal.js";
+import { semanticReadHintsFromArgs, semanticRecoveryReadState, type SemanticRecoveryReadBlock } from "../semantic-recovery-journal.js";
+import { matchedActivePublishWriteStages } from "../publish-coordinator.js";
 // L25-16 — 控制面工具由代理**本地**服务，绝不转发给 KTX。
 // 工具名单与描述来自 `ops/control-plane.ts`（单一事实源）。
 import { isControlPlaneTool } from "../ops/control-plane.js";
 import { invokeOpsTool, opsToolDescriptors } from "../ops/ops-tools.js";
 import { listSources } from "../semantic-layer.js";
-import { loadContentPaths } from "../paths.js";
+import { caliberBindingsPath, loadContentPaths } from "../paths.js";
 import {
   firstConnectionIdFromArgs,
   resolveAndMaybeServeHiveTool
 } from "../hive/proxy-hook.js";
 import type { HiveExecutionTool } from "../hive/execution.js";
+import {
+  requestWouldHitUpstreamSemanticExecution,
+  trackUpstreamSemanticEnter,
+  trackUpstreamSemanticLeave
+} from "./field-exposure.js";
 import {
   isOpsEvidenceGovernanceSource,
   OPS_EVIDENCE_CONNECTION_ID,
@@ -92,10 +105,15 @@ import {
 import { getAuditDb as getAdminAuditDb } from "../admin/audit.js";
 import { extractSqlFromToolResult, mergeIncludeSql } from "../audit/query-artifact-capture.js";
 import { canonicalizeLucyQueryArgs } from "./lucy-query-normalization.js";
+import { recallObservedToolNames, rememberObservedToolNames } from "./observed-tool-names.js";
+import { REPEAT_REJECTION_HINT, computeRejectionFingerprint, repeatRejections } from "./rejection-guard.js";
 import { applyLucyQueryForcedFilters, buildExplainForcedPredicateDiagnostics, isScopeIntersectionEmpty } from "./row-policy.js";
 import { TurnCorrelationRegistry } from "./turn-correlation.js";
 import { beginAuditWrite, completeAuditWrite, failAuditWrite } from "./audit-write-health.js";
+import { TraceRequestContext, currentTrace, currentTraceContext, runWithTrace } from "./audit-trace-context.js";
+import { TraceRecorder, completeTrace, mapReasonCode, type SpanHandle, type TraceStage } from "./audit-trace-span.js";
 import {
+  buildEmptyResultNextStep,
   classifyFailure,
   denialAllowList,
   filterPushdownGuardEnabled,
@@ -112,8 +130,13 @@ import {
   budgetIdentityKey,
   budgetScopeKey,
   QUESTION_BUDGET_ABS_EXEC_MS,
+  QUESTION_BUDGET_MAX_BUSY_MS,
+  QUESTION_BUDGET_MAX_CALLS,
+  QUESTION_BUDGET_MAX_WALL_MS,
+  questionBudgetWallMode,
   installBudgetPersistence,
   type BudgetPersistence,
+  type NextStep,
   registerPublishedVersion,
   repairHint,
   buildRepairClosure,
@@ -123,15 +146,79 @@ import {
   TRUNCATION_REPAIR_HINT,
   type RepairTargetEvidence,
   isBudgetUnavailable,
+  type BudgetSnapshot,
+  type BudgetTicket,
+  type BudgetState,
+  type ContinuationMode,
 } from "./question-experience.js";
 import { bindQuestionBudgetSettlement } from "./question-budget-lifecycle.js";
-import { applyLucyCallGuard, countWithoutSourceBeforeAcl, loadPublishedAmbiguityCatalog, queryGuardrailsEnabled } from "./query-guardrails.js";
+import { applyLucyCallGuard, countWithoutSourceBeforeAcl, loadAmbiguityCatalogFromDir, loadPublishedAmbiguityCatalog, queryGuardrailsEnabled } from "./query-guardrails.js";
 import {
   lookupReportTemplate,
   resolveCertifiedRoute,
 } from "./certified-route.js";
+// P0-1 问题类型口径绑定（Spec v0.9 D3–D12／O1／O2）。
+import {
+  bindingScopeKey,
+  checkCaliberBindingGate,
+  prepareCaliberBindingActivation,
+  withCaliberBindingRegistryExclusion,
+  withCaliberBindingScopeLock,
+  type CaliberBindingDenial,
+} from "./caliber-binding.js";
+import {
+  beginBindingSessionPreparation,
+  commitBindingSession,
+  readBindingSession,
+  restorePriorBindingSession,
+} from "./caliber-binding-session.js";
+import {
+  classifyCaliberParticipation,
+  currentCaliberBindingRegistry,
+  registrySyncPending,
+  verifyCurrentBindingContentAndDependencies,
+  type ParticipationProofMetrics,
+} from "./caliber-binding-registry.js";
+// P0-4 答复可核对块（REQ-030-022／Spec v0.4-draft）。
+import {
+  ANSWER_VERIFIABILITY_INSTRUCTION_LINES,
+  applyAnswerVerifiabilityToLucyQuery,
+  buildAnswerVerifiabilityErrorEnvelope,
+  extractLucy018PreserveFields,
+  captureRequestPinnedCaliberEvidence,
+  deepCopyJson,
+  extractSseJsonRpcResponseRaw,
+  systemConstraintsFromForcedFilters,
+  type RequestPinnedCaliberEvidence,
+} from "./answer-verifiability.js";
+// P0-3 表级歧义门闩（REQ-030-024／Spec v0.5）。
+import {
+  ASK_FIRST_SECTION,
+  ambiguityScopeKey,
+  attestSourceConfirmation,
+  buildMatchableSourcesForGate,
+  checkSourceAmbiguityGate,
+  admitHostConfirmRequest,
+  LUCY_HOST_ATTESTATION_HEADER,
+  repairEvidenceIdentityKey,
+  sourceAmbiguityGateAppliesToTool,
+  upsertJourneyOnBegin,
+  type GateSchemaProbe,
+  type SourceAmbiguityDenial,
+  type SourceIdentity,
+} from "./source-ambiguity-gate.js";
+import { SOURCE_COUNT_CAP, toSelectionDisclosure, type SourceSelectionDisclosure } from "./source-selection-tolerance.js";
 
 export { registerPublishedVersion };
+export {
+  admitHostConfirmRequest,
+  attestSourceConfirmation,
+  hostConfirmCallerAllowed,
+  LUCY_HOST_ATTESTATION_HEADER
+} from "./source-ambiguity-gate.js";
+
+/** 宿主 attested 确认提交（非 tools/call；§4.4 层 B／sourceChannel=host_confirm_api）。 */
+export const SOURCE_AMBIGUITY_CONFIRM_PATH = "/mcp/host/source-ambiguity/confirm";
 
 const KTX_HOST = process.env.LUCY_PROXY_UPSTREAM_HOST ?? "127.0.0.1";
 const KTX_PORT = Number(process.env.LUCY_PROXY_UPSTREAM_PORT ?? 7878);
@@ -145,6 +232,21 @@ const LUCY_SKILLS_PORT = Number(process.env.LUCY_PROXY_LUCY_SKILLS_PORT ?? 7881)
 // (`LUCY_DEPLOYMENT_MODE=development`); customer mode refuses to start with it on.
 const MAX_BODY_BYTES = Number(process.env.LUCY_PROXY_MAX_BODY_BYTES ?? 1_048_576);
 const UPSTREAM_TIMEOUT_MS = Number(process.env.LUCY_PROXY_UPSTREAM_TIMEOUT_MS ?? 30_000);
+/**
+ * P1-82：单次上游调用的总时长硬上限。`UPSTREAM_TIMEOUT_MS` 只是 socket 空闲超时，上游持续滴水或事件循环被占时
+ * 可能远超它；容量名额要等上游真实结束才释放，没有这条硬上限，几条死查询就能占满连接／全局名额。
+ * 默认 90 秒，低于问数预算的绝对执行时限（120 秒），后者保留为预算记账边界。
+ */
+/** P1-82：客户端中途离开后，名额在上游 close 之后额外保留的时长（取消未获数据库确认）。0 = 不保留。 */
+const CANCEL_UNCONFIRMED_HOLD_MS = (() => {
+  const raw = process.env.LUCY_MCP_CANCEL_HOLD_MS;
+  const parsed = raw === undefined ? NaN : Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 30_000;
+})();
+const UPSTREAM_HARD_DEADLINE_MS = (() => {
+  const parsed = Number(process.env.LUCY_PROXY_UPSTREAM_HARD_DEADLINE_MS);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 90_000;
+})();
 const QUERY_KEY_RE = /^(?:sql|query)$/i;
 const LUCY_QUERY_DEFAULT_LIMIT = Number(process.env.LUCY_QUERY_DEFAULT_LIMIT ?? 100);
 const LUCY_QUERY_MAX_LIMIT = Number(process.env.LUCY_QUERY_MAX_LIMIT ?? 1000);
@@ -156,42 +258,15 @@ function getInternalToken(): string {
   return process.env.KTX_INTERNAL_TOKEN ?? "";
 }
 
-const lucyQueryInflight = new Map<string, number>();
-
 function reportedTurnWindowMs(): number {
   return Number(process.env.LUCY_REPORTED_TURN_ATTACH_WINDOW_MS ?? 600_000);
 }
 
 const reportedTurns = new TurnCorrelationRegistry(reportedTurnWindowMs);
 
-function queryConcurrencyKey(identity: Identity): string {
-  return `${identity.userId}:${identity.tokenHashPrefix}`;
-}
-
 function queryConcurrencyLimit(): number {
   if (!Number.isFinite(LUCY_QUERY_MAX_INFLIGHT)) return 4;
   return Math.max(1, Math.floor(LUCY_QUERY_MAX_INFLIGHT));
-}
-
-function acquireLucyQuerySlot(identity: Identity): { allowed: true; release: () => void; active: number; max: number } | { allowed: false; active: number; max: number } {
-  const key = queryConcurrencyKey(identity);
-  const active = lucyQueryInflight.get(key) ?? 0;
-  const max = queryConcurrencyLimit();
-  if (active >= max) return { allowed: false, active, max };
-  lucyQueryInflight.set(key, active + 1);
-  let released = false;
-  return {
-    allowed: true,
-    active: active + 1,
-    max,
-    release: () => {
-      if (released) return;
-      released = true;
-      const current = lucyQueryInflight.get(key) ?? 0;
-      if (current <= 1) lucyQueryInflight.delete(key);
-      else lucyQueryInflight.set(key, current - 1);
-    }
-  };
 }
 
 function releaseOnResponseEnd(res: ServerResponse, release: () => void): void {
@@ -232,6 +307,35 @@ function readBody(req: IncomingMessage): Promise<Buffer> {
     });
     req.on("error", reject);
   });
+}
+
+/** P1-36：在当前请求的 trace 上登记一个上游阶段 span；无请求上下文（后台、passthrough）时原样执行。 */
+async function withUpstreamSpan<T extends IncomingMessage | string | undefined>(
+  stage: TraceStage,
+  run: () => Promise<T>,
+  options: { parent?: SpanHandle; attrs?: Record<string, unknown> } = {}
+): Promise<T> {
+  const trace = currentTrace();
+  if (!trace) return run();
+  const span = trace.start(stage, options.parent);
+  try {
+    const result = await run();
+    const statusCode = typeof result === "object" && result !== null ? result.statusCode : undefined;
+    span.end({
+      status: "ok",
+      reasonCode: "allowed",
+      attrs: { ...options.attrs, ...(statusCode !== undefined ? { upstream_status: statusCode } : {}) }
+    });
+    return result;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const mapped = mapReasonCode({
+      decisionReason: /timeout/i.test(message) ? "timeout" : "upstream_error",
+      outcome: "error"
+    });
+    span.end({ status: "error", reasonCode: mapped.code, reasonParam: mapped.param, errorCategory: mapped.errorCategory, attrs: options.attrs });
+    throw err;
+  }
 }
 
 function forwardToKtx(
@@ -279,16 +383,30 @@ function forwardToUpstream(
     if (internalToken) headers["authorization"] = `Bearer ${internalToken}`;
     if (body) headers["content-length"] = String(body.byteLength);
 
+    const isToolCall = method === "POST" && body !== undefined && body.includes('"tools/call"');
     const upstream = httpRequest(
       { hostname: target.host, port: target.port, path: url, method, headers },
-      resolve
+      (response) => {
+        // Any non-5xx answer to a tool call proves KTX is processing work (see upstream-liveness.ts).
+        if (isToolCall && (response.statusCode ?? 500) < 500) markUpstreamToolCallResponded();
+        resolve(response);
+      }
     );
+    trackMcpUpstreamWork(upstream);
     // Spec 162 §6.2 / SC-13：把在途请求句柄交给调用方，客户端断开时可以取消上游。
     onRequest?.(upstream);
     upstream.setTimeout(UPSTREAM_TIMEOUT_MS, () => {
       upstream.destroy(new Error(`${label} upstream timeout after ${UPSTREAM_TIMEOUT_MS}ms`));
     });
     upstream.on("error", reject);
+    if (method === "POST") {
+      // 只限请求—响应式调用；GET 事件流本就长连接。
+      const hardDeadline = setTimeout(() => {
+        upstream.destroy(new Error(`${label} upstream hard deadline after ${UPSTREAM_HARD_DEADLINE_MS}ms`));
+      }, UPSTREAM_HARD_DEADLINE_MS);
+      hardDeadline.unref();
+      upstream.once("close", () => clearTimeout(hardDeadline));
+    }
     barrier?.trackUpstream(upstream);
     if (body) upstream.end(body);
     else upstream.end();
@@ -340,7 +458,24 @@ function readUpstreamBody(upstream: IncomingMessage): Promise<string> {
  * plain-text 400 as missing session traffic), then the `notifications/initialized`
  * the protocol requires before session traffic is accepted.
  */
-async function handshakeUpstreamSession(identity: Identity): Promise<string | undefined> {
+/** P1-37 U3a：恢复握手的显式结果。任何异常都落成结果，不依赖异常路径。 */
+export type RecoveryFailureCause =
+  | "initialize_failed"
+  | "no_session_id"
+  | "invalid_initialize_response"
+  | "initialized_failed"
+  | "handshake_threw";
+export type RecoveryResult = { ok: true; sessionId: string } | { ok: false; cause: RecoveryFailureCause };
+
+async function handshakeUpstreamSession(identity: Identity, parent?: SpanHandle): Promise<RecoveryResult> {
+  try {
+    return await handshakeUpstreamSessionUnsafe(identity, parent);
+  } catch {
+    return { ok: false, cause: "handshake_threw" };
+  }
+}
+
+async function handshakeUpstreamSessionUnsafe(identity: Identity, parent?: SpanHandle): Promise<RecoveryResult> {
   const handshakeHeaders = { "content-type": "application/json" } satisfies IncomingMessage["headers"];
   const initializeBody = Buffer.from(JSON.stringify({
     jsonrpc: "2.0",
@@ -353,24 +488,28 @@ async function handshakeUpstreamSession(identity: Identity): Promise<string | un
     }
   }));
 
-  const initializeResponse = await forwardToKtx("POST", "/mcp", handshakeHeaders, initializeBody);
+  const initializeResponse = await withUpstreamSpan("upstream_handshake", () => forwardToKtx("POST", "/mcp", handshakeHeaders, initializeBody), { parent });
   const initializeResponseBody = await readUpstreamBody(initializeResponse);
   const sessionId = normalizeHeader(initializeResponse.headers["mcp-session-id"]);
-  if ((initializeResponse.statusCode ?? 200) >= 400 || !sessionId) return undefined;
+  if ((initializeResponse.statusCode ?? 200) >= 400) return { ok: false, cause: "initialize_failed" };
+  if (!sessionId) return { ok: false, cause: "no_session_id" };
   if (!isJsonRpcShaped(decodeUpstreamPayload(
     initializeResponseBody,
     String(initializeResponse.headers["content-type"] ?? ""),
     ""
   ))) {
-    return undefined;
+    return { ok: false, cause: "invalid_initialize_response" };
   }
 
   const initializedBody = Buffer.from(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }));
-  const initializedResponse = await forwardToKtx("POST", "/mcp", handshakeHeaders, initializedBody, sessionId);
+  const initializedResponse = await withUpstreamSpan("upstream_handshake", () => forwardToKtx("POST", "/mcp", handshakeHeaders, initializedBody, sessionId), { parent });
   await readUpstreamBody(initializedResponse);
+  // U3a：`notifications/initialized` 须被上游以 2xx 接受才算握手成功；否则不缓存新会话。
+  const initializedStatus = initializedResponse.statusCode ?? 200;
+  if (initializedStatus < 200 || initializedStatus >= 300) return { ok: false, cause: "initialized_failed" };
 
   setUpstreamSession(upstreamSessionOwner(identity), sessionId);
-  return sessionId;
+  return { ok: true, sessionId };
 }
 
 /**
@@ -434,7 +573,7 @@ async function forwardToKtxWithSession(
   const sessionId = resolveOutboundSession(identity, incomingHeaders);
   session.gatewaySupplied = Boolean(sessionId) && sessionId !== clientSessionId;
 
-  let upstream = await forwardToKtx(method, url, headersWithOwnedSession(identity, incomingHeaders), body, sessionId, onRequest);
+  let upstream = await withUpstreamSpan("upstream_call", () => forwardToKtx(method, url, headersWithOwnedSession(identity, incomingHeaders), body, sessionId, onRequest));
   let upstreamBody = await readUpstreamBody(upstream);
   if (!keepalive) return { upstream, body: upstreamBody, session };
 
@@ -448,18 +587,22 @@ async function forwardToKtxWithSession(
 
   if (sessionId) clearUpstreamSession(upstreamSessionOwner(identity), sessionId);
   session.handshakeAttempted = true;
-  const freshSession = await handshakeUpstreamSession(identity).catch(() => undefined);
-  if (!freshSession) {
+  const recoverSpan = currentTrace()?.start("session_recover");
+  const recovery = await handshakeUpstreamSession(identity, recoverSpan);
+  if (!recovery.ok) {
     session.recoveryFailed = true;
+    recoverSpan?.end({ status: "error", reasonCode: "session_lost", errorCategory: "upstream_failed", attrs: { recovered: false, reason: recovery.cause } });
     return { upstream, body: upstreamBody, session };
   }
+  const freshSession = recovery.sessionId;
+  recoverSpan?.end({ status: "ok", reasonCode: "upstream_session_recovered", attrs: { recovered: true } });
 
   // Retry once with the fresh session, dropping the stale client-supplied one.
   const retryHeaders: IncomingMessage["headers"] = { ...incomingHeaders };
   for (const key of Object.keys(retryHeaders)) {
     if (key.toLowerCase() === "mcp-session-id") delete retryHeaders[key];
   }
-  upstream = await forwardToKtx(method, url, retryHeaders, body, freshSession, onRequest);
+  upstream = await withUpstreamSpan("upstream_call", () => forwardToKtx(method, url, retryHeaders, body, freshSession, onRequest), { attrs: { retry_count: 1 } });
   upstreamBody = await readUpstreamBody(upstream);
   const stillRefused = isSessionRequiredFailure(
     upstream.statusCode,
@@ -509,6 +652,75 @@ function _bindOpenSessionTurn_REMOVED_v0_3(
   return;
 }
 
+function finalizeTracedEntry(
+  context: TraceRequestContext,
+  entry: Parameters<typeof writeLog>[0]
+): Parameters<typeof writeLog>[0] {
+  const { evidence, root } = completeTrace(context.recorder, {
+    tool: entry.tool,
+    outcome: entry.outcome,
+    decisionReason: entry.decisionReason,
+    errorDetail: entry.errorDetail,
+    policyVersion: entry.policyVersion,
+    isToolCall: context.rpcMethod === "tools/call"
+  });
+  const finished = context.recorder.finish(root);
+  return {
+    ...entry,
+    traceId: finished.traceId,
+    ts: new Date(finished.wallEndMs).toISOString(),
+    durationMs: finished.durationMs,
+    spans: finished.spans,
+    ipSource: context.ipSource,
+    trustedSource: context.trustedSource,
+    executionEvidence: entry.executionEvidence ?? evidence
+  };
+}
+
+/**
+ * P1-37 U2：登记一次被拒请求并判断是否「相同请求刚被拒绝」。
+ * 指纹只对规范化后的入参取 HMAC；密钥不可用时返回无指纹，不影响拒绝响应本身。
+ */
+async function trackRejection(
+  context: TraceRequestContext | undefined,
+  reason: string
+): Promise<{ fingerprint?: string; repeated: boolean }> {
+  const rejection = context?.rejection;
+  if (!rejection) return { repeated: false };
+  rejection.fingerprint ??= await computeRejectionFingerprint(rejection.args);
+  if (!rejection.fingerprint) return { repeated: false };
+  const parts = {
+    identityId: rejection.identityId,
+    sessionScope: rejection.sessionScope,
+    tool: rejection.tool,
+    fingerprint: rejection.fingerprint,
+    reason,
+    policyVersion: getPolicyRuntimeStatus().policyVersion
+  };
+  const repeated = repeatRejections.isRepeated(parts);
+  repeatRejections.remember(parts);
+  return { fingerprint: rejection.fingerprint, repeated };
+}
+
+/** 重复被拒时返回要追加到拒绝文案末尾的提示（含前导空格），否则返回空串。 */
+async function repeatRejectionSuffix(context: TraceRequestContext | undefined, reason: string): Promise<string> {
+  const tracked = await trackRejection(context, reason);
+  return tracked.repeated ? ` ${REPEAT_REJECTION_HINT}` : "";
+}
+
+/** 审计出口：被拒行（denied 或入参校验失败）补上指纹，并登记到重复被拒状态。 */
+async function withRejectionFingerprint(
+  context: TraceRequestContext | undefined,
+  entry: Parameters<typeof writeLog>[0]
+): Promise<Parameters<typeof writeLog>[0]> {
+  const rejection = context?.rejection;
+  if (!rejection || entry.tool !== rejection.tool || entry.rejectionFingerprint) return entry;
+  const reason = entry.decisionReason ?? entry.errorDetail ?? "";
+  if (entry.outcome !== "denied" && !reason.startsWith("invalid_arguments")) return entry;
+  const tracked = await trackRejection(context, reason);
+  return tracked.fingerprint ? { ...entry, rejectionFingerprint: tracked.fingerprint } : entry;
+}
+
 function recordAudit(entry: Parameters<typeof writeLog>[0], sources?: SourceRef[]): void {
   beginAuditWrite();
   // A known User-Agent product replaces an empty name or Lucy's own placeholder.
@@ -531,12 +743,19 @@ function recordAudit(entry: Parameters<typeof writeLog>[0], sources?: SourceRef[
       entry.requestId == null || entry.requestId === "" ? undefined : String(entry.requestId)
     )
   };
-  writeLog(normalized)
-    .then((accessLogId) => {
+  // P1-36：该请求的 trace 由第一行审计行认领；响应发出后再收尾并同事务写入行与 span。
+  const traceContext = currentTraceContext();
+  const traced = traceContext?.claim(normalized.traceId) === true;
+  const ready: Promise<Parameters<typeof writeLog>[0]> = (traced && traceContext
+    ? traceContext.settled.then(() => finalizeTracedEntry(traceContext, normalized))
+    : Promise.resolve(normalized)
+  ).then((finalEntry) => withRejectionFingerprint(traceContext, finalEntry));
+  ready
+    .then((finalEntry) => writeLog(finalEntry).then((accessLogId) => {
       if (sources && sources.length > 0) {
-        return writeAccessLogSources(accessLogId, normalized.ts, normalized.userId, normalized.tool, toSourceRecords(sources));
+        return writeAccessLogSources(accessLogId, finalEntry.ts, finalEntry.userId, finalEntry.tool, toSourceRecords(sources));
       }
-    })
+    }))
     .then(() => {
       completeAuditWrite();
     })
@@ -804,7 +1023,7 @@ function queryOperation(query: string): string {
   return "unknown";
 }
 
-function queryAuditMeta(toolArgs: unknown): Partial<Parameters<typeof writeLog>[0]> & { queryTables?: string[] } {
+function queryAuditMeta(toolArgs: unknown, toolName?: string): Partial<Parameters<typeof writeLog>[0]> & { queryTables?: string[] } {
   const rawQuery = findRawQuery(toolArgs);
   if (!rawQuery) return {};
   const preview = buildAuditQueryPreview(rawQuery);
@@ -817,7 +1036,8 @@ function queryAuditMeta(toolArgs: unknown): Partial<Parameters<typeof writeLog>[
     previewTruncated: preview.previewTruncated,
     previewOriginalBytes: preview.previewOriginalBytes,
     // U11：摘要基于完整的受控规范化输入，digest_kind 区分来源类型。
-    digestKind: "sql",
+    // P1-36 D10：wiki_search 的摘要是检索文本，不得标成 sql。
+    digestKind: toolName === "wiki_search" ? "search_text" : "sql",
     queryTables: extractQueryTables(rawQuery)
   };
 }
@@ -1064,7 +1284,7 @@ function lucyBeginQuestionTool() {
   return {
     name: "lucy_begin_question",
     description:
-      "Optional but recommended. Call once at the start of each new user business question to help Lucy audit. Prefer passing the user's original wording in `question` when available; always provide `intentSummary`. Skipping this tool never blocks catalog or query tools. Do not call for protocol checks or tool discovery only.",
+      `Recommended at the start of each new user business question. Prefer the user's original wording in \`question\`; always provide \`intentSummary\`. When multiple visible sources may match the same business term, Lucy allows the query but discloses the selection in answer_verifiability.sourceSelection (tell the user which source you used and that it was unconfirmed). source_ambiguity_gate is returned only for hard failures (unresolved refs, catalog health, cross-connection, more than ${SOURCE_COUNT_CAP} sources, or no source-qualified reference at all while the business term matches several sources); then retry as a single-source query using \`source.measure\` keys. Skipping begin does not bypass these hard checks. Do not call for protocol checks or tool discovery only.`,
     inputSchema: {
       type: "object",
       properties: {
@@ -1074,7 +1294,9 @@ function lucyBeginQuestionTool() {
           type: "array",
           items: { type: "string" },
           maxItems: 20
-        }
+        },
+        // P0-1：显式指定生效绑定。优先于触发匹配；不回退触发匹配。
+        caliberBindingId: { type: "string", maxLength: 200 }
       },
       required: ["intentSummary"],
       additionalProperties: false
@@ -1086,11 +1308,13 @@ function lucyContinueQuestionTool() {
   return {
     name: "lucy_continue_question",
     description:
-      "Continue the current question after question_budget_exhausted. Pass the continueToken from that response. This does not start a new question and does not require a database connection.",
+      "Budget escape after question_budget_exhausted. Pass the continueToken from that response. Default mode `continue` continues the same question (without lucy_begin_question, up to 5 continuations). When the stop payload has continuable=false and its next_step asks for mode=new_question, pass mode=new_question to reopen the budget for a new question on the same token (begin-not-available scopes only; where lucy_begin_question is available, use it instead). This is a budget limit, not a permission denial.",
     inputSchema: {
       type: "object",
       properties: {
-        token: { type: "string" }
+        token: { type: "string" },
+        // P1-74 / D7：显式 `continue`（默认）或 `new_question`；旧客户端只传 token ⇒ continue。
+        mode: { type: "string", enum: ["continue", "new_question"] }
       },
       required: ["token"],
       additionalProperties: false
@@ -1237,6 +1461,50 @@ function localToolBuilders(): Array<{ name: string; build: () => Record<string, 
     builders.push({ name: descriptor.name, build: () => descriptor });
   }
   return builders;
+}
+
+/**
+ * P1-60 (Spec §3 D1–D2): inactive / unknown 下从 visibleTools 移除 lucy_begin_question。
+ * 分类读取失败按 unknown 隐藏 begin；其余工具与 continue 保持。
+ */
+async function shouldHideBeginQuestion(
+  identity: Identity,
+  sessionId: string | null | undefined,
+  work?: InstructionsWork
+): Promise<boolean> {
+  const started = performance.now();
+  try {
+    const identityKey = budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? "");
+    const scopeKey = sessionId ? bindingScopeKey(identityKey, sessionId) : undefined;
+    const proof = work ? { dir: caliberBindingsPath(await loadContentPaths()), metrics: work.participationProof } : undefined;
+    const participation = await classifyCaliberParticipation({ scopeKey, proof });
+    return participation !== "active";
+  } catch {
+    return true;
+  } finally {
+    if (work) work.timings.begin_visibility = performance.now() - started;
+  }
+}
+
+/**
+ * P1-74 / D7：预算开启时，凡可见任一**计费问数工具**的身份必须可达
+ * `lucy_continue_question`（含 mode=new_question）。只放宽该逃生工具的
+ * 可见性／可达性，不新增任何 connection／source／行权限；wiki-only 等
+ * 非问数身份不在本条范围，沿用既有 ACL（SC-47 合同不变）。
+ */
+const BILLED_DATA_TOOL_NAMES = new Set([
+  "lucy_query",
+  "lucy_read_source",
+  "lucy_freshness",
+  "lucy_explain_query"
+]);
+
+function budgetEscapeToolReachable(visibleTools: ReadonlySet<string> | readonly string[]): boolean {
+  if (!questionBudgetEnabled()) return false;
+  for (const tool of visibleTools) {
+    if (BILLED_DATA_TOOL_NAMES.has(tool)) return true;
+  }
+  return false;
 }
 
 function numericLimit(value: unknown): number {
@@ -1402,7 +1670,9 @@ function generatedSqlAuditFields(
     generatedSql: sql,
     queryHash: createHash("sha256").update(sql).digest("hex"),
     queryLength: sql.length,
-    queryOperation: queryOperation(sql)
+    queryOperation: queryOperation(sql),
+    // P1-36 D10：lucy_query 的摘要来自上游编译出的 SQL。
+    digestKind: "sql"
   };
 }
 
@@ -1515,6 +1785,17 @@ function invalidLucyQueryShapeReason(toolName: string, record: Record<string, un
     ?? invalidOrderByFieldReason(toolName, record, "orderBy");
 }
 
+const LUCY_QUERY_MEASURES_HINT =
+  "lucy_query requires a non-empty \"measures\" array, for example {\"connectionId\":\"<connection>\",\"measures\":[\"<source>.<measure>\"],\"dimensions\":[{\"field\":\"<source>.<dimension>\"}]}";
+
+/** P1-37 U2：`measures` 缺失或为空数组＝KTX 必然拒绝的形状（见 O6 取证）。 */
+function lucyQueryMeasuresRequiredReason(args: unknown): string | undefined {
+  if (!args || typeof args !== "object" || Array.isArray(args)) return undefined;
+  const measures = (args as Record<string, unknown>).measures;
+  if (Array.isArray(measures) && measures.length > 0) return undefined;
+  return "invalid_arguments:lucy_query:measures_required";
+}
+
 function validateLucyToolArgs(toolName: string, args: unknown): string | undefined {
   if (
     !toolName.startsWith("lucy_") ||
@@ -1529,7 +1810,10 @@ function validateLucyToolArgs(toolName: string, args: unknown): string | undefin
     // 这里按**前缀**豁免（而不是按登记表）：登记表之外的 `lucy_ops_*` 也必须走
     // 分类闸门（ACL → `tool_unclassified:<tool>`）得到准确的原因码，而不是先被
     // 数据面的入参规则拦下、报出误导性的 `connection_required`。
-    toolName.startsWith("lucy_ops_")
+    toolName.startsWith("lucy_ops_") ||
+    // P1-37 U2：未登记的工具名先走分类闸门（ACL → `tool_unclassified:<tool>`），
+    // 而不是被数据面入参规则先拦下、报出误导性的 `connection_required`。
+    absoluteDenyOrUnclassifiedReason(toolName)?.startsWith("tool_unclassified:")
   ) {
     return undefined;
   }
@@ -1823,28 +2107,412 @@ function isFileNotFound(err: unknown): boolean {
   return Boolean(err && typeof err === "object" && (err as { code?: string }).code === "ENOENT");
 }
 
-async function buildRoleAwareInstructions(identity: Identity): Promise<string | undefined> {
-  const fallback = await loadDataQaInstructions();
-  try {
-    const catalog = await lucyCatalog(identity);
-    let accessibleSkills: Awaited<ReturnType<typeof filterAccessibleSkills>> = [];
-    try {
-      const allSkills = await loadAllSkillsFresh();
-      accessibleSkills = await filterAccessibleSkills(identity, allSkills, "discover");
-    } catch {
-      // Best-effort loading of skills for instructions
-    }
+/**
+ * D8 / SC-12 — initialize Visible Scope 每行只拼四元组身份字段。
+ * 导出供单测直接调用生产拼装路径，避免手写行假绿。
+ */
+export function formatVisibleScopeSourceLine(source: {
+  connectionId: string;
+  schema: string;
+  sourceName: string;
+  table: string;
+}): string {
+  return `- ${source.connectionId}.${source.schema}.${source.sourceName} -> ${source.table}`;
+}
 
-    if (catalog.connections.length === 0 && catalog.sources.length === 0 && accessibleSkills.length === 0) return fallback;
-    const visibleTools = new Set(await allowedToolNames(identity));
+// ─── P1-75 §2.2：握手指引决策（1 秒截止／容量 20／基础指引降级）──────────────
+
+/** 动态指引决策截止：自 Lucy 接受该 `initialize`（ingress，单调时钟）起算。 */
+export const INSTRUCTIONS_DYNAMIC_DEADLINE_MS = 1000;
+/** 每实例同时运行的动态指引工作上限；无等待队列，满则直接走基础指引。 */
+export const INSTRUCTIONS_WORK_MAX_CONCURRENT = 20;
+
+/** 仅供单测：缩短截止／容量，或在工作内部注入慢点（可忽略取消，用于验证「真实终结才释放」）。 */
+export const instructionsDecisionTestHooks: {
+  deadlineMs?: number;
+  capacity?: number;
+  beforeBuild?: (signal: AbortSignal) => Promise<void>;
+  /** 构建完成后、复核授权代次前触发：用于模拟「构建期间授权／输入已变」。 */
+  afterBuild?: () => Promise<void>;
+  /** 可见性／口径策略读取（`resolveInstructionsVisibility`）入口：用于模拟策略读取变慢或卡死；基础指引路径不得触达。 */
+  policyReads?: () => Promise<void>;
+} = {};
+
+let instructionsWorkActive = 0;
+
+/** P0-2：独立 `lucy_catalog` 每实例同时运行上限；无等待队列，满则返回可重试的忙碌结果。 */
+export const CATALOG_WORK_MAX_CONCURRENT = 20;
+let catalogWorkActive = 0;
+/** 仅供单测：缩小容量，或在目录读取前注入可取消的慢点。 */
+export const catalogWorkTestHooks: { capacity?: number; beforeCatalog?: (signal: AbortSignal) => Promise<void> } = {};
+export function catalogWorkActiveCount(): number {
+  return catalogWorkActive;
+}
+
+/** 当前占用中的动态指引工作数（只读；供测试与取证）。 */
+export function instructionsWorkActiveCount(): number {
+  return instructionsWorkActive;
+}
+
+type InstructionsFallbackReason = "deadline" | "capacity_full" | "build_failed" | "stale_proof" | "protocol_fallback";
+
+type InstructionsDecision =
+  | { kind: "full"; text: string }
+  | { kind: "basic"; text: string; reason: InstructionsFallbackReason }
+  | { kind: "disconnected" }
+  | { kind: "revoked" };
+
+type InstructionsWork = {
+  signal: AbortSignal;
+  openSpans: SpanHandle[];
+  participationProof: ParticipationProofMetrics;
+  skillVerification: SkillDiscoveryMetrics;
+  timings: Partial<Record<"begin_visibility" | "tool_visibility" | "skill_verify", number>>;
+  skillDiscovery?: { root: string; snapshot: SkillDiscoverySnapshot };
+  skillDiscoveryFailed?: boolean;
+};
+
+function throwIfInstructionsWorkAborted(work: InstructionsWork | undefined): void {
+  work?.signal.throwIfAborted();
+}
+
+async function resolveInstructionsVisibility(
+  identity: Identity,
+  sessionId: string | null | undefined,
+  work?: InstructionsWork
+): Promise<{ hideBegin: boolean; visibleTools: Set<string> }> {
+  const started = performance.now();
+  await instructionsDecisionTestHooks.policyReads?.();
+  const hideBegin = await shouldHideBeginQuestion(identity, sessionId, work);
+  const visibleTools = new Set(await allowedToolNames(identity));
+  // P1-60 D1: inactive / unknown 下不主动曝光 begin（Spec §4 伪代码）。
+  if (hideBegin) visibleTools.delete("lucy_begin_question");
+  // P1-74 / D7：计费问数身份必须可达逃生工具（不新增数据权限）。
+  if (budgetEscapeToolReachable(visibleTools)) visibleTools.add("lucy_continue_question");
+  if (work) work.timings.tool_visibility = performance.now() - started;
+  return { hideBegin, visibleTools };
+}
+
+function questionReportingLinesFor(visibleTools: ReadonlySet<string>): string[] {
+  return visibleTools.has("lucy_begin_question")
+    ? [
+        "- Recommended: at the start of each new user business question, call `lucy_begin_question` once. Prefer the user's original wording in `question` when available; always provide `intentSummary`. Skipping begin does not bypass the source ambiguity gate when a query asserts a source. Do not call it for protocol checks or tool discovery only.",
+        ""
+      ]
+    : [];
+}
+
+// P1-74 / D5：与 md「问询预算」同一处置口径 —— 预算终止不是权限拒绝；
+// 按 continuable／next_step 分支：续查多档（无 begin 时默认至多 5 档），
+// 硬停后按 next_step 重试。inactive 模式不得点名 begin（P1-60 工具隐藏合同）。
+function budgetExhaustedLineFor(visibleTools: ReadonlySet<string>, hideBegin: boolean): string {
+  if (!visibleTools.has("lucy_continue_question")) {
+    return "- When a data tool returns `question_budget_exhausted`, stop looping. This is a question budget limit, not a permission denial; deliver the verified partial results, state the gaps, and do not retry.";
+  }
+  return hideBegin
+    ? "- When a data tool returns `question_budget_exhausted`, stop looping. This is a question budget limit, not a permission denial. If `continuable` is true, call `lucy_continue_question` once with the returned `continueToken` (default mode `continue`) and then retry the data tool; a question can be continued up to 5 times. If `continuable` is false, call `lucy_continue_question` with `mode=new_question` and the `continueToken` to reopen the budget for a new question on the same token, then retry the data tool. Deliver verified partial results only when no such path is available."
+    : "- When a data tool returns `question_budget_exhausted`, stop looping. This is a question budget limit, not a permission denial. If `continuable` is true, call `lucy_continue_question` once with the returned `continueToken` (default mode `continue`) and then retry the data tool; a question can be continued up to 5 times. If `continuable` is false, follow the structured `next_step`: `lucy_begin_question` starts a new question where begin is available; `lucy_continue_question` with `mode=new_question` and the `continueToken` reopens the budget with the same token where begin is not available, then retry the data tool. Deliver verified partial results only when no such path is available.";
+}
+
+/**
+ * P1-77 C1–C4／C6：默认主动采用业务上下文的静态规则（事实源 `data-qa-instructions.md`「业务上下文默认采用」一节的代码镜像）。
+ * 纯静态文本：握手内不做任何 Wiki／Skill 检索或正文读取。`[C1a]` 等行首标记用于 SC-08 的实际注入断言与归因。
+ */
+export const CONTEXT_ADOPTION_RULE_LINES: readonly string[] = [
+  "## Business Context Adoption",
+  "",
+  "- [C1a] Governed definitions first: before answering, check whether the visible sources already supply the applicable definition (measure / dimension descriptions, an active Question Type Binding / caliber binding). If so, query directly with that governed definition and disclose where it came from; do not force a Wiki search.",
+  "- [C1b] Supplement only when missing: only for a business definition the authorized sources do not cover, call `wiki_search` then `wiki_read` (where visible). When several definitions conflict, check their scope / version or ask the user; never take the first hit.",
+  "- [C1c] No channel, no downgrade: if there is no Wiki channel or no hit, questions answerable from governed definitions are still delivered as usual; only a required business definition that is truly missing makes that sub-conclusion unavailable (see [C3]).",
+  "- [C2] Procedures: when the question needs a governed procedure, read it directly if the authorized target is already known; otherwise confirm the target with the visible Skill search tool (`lucy_skill_search`) and then read the body (`lucy_skill_read`). Follow the procedure; threshold actions and dispatching are suggestions only; perform zero write operations.",
+  "- [C3] Honest fallback: a lookup or read failure must never fail the whole question. Distinguish four states: not found / not permitted / read failed / definition conflict. Mark only the affected sub-conclusion `unavailable` and state the impact, deliver the other sub-conclusions normally, and never invent a definition or a procedure conclusion.",
+  "- [C4] Main path protection: pure semantic fact questions keep the shortest path (catalog -> source -> `lucy_query` -> answer) with no mandatory context lookup; governed definitions ([C1a]) go straight through and are never blocked by these steps.",
+  "- [C6] Per-question limits: for the same business dependency in one question, make at most one lookup and one body read (a Resource / Prompt read counts as the same read) and reuse a body already obtained and still authorized. At the limit or on an explicit tool timeout, stop extra calls for that dependency, deliver the verified results per [C3], and keep the other dependencies moving. The proxy data-tool budget still applies.",
+  ""
+];
+
+/**
+ * 静态核心问数规则：完整指引与基础指引**共用同一份**（事实源 `data-qa-instructions.md` 的同口径代码镜像）。
+ * 只含规则行，不含任何角色化连接／Source／Skill 名单。
+ */
+export function staticCoreRuleLines(options: {
+  catalogTool: string;
+  questionReportingLines: string[];
+  budgetExhaustedLine: string;
+}): string[] {
+  const { catalogTool, questionReportingLines, budgetExhaustedLine } = options;
+  return [
+    "- Use the Lucy MCP Proxy tool surface only; do not invent data when a data tool fails.",
+    `- Call ${catalogTool} before choosing a connection or source unless the route is already explicit in the user request.`,
+    "- Only use connections and sources listed in this session's visible scope.",
+    "- If a query needs data, call `lucy_query` or `lucy_read_source`; do not answer from wiki-only context when data retrieval failed.",
+    "- For simple factual questions, use the shortest verified path: catalog/source confirmation -> `lucy_query` -> answer. Do not call `entity_details` or `lucy_explain_query` before `lucy_query` unless the user asks for entity metadata or permission/guardrail diagnostics.",
+    "- A successful `lucy_query` that returns zero fact rows carries a structured `next_step` inside the result JSON (and in `_meta.lucy.next_step`). Read it before retrying: it names the source, the filters you used, and the controlled next calls (`lucy_read_source`, `lucy_freshness`) to verify grain, period and filters. Do not substitute an approximation for the empty result.",
+    ...ANSWER_VERIFIABILITY_INSTRUCTION_LINES,
+    ...CONTEXT_ADOPTION_RULE_LINES,
+    ...questionReportingLines,
+    // D13：与 md 事实源同一 ASK_FIRST 片段（有可见 catalog 时也必须出现）
+    ASK_FIRST_SECTION.trimEnd(),
+    "",
+    "- Answer simple numeric questions directly first, usually as a compact table, then add brief caveats/provenance. Do not turn ordinary fact lookups into long audit reports.",
+    "- For multi-metric, multi-period, or multi-scenario questions, build an answerability dependency matrix before querying: numerator, denominator, period/grain, batch/version, actual/forecast/budget scenario, source/measure, and governed business definition. Mark a subquestion unavailable when a required dependency is missing; do not substitute an approximation.",
+    "- Budget requires an independent budget measure, source, or governed formula. Never substitute forecast, target, or prior actual for budget. If budget evidence is missing, deliver the answerable parts and state that budget variance is currently unavailable.",
+    "- Calculate and label actual, forecast, and budget separately. Any cross-scenario composition must be labeled hybrid with the covered periods for each component; do not assume the current quarter is complete actual without evidence.",
+    "- revenue/quantity or revenue/bandwidth is realized unit price and includes mix effects. Do not claim pure price, volume, or mix contribution without a governed decomposition formula and the required grain.",
+    "- Distinguish no fact row, NULL/blank source field, and values inferred from cumulative deltas. Do not collapse all three states into `—`.",
+    "- If a key data tool call fails, the final answer must say whether a retry succeeded, whether the failure affects the conclusion, and which values remain uncertain. Do not give numeric conclusions when no successful fact data was returned.",
+    "- Fingerprint failures by tool, source, normalized reason, and relevant argument shape. Retry the same fingerprint at most once and only with an information-gaining correction; cycling among eq, =, and in is not a correction.",
+    // Spec lucy-20261111 SC-T4：数字取自代理实际执行的预算常量，避免与 md／运行时分叉。
+    `- Per question, use at most ${QUESTION_BUDGET_MAX_CALLS} data-tool calls or ${QUESTION_BUDGET_MAX_BUSY_MS / 1000} seconds of settled data-processing time (thinking time excluded), whichever comes first. Repeat the same input at most once, do not re-read a successful source, and retry only transient errors once. Protocol methods (question declaration and continuation) do not count toward this budget.`,
+    budgetExhaustedLine,
+    "- Partial evidence still requires a final response. Give each subquestion an ok, no_data, unavailable, or partial status, plus period, batch/version, scenario, failure impact, and provenance.",
+    "- When rows are missing, fields are NULL, a tool failed, or a value is inferred, qualify the answer with phrases such as 基于当前可查询数据 or 按累计差额推算; do not claim the data is complete or fully reconciled.",
+    "- For `lucy_query`, use source-qualified semantic keys such as `source.measure`, `source.dimension`, and `source.segment`. Do not shorten them after an error; unqualified keys may be rejected by ACL before reaching the semantic layer.",
+    "- In `lucy_query.measures`, use string semantic measure keys when the measure exists. Use `{expr,name}` objects only for ad hoc aggregate expressions.",
+    "- In `lucy_query.dimensions` and `lucy_query.order_by`, use object entries such as `{field:\"source.field\"}`; do not use bare string arrays.",
+    "- `lucy_query.filters` supports string filters and structured filters such as `{field:\"source.field\",op:\"contains\",value:\"<entity keyword>\"}`. Prefer semantic segments such as `source.segment` for common filters when available.",
+    "- Some clients may serialize the whole `filters` value as JSON text; Lucy strictly restores that compatibility shape. Do not generate it deliberately. `orderBy` is accepted only as an alias for canonical `order_by`; conflicting aliases fail closed.",
+    "- Interpret POC `DATE` / `DATETIME` values as Asia/Shanghai business dates when the visible source documentation says so."
+  ];
+}
+
+/** 基础指引的工具发现方法：只讲方法，不列任何连接／Source／Skill 名称。 */
+export const BASIC_INSTRUCTIONS_DISCOVERY_LINES: readonly string[] = [
+  "## Tool Discovery",
+  "",
+  "- This handshake carries no connection, source or skill lists. Discover what you may use through the tools actually listed by `tools/list`.",
+  "- Use the catalog tool listed there (`lucy_catalog` where visible) to see the connections and sources you may query, and `lucy_read_source` to inspect a source's grain, fields and measures before querying.",
+  "- Where `lucy_skill_search` / `lucy_skill_read` are listed, search and read governed domain SOPs on demand for the business domain of the question; where `wiki_search` / `wiki_read` are listed, use them for business definitions.",
+  "- Authorization can change at any time. Re-run discovery instead of relying on remembered connection, source or tool names."
+];
+
+/**
+ * 进程内基础指引：核心问数规则 ＋ 工具发现方法，无角色化名单。
+ * Spec「进程预装载」：与身份／会话无关，不做任何策略／口径读取（那些读取不受截止约束，
+ * 会拖住降级响应并绕过容量上限）。保守默认：不点名 begin，保留 continue 逃生
+ * （P1-74 D7，不可达时模型只会交付部分结果）。首次调用同步构建一次并驻留进程；
+ * 握手路径在模块加载后即预热，降级时只是同步取值。
+ */
+let prebuiltBasicInstructions: string | undefined;
+export function buildBasicInstructions(): string {
+  prebuiltBasicInstructions ??= [
+    "# Lucy Data QA Runtime Instructions",
+    "",
+    ...staticCoreRuleLines({
+      catalogTool: "the catalog tool listed in `tools/list` (`lucy_catalog` where visible)",
+      questionReportingLines: questionReportingLinesFor(new Set(["lucy_continue_question"])),
+      budgetExhaustedLine: budgetExhaustedLineFor(new Set(["lucy_continue_question"]), true)
+    }),
+    "",
+    ...BASIC_INSTRUCTIONS_DISCOVERY_LINES
+  ].join("\n");
+  return prebuiltBasicInstructions;
+}
+
+/** 授权／输入代次证明：构建前后一致才可下发完整指引。取不到证明＝不可信（返回 null）。 */
+async function instructionsProof(identity: Identity): Promise<string | null> {
+  const resolved = await effectivePermissions(identity);
+  if (!resolved.ok) return null;
+  return `${getPolicyRuntimeStatus().policyVersion}|${resolved.permissions.snapshotHash}|${resolved.permissions.sourceMapVersion}`;
+}
+
+type InstructionsWorkResult = { text: string | undefined; current: boolean };
+
+async function runDynamicInstructionsWork(
+  identity: Identity,
+  sessionId: string | null | undefined,
+  buildSpan: SpanHandle | undefined,
+  work: InstructionsWork
+): Promise<InstructionsWorkResult> {
+  await instructionsDecisionTestHooks.beforeBuild?.(work.signal);
+  throwIfInstructionsWorkAborted(work);
+  const before = await instructionsProof(identity);
+  throwIfInstructionsWorkAborted(work);
+  const text = await buildRoleAwareInstructionsUntimed(identity, buildSpan, sessionId, work);
+  throwIfInstructionsWorkAborted(work);
+  await instructionsDecisionTestHooks.afterBuild?.();
+  const after = await instructionsProof(identity);
+  throwIfInstructionsWorkAborted(work);
+  if (before === null || before !== after || work.skillDiscoveryFailed) return { text, current: false };
+  const skills = work.skillDiscovery;
+  if (!skills) return { text, current: true };
+  const verifyStarted = performance.now();
+  const current = await verifySkillDiscovery(skills.root, skills.snapshot, work.skillVerification);
+  work.timings.skill_verify = performance.now() - verifyStarted;
+  return { text, current };
+}
+
+type InstructionsRaceOutcome =
+  | { t: "done"; value: InstructionsWorkResult }
+  | { t: "failed" }
+  | { t: "deadline" }
+  | { t: "disconnect" };
+
+function awaitInstructionsWork(
+  workPromise: Promise<InstructionsWorkResult>,
+  remainingMs: number,
+  clientSignal: AbortSignal
+): Promise<InstructionsRaceOutcome> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve({ t: "deadline" }), Math.max(0, remainingMs));
+    const onAbort = () => resolve({ t: "disconnect" });
+    clientSignal.addEventListener("abort", onAbort, { once: true });
+    const settle = (outcome: InstructionsRaceOutcome) => {
+      clearTimeout(timer);
+      clientSignal.removeEventListener("abort", onAbort);
+      resolve(outcome);
+    };
+    workPromise.then((value) => settle({ t: "done", value }), () => settle({ t: "failed" }));
+  });
+}
+
+const FALLBACK_REASON_CODE: Record<InstructionsFallbackReason, "timeout" | "execution_unavailable" | "internal_error" | "upstream_error"> = {
+  deadline: "timeout",
+  capacity_full: "execution_unavailable",
+  build_failed: "internal_error",
+  stale_proof: "internal_error",
+  protocol_fallback: "upstream_error"
+};
+
+/**
+ * 握手指引决策。成功响应前只会得到四种结局之一；完整或基础指引至多下发一次。
+ * 迟到工作只做结算：它拿不到响应，也不写入任何跨请求缓存，因此无法发布旧指引。
+ */
+async function decideInitializeInstructions(
+  identity: Identity,
+  sessionId: string | null | undefined,
+  ctx: { ingressMonoMs: number; clientSignal: AbortSignal; protocolFallback?: boolean }
+): Promise<InstructionsDecision> {
+  const buildSpan = currentTrace()?.start("instructions_build");
+  const openSpans: SpanHandle[] = [];
+  const controller = new AbortController();
+  const work: InstructionsWork = {
+    signal: controller.signal, openSpans, timings: {},
+    participationProof: { checks: 0, joins: 0, batches: 0 },
+    skillVerification: skillDiscoveryMetrics()
+  };
+  const closeOpenChildren = (reasonCode: "timeout" | "cancelled") => {
+    for (const span of openSpans) span.end({ status: "error", reasonCode });
+  };
+  const deadlineMonoMs = ctx.ingressMonoMs + (instructionsDecisionTestHooks.deadlineMs ?? INSTRUCTIONS_DYNAMIC_DEADLINE_MS);
+  const barrier = currentBarrierHandle();
+
+  const conclude = (decision: InstructionsDecision): InstructionsDecision => {
+    let final = decision;
+    if (final.kind === "full" || final.kind === "basic") {
+      // 发送前重验：撤权不出旧指引；客户端已断开不写响应。
+      if (barrier && !barrier.isCurrent()) final = { kind: "revoked" };
+      else if (ctx.clientSignal.aborted) final = { kind: "disconnected" };
+    }
+    if (final.kind === "full") {
+      buildSpan?.end({ status: "ok", reasonCode: "allowed", attrs: {
+        cache_hit: false, decision: "full", bytes: Buffer.byteLength(final.text), ...work.timings,
+        skill_verify_checks: work.skillVerification.checks,
+        skill_verify_joins: work.skillVerification.joins,
+        skill_verify_batches: work.skillVerification.batches,
+        skill_verify_io: work.skillVerification.scan_read,
+        binding_proof_checks: work.participationProof.checks,
+        binding_proof_joins: work.participationProof.joins,
+        binding_proof_batches: work.participationProof.batches
+      } });
+    } else if (final.kind === "basic") {
+      buildSpan?.end({
+        status: "error", reasonCode: FALLBACK_REASON_CODE[final.reason],
+        attrs: { decision: "basic", fallback_reason: final.reason, bytes: Buffer.byteLength(final.text) }
+      });
+    } else {
+      buildSpan?.end({ status: "error", reasonCode: final.kind === "revoked" ? "acl_denied" : "cancelled" });
+    }
+    return final;
+  };
+  const basic = (reason: InstructionsFallbackReason): InstructionsDecision => (
+    conclude({ kind: "basic", text: buildBasicInstructions(), reason })
+  );
+
+  if (ctx.clientSignal.aborted) return conclude({ kind: "disconnected" });
+  // 既有本地协议回退（上游握手不可用）走同一决策：不起动态工作，直接基础指引。
+  if (ctx.protocolFallback) return basic("protocol_fallback");
+  const remainingMs = deadlineMonoMs - questionBudget.monoNow();
+  if (remainingMs <= 0) return basic("deadline");
+  if (instructionsWorkActive >= (instructionsDecisionTestHooks.capacity ?? INSTRUCTIONS_WORK_MAX_CONCURRENT)) {
+    return basic("capacity_full");
+  }
+
+  // 容量只在工作**真实终结**时释放（含取消后仍在跑的底层读取）。
+  instructionsWorkActive += 1;
+  const workPromise = runDynamicInstructionsWork(identity, sessionId, buildSpan, work)
+    .finally(() => { instructionsWorkActive -= 1; });
+  workPromise.catch(() => undefined);
+
+  const outcome = await awaitInstructionsWork(workPromise, remainingMs, ctx.clientSignal);
+  if (outcome.t === "disconnect") {
+    controller.abort();
+    closeOpenChildren("cancelled");
+    return conclude({ kind: "disconnected" });
+  }
+  if (outcome.t === "deadline" || questionBudget.monoNow() > deadlineMonoMs) {
+    controller.abort();
+    closeOpenChildren("timeout");
+    return basic("deadline");
+  }
+  if (outcome.t === "failed" || !outcome.value.text) return basic("build_failed");
+  if (!outcome.value.current) return basic("stale_proof");
+  return conclude({ kind: "full", text: outcome.value.text });
+}
+
+async function buildRoleAwareInstructionsUntimed(
+  identity: Identity,
+  buildSpan: SpanHandle | undefined,
+  sessionId?: string | null,
+  work?: InstructionsWork
+): Promise<string | undefined> {
+  async function fallback(): Promise<string | undefined> {
+    const hideBegin = await shouldHideBeginQuestion(identity, sessionId, work);
+    throwIfInstructionsWorkAborted(work);
+    const md = await loadDataQaInstructions();
+    throwIfInstructionsWorkAborted(work);
+    return hideBegin && md
+      ? md.replace(/## 可选问询上报[^\n]*\n[\s\S]*?(?=\n## |$)/u, "").replaceAll("lucy_begin_question", "问询声明")
+      : md;
+  }
+  try {
+    const catalogSpan = currentTrace()?.start("catalog_resolve", buildSpan);
+    if (catalogSpan) work?.openSpans.push(catalogSpan);
+    // §2.2：握手只消费四元组与示例；描述／grain 增强移出应答路径（独立 lucy_catalog 仍走完整合同）。
+    const catalog = await lucyCatalog(identity, { enrichDescriptions: false, signal: work?.signal });
+    catalogSpan?.end({ status: "ok", reasonCode: "allowed" });
+    let accessibleSkills: SkillDiscoveryAsset[] = [];
+    const skillsSpan = currentTrace()?.start("skills_load", buildSpan);
+    if (skillsSpan) work?.openSpans.push(skillsSpan);
+    const skillMetrics = skillDiscoveryMetrics();
+    try {
+      const root = (await loadContentPaths()).skills;
+      const snapshot = await readSkillDiscovery(root, skillMetrics);
+      throwIfInstructionsWorkAborted(work);
+      const aclStart = performance.now();
+      accessibleSkills = await filterAccessibleSkills(identity, snapshot.skills, "discover");
+      if (work) work.skillDiscovery = { root, snapshot };
+      skillsSpan?.end({ status: "ok", reasonCode: "allowed", attrs: {
+        skill_count: snapshot.skills.length,
+        cache_hit: skillMetrics.directories === 0 && skillMetrics.joins === 0,
+        ...skillMetrics,
+        acl_filter: performance.now() - aclStart
+      } });
+    } catch {
+      if (work) work.skillDiscoveryFailed = true;
+      skillsSpan?.end({ status: "error", reasonCode: "upstream_error", attrs: skillMetrics });
+    }
+    throwIfInstructionsWorkAborted(work);
+
+    if (catalog.connections.length === 0 && catalog.sources.length === 0 && accessibleSkills.length === 0) return fallback();
+    const { hideBegin, visibleTools } = await resolveInstructionsVisibility(identity, sessionId, work);
+    throwIfInstructionsWorkAborted(work);
     const catalogTool = visibleTools.has("lucy_catalog")
       ? "`lucy_catalog`"
       : visibleTools.has("kx_catalog")
         ? "`kx_catalog`"
         : "the visible catalog tool";
-    const sourceLines = catalog.sources.map((source) => (
-      `- ${source.connectionId}.${source.schema}.${source.sourceName} -> ${source.table}`
-    ));
+    const sourceLines = catalog.sources.map(formatVisibleScopeSourceLine);
     const exampleLines = catalog.examples.map((example) => `- ${example}`);
     const skillLines = accessibleSkills.map((skill) => (
       `- [${skill.name}] (${skill.uri}): ${skill.title} - ${skill.description}`
@@ -1858,38 +2526,14 @@ async function buildRoleAwareInstructions(identity: Identity): Promise<string | 
           ...skillLines
         ]
       : [];
-    const questionReportingLines = visibleTools.has("lucy_begin_question")
-      ? [
-          "- Optional but recommended: at the start of each new user business question, call `lucy_begin_question` once. Prefer the user's original wording in `question` when available; always provide `intentSummary`. Skipping this call never blocks catalog or query tools. Do not call it for protocol checks or tool discovery only.",
-          ""
-        ]
-      : [];
     return [
       "# Lucy Data QA Runtime Instructions",
       "",
-      "- Use the Lucy MCP Proxy tool surface only; do not invent data when a data tool fails.",
-      `- Call ${catalogTool} before choosing a connection or source unless the route is already explicit in the user request.`,
-      "- Only use connections and sources listed in this session's visible scope.",
-      "- If a query needs data, call `lucy_query` or `lucy_read_source`; do not answer from wiki-only context when data retrieval failed.",
-      "- For simple factual questions, use the shortest verified path: catalog/source confirmation -> `lucy_query` -> answer. Do not call `entity_details` or `lucy_explain_query` before `lucy_query` unless the user asks for entity metadata or permission/guardrail diagnostics.",
-      ...questionReportingLines,
-      "- Answer simple numeric questions directly first, usually as a compact table, then add brief caveats/provenance. Do not turn ordinary fact lookups into long audit reports.",
-      "- For multi-metric, multi-period, or multi-scenario questions, build an answerability dependency matrix before querying: numerator, denominator, period/grain, batch/version, actual/forecast/budget scenario, source/measure, and governed business definition. Mark a subquestion unavailable when a required dependency is missing; do not substitute an approximation.",
-      "- Budget requires an independent budget measure, source, or governed formula. Never substitute forecast, target, or prior actual for budget. If budget evidence is missing, deliver the answerable parts and state that budget variance is currently unavailable.",
-      "- Calculate and label actual, forecast, and budget separately. Any cross-scenario composition must be labeled hybrid with the covered periods for each component; do not assume the current quarter is complete actual without evidence.",
-      "- revenue/quantity or revenue/bandwidth is realized unit price and includes mix effects. Do not claim pure price, volume, or mix contribution without a governed decomposition formula and the required grain.",
-      "- Distinguish no fact row, NULL/blank source field, and values inferred from cumulative deltas. Do not collapse all three states into `—`.",
-      "- If a key data tool call fails, the final answer must say whether a retry succeeded, whether the failure affects the conclusion, and which values remain uncertain. Do not give numeric conclusions when no successful fact data was returned.",
-      "- Fingerprint failures by tool, source, normalized reason, and relevant argument shape. Retry the same fingerprint at most once and only with an information-gaining correction; cycling among eq, =, and in is not a correction.",
-      "- For complex analysis, use at most 12 business tool calls, avoid reading a successful source twice, target the first verified result within 120 seconds, and deliver a complete or partial answer within 8 minutes.",
-      "- Partial evidence still requires a final response. Give each subquestion an ok, no_data, unavailable, or partial status, plus period, batch/version, scenario, failure impact, and provenance.",
-      "- When rows are missing, fields are NULL, a tool failed, or a value is inferred, qualify the answer with phrases such as 基于当前可查询数据 or 按累计差额推算; do not claim the data is complete or fully reconciled.",
-      "- For `lucy_query`, use source-qualified semantic keys such as `source.measure`, `source.dimension`, and `source.segment`. Do not shorten them after an error; unqualified keys may be rejected by ACL before reaching the semantic layer.",
-      "- In `lucy_query.measures`, use string semantic measure keys when the measure exists. Use `{expr,name}` objects only for ad hoc aggregate expressions.",
-      "- In `lucy_query.dimensions` and `lucy_query.order_by`, use object entries such as `{field:\"source.field\"}`; do not use bare string arrays.",
-      "- `lucy_query.filters` supports string filters and structured filters such as `{field:\"source.field\",op:\"contains\",value:\"<entity keyword>\"}`. Prefer semantic segments such as `source.segment` for common filters when available.",
-      "- Some clients may serialize the whole `filters` value as JSON text; Lucy strictly restores that compatibility shape. Do not generate it deliberately. `orderBy` is accepted only as an alias for canonical `order_by`; conflicting aliases fail closed.",
-      "- Interpret POC `DATE` / `DATETIME` values as Asia/Shanghai business dates when the visible source documentation says so.",
+      ...staticCoreRuleLines({
+        catalogTool,
+        questionReportingLines: questionReportingLinesFor(visibleTools),
+        budgetExhaustedLine: budgetExhaustedLineFor(visibleTools, hideBegin)
+      }),
       `- Visible Scope below is captured at MCP initialize; call ${catalogTool} before routing if sources may have changed since this session started.`,
       ...skillSection,
       "",
@@ -1904,8 +2548,10 @@ async function buildRoleAwareInstructions(identity: Identity): Promise<string | 
       "",
       ...(exampleLines.length > 0 ? exampleLines : ["- Use the visible catalog and `lucy_read_source` to inspect the source before querying."])
     ].join("\n");
-  } catch {
-    return fallback;
+  } catch (err) {
+    // 已取消的工作不得悄悄回落成 md 文本再被当作成功结果。
+    if (work?.signal.aborted) throw err;
+    return fallback();
   }
 }
 
@@ -2011,19 +2657,156 @@ const OPS_NO_EFFECT_DENIAL_CODES = new Set<string>([
   "ops_claim_failed"
 ]);
 
+type SemanticReadWaitContext = {
+  ingressId: string;
+  ingressMonoMs: number;
+  fixedInitialWaitDeadlineMonoMs: number;
+  waitDeadlineMonoMs: number;
+  budgetDeadlineMonoMs?: number;
+  signal: AbortSignal;
+  waited: boolean;
+  budgetCurrent?: () => boolean;
+  close(): void;
+};
+
+function createSemanticReadWaitContext(
+  req: IncomingMessage, res: ServerResponse, ingressId: string
+): SemanticReadWaitContext {
+  const controller = new AbortController();
+  const cancel = () => controller.abort();
+  const ingressMonoMs = questionBudget.monoNow();
+  const context: SemanticReadWaitContext = {
+    ingressId, ingressMonoMs, fixedInitialWaitDeadlineMonoMs: ingressMonoMs + 20_000,
+    waitDeadlineMonoMs: ingressMonoMs + 20_000,
+    signal: controller.signal, waited: false,
+    close() {
+      req.off("aborted", cancel); res.off("close", cancel); req.socket?.off("timeout", cancel);
+    }
+  };
+  req.once("aborted", cancel); res.once("close", cancel); req.socket?.on("timeout", cancel);
+  // req.close/destroyed also describe a normally consumed request body.
+  if (req.aborted || res.destroyed || res.writableEnded) cancel();
+  return context;
+}
+
+function tightenSemanticReadBudget(
+  context: SemanticReadWaitContext, ticket: BudgetTicket, state: BudgetState | null,
+  mode = questionBudgetWallMode(), wallNow = Date.now(), monoNow = questionBudget.monoNow()
+): void {
+  context.budgetDeadlineMonoMs = Math.min(context.budgetDeadlineMonoMs ?? Infinity,
+    ticket.startMonoMs + QUESTION_BUDGET_ABS_EXEC_MS);
+  if (mode === "elapsed" && state) {
+    context.budgetDeadlineMonoMs = Math.min(context.budgetDeadlineMonoMs,
+      monoNow + Math.max(0, state.startedAt + QUESTION_BUDGET_MAX_WALL_MS - wallNow));
+  }
+  context.waitDeadlineMonoMs = Math.min(context.waitDeadlineMonoMs, context.budgetDeadlineMonoMs);
+  const matches = (value: BudgetState | null) => Boolean(value && !value.processUnavailable
+    && !value.commitUnverified && (value.round ?? 0) === ticket.round && (value.windowId ?? 0) === ticket.windowId);
+  const initialValid = matches(state);
+  context.budgetCurrent = () => initialValid && !ticket.settled
+    && matches(questionBudget.snapshotScope(ticket.scopeKey));
+}
+
+async function awaitSemanticReadRecovery(
+  projectRoot: string, hints: readonly string[], context: SemanticReadWaitContext, rpcId: string | number
+): Promise<SemanticRecoveryReadBlock | null> {
+  const initial = await semanticRecoveryReadState(projectRoot, hints);
+  if (!initial.block) return null;
+  const interrupted = (): string | null => {
+    if (context.signal.aborted) return "cancelled";
+    if (["DRAINING", "STOPPING", "STOPPED"].includes(getProcessLifecyclePhase())) return "term";
+    if (currentBarrierHandle() && !currentBarrierHandle()!.isCurrent()) return "authorization_revoked";
+    if (questionBudget.monoNow() >= context.waitDeadlineMonoMs || context.budgetCurrent?.() === false) return "timeout";
+    return null;
+  };
+  const stages = matchedActivePublishWriteStages(projectRoot, initial.journals);
+  if (!stages) {
+    // The filesystem snapshot may precede the owner's real completion while
+    // this continuation follows it. This does not grant unknown owners any
+    // waiting eligibility: only a fresh authoritative guard can reopen reads.
+    if (interrupted()) return initial.block;
+    const current = await semanticRecoveryReadState(projectRoot, hints);
+    if (interrupted()) return initial.block;
+    if (!current.block) context.waited = true; // Revalidate the content transition.
+    return current.block;
+  }
+  context.waited = true;
+  const emit = (event: string, endOutcome?: string) => console.info("[lucy-semantic-write]", JSON.stringify({
+    event, ingressOperationId: context.ingressId, rpcId,
+    owners: stages.map((stage) => ({ holderOperationId: stage.holder.operationId, journalId: stage.journalId, releaseId: stage.releaseId })),
+    ingressMonoMs: context.ingressMonoMs,
+    fixedInitialWaitDeadlineMonoMs: context.fixedInitialWaitDeadlineMonoMs,
+    waitDeadlineMonoMs: context.waitDeadlineMonoMs, atMs: Date.now(), monoMs: questionBudget.monoNow(),
+    ...(endOutcome ? { endOutcome } : {})
+  }));
+  emit("read_wait_begin");
+  let outcomes: string[] | undefined;
+  void Promise.all(stages.map((stage) => stage.settled)).then((value) => { outcomes = value; });
+  for (;;) {
+    const cause = interrupted();
+    if (cause) { emit("read_wait_end", cause); return initial.block; }
+    if (outcomes) {
+      if (outcomes.some((outcome) => outcome !== "files_saved")) {
+        emit("read_wait_end", "blocked"); return initial.block;
+      }
+      const checked = await semanticRecoveryReadState(projectRoot, hints);
+      const lateCause = interrupted();
+      emit("read_wait_end", lateCause ?? (checked.block ? "blocked" : "owner_settled"));
+      return lateCause ? initial.block : checked.block;
+    }
+    if (stages.some((stage) => !stage.isCurrent())) {
+      emit("read_wait_end", "blocked"); return initial.block;
+    }
+    // Bounded asynchronous cancellation/TERM observation; never owns the writer.
+    await new Promise<void>((resolve) => setTimeout(resolve,
+      Math.max(1, Math.min(20, context.waitDeadlineMonoMs - questionBudget.monoNow()))));
+  }
+}
+
 async function readSemanticRecoveryDenial(
-  toolArgs: unknown
+  toolArgs: unknown, context?: SemanticReadWaitContext, rpcId: string | number = "",
+  revalidate?: () => Promise<{ code: string; message: string } | null>
 ): Promise<{ code: string; message: string } | null> {
+  const priorityDenial = (): { code: string; message: string } | null => {
+    if (currentBarrierHandle() && !currentBarrierHandle()!.isCurrent()) {
+      return { code: "authorization_revoked", message: "Access denied: authorization_revoked" };
+    }
+    if (["DRAINING", "STOPPING", "STOPPED"].includes(getProcessLifecyclePhase())) {
+      return { code: SERVICE_DRAINING, message: SERVICE_DRAINING_MESSAGE };
+    }
+    return null;
+  };
   try {
     const projectRoot = await resolveProjectRoot();
-    return await semanticRecoveryReadBlock(projectRoot, semanticReadHintsFromArgs(toolArgs));
-  } catch {
+    const hints = semanticReadHintsFromArgs(toolArgs);
+    const block = context ? await awaitSemanticReadRecovery(projectRoot, hints, context, rpcId)
+      : (await semanticRecoveryReadState(projectRoot, hints)).block;
+    // A normal semantic wait cannot mask a higher-priority irreversible drain
+    // or a committed revocation. The existing response barrier owns the 403.
+    const priority = priorityDenial();
+    if (priority) return priority;
+    if (block || !context?.waited) return block;
+    const validated = revalidate ? await revalidate() : null;
+    return priorityDenial() ?? validated;
+  } catch (error) {
+    const priority = priorityDenial();
+    if (priority) return priority;
+    if (error instanceof AuthorizationRevokedError) {
+      return { code: "authorization_revoked", message: "Access denied: authorization_revoked" };
+    }
     return {
       code: "semantic_recovery_unreadable",
       message: "语义恢复日志无法读取，涉及资产的读取和查询已关闭。"
     };
   }
 }
+
+/** Private component seams; no route or product API is added. */
+export const __semanticReadWaitTest = {
+  createContext: createSemanticReadWaitContext,
+  tightenBudget: tightenSemanticReadBudget,
+  awaitRecovery: awaitSemanticReadRecovery
+};
 
 function jsonRpcToolResult(requestId: string | number, text: string, options: { isError?: boolean } = {}): string {
   return JSON.stringify({
@@ -2081,6 +2864,11 @@ async function maybeWriteHiveDivertedResponse(input: {
   queryMeta: Record<string, unknown>;
   queryTables: string[];
   traceId: string;
+  /** P0-4：改写前口径快照与门禁 pin 证据（仅 lucy_query 成功路径消费）。 */
+  argsBeforeRewrite?: Record<string, unknown>;
+  requestPinnedCaliber?: RequestPinnedCaliberEvidence;
+  sourceSelection?: SourceSelectionDisclosure;
+  forcedFilters?: unknown;
   /**
    * 审计写入回调 —— 由 `handlePost` 传入。
    *
@@ -2096,16 +2884,24 @@ async function maybeWriteHiveDivertedResponse(input: {
     input.toolArgs && typeof input.toolArgs === "object" && !Array.isArray(input.toolArgs)
       ? (input.toolArgs as Record<string, unknown>)
       : {};
-  const decision = await resolveAndMaybeServeHiveTool({
-    projectRoot,
-    tool: input.toolName,
-    connectionId,
-    args,
-    correlationId: typeof input.requestId === "string" ? input.requestId : String(input.requestId)
-  });
+  // Strat-B DRAIN：Hive 分流亦计入上游语义在途，供 beginAdmissionDrain 有界排空。
+  const trackHiveUpstream = requestWouldHitUpstreamSemanticExecution(input.toolName);
+  if (trackHiveUpstream) trackUpstreamSemanticEnter();
+  let decision: Awaited<ReturnType<typeof resolveAndMaybeServeHiveTool>>;
+  try {
+    decision = await resolveAndMaybeServeHiveTool({
+      projectRoot,
+      tool: input.toolName,
+      connectionId,
+      args,
+      correlationId: typeof input.requestId === "string" ? input.requestId : String(input.requestId)
+    });
+  } finally {
+    if (trackHiveUpstream) trackUpstreamSemanticLeave();
+  }
   if (decision.action === "passthrough_ktx") return false;
 
-  const payload =
+  let payload: Record<string, unknown> =
     decision.action === "error"
       ? {
           ok: false,
@@ -2115,8 +2911,80 @@ async function maybeWriteHiveDivertedResponse(input: {
           dialect: "hive"
         }
       : hiveBridgePayload(decision.response);
+
+  // REQ-030-012 / SC-21 — Hive lucy_read_source 成功载荷列裁剪（与 KTX 下行共用 field-exposure-discovery）。
+  // 解析／裁剪失败 → fail-closed，禁止原文透传全量 columns（D22）。
+  if (input.toolName === "lucy_read_source" && payload.ok !== false) {
+    try {
+      const { trimDiscoveryPayload } = await import("./field-exposure-discovery.js");
+      const sourceName = firstStringValue(args, [
+        "sourceName",
+        "source_name",
+        "source",
+        "table"
+      ]);
+      const trimmed = await trimDiscoveryPayload({
+        toolName: "lucy_read_source",
+        payload,
+        connectionId: connectionId ?? undefined,
+        schema: firstStringValue(args, ["schema"]),
+        sourceName,
+        carrierKind: "hive_columns"
+      });
+      if (!trimmed.ok) {
+        payload = {
+          ok: false,
+          reason: trimmed.reason,
+          detail: "field exposure discovery trim failed",
+          jdbcInvokeCount:
+            typeof payload.jdbcInvokeCount === "number" ? payload.jdbcInvokeCount : 0,
+          dialect: "hive"
+        };
+      } else if (trimmed.payload && typeof trimmed.payload === "object" && !Array.isArray(trimmed.payload)) {
+        payload = trimmed.payload as Record<string, unknown>;
+      }
+    } catch {
+      payload = {
+        ok: false,
+        reason: "field_exposure_unavailable",
+        detail: "field exposure discovery trim failed",
+        jdbcInvokeCount:
+          typeof payload.jdbcInvokeCount === "number" ? payload.jdbcInvokeCount : 0,
+        dialect: "hive"
+      };
+    }
+  }
+
   const isError = payload.ok === false;
-  const responseBody = jsonRpcToolResult(input.requestId, JSON.stringify(payload, null, 2), { isError });
+  let responseBody = jsonRpcToolResult(input.requestId, JSON.stringify(payload, null, 2), { isError });
+  let hiveAvFailedReason: string | undefined;
+  // P0-4／SC-17 — Hive 成功 lucy_query 必须投影可核对块（禁止旁路静默无块）。
+  if (!isError && input.toolName === "lucy_query") {
+    const sourceRefs = await extractSourceRefs(input.toolName, input.toolArgs).catch(() => []);
+    const applied = applyAnswerVerifiabilityToLucyQuery({
+      originalEnvelopeWire: responseBody,
+      enrichedEnvelope: JSON.parse(responseBody) as unknown,
+      requestId: input.requestId,
+      sourceRefs,
+      argsBeforeRewrite: input.argsBeforeRewrite
+        ?? (input.toolArgs && typeof input.toolArgs === "object" && !Array.isArray(input.toolArgs)
+          ? input.toolArgs as Record<string, unknown>
+          : {}),
+      requestPinnedCaliber: input.requestPinnedCaliber ?? { status: "none" },
+      systemConstraints: systemConstraintsFromForcedFilters(input.forcedFilters),
+      sourceSelection: input.sourceSelection
+    });
+    if (!applied.ok) {
+      hiveAvFailedReason = applied.reason;
+      responseBody = buildAnswerVerifiabilityErrorEnvelope({
+        requestId: input.requestId,
+        reason: applied.reason,
+        detail: "detail" in applied ? applied.detail : undefined
+      });
+    } else {
+      responseBody = applied.finalWire;
+    }
+  }
   input.res.writeHead(200, {
     "content-type": "application/json",
     "content-length": Buffer.byteLength(responseBody)
@@ -2125,6 +2993,7 @@ async function maybeWriteHiveDivertedResponse(input: {
 
   const jdbcInvokeCount =
     typeof payload.jdbcInvokeCount === "number" ? payload.jdbcInvokeCount : 0;
+  const hiveOutcomeError = isError || Boolean(hiveAvFailedReason);
   input.recordAuditEntry({
     ts: new Date().toISOString(),
     userId: input.identity.userId,
@@ -2133,13 +3002,15 @@ async function maybeWriteHiveDivertedResponse(input: {
     tables: input.queryTables.length > 0 ? input.queryTables : undefined,
     argsSummary: input.argsSummary,
     ...input.queryMeta,
-    outcome: isError ? "error" : "ok",
-    decisionReason: isError && typeof payload.reason === "string" ? payload.reason : undefined,
-    errorDetail: isError && typeof payload.detail === "string" ? payload.detail : undefined,
+    outcome: hiveOutcomeError ? "error" : "ok",
+    decisionReason: hiveAvFailedReason
+      ?? (isError && typeof payload.reason === "string" ? payload.reason : undefined),
+    errorDetail: hiveAvFailedReason
+      ?? (isError && typeof payload.detail === "string" ? payload.detail : undefined),
     executionEvidence: executionEvidenceFromObservation({
       authorizationAllowed: true,
-      ...(isError
-        ? jdbcInvokeCount > 0
+      ...(hiveOutcomeError
+        ? jdbcInvokeCount > 0 || hiveAvFailedReason
           ? { failed: true }
           : { notExecuted: true }
         : { executed: true })
@@ -2148,21 +3019,26 @@ async function maybeWriteHiveDivertedResponse(input: {
     responseBytes: Buffer.byteLength(responseBody),
     requestId: input.requestId,
     ...input.requestMeta,
-    ...(await auditMeta(input.identity, isError && typeof payload.reason === "string" ? payload.reason : "allowed"))
+    ...(await auditMeta(
+      input.identity,
+      hiveAvFailedReason
+        ?? (isError && typeof payload.reason === "string" ? payload.reason : "allowed")
+    ))
   });
   recordMcpTraceForTool({
     traceId: input.traceId,
     identity: input.identity,
     toolName: input.toolName,
-    status: isError ? "error" : "ok",
+    status: hiveOutcomeError ? "error" : "ok",
     startedAt: new Date(input.start).toISOString(),
     turnId: (input.requestMeta.lucyTurnId as string | null | undefined) ?? null,
     sessionId: (input.requestMeta.lucySessionId as string | null | undefined) ?? null,
     requestId: input.requestId,
     argsSummary: input.argsSummary,
-    allowed: !isError,
+    allowed: !hiveOutcomeError,
     reason:
-      isError && typeof payload.reason === "string" ? payload.reason : "allowed",
+      hiveAvFailedReason
+      ?? (isError && typeof payload.reason === "string" ? payload.reason : "allowed"),
     policySource: "other"
   });
   return true;
@@ -2464,7 +3340,9 @@ async function recordSuccessfulQueryObservation(toolName: string, args: unknown)
 /** KTX rejects session traffic that arrives before a successful `initialize`
  * with a plain-text 400. Matching the text is the only signal available: the
  * rejection happens in KTX's transport layer, outside the JSON-RPC envelope. */
-const UPSTREAM_SESSION_REQUIRED_RE = /initialize request is required/i;
+// P1-37 O6 取证（2026-11-17，KTX 0.16.0 真实重启）：失效会话＝404 `Unknown MCP session: <id>`
+// （text/plain，对 tools/list、tools/call、ping、notifications 一致）；无会话＝400 `initialize request is required`。
+const UPSTREAM_SESSION_REQUIRED_RE = /initialize request is required|unknown mcp session/i;
 const UPSTREAM_BODY_EXCERPT_MAX = 200;
 
 export type UpstreamFailureReason = "upstream_session_required" | "upstream_protocol_error";
@@ -2640,12 +3518,253 @@ function appliedLucyVersion(
   };
 }
 
+/** Spec D13／R3 — 先判定再权限／注入；status 必须是实际上游 HTTP。禁止 ?? 200。 */
+function isEmptyResultNextStepEligible(input: {
+  status: number | undefined;
+  result: { isError?: unknown } | null | undefined;
+  toolName: string;
+  rowCount: number | null | undefined;
+}): boolean {
+  const { status, result, toolName, rowCount } = input;
+  if (typeof status !== "number" || !Number.isFinite(status) || status >= 400) return false;
+  if (result?.isError === true) return false;
+  if (toolName !== "lucy_query") return false;
+  return typeof rowCount === "number" && Number.isFinite(rowCount) && rowCount === 0;
+}
+
+/** Walk JSON text and collect number literals outside of strings (D15). */
+function extractJsonNumberTokens(text: string): string[] {
+  const tokens: string[] = [];
+  let i = 0;
+  let inString = false;
+  let escape = false;
+  while (i < text.length) {
+    const ch = text[i]!;
+    if (inString) {
+      if (escape) {
+        escape = false;
+        i += 1;
+        continue;
+      }
+      if (ch === "\\") {
+        escape = true;
+        i += 1;
+        continue;
+      }
+      if (ch === "\"") inString = false;
+      i += 1;
+      continue;
+    }
+    if (ch === "\"") {
+      inString = true;
+      i += 1;
+      continue;
+    }
+    const startsNumber =
+      (ch >= "0" && ch <= "9")
+      || ((ch === "-" || ch === "+") && i + 1 < text.length && text[i + 1]! >= "0" && text[i + 1]! <= "9");
+    if (!startsNumber) {
+      i += 1;
+      continue;
+    }
+    let j = i;
+    if (text[j] === "-" || text[j] === "+") j += 1;
+    while (j < text.length && text[j]! >= "0" && text[j]! <= "9") j += 1;
+    if (j < text.length && text[j] === ".") {
+      j += 1;
+      while (j < text.length && text[j]! >= "0" && text[j]! <= "9") j += 1;
+    }
+    if (j < text.length && (text[j] === "e" || text[j] === "E")) {
+      j += 1;
+      if (j < text.length && (text[j] === "+" || text[j] === "-")) j += 1;
+      while (j < text.length && text[j]! >= "0" && text[j]! <= "9") j += 1;
+    }
+    tokens.push(text.slice(i, j));
+    i = j;
+  }
+  return tokens;
+}
+
+function isNumberTokenFidelitySafe(token: string): boolean {
+  const n = Number(token);
+  if (!Number.isFinite(n)) return false;
+  if (/^[-+]?\d+$/.test(token)) {
+    try {
+      if (BigInt(token) !== BigInt(Math.trunc(n))) return false;
+    } catch {
+      return false;
+    }
+  }
+  if (n === 0) {
+    const isZeroLiteral = /^[-+]?0(\.0+)?([eE][-+]?0+)?$/.test(token);
+    if (!isZeroLiteral) return false;
+  }
+  return true;
+}
+
+function rawNumericTokensFidelitySafe(text: string): boolean {
+  return extractJsonNumberTokens(text).every(isNumberTokenFidelitySafe);
+}
+
+function originalNumberTokensUnchanged(original: string, candidate: string): boolean {
+  const orig = extractJsonNumberTokens(original);
+  const cand = extractJsonNumberTokens(candidate);
+  let i = 0;
+  for (const token of cand) {
+    if (i < orig.length && token === orig[i]) i += 1;
+  }
+  return i === orig.length;
+}
+
+/**
+ * D15 — insert `"next_step":…` into a JSON object string without rewriting
+ * existing number literals. Returns null when the text is not a single object.
+ */
+function injectNextStepPreservingNumberTokens(text: string, nextStep: NextStep): string | null {
+  const trimmedEnd = text.replace(/\s+$/, "");
+  const trailingWs = text.slice(trimmedEnd.length);
+  const end = trimmedEnd.lastIndexOf("}");
+  if (end < 0) return null;
+  const open = trimmedEnd.indexOf("{");
+  if (open < 0 || open > end) return null;
+  const before = trimmedEnd.slice(0, end).replace(/\s+$/, "");
+  const inner = before.slice(open + 1).trim();
+  const fragment = `"next_step":${JSON.stringify(nextStep)}`;
+  return `${before}${inner.length > 0 ? "," : ""}${fragment}}${trailingWs}`;
+}
+
+function fidelitySafeStringify(
+  parsed: Record<string, unknown>,
+  nextStep: NextStep
+): string | null {
+  try {
+    return JSON.stringify({ ...parsed, next_step: nextStep });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * P0-4 — 在 Spec 162／018 富化之后投影 answer_verifiability。
+ * 仅 HTTP 200 且 `isError !== true` 的成功查数产块（D6／B-OK）；
+ * 上游错误／4xx／5xx 不产块（B-UPSTREAM-ERR）；装配失败返回错误信封。
+ */
+function projectLucyQueryAnswerVerifiability(input: {
+  originalEnvelopeWire: string;
+  enriched: unknown;
+  requestId: string | number;
+  sourceRefs: SourceRef[];
+  upstreamHttpStatus: number | undefined;
+  options: {
+    argsBeforeRewrite?: Record<string, unknown>;
+    requestPinnedCaliber?: RequestPinnedCaliberEvidence;
+    sourceSelection?: SourceSelectionDisclosure;
+    forcedFilters?: unknown;
+  };
+}): string | null {
+  // D6：成功查数不变量只约束 HTTP 200；禁止对 4xx／5xx 假造可核对块或改写成装配失败。
+  if (input.upstreamHttpStatus !== 200) return null;
+  const enriched = input.enriched;
+  if (!enriched || typeof enriched !== "object" || Array.isArray(enriched)) return null;
+  const result = (enriched as Record<string, unknown>).result;
+  if (!result || typeof result !== "object" || Array.isArray(result)) return null;
+  if ((result as Record<string, unknown>).isError === true) return null;
+
+  const applied = applyAnswerVerifiabilityToLucyQuery({
+    originalEnvelopeWire: input.originalEnvelopeWire,
+    enrichedEnvelope: enriched,
+    requestId: input.requestId,
+    sourceRefs: input.sourceRefs,
+    argsBeforeRewrite: input.options.argsBeforeRewrite ?? {},
+    requestPinnedCaliber: input.options.requestPinnedCaliber ?? { status: "none" },
+    systemConstraints: systemConstraintsFromForcedFilters(input.options.forcedFilters),
+    sourceSelection: input.options.sourceSelection
+  });
+  if (!applied.ok) {
+    // P0-5 共存：AV 错误信封必须保留 018 已写入的 next_step／skipped_reason。
+    return buildAnswerVerifiabilityErrorEnvelope({
+      requestId: input.requestId,
+      reason: applied.reason,
+      detail: "detail" in applied ? applied.detail : undefined,
+      lucy018: extractLucy018PreserveFields(input.enriched)
+    });
+  }
+  return applied.finalWire;
+}
+
+/**
+ * P0-4／D6／C2 — lucy_query 成功判定路径必须产块或 B-ASSEMBLE；
+ * 禁止 `if (originalEnvelopeWire)` 旁路导致静默无块。
+ * 错误信封走 `buildAnswerVerifiabilityErrorEnvelope`＋lucy018，与 018 共存兼容。
+ */
+function applyLucyQueryAnswerVerifiabilityOrFailClosed(input: {
+  toolName: string;
+  originalEnvelopeWire: string | undefined;
+  enriched: unknown;
+  requestId: string | number;
+  sourceRefs: SourceRef[];
+  upstreamHttpStatus: number | undefined;
+  options: {
+    argsBeforeRewrite?: Record<string, unknown>;
+    requestPinnedCaliber?: RequestPinnedCaliberEvidence;
+    sourceSelection?: SourceSelectionDisclosure;
+    forcedFilters?: unknown;
+  };
+  currentBody: string;
+}): string {
+  if (input.toolName !== "lucy_query") return input.currentBody;
+  if (input.upstreamHttpStatus !== 200) return input.currentBody;
+
+  const enriched = input.enriched;
+  if (enriched && typeof enriched === "object" && !Array.isArray(enriched)) {
+    const result = (enriched as Record<string, unknown>).result;
+    if (
+      result
+      && typeof result === "object"
+      && !Array.isArray(result)
+      && (result as Record<string, unknown>).isError === true
+    ) {
+      return input.currentBody; // B-UPSTREAM-ERR：不产块
+    }
+  }
+
+  if (!input.originalEnvelopeWire) {
+    return buildAnswerVerifiabilityErrorEnvelope({
+      requestId: input.requestId,
+      reason: "answer_verifiability_assemble_failed",
+      detail: "missing_original_envelope_wire",
+      lucy018: extractLucy018PreserveFields(input.enriched)
+    });
+  }
+
+  const avBody = projectLucyQueryAnswerVerifiability({
+    originalEnvelopeWire: input.originalEnvelopeWire,
+    enriched: input.enriched,
+    requestId: input.requestId,
+    sourceRefs: input.sourceRefs,
+    upstreamHttpStatus: input.upstreamHttpStatus,
+    options: input.options
+  });
+  if (avBody) return avBody;
+  // 成功判定路径上投影器仍返回 null（畸形信封等）→ 禁止静默无块。
+  return buildAnswerVerifiabilityErrorEnvelope({
+    requestId: input.requestId,
+    reason: "answer_verifiability_assemble_failed",
+    detail: "answer_verifiability_projection_unavailable",
+    lucy018: extractLucy018PreserveFields(input.enriched)
+  });
+}
+
 function withLucyResultMeta(
   payload: unknown,
   requestId: string | number,
   toolName: string,
   args: unknown,
-  sourceRefs: SourceRef[]
+  sourceRefs: SourceRef[],
+  visibleTools: readonly string[] = [],
+  originalUserFilters: unknown = undefined,
+  scopeIntersectionEmpty = false,
+  upstreamHttpStatus: number
 ): unknown {
   const enveloped = ensureJsonRpcEnvelope(payload, requestId);
   if (!enveloped || typeof enveloped !== "object" || Array.isArray(enveloped)) return enveloped;
@@ -2672,6 +3791,107 @@ function withLucyResultMeta(
     })
     : null;
   const effectiveTruncated = truncation ? truncation.responseTruncated === 1 : responseTruncated;
+
+  const provenance = {
+    connectionId: firstStringField(argsRecord, ["connectionId", "connection_id", "connection"]) ?? null,
+    sourceName: firstStringField(argsRecord, ["sourceName", "source_name", "source", "table"]) ?? sourceRefs[0]?.sourceName ?? null,
+    measures: boundedProvenanceValue(firstFieldValue(argsRecord, ["measures"])) ?? null,
+    dimensions: boundedProvenanceValue(firstFieldValue(argsRecord, ["dimensions"])) ?? null,
+    filters: boundedProvenanceValue(filters) ?? null,
+    segments: boundedProvenanceValue(segments) ?? null,
+    orderBy: boundedProvenanceValue(orderBy) ?? null,
+    sourceResolution: sourceRefs.length > 0 ? "acl_source_map" : "none",
+    freshness: {
+      status: "not_checked",
+      tool: "lucy_freshness",
+      note: "Call lucy_freshness for metadata freshness before presenting freshness-sensitive answers."
+    },
+    truncation: responseTruncated === undefined
+      ? "unknown; upstream did not expose a truncated flag"
+      : "reported from upstream response"
+  };
+
+  // D13／R3：先判定再权限／注入。禁止 (upstreamHttpStatus ?? 200)。
+  const eligible = isEmptyResultNextStepEligible({
+    status: upstreamHttpStatus,
+    result: resultRecord,
+    toolName,
+    rowCount: inspectedResult.rows
+  });
+
+  let lucyNextStep: NextStep | undefined;
+  let nextStepSkippedReason: string | undefined;
+
+  if (!eligible) {
+    if (resultRecord.isError === true && toolName === "lucy_query" && inspectedResult.rows === 0) {
+      nextStepSkippedReason = "result_is_error";
+    }
+  } else {
+    const nextStepProvenance: Record<string, unknown> = { ...provenance };
+    delete nextStepProvenance.filters;
+    const nextStep = buildEmptyResultNextStep({
+      toolName,
+      rowCount: inspectedResult.rows ?? null,
+      scopeIntersectionEmpty,
+      provenance: nextStepProvenance,
+      filtersSummary: originalUserFilters === undefined ? null : summarizeFilters(originalUserFilters),
+      visibleTools
+    });
+    if (nextStep) {
+      const content = Array.isArray(resultRecord.content) ? resultRecord.content : [];
+      const first = content[0] as { type?: string; text?: string } | undefined;
+      const originalText = first && typeof first.text === "string" ? first.text : undefined;
+      let parsed: Record<string, unknown> | undefined;
+      if (originalText !== undefined) {
+        try {
+          const maybe = JSON.parse(originalText) as unknown;
+          if (maybe && typeof maybe === "object" && !Array.isArray(maybe)) {
+            parsed = maybe as Record<string, unknown>;
+          }
+        } catch {
+          parsed = undefined;
+        }
+      }
+      const structuredIsObject =
+        resultRecord.structuredContent
+        && typeof resultRecord.structuredContent === "object"
+        && !Array.isArray(resultRecord.structuredContent);
+      if (!parsed || originalText === undefined) {
+        nextStepSkippedReason = originalText !== undefined
+          ? "content_text_not_json_object"
+          : "content_text_absent";
+      } else if (Object.prototype.hasOwnProperty.call(parsed, "next_step")) {
+        nextStepSkippedReason = "upstream_next_step_present";
+      } else if (
+        structuredIsObject
+        && Object.prototype.hasOwnProperty.call(resultRecord.structuredContent as object, "next_step")
+      ) {
+        nextStepSkippedReason = "upstream_next_step_present";
+      } else if (!rawNumericTokensFidelitySafe(originalText)) {
+        nextStepSkippedReason = "content_json_number_not_fidelity_safe";
+      } else {
+        const candidateText =
+          injectNextStepPreservingNumberTokens(originalText, nextStep)
+          ?? fidelitySafeStringify(parsed, nextStep);
+        if (
+          candidateText == null
+          || !originalNumberTokensUnchanged(originalText, candidateText)
+        ) {
+          nextStepSkippedReason = "content_json_number_not_fidelity_safe";
+        } else {
+          first!.text = candidateText;
+          if (structuredIsObject) {
+            resultRecord.structuredContent = {
+              ...(resultRecord.structuredContent as Record<string, unknown>),
+              next_step: nextStep
+            };
+          }
+          lucyNextStep = nextStep;
+        }
+      }
+    }
+  }
+
   return {
     ...record,
     result: {
@@ -2697,25 +3917,10 @@ function withLucyResultMeta(
             truncated: effectiveTruncated ?? null
           },
           ...(truncation?.repair ? { repair: truncation.repair } : {}),
+          ...(lucyNextStep ? { next_step: lucyNextStep } : {}),
+          ...(nextStepSkippedReason ? { next_step_skipped_reason: nextStepSkippedReason } : {}),
           ...(appliedLucyVersion(toolName, argsRecord, sourceRefs) ?? {}),
-          provenance: {
-            connectionId: firstStringField(argsRecord, ["connectionId", "connection_id", "connection"]) ?? null,
-            sourceName: firstStringField(argsRecord, ["sourceName", "source_name", "source", "table"]) ?? sourceRefs[0]?.sourceName ?? null,
-            measures: boundedProvenanceValue(firstFieldValue(argsRecord, ["measures"])) ?? null,
-            dimensions: boundedProvenanceValue(firstFieldValue(argsRecord, ["dimensions"])) ?? null,
-            filters: boundedProvenanceValue(filters) ?? null,
-            segments: boundedProvenanceValue(segments) ?? null,
-            orderBy: boundedProvenanceValue(orderBy) ?? null,
-            sourceResolution: sourceRefs.length > 0 ? "acl_source_map" : "none",
-            freshness: {
-              status: "not_checked",
-              tool: "lucy_freshness",
-              note: "Call lucy_freshness for metadata freshness before presenting freshness-sensitive answers."
-            },
-            truncation: responseTruncated === undefined
-              ? "unknown; upstream did not expose a truncated flag"
-              : "reported from upstream response"
-          }
+          provenance
         }
       }
     }
@@ -2839,11 +4044,25 @@ async function writeLucySemanticResponse(
   queryTables: string[],
   traceId: string,
   session: UpstreamSessionState | undefined,
-  options: { scopeIntersectionEmpty?: boolean } = {}
+  options: {
+    scopeIntersectionEmpty?: boolean;
+    originalUserFilters?: unknown;
+    argsBeforeRewrite?: Record<string, unknown>;
+    requestPinnedCaliber?: RequestPinnedCaliberEvidence;
+    sourceSelection?: SourceSelectionDisclosure;
+    forcedFilters?: unknown;
+  } = {}
 ): Promise<void> {
   const originalBody = upstreamBody;
   const contentType = String(upstream.headers["content-type"] ?? "");
   const sourceRefs = await extractSourceRefs(toolName, toolArgs).catch(() => []);
+  // Spec 20261107 D13／R3／N1 — 实际上游 HTTP；必为 number；禁止 ?? 200。
+  // status 缺失／非有限 → NaN，使 isEmptyResultNextStepEligible 失败（不得冒充 200）。
+  const rawUpstreamStatus = upstream.statusCode;
+  const upstreamHttpStatus =
+    typeof rawUpstreamStatus === "number" && Number.isFinite(rawUpstreamStatus)
+      ? rawUpstreamStatus
+      : Number.NaN;
   const upstreamFailure = classifyUpstreamFailure(upstream.statusCode, contentType, originalBody, requestId, session);
   if (upstreamFailure) {
     await writeUpstreamFailureResponse(upstreamFailure, {
@@ -2873,20 +4092,157 @@ async function writeLucySemanticResponse(
   let forceJson = false;
 
   try {
+    const enrichWithNextStep = async (payload: unknown): Promise<unknown> => {
+      const enveloped = ensureJsonRpcEnvelope(payload, requestId);
+      const resultRecord =
+        enveloped
+        && typeof enveloped === "object"
+        && !Array.isArray(enveloped)
+        && (enveloped as Record<string, unknown>).result
+        && typeof (enveloped as Record<string, unknown>).result === "object"
+        && !Array.isArray((enveloped as Record<string, unknown>).result)
+          ? ((enveloped as Record<string, unknown>).result as Record<string, unknown>)
+          : undefined;
+      const inspectedEarly = inspectRowsAndColumns(resultRecord ?? payload);
+      // Spec 20261107 D13／D5／R2-02／R3 —— 统一成功判定通过后才求值。
+      // 顺序：isEmptyResultNextStepEligible → allowedToolNames → build／注入。
+      const shouldResolveVisibleTools = isEmptyResultNextStepEligible({
+        status: upstreamHttpStatus,
+        result: resultRecord,
+        toolName,
+        rowCount: inspectedEarly.rows
+      });
+      const visibleTools = shouldResolveVisibleTools
+        ? await allowedToolNames(identity).catch(() => [] as string[])
+        : ([] as string[]);
+      return withLucyResultMeta(
+        payload,
+        requestId,
+        toolName,
+        toolArgs,
+        sourceRefs,
+        visibleTools,
+        options.originalUserFilters,
+        options.scopeIntersectionEmpty === true,
+        upstreamHttpStatus
+      );
+    };
+
+    const originalEnvelopeWire = contentType.includes("text/event-stream")
+      ? extractSseJsonRpcResponseRaw(originalBody, requestId)
+      : contentType.includes("application/json")
+        ? originalBody
+        : undefined;
+
     if (contentType.includes("text/event-stream")) {
       const payload = decodeSseMessage(originalBody, requestId);
       if (!payload) throw new Error("missing SSE data frame");
-      body = JSON.stringify(withLucyResultMeta(payload, requestId, toolName, toolArgs, sourceRefs));
+      const enriched = await enrichWithNextStep(payload);
+      body = JSON.stringify(enriched);
       forceJson = true;
+      // P0-4／SC-21／C2 — SSE 最终写回与 JSON 同一装配合同；缺 raw → B-ASSEMBLE。
+      body = applyLucyQueryAnswerVerifiabilityOrFailClosed({
+        toolName,
+        originalEnvelopeWire,
+        enriched,
+        requestId,
+        sourceRefs,
+        upstreamHttpStatus,
+        options,
+        currentBody: body
+      });
     } else if (contentType.includes("application/json")) {
-      body = JSON.stringify(withLucyResultMeta(JSON.parse(originalBody), requestId, toolName, toolArgs, sourceRefs));
+      const enriched = await enrichWithNextStep(JSON.parse(originalBody));
+      body = JSON.stringify(enriched);
       forceJson = true;
+      body = applyLucyQueryAnswerVerifiabilityOrFailClosed({
+        toolName,
+        originalEnvelopeWire,
+        enriched,
+        requestId,
+        sourceRefs,
+        upstreamHttpStatus,
+        options,
+        currentBody: body
+      });
     } else {
       throw new Error(`unsupported content-type:${contentType || "<missing>"}`);
     }
   } catch (err) {
     metaFailed = `lucy_result_meta_failed:${err instanceof Error ? err.message : String(err)}`;
-    body = originalBody;
+    // REQ-030-012 / D22 — 发现面裁剪失败路径禁止原文透传；meta 失败时对 read_source 亦 fail-closed。
+    if (toolName === "lucy_read_source") {
+      body = JSON.stringify({
+        jsonrpc: "2.0",
+        id: requestId,
+        result: {
+          isError: true,
+          content: [{ type: "text", text: "field_exposure_unavailable" }]
+        }
+      });
+      forceJson = true;
+    } else if (toolName === "lucy_query" && upstreamHttpStatus === 200) {
+      // P0-4／D6／B-ASSEMBLE — HTTP 200 成功查数路径禁止回落原文静默无块。
+      body = buildAnswerVerifiabilityErrorEnvelope({
+        requestId,
+        reason: "answer_verifiability_assemble_failed",
+        detail: metaFailed
+      });
+      forceJson = true;
+    } else {
+      body = originalBody;
+    }
+  }
+
+  // REQ-030-012 — lucy_read_source 下行列裁剪（与 Hive 共用 field-exposure-discovery）。
+  if (toolName === "lucy_read_source" && !metaFailed) {
+    try {
+      const { trimDiscoveryPayload } = await import("./field-exposure-discovery.js");
+      const argsRecord = toolArgs && typeof toolArgs === "object" && !Array.isArray(toolArgs)
+        ? (toolArgs as Record<string, unknown>)
+        : {};
+      const primary = sourceRefs[0];
+      const parsedBody = JSON.parse(body) as unknown;
+      const trimmed = await trimDiscoveryPayload({
+        toolName,
+        payload: parsedBody,
+        connectionId:
+          (typeof argsRecord.connectionId === "string" ? argsRecord.connectionId : undefined) ??
+          primary?.connectionId,
+        schema: primary?.schema,
+        sourceName:
+          (typeof argsRecord.sourceName === "string"
+            ? argsRecord.sourceName
+            : typeof argsRecord.source === "string"
+              ? argsRecord.source
+              : undefined) ?? primary?.sourceName,
+        carrierKind: "read_source_columns"
+      });
+      if (!trimmed.ok) {
+        body = JSON.stringify({
+          jsonrpc: "2.0",
+          id: requestId,
+          result: {
+            isError: true,
+            content: [{ type: "text", text: trimmed.reason }]
+          }
+        });
+        forceJson = true;
+      } else {
+        body = JSON.stringify(trimmed.payload);
+        forceJson = true;
+      }
+    } catch {
+      body = JSON.stringify({
+        jsonrpc: "2.0",
+        id: requestId,
+        result: {
+          isError: true,
+          content: [{ type: "text", text: "field_exposure_unavailable" }]
+        }
+      });
+      forceJson = true;
+    }
   }
 
   if (toolName === "lucy_query" && filterPushdownGuardEnabled() && isFilterPushdownText(body)) {
@@ -3075,7 +4431,7 @@ async function collectRepairEvidence(input: {
   let schemaByName: Map<string, { compiled: boolean; measureCount: number }> | null = null;
   try {
     const projectRoot = await resolveProjectRoot();
-    const sources = await listSources(projectRoot);
+    const sources = await listSources(projectRoot, { skipAuthorizedCounts: true });
     schemaByName = new Map(
       sources.map((source) => [
         source.table,
@@ -3188,8 +4544,12 @@ function localInitializePayload(requestId: string | number, instructions: string
   };
 }
 
-async function localToolsListPayload(identity: Identity, requestId: string | number): Promise<Record<string, unknown>> {
+async function localToolsListPayload(identity: Identity, requestId: string | number, sessionId?: string | null): Promise<Record<string, unknown>> {
   const visibleTools = new Set(await allowedToolNames(identity));
+  // P1-60 D1: inactive / unknown 下不主动曝光 begin（Spec §4 伪代码）。
+  if (await shouldHideBeginQuestion(identity, sessionId)) visibleTools.delete("lucy_begin_question");
+  // P1-74 / D7：计费问数身份必须可达逃生工具（不新增数据权限）。
+  if (budgetEscapeToolReachable(visibleTools)) visibleTools.add("lucy_continue_question");
   const tools = localToolBuilders()
     .filter((local) => visibleTools.has(local.name))
     .map((local) => local.build());
@@ -3206,7 +4566,8 @@ async function writeToolsListResponse(
   upstreamBody: string,
   res: ServerResponse,
   requestId: string | number,
-  session: UpstreamSessionState | undefined
+  session: UpstreamSessionState | undefined,
+  sessionId?: string | null
 ): Promise<{
   filterFailed: boolean;
   errorDetail?: string;
@@ -3251,6 +4612,10 @@ async function writeToolsListResponse(
     };
   }
   const visibleTools = new Set(await allowedToolNames(identity));
+  // P1-60 D1: inactive / unknown 下不主动曝光 begin（Spec §4 伪代码）。
+  if (await shouldHideBeginQuestion(identity, sessionId)) visibleTools.delete("lucy_begin_question");
+  // P1-74 / D7：计费问数身份必须可达逃生工具（不新增数据权限）。
+  if (budgetEscapeToolReachable(visibleTools)) visibleTools.add("lucy_continue_question");
   let body = originalBody;
   let filterFailed = false;
   let errorDetail: string | undefined;
@@ -3274,6 +4639,7 @@ async function writeToolsListResponse(
     forceJson = true;
   }
 
+  if (!filterFailed) rememberToolsListNames(identity, body);
   const headers = forceJson ? bufferedJsonHeaders(upstream) : passthroughBodyHeaders(upstream);
   const responseBytes = Buffer.byteLength(body);
   headers["content-length"] = responseBytes;
@@ -3282,21 +4648,31 @@ async function writeToolsListResponse(
   return { filterFailed, errorDetail, responseBytes };
 }
 
+/** P1-37 U2：记下本次真实下发给该身份的工具名，供未知工具名拒绝时作为可见清单。 */
+function rememberToolsListNames(identity: Identity, servedBody: string): void {
+  try {
+    const parsed = JSON.parse(servedBody) as { result?: { tools?: Array<{ name?: unknown }> } };
+    const names = (parsed.result?.tools ?? []).map((tool) => tool.name).filter((name): name is string => typeof name === "string");
+    rememberObservedToolNames(identity.userId, identity.tokenHashPrefix ?? "", getPolicyRuntimeStatus().policyVersion, names);
+  } catch {
+    // 记录是尽力而为，不影响 tools/list 响应。
+  }
+}
+
 // Rewrites the upstream `initialize` response so `result.instructions` is the
 // proxy's data-QA guidance text. On ANY failure (parse error, missing result,
-// unsupported content-type, instructions text not loaded) we pass the original
+// unsupported content-type) we pass the original
 // upstream body through unchanged. This is deliberately fail-open: a buggy
 // rewriter must not block MCP session establishment for every client.
 async function writeInitializeResponse(
-  identity: Identity,
   upstream: IncomingMessage,
   upstreamBody: string,
   res: ServerResponse,
-  requestId: string | number
+  requestId: string | number,
+  instructions: string
 ): Promise<{ injectionFailed: boolean; errorDetail?: string; responseBytes: number }> {
   const originalBody = upstreamBody;
   const contentType = String(upstream.headers["content-type"] ?? "");
-  const instructions = await buildRoleAwareInstructions(identity);
   const isSse = contentType.includes("text/event-stream");
 
   let body = originalBody;
@@ -3304,35 +4680,30 @@ async function writeInitializeResponse(
   let errorDetail: string | undefined;
   let forceJson = false;
 
-  if (!instructions) {
-    injectionFailed = true;
-    errorDetail = "instructions_text_unavailable";
-  } else {
-    try {
-      if (isSse) {
-        const payload = decodeSseMessage(originalBody, requestId);
-        if (!payload) throw new Error("missing SSE data frame");
-        const record = payload as Record<string, unknown>;
-        const result = record.result as Record<string, unknown> | undefined;
-        if (!result || typeof result !== "object") throw new Error("missing result object");
-        const rewritten = ensureJsonRpcEnvelope({ ...record, result: { ...result, instructions } }, requestId);
-        body = JSON.stringify(rewritten);
-        forceJson = true;
-      } else if (contentType.includes("application/json")) {
-        const parsed = JSON.parse(originalBody) as Record<string, unknown>;
-        const result = parsed.result as Record<string, unknown> | undefined;
-        if (!result || typeof result !== "object") throw new Error("missing result object");
-        const rewritten = ensureJsonRpcEnvelope({ ...parsed, result: { ...result, instructions } }, requestId);
-        body = JSON.stringify(rewritten);
-        forceJson = true;
-      } else {
-        throw new Error(`unsupported content-type:${contentType || "<missing>"}`);
-      }
-    } catch (err) {
-      injectionFailed = true;
-      errorDetail = `instructions_injection_failed:${err instanceof Error ? err.message : String(err)}`;
-      body = originalBody;
+  try {
+    if (isSse) {
+      const payload = decodeSseMessage(originalBody, requestId);
+      if (!payload) throw new Error("missing SSE data frame");
+      const record = payload as Record<string, unknown>;
+      const result = record.result as Record<string, unknown> | undefined;
+      if (!result || typeof result !== "object") throw new Error("missing result object");
+      const rewritten = ensureJsonRpcEnvelope({ ...record, result: { ...result, instructions } }, requestId);
+      body = JSON.stringify(rewritten);
+      forceJson = true;
+    } else if (contentType.includes("application/json")) {
+      const parsed = JSON.parse(originalBody) as Record<string, unknown>;
+      const result = parsed.result as Record<string, unknown> | undefined;
+      if (!result || typeof result !== "object") throw new Error("missing result object");
+      const rewritten = ensureJsonRpcEnvelope({ ...parsed, result: { ...result, instructions } }, requestId);
+      body = JSON.stringify(rewritten);
+      forceJson = true;
+    } else {
+      throw new Error(`unsupported content-type:${contentType || "<missing>"}`);
     }
+  } catch (err) {
+    injectionFailed = true;
+    errorDetail = `instructions_injection_failed:${err instanceof Error ? err.message : String(err)}`;
+    body = originalBody;
   }
 
   const headers = forceJson ? bufferedJsonHeaders(upstream) : passthroughBodyHeaders(upstream);
@@ -3343,7 +4714,42 @@ async function writeInitializeResponse(
   return { injectionFailed, errorDetail, responseBytes };
 }
 
-async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: AdmittedRequest): Promise<void> {
+/**
+ * P1-75 §2.2：握手无成功应答的两种结局。
+ * - 客户端已断开：不写任何响应，只结算取消。
+ * - 授权已撤：沿用授权屏障对 `res` 发送点的既有拒绝（403 authorization_revoked），不出任何指引。
+ */
+function settleInitializeWithoutInstructions(
+  decision: { kind: "disconnected" | "revoked" },
+  res: ServerResponse
+): { outcome: "error" | "denied"; errorDetail: string } {
+  if (decision.kind === "revoked") {
+    res.writeHead(200, {});
+    res.end();
+    return { outcome: "denied", errorDetail: AUTHORIZATION_REVOKED_DETAIL };
+  }
+  if (!res.destroyed && !res.writableEnded) res.destroy();
+  return { outcome: "error", errorDetail: "client_disconnected" };
+}
+
+async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: AdmittedRequest, readWait: SemanticReadWaitContext): Promise<void> {
+  const trace = new TraceRecorder({ traceId: `trace_${randomUUID()}` });
+  const traceContext = new TraceRequestContext(trace);
+  const evidence = resolveClientIpEvidence(req);
+  traceContext.ipSource = evidence.ipSource;
+  traceContext.trustedSource = evidence.trustedSource;
+  traceContext.instrumentResponse(res);
+  await runWithTrace(traceContext, () => handlePostTraced(req, res, admitted, trace, traceContext, readWait));
+}
+
+async function handlePostTraced(
+  req: IncomingMessage,
+  res: ServerResponse,
+  admitted: AdmittedRequest,
+  trace: TraceRecorder,
+  traceContext: TraceRequestContext,
+  readWait: SemanticReadWaitContext
+): Promise<void> {
   const sessionId = normalizeHeader(req.headers["mcp-session-id"]);
   const explicitTurnId = normalizeHeader(req.headers["x-lucy-turn-id"]);
   const { identity, body } = admitted;
@@ -3359,12 +4765,21 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
     ...(networkMeta.deviceName ? { deviceName: networkMeta.deviceName } : {})
   };
   const start = Date.now();
-  const traceId = `trace_${randomUUID()}`;
+  const traceId = trace.traceId;
 
   let rpcMethod: string | undefined;
   let toolName: string | undefined;
   let toolArgs: unknown;
   let scopeIntersectionEmpty = false;
+  // Spec 20261107 D6 —— 行策略谓词会在下面被前插进 filters。先快照**原始用户
+  // filter**，next_step 只回显它（且去值），策略谓词与强制表达式一律不出现。
+  let originalUserFilters: unknown;
+  // P0-4 —— 改写前完整口径快照＋门禁当拍 pin 证据（随请求携带，禁止响应期重读）。
+  let argsBeforeRewrite: Record<string, unknown> | undefined;
+  let requestPinnedCaliber: RequestPinnedCaliberEvidence | undefined;
+  // P1-35 v0.4 D13：门闩档②放行披露，随请求携带到 lucy_query 成功投影。
+  let sourceSelectionForAv: SourceSelectionDisclosure | undefined;
+  let forcedFiltersForAv: unknown;
   let requestId: string | number = "";
   let argsSummary: Record<string, unknown> | undefined;
   let queryMeta: Partial<Parameters<typeof writeLog>[0]> = {};
@@ -3378,9 +4793,15 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
   let cancelUpstreamOnCapture = false;
   const captureUpstreamRequest = (request: ClientRequest): void => {
     upstreamRequestHandle = request;
-    if (!cancelUpstreamOnCapture || request.destroyed) return;
+    const stopping = ["DRAINING", "STOPPING", "STOPPED"].includes(getProcessLifecyclePhase());
+    const originalBudgetExpired = (readWait.budgetDeadlineMonoMs !== undefined
+      && questionBudget.monoNow() >= readWait.budgetDeadlineMonoMs) || readWait.budgetCurrent?.() === false;
+    if (request.destroyed || (!cancelUpstreamOnCapture && !readWait.signal.aborted && !stopping && !originalBudgetExpired)) return;
     try {
-      request.destroy(new Error("client_disconnected"));
+      // forwardToUpstream invokes this synchronously BEFORE end(body). A
+      // completed 20s wait eligibility is never an execution-wide timeout.
+      request.destroy(new Error(stopping ? "service_draining"
+        : originalBudgetExpired ? "absolute_execution_deadline" : "client_disconnected"));
     } catch {
       // 句柄已经结束。
     }
@@ -3392,10 +4813,61 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
     argsSummary = { ...(argsSummary ?? {}), budgetSettlement: { ...previous, ...facts } };
   };
 
+  const revalidateSemanticRead = async (): Promise<{ code: string; message: string } | null> => {
+    if (readWait.signal.aborted || ["DRAINING", "STOPPING", "STOPPED"].includes(getProcessLifecyclePhase())) {
+      return { code: SERVICE_DRAINING, message: SERVICE_DRAINING_MESSAGE };
+    }
+    const barrier = currentBarrierHandle();
+    if (barrier && !barrier.isCurrent()) throw new AuthorizationRevokedError();
+    if (!toolName) return { code: "tool_forbidden", message: "Access denied: tool_forbidden" };
+    const original = deepCopyJson(argsBeforeRewrite ?? toolArgs);
+    const current = await aclCheck(identity, toolName, original);
+    if (!current.allowed) return { code: current.reason ?? "denied", message: `Access denied: ${current.reason ?? "denied"}` };
+    let next = toolName === "lucy_query" ? applyLucyQueryForcedFilters(original, current.forcedFilters) : original;
+    if (queryGuardrailsEnabled() && (toolName === "lucy_query" || toolName === "lucy_read_source")) {
+      const resolved = await effectivePermissions(identity);
+      const readable = new Set<string>();
+      if (resolved.ok) {
+        if (resolved.permissions.tables.includes("*")) readable.add("*");
+        for (const source of resolved.permissions.sources) {
+          if (source.sourceName) readable.add(source.sourceName);
+          if (source.table) readable.add(source.table);
+          if (source.connectionId && source.sourceName) readable.add(`${source.connectionId}.${source.sourceName}`);
+        }
+      }
+      // P1-70: the observed writer changed this directory. The ordinary 60s
+      // published-catalog cache cannot prove the post-wait semantic generation.
+      // Bypass it only here; other requests retain their existing cache policy.
+      const contentPaths = await loadContentPaths();
+      const projectRoot = await resolveProjectRoot();
+      const catalog = await loadAmbiguityCatalogFromDir(path.resolve(projectRoot, contentPaths.semanticLayer));
+      const guard = applyLucyCallGuard({ toolName, args: next,
+        readableSourceNames: resolved.ok ? readable : null, catalog });
+      if (guard.action === "stop") return { code: guard.reason, message: guard.repair };
+      next = guard.args;
+    }
+    if (barrier && !barrier.isCurrent()) throw new AuthorizationRevokedError();
+    if (readWait.signal.aborted || ["DRAINING", "STOPPING", "STOPPED"].includes(getProcessLifecyclePhase())
+      || readWait.budgetCurrent?.() === false) {
+      return { code: "semantic_recovery_required", message: "本次等待已结束，请在维护完成后重试原问题。" };
+    }
+    toolArgs = next;
+    if (toolName === "lucy_query") {
+      forcedFiltersForAv = current.forcedFilters;
+      scopeIntersectionEmpty = isScopeIntersectionEmpty(original, current.forcedFilters);
+    }
+    const params = parsedRpc?.params as Record<string, unknown> | undefined;
+    if (params) params.arguments = next;
+    argsSummary = summarizeArgsForAudit(toolName,
+      next && typeof next === "object" && !Array.isArray(next) ? next as Record<string, unknown> : {});
+    return null;
+  };
+
   try {
     const parsed = JSON.parse(body.toString()) as Record<string, unknown>;
     parsedRpc = parsed;
     rpcMethod = parsed.method as string | undefined;
+    traceContext.rpcMethod = rpcMethod;
     requestId = (parsed.id as string | number | undefined) ?? "";
 
     if (rpcMethod === "initialize") {
@@ -3433,7 +4905,13 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
         // Keep only a safe subset of args for logging (Spec 137 — no raw question)
         argsSummary = summarizeArgsForAudit(toolName, args);
       }
-      const rawQueryAudit = queryAuditMeta(toolArgs);
+      traceContext.rejection = {
+        identityId: identity.userId,
+        tool: toolName ?? "",
+        args: toolArgs ?? null,
+        sessionScope: sessionId || "default"
+      };
+      const rawQueryAudit = queryAuditMeta(toolArgs, toolName);
       const { queryTables: extractedQueryTables, ...safeQueryMeta } = rawQueryAudit;
       queryMeta = safeQueryMeta;
       queryTables = extractedQueryTables ?? [];
@@ -3459,6 +4937,11 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
     results: Awaited<ReturnType<typeof searchAccessibleWikiPages>>,
     upstreamError?: string
   ): Promise<void> => {
+    // P1-36 §6.2：上游失败后本地回退须同时留下 upstream_call(error) 与 local_handler(wiki_fallback)。
+    trace.mark("local_handler", {
+      status: query ? "ok" : "error",
+      attrs: { handler: upstreamError ? "wiki_fallback" : "wiki_search" }
+    });
     // SC-12 — only articles this role can read are injected, and each one
     // is audited with its key and wiki version.
     const wikiInjectedKeys = results.map((hit) => hit.key);
@@ -3523,7 +5006,8 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
     }
   }
   if (rpcMethod === "tools/call" && toolName && toolName !== "lucy_begin_question") {
-    const attribution = reportedTurns.resolve({
+    // 空桑基修复 Spec §2：无 header 时延续同会话已 record 的 begin turn → confirmed。
+    const attribution = reportedTurns.resolveToolCall({
       identity,
       sessionId: requestMeta.lucySessionId,
       explicitTurnId
@@ -3579,8 +5063,10 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
       ? validateLucyToolArgs(toolName, toolArgs)
       : undefined
   );
-  if (invalidArgumentsReason) {
-    const responseBody = jsonRpcToolResult(requestId, `Invalid arguments: ${invalidArgumentsReason}`, { isError: true });
+  const respondInvalidArguments = async (invalidArgumentsReason: string, baseHint?: string): Promise<void> => {
+    const tracked = await trackRejection(traceContext, invalidArgumentsReason);
+    const hint = [baseHint, tracked.repeated ? REPEAT_REJECTION_HINT : undefined].filter(Boolean).join(" ") || undefined;
+    const responseBody = jsonRpcToolResult(requestId, `Invalid arguments: ${invalidArgumentsReason}${hint ? `. ${hint}` : ""}`, { isError: true });
     res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
     res.end(responseBody);
     recordRequestAudit({
@@ -3619,6 +5105,13 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, admitted: A
       reason: invalidArgumentsReason,
       policySource: "other"
     });
+  };
+  if (invalidArgumentsReason) {
+    // SC-05：整个查询形状缺失同样是 KTX 必然拒绝的形状，文案同样带示例（只加提示，不新增拒绝条件）。
+    const shapeHint = invalidArgumentsReason === "invalid_arguments:lucy_query:query_shape_required"
+      ? LUCY_QUERY_MEASURES_HINT
+      : undefined;
+    await respondInvalidArguments(invalidArgumentsReason, shapeHint);
     return;
   }
 
@@ -3900,6 +5393,9 @@ async function writeCertifiedRouteResponse(
   if (questionBudgetBypassEnabled() && questionBudgetEnabled()) {
     const compiledBudget = await effectivePermissions(identity).catch(() => null);
     const allowedTools = compiledBudget && compiledBudget.ok ? (compiledBudget.permissions.tools ?? []) : [];
+    // P1-74 / D7：计费问数身份即使未显式授予 continue，也按数据问数能力获得逃生可达。
+    const canContinue = allowedTools.includes("lucy_continue_question") || allowedTools.includes("*") || budgetEscapeToolReachable(allowedTools);
+    const canBegin = allowedTools.includes("lucy_begin_question") || allowedTools.includes("*");
     const budgetDecision = await questionBudget.consumePersisted(
       requestMeta.lucyTurnId,
       Date.now(),
@@ -3908,7 +5404,8 @@ async function writeCertifiedRouteResponse(
       {
         identityKey: budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
         sessionId: requestMeta.lucySessionId,
-        canContinue: allowedTools.includes("lucy_continue_question") || allowedTools.includes("*")
+        canContinue,
+        canBegin
       }
     );
     if (budgetDecision.action !== "allow") {
@@ -3916,7 +5413,13 @@ async function writeCertifiedRouteResponse(
         {
           reason: budgetDecision.reason,
           ...(budgetDecision.action === "stop"
-            ? { partial: budgetDecision.partial, continueToken: budgetDecision.continueToken, continuable: budgetDecision.continuable }
+            ? {
+                partial: budgetDecision.partial,
+                continueToken: budgetDecision.continueToken,
+                continuable: budgetDecision.continuable,
+                // P1-74 / D4：与数据工具停机同一结构化下一步口径。
+                ...(budgetDecision.nextStep ? { next_step: budgetDecision.nextStep } : {})
+              }
             : { partial: true })
         },
         true,
@@ -4008,6 +5511,26 @@ const DENIAL_REPAIR_TOOLS = new Set([
   "lucy_query",
   "lucy_read_source"
 ]);
+
+/**
+ * P1-37 U2：未知工具名的拒绝指引。清单＝该身份在当前策略版本下真实 `tools/list` 返回过的名称；
+ * 没有记录时退回 `allowedToolNames`（其上界，已排除 absolute-deny 与未授权控制面）。
+ * 不复用 `DENIAL_REPAIR_TOOLS` 的数据来源载荷。
+ */
+async function unknownToolGuidance(
+  identity: Identity,
+  toolName: string
+): Promise<{ text: string; payload: Record<string, unknown> }> {
+  const policyVersion = getPolicyRuntimeStatus().policyVersion;
+  const observed = recallObservedToolNames(identity.userId, identity.tokenHashPrefix ?? "", policyVersion);
+  const names = observed ?? await allowedToolNames(identity).catch(() => [] as string[]);
+  const text = ` "${toolName}" is not a tool this server provides. Do not guess tool names; `
+    + (names.length > 0 ? `use one of: ${names.join(", ")}.` : "call tools/list to see the tools available to you.");
+  return {
+    text,
+    payload: { reason: "tool_unclassified", unknownTool: toolName, availableTools: names }
+  };
+}
 
 /**
  * Builds the ACL-scoped repair payload shared by every permission denial.
@@ -4114,7 +5637,19 @@ async function buildDenialRepairPayload(
 
   // ACL check for tool calls
   if (rpcMethod === "tools/call" && toolName) {
-    const decision = await aclCheck(identity, toolName, toolArgs);
+    const aclSpan = trace.start("acl");
+    // P1-74 / D7：计费问数身份在预算开启时可达逃生工具 —— 不新增数据权限，
+    // 仅放宽 `lucy_continue_question` 本工具的调用闸门（wiki-only 等非问数
+    // 身份仍走既有 ACL，SC-47 合同不变）。
+    const decision = toolName === "lucy_continue_question" && budgetEscapeToolReachable(await allowedToolNames(identity).catch(() => [] as string[]))
+      ? { allowed: true as const, reason: "allowed" }
+      : await aclCheck(identity, toolName, toolArgs);
+    if (decision.allowed) {
+      aclSpan.end({ status: "ok", reasonCode: "allowed", attrs: { decision: "allow" } });
+    } else {
+      const aclMapped = mapReasonCode({ decisionReason: decision.reason ?? "denied", outcome: "denied" });
+      aclSpan.end({ status: "denied", reasonCode: aclMapped.code, reasonParam: aclMapped.param, errorCategory: aclMapped.errorCategory, attrs: { decision: "deny" } });
+    }
     if (!decision.allowed) {
       const errorMsg = decision.reason ?? "denied";
       const compiled = await effectivePermissions(identity).catch(() => null);
@@ -4128,13 +5663,18 @@ async function buildDenialRepairPayload(
       const denial = DENIAL_REPAIR_TOOLS.has(toolName)
         ? await buildDenialRepairPayload(identity, errorMsg)
         : null;
+      const tracked = await trackRejection(traceContext, errorMsg);
+      const unknownTool = errorMsg.startsWith("tool_unclassified:")
+        ? await unknownToolGuidance(identity, toolName)
+        : null;
+      const repeatText = tracked.repeated ? ` ${REPEAT_REJECTION_HINT}` : "";
       const responseBody = JSON.stringify({
         jsonrpc: "2.0",
         id: requestId,
         result: {
           isError: true,
-          content: [{ type: "text", text: `Access denied: ${errorMsg}${denial?.text ?? ""}` }],
-          ...(denial ? { data: denial.payload } : {})
+          content: [{ type: "text", text: `Access denied: ${errorMsg}${denial?.text ?? ""}${unknownTool?.text ?? ""}${repeatText}` }],
+          ...(denial ? { data: denial.payload } : unknownTool ? { data: unknownTool.payload } : {})
         }
       });
       res.writeHead(200, { "content-type": "application/json" });
@@ -4177,8 +5717,332 @@ async function buildDenialRepairPayload(
       });
       return;
     }
+    // ─── P0-1 问题类型口径绑定：注入前门禁 ───
+    // 闸序（Spec D6）：**ACL →（若有可解析 Active Binding）口径集合 → 行权限注入／
+    // 既有 guardrails**。偏离 → `caliber_binding_violation`，**不转发上游**。
+    // 口径校验基于**注入前**的原始 Agent 入参（行权限谓词不参与）。
+    if (toolName === "lucy_query" || toolName === "lucy_explain_query") {
+      const caliberGate = await checkCaliberBindingGate({
+        identity,
+        identityKey: budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
+        sessionId: requestMeta.lucySessionId,
+        toolName,
+        args: (toolArgs && typeof toolArgs === "object" && !Array.isArray(toolArgs))
+          ? toolArgs as Record<string, unknown>
+          : {}
+      });
+      if (caliberGate.kind === "deny") {
+        const denial: CaliberBindingDenial = caliberGate.denial;
+        const caliberRepeatText = await repeatRejectionSuffix(traceContext, denial.code);
+        const responseBody = JSON.stringify({
+          jsonrpc: "2.0",
+          id: requestId,
+          result: {
+            isError: true,
+            content: [{ type: "text", text: `${denial.text}${caliberRepeatText}` }],
+            data: denial.payload
+          }
+        });
+        res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+        res.end(responseBody);
+        recordRequestAudit({
+          ts: new Date().toISOString(),
+          userId: identity.userId,
+          client: identity.client,
+          tool: toolName,
+          tables: queryTables.length > 0 ? queryTables : undefined,
+          argsSummary,
+          ...queryMeta,
+          outcome: "denied",
+          decisionReason: denial.code,
+          errorDetail: denial.code,
+          failureDimension: denial.payload.failureDimension,
+          durationMs: Date.now() - start,
+          responseBytes: Buffer.byteLength(responseBody),
+          requestId,
+          ...requestMeta,
+          // 口径偏离是「效果发生前」的拒绝：本次尝试**未执行**（零上游执行）。
+          executionEvidence: executionEvidenceFromObservation({
+            authorizationAllowed: true,
+            notExecuted: true
+          }),
+          ...(await auditMeta(identity, denial.code))
+        });
+        recordMcpTraceForTool({
+          traceId,
+          identity,
+          toolName,
+          status: "denied",
+          startedAt: new Date(start).toISOString(),
+          turnId: requestMeta.lucyTurnId ?? null,
+          sessionId: requestMeta.lucySessionId ?? null,
+          requestId,
+          argsSummary,
+          allowed: false,
+          reason: denial.code,
+          matchedRule: denial.payload.dimension
+        });
+        return;
+      }
+      // P0-4 §5.2.1 — 门禁 allow 当拍 pin；随请求携带至响应装配。
+      if (toolName === "lucy_query") {
+        const argsRecord =
+          toolArgs && typeof toolArgs === "object" && !Array.isArray(toolArgs)
+            ? toolArgs as Record<string, unknown>
+            : {};
+        argsBeforeRewrite = deepCopyJson(argsRecord);
+        requestPinnedCaliber = await captureRequestPinnedCaliberEvidence({
+          identityKey: budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
+          sessionId: requestMeta.lucySessionId
+        });
+      }
+    }
+    // ─── P0-3 表级歧义门闩：ACL＋口径之后、上游／explain 成功体之前 ───
+    // explain 必须在本段拦截（约本地成功体之前）；不得只挂共享 query guard。
+    if (toolName && sourceAmbiguityGateAppliesToTool(toolName)) {
+      const sagResolved = await effectivePermissions(identity).catch(() => null);
+      // 权限／目录不可读 → fail-closed（D10／SC-24），禁止静默跳过门闩。
+      if (!sagResolved?.ok) {
+        const denialText = `Access denied: source_ambiguity_gate（表级歧义：目录或权限不可读，请先确认来源表）${await repeatRejectionSuffix(traceContext, "source_ambiguity_gate")}`;
+        const denialPayload = {
+          reason: "source_ambiguity_gate",
+          failureDimension: "source_selection",
+          message: "表级歧义：请先确认来源表",
+          detail: "catalog_unreliable",
+          candidates: [] as unknown[],
+          repair: { usableTargets: [], rejected: [], factualError: "当前没有可用的合法目标：目录或权限不可读。", text: "当前没有可用的合法目标：目录或权限不可读。" }
+        };
+        const responseBody = JSON.stringify({
+          jsonrpc: "2.0",
+          id: requestId,
+          result: {
+            isError: true,
+            content: [{ type: "text", text: denialText }],
+            data: denialPayload
+          }
+        });
+        res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+        res.end(responseBody);
+        recordRequestAudit({
+          ts: new Date().toISOString(),
+          userId: identity.userId,
+          client: identity.client,
+          tool: toolName,
+          tables: queryTables.length > 0 ? queryTables : undefined,
+          argsSummary,
+          ...queryMeta,
+          outcome: "denied",
+          decisionReason: "source_ambiguity_gate",
+          errorDetail: "catalog_unreliable",
+          failureDimension: "source_selection",
+          durationMs: Date.now() - start,
+          responseBytes: Buffer.byteLength(responseBody),
+          requestId,
+          ...requestMeta,
+          executionEvidence: executionEvidenceFromObservation({
+            authorizationAllowed: true,
+            notExecuted: true
+          }),
+          ...(await auditMeta(identity, "source_ambiguity_gate"))
+        });
+        recordMcpTraceForTool({
+          traceId,
+          identity,
+          toolName,
+          status: "denied",
+          startedAt: new Date(start).toISOString(),
+          turnId: requestMeta.lucyTurnId ?? null,
+          sessionId: requestMeta.lucySessionId ?? null,
+          requestId,
+          argsSummary,
+          allowed: false,
+          reason: "source_ambiguity_gate"
+        });
+        return;
+      }
+      {
+        // Critical：必须装配描述／度量／健康态；缺省仅 sourceName＋table 会让中文 description 场景 zero_hits 假放行。
+        const enriched = await buildMatchableSourcesForGate(sagResolved.permissions.sources);
+        const toolArgsRecord =
+          (toolArgs && typeof toolArgs === "object" && !Array.isArray(toolArgs))
+            ? toolArgs as Record<string, unknown>
+            : {};
+        // P1-35 D5：按完整身份装配真实 schema／completion 探测（仅 done＝compiled）。
+        // SourceSummary：conn／schema／table(=sourceName)／qualifiedName(=physical)。
+        const schemaProbeByIdentity = new Map<string, GateSchemaProbe>();
+        let sourceMapReliable = true;
+        try {
+          const projectRoot = await resolveProjectRoot();
+          const listed = await listSources(projectRoot, { skipAuthorizedCounts: true });
+          // 度量名取自上面已装配的 overlay（与 measureCount 同源）；读不到名字＝空＝不合法（fail-closed）。
+          const measureNamesByKey = new Map(
+            enriched.matchableSources.map((m) => [repairEvidenceIdentityKey(m.identity), m.measureNames ?? []])
+          );
+          for (const src of listed) {
+            const key = repairEvidenceIdentityKey({
+              connectionId: src.conn,
+              schema: src.schema,
+              sourceName: src.table,
+              physicalTable: src.qualifiedName || `${src.schema}.${src.table}`
+            });
+            schemaProbeByIdentity.set(key, {
+              schemaExists: true,
+              completion: src.completion,
+              measureNames: measureNamesByKey.get(key) ?? []
+            });
+          }
+          // 权限可见但 listSources 未收录 → schemaExists=false（已知不存在于语义清单）
+          for (const s of sagResolved.permissions.sources) {
+            const key = repairEvidenceIdentityKey({
+              connectionId: s.connectionId,
+              schema: s.schema,
+              sourceName: s.sourceName,
+              physicalTable: s.table
+            });
+            if (!schemaProbeByIdentity.has(key)) {
+              schemaProbeByIdentity.set(key, {
+                schemaExists: false,
+                completion: null,
+                measureNames: []
+              });
+            }
+          }
+        } catch {
+          sourceMapReliable = false;
+        }
+        const sagOutcome = await checkSourceAmbiguityGate({
+          identityKey: budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
+          sessionId: requestMeta.lucySessionId,
+          toolName,
+          args: toolArgsRecord,
+          permissions: sagResolved.permissions,
+          matchableSources: enriched.matchableSources,
+          sourceMapReliable,
+          schemaProbeByIdentity
+        });
+        if (sagOutcome.kind === "allow" && sagOutcome.selection) {
+          sourceSelectionForAv = toSelectionDisclosure(sagOutcome.selection);
+        }
+        if (sagOutcome.kind === "deny_caliber_unresolved") {
+          const unresolvedRepeatText = await repeatRejectionSuffix(traceContext, "caliber_binding_unresolved");
+          const responseBody = JSON.stringify({
+            jsonrpc: "2.0",
+            id: requestId,
+            result: {
+              isError: true,
+              content: [{ type: "text", text: `${sagOutcome.text}${unresolvedRepeatText}` }],
+              data: { reason: "caliber_binding_unresolved", failureDimension: "口径绑定" }
+            }
+          });
+          res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+          res.end(responseBody);
+          recordRequestAudit({
+            ts: new Date().toISOString(),
+            userId: identity.userId,
+            client: identity.client,
+            tool: toolName,
+            tables: queryTables.length > 0 ? queryTables : undefined,
+            argsSummary,
+            ...queryMeta,
+            outcome: "denied",
+            decisionReason: "caliber_binding_unresolved",
+            errorDetail: "caliber_binding_unresolved",
+            durationMs: Date.now() - start,
+            responseBytes: Buffer.byteLength(responseBody),
+            requestId,
+            ...requestMeta,
+            executionEvidence: executionEvidenceFromObservation({
+              authorizationAllowed: true,
+              notExecuted: true
+            }),
+            ...(await auditMeta(identity, "caliber_binding_unresolved"))
+          });
+          recordMcpTraceForTool({
+            traceId,
+            identity,
+            toolName,
+            status: "denied",
+            startedAt: new Date(start).toISOString(),
+            turnId: requestMeta.lucyTurnId ?? null,
+            sessionId: requestMeta.lucySessionId ?? null,
+            requestId,
+            argsSummary,
+            allowed: false,
+            reason: "caliber_binding_unresolved"
+          });
+          return;
+        }
+        if (sagOutcome.kind === "deny") {
+          const denial: SourceAmbiguityDenial = sagOutcome.denial;
+          const denialText = `Access denied: ${denial.reason}（${denial.message}）${await repeatRejectionSuffix(traceContext, denial.reason)}`;
+          const responseBody = JSON.stringify({
+            jsonrpc: "2.0",
+            id: requestId,
+            result: {
+              isError: true,
+              content: [{ type: "text", text: denialText }],
+              data: denial
+            }
+          });
+          res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+          res.end(responseBody);
+          recordRequestAudit({
+            ts: new Date().toISOString(),
+            userId: identity.userId,
+            client: identity.client,
+            tool: toolName,
+            tables: queryTables.length > 0 ? queryTables : undefined,
+            argsSummary,
+            ...queryMeta,
+            outcome: "denied",
+            decisionReason: denial.reason,
+            errorDetail: denial.reason,
+            failureDimension: denial.failureDimension,
+            durationMs: Date.now() - start,
+            responseBytes: Buffer.byteLength(responseBody),
+            requestId,
+            ...requestMeta,
+            executionEvidence: executionEvidenceFromObservation({
+              authorizationAllowed: true,
+              notExecuted: true
+            }),
+            ...(await auditMeta(identity, denial.reason))
+          });
+          recordMcpTraceForTool({
+            traceId,
+            identity,
+            toolName,
+            status: "denied",
+            startedAt: new Date(start).toISOString(),
+            turnId: requestMeta.lucyTurnId ?? null,
+            sessionId: requestMeta.lucySessionId ?? null,
+            requestId,
+            argsSummary,
+            allowed: false,
+            reason: denial.reason,
+            matchedRule: denial.failureDimension
+          });
+          return;
+        }
+        // allow / skip_bound → 继续既有 guardrails／上游／explain
+      }
+    }
     // Spec 99 §6 — Proxy-only forced_filters injection for lucy_query; strip any user-supplied alias.
     if (toolName === "lucy_query") {
+      const argsRecord =
+        toolArgs && typeof toolArgs === "object" && !Array.isArray(toolArgs)
+          ? toolArgs as Record<string, unknown>
+          : {};
+      // 若口径门禁未跑到（理论上不应），仍在改写前补齐快照／pin。
+      if (!argsBeforeRewrite) argsBeforeRewrite = deepCopyJson(argsRecord);
+      if (!requestPinnedCaliber) {
+        requestPinnedCaliber = await captureRequestPinnedCaliberEvidence({
+          identityKey: budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
+          sessionId: requestMeta.lucySessionId
+        });
+      }
+      originalUserFilters = argsBeforeRewrite.filters ?? argsRecord.filters;
+      forcedFiltersForAv = decision.forcedFilters;
       scopeIntersectionEmpty = isScopeIntersectionEmpty(toolArgs, decision.forcedFilters);
       const record = applyLucyQueryForcedFilters(toolArgs, decision.forcedFilters);
       toolArgs = record;
@@ -4271,7 +6135,9 @@ async function buildDenialRepairPayload(
       const budgetScope = `${identity.tokenHashPrefix ?? "no-token"}:${requestMeta.lucySessionId ?? "no-session"}`;
       const compiledBudget = await effectivePermissions(identity).catch(() => null);
       const allowedTools = compiledBudget && compiledBudget.ok ? (compiledBudget.permissions.tools ?? []) : [];
-      const canContinue = allowedTools.includes("lucy_continue_question") || allowedTools.includes("*");
+      // P1-74 / D7：计费问数身份即使未显式授予 continue，也按数据问数能力获得逃生可达。
+      const canContinue = allowedTools.includes("lucy_continue_question") || allowedTools.includes("*") || budgetEscapeToolReachable(allowedTools);
+      const canBegin = allowedTools.includes("lucy_begin_question") || allowedTools.includes("*");
       const budgetDecision = await questionBudget.consumePersisted(
         requestMeta.lucyTurnId,
         Date.now(),
@@ -4280,7 +6146,8 @@ async function buildDenialRepairPayload(
         {
           identityKey: budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
           sessionId: requestMeta.lucySessionId,
-          canContinue
+          canContinue,
+          canBegin
         }
       );
       if (budgetDecision.action === "reject") {
@@ -4353,7 +6220,9 @@ async function buildDenialRepairPayload(
                 reason: budgetDecision.reason,
                 partial: budgetDecision.partial,
                 continueToken: budgetDecision.continueToken,
-                continuable: budgetDecision.continuable
+                continuable: budgetDecision.continuable,
+                // P1-74 / D4：结构化下一步（软信封；预算终止不是权限拒绝）。
+                ...(budgetDecision.nextStep ? { next_step: budgetDecision.nextStep } : {})
               })
             }]
           }
@@ -4377,7 +6246,11 @@ async function buildDenialRepairPayload(
               continuationMatched: budgetDecision.continuationMatched ?? false,
               continuationCreditLeft: budgetDecision.continuationCreditLeft ?? false,
               canContinueByCapability: budgetDecision.canContinueByCapability ?? false
-            }
+            },
+            // REQ-030-035／P1-14：预算终止行写入可复盘快照（不加进 MCP 响应体）。
+            ...("budgetSnapshot" in budgetDecision && budgetDecision.budgetSnapshot
+              ? { budgetSnapshot: budgetDecision.budgetSnapshot as BudgetSnapshot }
+              : {})
           },
           // 闸序事实：ACL 裁决（上方 aclCheck）先于预算闸。预算终止时授权**已经
           // 裁决通过**，因此显式记录该凭据 —— 预算桶不得覆盖已发生的授权裁决，
@@ -4419,10 +6292,38 @@ async function buildDenialRepairPayload(
           requestId: budgetDecision.ticket?.requestId ?? null
         };
         const previousFact = (argsSummary?.budgetContinuation ?? {}) as Record<string, unknown>;
-        argsSummary = { ...(argsSummary ?? {}), budgetContinuation: { ...previousFact, ...appliedFact } };
+        // REQ-030-035 R3：续查换窗生效行带换窗前快照（eventKind=continuation_rollover）。
+        const rolloverSnap =
+          "budgetSnapshot" in budgetDecision ? budgetDecision.budgetSnapshot : undefined;
+        argsSummary = {
+          ...(argsSummary ?? {}),
+          budgetContinuation: { ...previousFact, ...appliedFact },
+          ...(rolloverSnap ? { budgetSnapshot: rolloverSnap } : {})
+        };
+      }
+      if (budgetDecision.reopened) {
+        // P1-74 / Task 2：new_question 重开在**本次数据调用**兑现 —— 换窗与准入
+        // 同一事务已提交；预算行解除旧 turn 归属。清除**仍为当前值的** reported-turn
+        // 指针（只 forget 旧 turnId，不碰其它候选），不新建上报 turn／BindingSession。
+        const appliedReopen = {
+          applied: true,
+          windowId: budgetDecision.ticket?.windowId ?? null,
+          round: budgetDecision.ticket?.round ?? null,
+          requestId: budgetDecision.ticket?.requestId ?? null
+        };
+        const previousReopen = (argsSummary?.budgetReopen ?? {}) as Record<string, unknown>;
+        const rolloverSnap =
+          "budgetSnapshot" in budgetDecision ? budgetDecision.budgetSnapshot : undefined;
+        argsSummary = {
+          ...(argsSummary ?? {}),
+          budgetReopen: { ...previousReopen, ...appliedReopen },
+          ...(rolloverSnap ? { budgetSnapshot: rolloverSnap } : {})
+        };
+        if (requestMeta.lucyTurnId) reportedTurns.forget(requestMeta.lucyTurnId);
       }
       if (budgetDecision.ticket) {
         const ticket = budgetDecision.ticket;
+        tightenSemanticReadBudget(readWait, ticket, questionBudget.snapshotScope(ticket.scopeKey));
         // Spec 162 §6.2 / SC-13：res.close 只取消上游。结算等上游 close（取消确认），
         // 或绝对执行时限。断开本身不清定时器，也不按断开时刻少计。
         bindQuestionBudgetSettlement({
@@ -4454,17 +6355,93 @@ async function buildDenialRepairPayload(
     }
 
     if (toolName === "connection_list" || toolName === "lucy_catalog" || toolName === "kx_catalog") {
-      const data = toolName === "connection_list"
-        ? await connectionList(identity)
-        : toolName === "lucy_catalog"
-          ? await lucyCatalog(identity)
-          : await kxCatalog(identity);
+      const handler = trace.start("local_handler");
+      // P0-2：独立目录读取有并发上限与客户端取消；结局不得记成功（见 settleCatalogWithoutResult）。
+      const bounded = toolName === "lucy_catalog";
+      const settleCatalogWithoutResult = async (errorDetail: string, reasonCode: "cancelled" | "execution_unavailable") => {
+        handler.end({ status: "error", reasonCode, attrs: { handler: "catalog", detail: errorDetail } });
+        if (errorDetail === "client_disconnected") {
+          if (!res.destroyed && !res.writableEnded) res.destroy();
+        } else {
+          const busyBody = JSON.stringify({
+            jsonrpc: "2.0",
+            id: requestId,
+            result: { isError: true, content: [{ type: "text", text: "目录读取繁忙，请稍后重试。" }] }
+          });
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(busyBody);
+        }
+        recordRequestAudit({
+          ts: new Date().toISOString(),
+          userId: identity.userId,
+          client: identity.client,
+          tool: toolName,
+          argsSummary,
+          ...queryMeta,
+          outcome: "error",
+          errorDetail,
+          executionEvidence: executionEvidenceFromObservation({ notExecuted: true, authorizationAllowed: true }),
+          durationMs: Date.now() - start,
+          requestId,
+          ...requestMeta,
+          ...(await auditMeta(identity, "allowed")),
+        });
+        recordMcpTraceForTool({
+          traceId,
+          identity,
+          toolName,
+          status: "error",
+          startedAt: new Date(start).toISOString(),
+          turnId: requestMeta.lucyTurnId ?? null,
+          sessionId: requestMeta.lucySessionId ?? null,
+          requestId,
+          argsSummary,
+          allowed: true,
+          reason: "allowed",
+          matchedRule: decision.reason
+        });
+      };
+      if (bounded && catalogWorkActive >= (catalogWorkTestHooks.capacity ?? CATALOG_WORK_MAX_CONCURRENT)) {
+        await settleCatalogWithoutResult("catalog_capacity_full", "execution_unavailable");
+        return;
+      }
+      if (bounded) catalogWorkActive += 1;
+      const catalogTimings: Record<string, number> = {};
+      let data: Awaited<ReturnType<typeof lucyCatalog>> | Awaited<ReturnType<typeof kxCatalog>> | Awaited<ReturnType<typeof connectionList>>;
+      try {
+        if (bounded) await catalogWorkTestHooks.beforeCatalog?.(readWait.signal);
+        data = await (toolName === "connection_list"
+          ? connectionList(identity)
+          : bounded
+            ? lucyCatalog(identity, { signal: readWait.signal, timings: catalogTimings })
+            : kxCatalog(identity));
+      } catch (error) {
+        if (bounded && (readWait.signal.aborted || res.destroyed)) {
+          await settleCatalogWithoutResult("client_disconnected", "cancelled");
+          return;
+        }
+        handler.end({ status: "error", reasonCode: "internal_error", attrs: { handler: "catalog" } });
+        throw error;
+      } finally {
+        if (bounded) catalogWorkActive -= 1;
+      }
+      // 构建完成时客户端若已离开，不得记成功（P0-2）。
+      if (bounded && (readWait.signal.aborted || res.destroyed)) {
+        await settleCatalogWithoutResult("client_disconnected", "cancelled");
+        return;
+      }
+      const serializeStart = performance.now();
       const responseBody = JSON.stringify({
         jsonrpc: "2.0",
         id: requestId,
         result: {
           content: [{ type: "text", text: JSON.stringify(data, null, 2) }]
         }
+      });
+      handler.end({
+        status: "ok",
+        reasonCode: "allowed",
+        attrs: { handler: "catalog", ...catalogTimings, serialize_ms: Math.round((performance.now() - serializeStart) * 10) / 10 }
       });
       res.writeHead(200, { "content-type": "application/json" });
       res.end(responseBody);
@@ -4535,13 +6512,12 @@ async function buildDenialRepairPayload(
           recordAuditEntry: recordRequestAudit
         });
         if (hiveHandled) return;
-        const block = await readSemanticRecoveryDenial(toolArgs);
+        const block = await readSemanticRecoveryDenial(toolArgs, readWait, requestId, revalidateSemanticRead);
         if (block) {
-          const responseBody = jsonRpcToolResult(requestId, JSON.stringify({
-            code: block.code,
-            message: block.message
-          }), { isError: true });
-          res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+          const responseBody = block.code === SERVICE_DRAINING
+            ? JSON.stringify({ ok: false, error: { code: SERVICE_DRAINING, message: SERVICE_DRAINING_MESSAGE } })
+            : jsonRpcToolResult(requestId, JSON.stringify({ code: block.code, message: block.message }), { isError: true });
+          res.writeHead(block.code === SERVICE_DRAINING ? 503 : 200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
           res.end(responseBody);
           recordRequestAudit({
             ts: new Date().toISOString(),
@@ -4673,22 +6649,36 @@ async function buildDenialRepairPayload(
     if (toolName === "lucy_continue_question") {
       const args = (toolArgs as Record<string, unknown> | undefined) ?? {};
       const token = typeof args.token === "string" ? args.token : "";
+      // P1-74 / D7：mode 缺省为 continue（旧客户端只传 token）；非法值由引擎判 invalid_arguments。
+      const mode: ContinuationMode | undefined = args.mode === "new_question" || args.mode === "continue"
+        ? args.mode
+        : typeof args.mode === "string"
+          ? (args.mode as ContinuationMode)
+          : undefined;
       const scopeKey = budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? "");
       const declared = await questionBudget.declareContinuation(
         questionBudgetScopeMode() === "stable"
           ? budgetScopeKey(scopeKey, requestMeta.lucySessionId)
           : `turn:${requestMeta.lucyTurnId ?? "none"}`,
-        token
+        token,
+        Date.now(),
+        mode
       );
       const responseBody = jsonRpcToolResult(
         requestId,
         JSON.stringify(declared.ok
-          ? { ok: true, idempotent: declared.idempotent === true, declared: declared.declared === true }
+          ? {
+              ok: true,
+              idempotent: declared.idempotent === true,
+              declared: declared.declared === true,
+              ...(declared.reopen ? { reopen: true } : {})
+            }
           : { ok: false, reason: declared.reason }),
         declared.ok ? {} : { isError: true }
       );
       res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
       res.end(responseBody);
+      const reopen = declared.ok === true && declared.reopen === true;
       recordRequestAudit({
         ts: new Date().toISOString(),
         userId: identity.userId,
@@ -4696,27 +6686,75 @@ async function buildDenialRepairPayload(
         tool: toolName,
         argsSummary: {
           tokenPresent: token.length > 0,
+          mode: mode ?? "continue",
           // Spec 162 §6.7 / SC-30：续查**声明**事实。与后续数据调用上的
-          // `budgetContinuation.applied` 是两条可区分事实。
+          // `budgetContinuation.applied` / `budgetReopen.applied` 是可区分事实。
           budgetContinuation: {
             declared: declared.ok === true && declared.declared === true,
             idempotent: declared.ok === true && declared.idempotent === true,
+            reopen,
             windowId: declared.ok ? declared.windowId ?? null : null,
             round: declared.ok ? declared.round ?? null : null
           }
         },
         outcome: declared.ok ? "ok" : "error",
-        decisionReason: declared.ok ? "budget_continuation_declared" : declared.reason,
+        decisionReason: declared.ok ? (reopen ? "budget_reopen_declared" : "budget_continuation_declared") : declared.reason,
         errorDetail: declared.ok ? undefined : declared.reason,
         durationMs: Date.now() - start,
         responseBytes: Buffer.byteLength(responseBody),
         requestId,
         ...requestMeta,
-        ...(await auditMeta(identity, declared.ok ? "budget_continuation_declared" : declared.reason)),
+        ...(await auditMeta(identity, declared.ok ? (reopen ? "budget_reopen_declared" : "budget_continuation_declared") : declared.reason)),
       });
       return;
     }
     if (toolName === "lucy_begin_question") {
+      // P1-60 §D2: inactive → begin_not_available，在生成 ID／写 turn／预算／BindingSession 前返回。
+      {
+        const beginScopeKey = bindingScopeKey(
+          budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
+          requestMeta.lucySessionId
+        );
+        let caliberParticipation: "inactive" | "active" | "unknown";
+        try { caliberParticipation = await classifyCaliberParticipation({ scopeKey: beginScopeKey }); }
+        catch { caliberParticipation = "unknown"; }
+        if (caliberParticipation !== "active") {
+          const reason = caliberParticipation === "inactive" ? "begin_not_available" : "caliber_binding_unresolved";
+          const message = caliberParticipation === "inactive"
+            ? "当前未启用问询上报，可直接按现有权限查询。"
+            : "本次问询的口径绑定状态不可信，本次开题未提交。";
+          const responseBody = JSON.stringify({
+            jsonrpc: "2.0",
+            id: requestId,
+            result: {
+              isError: true,
+              content: [{ type: "text", text: message }],
+              data: { reason, trace: traceId }
+            }
+          });
+          res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+          res.end(responseBody);
+          recordRequestAudit({
+            ts: new Date().toISOString(),
+            userId: identity.userId,
+            client: identity.client,
+            tool: toolName,
+            argsSummary,
+            outcome: "denied",
+            decisionReason: reason,
+            errorDetail: reason,
+            durationMs: Date.now() - start,
+            responseBytes: Buffer.byteLength(responseBody),
+            requestId,
+            ...requestMeta,
+            ...(await auditMeta(identity, "allowed")),
+          });
+          return;
+        }
+        // unknown → 既有治理 unresolved 链，不套用 D2（Spec §3.1）。
+        // active → 既有 begin 路径不变。
+      }
+
       const args = (toolArgs as Record<string, unknown> | undefined) ?? {};
       const intentSummary = typeof args.intentSummary === "string" ? args.intentSummary.trim() : "";
       if (!intentSummary) {
@@ -4758,6 +6796,7 @@ async function buildDenialRepairPayload(
         return;
       }
 
+
       const turnId = `lucy_${randomUUID()}`;
       const storePreview = storeQuestionPreviewEnabled();
       const rawQuestion = typeof args.question === "string" ? args.question : undefined;
@@ -4765,22 +6804,218 @@ async function buildDenialRepairPayload(
       const questionPreview = storePreview && rawQuestion ? redactQuestionText(rawQuestion).slice(0, maxChars) : undefined;
       const questionHash = storePreview && rawQuestion ? createHash("sha256").update(rawQuestion).digest("hex") : undefined;
 
-      try {
-        await writeConversationTurn({
-          turnId,
-          sessionId: requestMeta.lucySessionId,
-          userId: identity.userId,
-          tokenHashPrefix: identity.tokenHashPrefix,
-          platform: requestMeta.lucyPlatform,
-          client: identity.client,
-          questionHash,
-          questionPreview,
-          questionSummary: intentSummary,
-          questionSource: "reported_tool",
-          redactionVersion: "v1"
+      // ─── P0-1 问题类型口径绑定：激活判定（准备阶段） ───
+      // 显式 `caliberBindingId` 优先；否则按 O2 触发匹配，**恰好一条**才激活。
+      // 激活错（ambiguous／显式 id 不可见或不存在）→ 拒绝，**不改旧 BindingSession**。
+      const explicitBindingId = typeof args.caliberBindingId === "string" ? args.caliberBindingId.trim() : "";
+      const activation = await prepareCaliberBindingActivation({
+        identity,
+        intentSummary,
+        question: rawQuestion,
+        explicitBindingId: explicitBindingId || undefined
+      });
+      if (!activation.ok) {
+        const denial = activation.denial;
+        const responseBody = JSON.stringify({
+          jsonrpc: "2.0",
+          id: requestId,
+          result: {
+            isError: true,
+            content: [{ type: "text", text: denial.text }],
+            data: denial.payload
+          }
         });
-      } catch (err) {
-        console.error("[lucy-proxy] failed to write conversation turn", err);
+        res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+        res.end(responseBody);
+        recordRequestAudit({
+          ts: new Date().toISOString(),
+          userId: identity.userId,
+          client: identity.client,
+          tool: toolName,
+          argsSummary,
+          outcome: "denied",
+          decisionReason: denial.code,
+          errorDetail: denial.code,
+          failureDimension: denial.payload.failureDimension,
+          durationMs: Date.now() - start,
+          responseBytes: Buffer.byteLength(responseBody),
+          requestId,
+          ...requestMeta,
+          executionEvidence: executionEvidenceFromObservation({
+            authorizationAllowed: true,
+            notExecuted: true
+          }),
+          ...(await auditMeta(identity, denial.code))
+        });
+        recordMcpTraceForTool({
+          traceId,
+          identity,
+          toolName,
+          status: "denied",
+          startedAt: new Date(start).toISOString(),
+          turnId: null,
+          sessionId: requestMeta.lucySessionId ?? null,
+          requestId,
+          argsSummary,
+          allowed: false,
+          reason: denial.code,
+          policySource: "other"
+        });
+        return;
+      }
+      const chosenBinding = activation.activation.binding;
+      const registryGeneration = activation.activation.registryGeneration;
+      const caliberScopeKey = bindingScopeKey(
+        budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
+        requestMeta.lucySessionId
+      );
+
+      // ─── D11 共同提交与恢复 ───
+      // 锁序：注册表激活互斥区间（与注册表提交互斥，**不仅** identityKey＋sessionId
+      // 锁）→ 作用域锁。进入任何写入前复核：准备阶段 generation、当前绑定文件集合
+      // ＋内容摘要＋sourceMap 解析依赖。任一不满足 → `caliber_binding_unresolved`，
+      // **禁止提交旧选择**；旧 BindingSession 不变。
+      const beginOutcome = await withCaliberBindingRegistryExclusion(() =>
+        withCaliberBindingScopeLock(caliberScopeKey, async () => {
+          const proof = await verifyCurrentBindingContentAndDependencies(registryGeneration);
+          const registry = currentCaliberBindingRegistry();
+          if (
+            !registry
+            || registry.generation !== registryGeneration
+            || registrySyncPending()
+            || !proof.complete
+            || !proof.matchesCommitted
+          ) {
+            return { ok: false as const, code: "caliber_binding_unresolved" as const };
+          }
+          // ④ 前半段：先写 `preparing`（未完成提交）。失败时旧 Session 原样恢复。
+          await beginBindingSessionPreparation(caliberScopeKey, {
+            turnId,
+            registryGeneration,
+            bindingId: chosenBinding?.bindingId ?? null,
+            boundKey: chosenBinding?.boundKey ?? null,
+            caliberSnapshot: chosenBinding?.caliber ?? null
+          });
+          // ① turn 持久化
+          try {
+            await writeConversationTurn({
+              turnId,
+              sessionId: requestMeta.lucySessionId,
+              userId: identity.userId,
+              tokenHashPrefix: identity.tokenHashPrefix,
+              platform: requestMeta.lucyPlatform,
+              client: identity.client,
+              questionHash,
+              questionPreview,
+              questionSummary: intentSummary,
+              questionSource: "reported_tool",
+              redactionVersion: "v1"
+            });
+          } catch (err) {
+            console.error("[lucy-proxy] failed to write conversation turn", err);
+            await restorePriorBindingSession(caliberScopeKey);
+            return { ok: false as const, code: "persist_failed" as const };
+          }
+          // ②（可选）预算开题。预算整体关闭时不受预算存储故障牵连。
+          const begun = questionBudgetEnabled()
+            ? await questionBudget.beginQuestion({
+                identityKey: budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
+                sessionId: requestMeta.lucySessionId,
+                turnId
+              })
+            : { ok: true as const, previousTurnId: null, state: null as never };
+          if (!begun.ok) {
+            await restorePriorBindingSession(caliberScopeKey);
+            return { ok: false as const, code: "budget_failed" as const, reason: begun.reason };
+          }
+          // ③ 取代旧轮次指针
+          reportedTurns.supersede({
+            identity,
+            sessionId: requestMeta.lucySessionId,
+            turnId
+          }, begun.previousTurnId ?? undefined);
+          await bindPriorSessionCalls({
+            turnId,
+            userId: identity.userId,
+            tokenHashPrefix: identity.tokenHashPrefix,
+            sessionId: requestMeta.lucySessionId,
+            at: new Date().toISOString()
+          });
+          // ④ 后半段：提交点。仅 ④ 成功后才标 `committed`；失败／中断 → lost_or_conflict。
+          await commitBindingSession(caliberScopeKey, {
+            turnId,
+            registryGeneration,
+            bindingId: chosenBinding?.bindingId ?? null,
+            boundKey: chosenBinding?.boundKey ?? null,
+            caliberSnapshot: chosenBinding?.caliber ?? null
+          });
+          // P0-3：写入旅程词源；supersede 清旧确认／快照／用户证据（对齐 generation）。
+          const committed = await readBindingSession(caliberScopeKey);
+          const sagScope = ambiguityScopeKey(
+            budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
+            requestMeta.lucySessionId
+          );
+          await upsertJourneyOnBegin({
+            scopeKey: sagScope,
+            generation: committed.record?.generation ?? 1,
+            intentSummary,
+            question: rawQuestion ?? null
+          });
+          return { ok: true as const, previousTurnId: begun.previousTurnId };
+        })
+      );
+
+      if (!beginOutcome.ok && beginOutcome.code === "caliber_binding_unresolved") {
+        const denialText = "Access denied: caliber_binding_unresolved（口径绑定无法解析）：绑定注册表状态不可信，本次开题未提交";
+        const responseBody = JSON.stringify({
+          jsonrpc: "2.0",
+          id: requestId,
+          result: {
+            isError: true,
+            content: [{ type: "text", text: denialText }],
+            data: { reason: "caliber_binding_unresolved", failureDimension: "口径绑定" }
+          }
+        });
+        res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+        res.end(responseBody);
+        recordRequestAudit({
+          ts: new Date().toISOString(),
+          userId: identity.userId,
+          client: identity.client,
+          tool: toolName,
+          argsSummary,
+          outcome: "denied",
+          decisionReason: "caliber_binding_unresolved",
+          errorDetail: "caliber_binding_unresolved",
+          failureDimension: "口径绑定",
+          durationMs: Date.now() - start,
+          responseBytes: Buffer.byteLength(responseBody),
+          requestId,
+          ...requestMeta,
+          executionEvidence: executionEvidenceFromObservation({
+            authorizationAllowed: true,
+            notExecuted: true
+          }),
+          ...(await auditMeta(identity, "caliber_binding_unresolved"))
+        });
+        recordMcpTraceForTool({
+          traceId,
+          identity,
+          toolName,
+          status: "denied",
+          startedAt: new Date(start).toISOString(),
+          turnId: null,
+          sessionId: requestMeta.lucySessionId ?? null,
+          requestId,
+          argsSummary,
+          allowed: false,
+          reason: "caliber_binding_unresolved",
+          policySource: "other"
+        });
+        return;
+      }
+
+      if (!beginOutcome.ok && beginOutcome.code === "persist_failed") {
         const responseBody = JSON.stringify({
           jsonrpc: "2.0",
           id: requestId,
@@ -4819,16 +7054,10 @@ async function buildDenialRepairPayload(
         return;
       }
       // Spec 162 §7.6 / SC-39：预算整体关闭时，问询开题不受预算存储故障牵连。
-      const begun = questionBudgetEnabled()
-        ? await questionBudget.beginQuestion({
-            identityKey: budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
-            sessionId: requestMeta.lucySessionId,
-            turnId
-          })
-        : { ok: true as const, previousTurnId: null, state: null as never };
-      if (!begun.ok) {
+      // （预算开题与轮次取代已在上面的 D11 临界区内完成。）
+      if (!beginOutcome.ok && beginOutcome.code === "budget_failed") {
         const responseBody = jsonRpcToolResult(requestId, JSON.stringify({
-          reason: begun.reason
+          reason: beginOutcome.reason
         }), { isError: true });
         res.writeHead(503, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
         res.end(responseBody);
@@ -4839,37 +7068,25 @@ async function buildDenialRepairPayload(
           tool: toolName,
           argsSummary,
           outcome: "error",
-          decisionReason: begun.reason,
-          errorDetail: begun.reason,
+          decisionReason: beginOutcome.reason,
+          errorDetail: beginOutcome.reason,
           durationMs: Date.now() - start,
           responseBytes: Buffer.byteLength(responseBody),
           requestId,
           ...requestMeta,
-          ...(await auditMeta(identity, begun.reason)),
+          ...(await auditMeta(identity, beginOutcome.reason)),
         });
         return;
       }
-      if (begun.previousTurnId) {
+      if (beginOutcome.ok && beginOutcome.previousTurnId) {
         // Spec 162 §6.5：同身份同会话的新问询**显式取代**旧轮次。
         // 取代事实写进本次开题的审计行（不另开一行，避免污染四桶恒等式）。
         // 审计不得回传 scopeKey / identityKey —— 只记两个 turnId。
         argsSummary = {
           ...(argsSummary ?? {}),
-          budgetSupersession: { from: begun.previousTurnId, to: turnId }
+          budgetSupersession: { from: beginOutcome.previousTurnId, to: turnId }
         };
       }
-      reportedTurns.supersede({
-        identity,
-        sessionId: requestMeta.lucySessionId,
-        turnId
-      }, begun.previousTurnId ?? undefined);
-      await bindPriorSessionCalls({
-        turnId,
-        userId: identity.userId,
-        tokenHashPrefix: identity.tokenHashPrefix,
-        sessionId: requestMeta.lucySessionId,
-        at: new Date().toISOString()
-      });
       // spec §8.4: lazy, sampled purge trigger on the (low-frequency) report path — no background worker.
       if (Math.random() < Number(process.env.LUCY_QUESTION_PREVIEW_PURGE_SAMPLE_RATE ?? 0.01)) {
         purgeExpiredConversationTurns().catch((err) => {
@@ -4885,6 +7102,8 @@ async function buildDenialRepairPayload(
             type: "text",
             text: JSON.stringify({
               turnId,
+              // P0-1：本次问询旅程的生效绑定（未命中时为 null）。
+              activeBindingId: chosenBinding?.bindingId ?? null,
               note: "Subsequent tool calls within the attach window will be associated with this turn automatically; no need to pass extra params."
             })
           }]
@@ -5466,13 +7685,12 @@ async function buildDenialRepairPayload(
     rpcMethod === "tools/call"
     && (toolName === "lucy_query" || toolName === "lucy_read_source" || toolName === "lucy_explain_query")
   ) {
-    const block = await readSemanticRecoveryDenial(toolArgs);
+    const block = await readSemanticRecoveryDenial(toolArgs, readWait, requestId, revalidateSemanticRead);
     if (block) {
-      const responseBody = jsonRpcToolResult(requestId, JSON.stringify({
-        code: block.code,
-        message: block.message
-      }), { isError: true });
-      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+      const responseBody = block.code === SERVICE_DRAINING
+        ? JSON.stringify({ ok: false, error: { code: SERVICE_DRAINING, message: SERVICE_DRAINING_MESSAGE } })
+        : jsonRpcToolResult(requestId, JSON.stringify({ code: block.code, message: block.message }), { isError: true });
+      res.writeHead(block.code === SERVICE_DRAINING ? 503 : 200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
       res.end(responseBody);
       recordRequestAudit({
         ts: new Date().toISOString(),
@@ -5509,10 +7727,18 @@ async function buildDenialRepairPayload(
     }
   }
 
-  if (rpcMethod === "tools/call" && toolName === "lucy_query") {
-    const slot = acquireLucyQuerySlot(identity);
+  // P1-82：所有上游语义执行工具共用一套 Agent／Token／连接／全局容量；超额立即繁忙，不启动上游工作。
+  if (rpcMethod === "tools/call" && typeof toolName === "string" && requestWouldHitUpstreamSemanticExecution(toolName)) {
+    const argsRecord = toolArgs && typeof toolArgs === "object" && !Array.isArray(toolArgs) ? toolArgs as Record<string, unknown> : {};
+    const slot = getMcpExecutionCapacity().tryAcquire({
+      agentId: identity.userId,
+      tokenKey: identity.tokenHashPrefix,
+      connectionId: typeof argsRecord.connectionId === "string" ? argsRecord.connectionId.trim() : "",
+      enforceToken: true
+    });
     if (!slot.allowed) {
       const reason = "query_concurrency_exceeded";
+      const capacityDetail = `scope=${slot.scope}; retry_after_ms=${slot.retryAfterMs}`;
       const responseBody = JSON.stringify({
         jsonrpc: "2.0",
         id: requestId,
@@ -5520,8 +7746,9 @@ async function buildDenialRepairPayload(
           isError: true,
           content: [{
             type: "text",
-            text: `Access denied: ${reason}; active=${slot.active}; max=${slot.max}`
-          }]
+            text: `Access denied: ${reason}; active=${slot.active}; max=${slot.max}; ${capacityDetail}`
+          }],
+          _meta: { lucy: { capacityScope: slot.scope, retryAfterMs: slot.retryAfterMs } }
         }
       });
       res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
@@ -5543,7 +7770,7 @@ async function buildDenialRepairPayload(
         argsSummary,
         ...queryMeta,
         outcome: "denied",
-        errorDetail: `${reason}:active=${slot.active};max=${slot.max}`,
+        errorDetail: `${reason}:active=${slot.active};max=${slot.max};scope=${slot.scope}`,
         durationMs: Date.now() - start,
         responseBytes: Buffer.byteLength(responseBody),
         requestId,
@@ -5566,7 +7793,19 @@ async function buildDenialRepairPayload(
       });
       return;
     }
-    releaseOnResponseEnd(res, slot.release);
+    // 租约在真实上游工作结束、响应提交完成后才归还；下游连接提前关闭不会提前腾出容量（Spec D6）。
+    // 客户端在拿到回答前离开时，Lucy 会取消上游 socket，但 KTX 不会取消已发出的数据库语句（Docker 实测：断连后
+    // 语句仍运行约 8 秒）。上游 close 因此不是「真实结束」；名额再保留一段有限时间，防止「发起—断开—再发起」绕过容量。
+    const releaseLease = slot.lease.release;
+    const settleLease = (info: { upstreamStarted: boolean }) => {
+      if (info.upstreamStarted && !res.writableFinished && CANCEL_UNCONFIRMED_HOLD_MS > 0) {
+        const timer = setTimeout(releaseLease, CANCEL_UNCONFIRMED_HOLD_MS);
+        timer.unref?.();
+        return;
+      }
+      releaseLease();
+    };
+    if (!onMcpWorkSettled(settleLease)) releaseOnResponseEnd(res, releaseLease);
   }
 
   if (
@@ -5585,9 +7824,24 @@ async function buildDenialRepairPayload(
       queryMeta,
       queryTables,
       traceId,
+      argsBeforeRewrite,
+      requestPinnedCaliber,
+      sourceSelection: sourceSelectionForAv,
+      forcedFilters: forcedFiltersForAv,
       recordAuditEntry: recordRequestAudit
     });
     if (hiveHandled) return;
+  }
+
+  // P1-37 U2（O6 取证，KTX 0.16.0）：`sl_query` 要求 `measures` 为非空数组，与其他入参无关；
+  // 缺失或为空时上游必然拒绝，且其错误文案会泄露内部工具名 `sl_query`。这里只复制该必然拒绝的条件，
+  // 在转发前以 Lucy 工具名＋示例返回；放在 Hive 分流之后，只影响真正要转发给 KTX 的请求。
+  if (rpcMethod === "tools/call" && toolName === "lucy_query") {
+    const measuresReason = lucyQueryMeasuresRequiredReason(toolArgs);
+    if (measuresReason) {
+      await respondInvalidArguments(measuresReason, LUCY_QUERY_MEASURES_HINT);
+      return;
+    }
   }
 
   let outboundBody = body;
@@ -5604,14 +7858,21 @@ async function buildDenialRepairPayload(
   // `initialize`, `tools/list` and `tools/call` responses are all buffered before
   // being rewritten, so they are read here once and passed down. Only these paths
   // can recover a refused upstream session (a piped response cannot be retried).
-  const bufferedUpstream = rpcMethod === "initialize" || rpcMethod === "tools/list" || rpcMethod === "tools/call";
+  // P1-37 U3a：`ping` 也走带恢复的缓冲路径（失效会话上 ping 同样得到 404）。
+  const bufferedUpstream = rpcMethod === "initialize" || rpcMethod === "tools/list" || rpcMethod === "tools/call" || rpcMethod === "ping";
+  // Strat-B DRAIN：KTX 上游语义 tools/call 计入在途，供 beginAdmissionDrain 有界排空。
+  const trackKtxUpstream =
+    rpcMethod === "tools/call" &&
+    typeof toolName === "string" &&
+    requestWouldHitUpstreamSemanticExecution(toolName);
   let upstream: IncomingMessage;
   let upstreamBody = "";
   let upstreamSession: UpstreamSessionState | undefined;
+  if (trackKtxUpstream) trackUpstreamSemanticEnter();
   try {
     if (rpcMethod === "initialize") {
       // `initialize` is what establishes the session; never inject one into it.
-      upstream = await forwardToKtx(req.method ?? "POST", MCP_UPSTREAM_PATH, headersWithOwnedSession(identity, req.headers), outboundBody, undefined, captureUpstreamRequest);
+      upstream = await withUpstreamSpan("upstream_handshake", () => forwardToKtx(req.method ?? "POST", MCP_UPSTREAM_PATH, headersWithOwnedSession(identity, req.headers), outboundBody, undefined, captureUpstreamRequest));
       upstreamBody = await readUpstreamBody(upstream);
     } else if (bufferedUpstream) {
       const forwarded = await forwardToKtxWithSession(
@@ -5626,21 +7887,47 @@ async function buildDenialRepairPayload(
       upstreamBody = forwarded.body;
       upstreamSession = forwarded.session;
     } else {
-      upstream = await forwardToKtx(
+      upstream = await withUpstreamSpan("upstream_call", () => forwardToKtx(
         req.method ?? "POST",
         MCP_UPSTREAM_PATH,
         headersWithOwnedSession(identity, req.headers),
         outboundBody,
         resolveOutboundSession(identity, req.headers),
         captureUpstreamRequest
-      );
+      ));
     }
   } catch (err) {
     if (rpcMethod === "initialize") {
       // The client gets a 200 but KTX holds no session, so anything cached for
       // this Token is stale; drop it and let the next data call re-handshake.
       clearUpstreamSession(upstreamSessionOwner(identity));
-      const instructions = instructionsInjectionEnabled() ? await buildRoleAwareInstructions(identity) : undefined;
+      // P1-75 §2.2：本地协议回退走同一指引决策，只下发基础指引。
+      let instructions: string | undefined;
+      if (instructionsInjectionEnabled()) {
+        const decision = await decideInitializeInstructions(identity, requestMeta.lucySessionId, {
+          ingressMonoMs: readWait.ingressMonoMs, clientSignal: readWait.signal, protocolFallback: true
+        });
+        if (decision.kind === "disconnected" || decision.kind === "revoked") {
+          const settled = settleInitializeWithoutInstructions(decision, res);
+          recordRequestAudit({
+            ts: new Date().toISOString(),
+            userId: identity.userId,
+            client: identity.client,
+            tool: rpcMethod,
+            outcome: settled.outcome,
+            errorDetail: settled.errorDetail,
+            durationMs: Date.now() - start,
+            responseBytes: 0,
+            requestId,
+            ...requestMeta,
+            ...(await auditMeta(identity, settled.errorDetail)),
+            skillAction: "discover"
+          });
+          return;
+        }
+        instructions = decision.text;
+      }
+      currentTrace()?.mark("local_handler", { status: "ok", attrs: { handler: "initialize_fallback" } });
       const payload = localInitializePayload(requestId, instructions);
       const responseBody = JSON.stringify(payload);
       res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
@@ -5686,7 +7973,7 @@ async function buildDenialRepairPayload(
         });
         return;
       }
-      const payload = await localToolsListPayload(identity, requestId);
+      const payload = await localToolsListPayload(identity, requestId, requestMeta.lucySessionId);
       const responseBody = JSON.stringify(payload);
       res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
       res.end(responseBody);
@@ -5713,9 +8000,12 @@ async function buildDenialRepairPayload(
       return;
     }
     if (rpcMethod === "tools/call") {
-      const reason = upstreamFailureReason(err);
-      const responseBody = JSON.stringify(rpcErrorResponse(requestId, "KTX upstream unavailable", reason));
-      res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
+      const draining = readWait.waited && ["DRAINING", "STOPPING", "STOPPED"].includes(getProcessLifecyclePhase());
+      const reason = draining ? SERVICE_DRAINING : upstreamFailureReason(err);
+      const responseBody = draining
+        ? JSON.stringify({ ok: false, error: { code: SERVICE_DRAINING, message: SERVICE_DRAINING_MESSAGE } })
+        : JSON.stringify(rpcErrorResponse(requestId, "KTX upstream unavailable", upstreamFailureReason(err)));
+      res.writeHead(draining ? 503 : 200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
       res.end(responseBody);
 
       let sourceRefs: SourceRef[] = [];
@@ -5735,6 +8025,7 @@ async function buildDenialRepairPayload(
         argsSummary,
         ...queryMeta,
         outcome: "error",
+        ...(draining ? { decisionReason: SERVICE_DRAINING } : {}),
         errorDetail: `${reason}:${err instanceof Error ? err.message : String(err)}`,
         durationMs: Date.now() - start,
         responseBytes: Buffer.byteLength(responseBody),
@@ -5759,6 +8050,8 @@ async function buildDenialRepairPayload(
       return;
     }
     throw err;
+  } finally {
+    if (trackKtxUpstream) trackUpstreamSemanticLeave();
   }
 
   if (upstreamSession?.recovered) {
@@ -5788,7 +8081,29 @@ async function buildDenialRepairPayload(
   }
 
   if (rpcMethod === "initialize" && instructionsInjectionEnabled()) {
-    const initResult = await writeInitializeResponse(identity, upstream, upstreamBody, res, requestId);
+    // P1-75 §2.2：上游握手按既有协议完成后，动态指引在 1 秒（自 ingress）内决策；到点／失败／容量满走基础指引。
+    const decision = await decideInitializeInstructions(identity, requestMeta.lucySessionId, {
+      ingressMonoMs: readWait.ingressMonoMs, clientSignal: readWait.signal
+    });
+    if (decision.kind === "disconnected" || decision.kind === "revoked") {
+      const settled = settleInitializeWithoutInstructions(decision, res);
+      recordRequestAudit({
+        ts: new Date().toISOString(),
+        userId: identity.userId,
+        client: identity.client,
+        tool: rpcMethod,
+        outcome: settled.outcome,
+        errorDetail: settled.errorDetail,
+        durationMs: Date.now() - start,
+        responseBytes: 0,
+        requestId,
+        ...requestMeta,
+        ...(await auditMeta(identity, settled.errorDetail)),
+        skillAction: "discover"
+      });
+      return;
+    }
+    const initResult = await writeInitializeResponse(upstream, upstreamBody, res, requestId, decision.text);
     recordRequestAudit({
       ts: new Date().toISOString(),
       userId: identity.userId,
@@ -5801,7 +8116,9 @@ async function buildDenialRepairPayload(
         executed: true,
         authorizationAllowed: true
       }),
-      errorDetail: initResult.injectionFailed ? initResult.errorDetail : undefined,
+      errorDetail: initResult.injectionFailed
+        ? initResult.errorDetail
+        : decision.kind === "basic" ? `instructions_basic:${decision.reason}` : undefined,
       durationMs: Date.now() - start,
       responseBytes: initResult.responseBytes,
       requestId,
@@ -5813,7 +8130,7 @@ async function buildDenialRepairPayload(
   }
 
   if (rpcMethod === "tools/list") {
-    const toolsList = await writeToolsListResponse(identity, upstream, upstreamBody, res, requestId, upstreamSession);
+    const toolsList = await writeToolsListResponse(identity, upstream, upstreamBody, res, requestId, upstreamSession, requestMeta.lucySessionId);
     // Spec 178 / T1 — compile failure short-circuits inside writeToolsListResponse
     // (HTTP 403 + JSON-RPC -32003 already on the wire). Audit must record the
     // denial with the full machine reason and the structured diagnostic;
@@ -6003,7 +8320,14 @@ async function buildDenialRepairPayload(
       queryTables,
       traceId,
       upstreamSession,
-      { scopeIntersectionEmpty }
+      {
+        scopeIntersectionEmpty,
+        originalUserFilters,
+        argsBeforeRewrite,
+        requestPinnedCaliber,
+        sourceSelection: sourceSelectionForAv,
+        forcedFilters: forcedFiltersForAv
+      }
     );
     return;
   }
@@ -6226,7 +8550,14 @@ export async function forwardAuthorizedLucyQuery(
 ): Promise<{ ok: true; payload: unknown } | { ok: false; reason: string }> {
   const decision = await authorizeAndRewrite(identity, "lucy_query", args);
   if (!decision.allowed) return { ok: false, reason: decision.reason ?? "acl_denied" };
-  const outbound = decision.forcedFilters ? { ...args, forced_filters: decision.forcedFilters } : args;
+  // P1-72: use the same mandatory carrier as the public MCP path. Bundled
+  // KTX ignores forced_filters, so forwarding only that field would lose RLS.
+  let outbound: Record<string, unknown>;
+  try {
+    outbound = applyLucyQueryForcedFilters(args, decision.forcedFilters);
+  } catch {
+    return { ok: false, reason: "row_policy_forced_filters_invalid" };
+  }
   const projectRoot = await resolveProjectRoot();
   const hiveDecision = await resolveAndMaybeServeHiveTool({
     projectRoot,
@@ -6245,13 +8576,17 @@ export async function forwardAuthorizedLucyQuery(
     return { ok: true, payload };
   }
   try {
-    const sessionId = getUpstreamSession(upstreamSessionOwner(identity)) ?? await handshakeUpstreamSession(identity);
+    const held = getUpstreamSession(upstreamSessionOwner(identity));
+    const sessionId = held ?? (await (async () => {
+      const recovery = await handshakeUpstreamSession(identity);
+      return recovery.ok ? recovery.sessionId : undefined;
+    })());
     if (!sessionId) return { ok: false, reason: "execution_interrupted" };
     const body = Buffer.from(JSON.stringify({
       jsonrpc: "2.0",
       id: `lucy-offline-batch-${randomUUID()}`,
       method: "tools/call",
-      params: { name: "lucy_query", arguments: outbound }
+      params: { name: "sl_query", arguments: lucyQueryUpstreamArgs(outbound) }
     }));
     const upstream = await forwardToKtx("POST", "/mcp", { "content-type": "application/json" }, body, sessionId, onRequest);
     const text = await readUpstreamBody(upstream);
@@ -6327,8 +8662,124 @@ function createBudgetPersistence(): BudgetPersistence | null {
   }
 }
 
+/**
+ * 宿主确认提交 HTTP（非 MCP tools/call）。
+ * POST /mcp/host/source-ambiguity/confirm
+ * Body: { sessionId, generation, selectedIdentity }
+ * Auth: Bearer + `actorKind=person` + `x-lucy-host-attestation`；
+ * 禁止 automation／未标注 actor／缺宿主头用同一 MCP Bearer 自证。
+ */
+async function handleSourceAmbiguityHostConfirm(
+  req: IncomingMessage,
+  res: ServerResponse
+): Promise<boolean> {
+  const pathname = (req.url ?? "").split("?")[0];
+  if (pathname !== SOURCE_AMBIGUITY_CONFIRM_PATH && pathname !== `${SOURCE_AMBIGUITY_CONFIRM_PATH}/`) {
+    return false;
+  }
+  if ((req.method ?? "").toUpperCase() !== "POST") {
+    const body = JSON.stringify({ error: "Method not allowed" });
+    res.writeHead(405, {
+      "content-type": "application/json",
+      "content-length": Buffer.byteLength(body),
+      allow: "POST"
+    });
+    res.end(body);
+    return true;
+  }
+  const sessionHeader =
+    normalizeHeader(req.headers["mcp-session-id"])
+    || normalizeHeader(req.headers["x-lucy-session-id"]);
+  const identify = await identifyRequestDetailed(req.headers.authorization, sessionHeader);
+  if (!identify.ok) {
+    const body = JSON.stringify({ error: "Unauthorized" });
+    res.writeHead(401, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
+    res.end(body);
+    return true;
+  }
+  const hostAttestation = normalizeHeader(req.headers[LUCY_HOST_ATTESTATION_HEADER]);
+  const hostAdmit = admitHostConfirmRequest({
+    identity: identify.identity,
+    hostAttestationHeader: hostAttestation
+  });
+  if (!hostAdmit.ok) {
+    const body = JSON.stringify({
+      error: "Forbidden",
+      reason: hostAdmit.reason,
+      detail: "Source confirmation requires actorKind=person and x-lucy-host-attestation"
+    });
+    res.writeHead(403, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
+    res.end(body);
+    return true;
+  }
+  let payload: {
+    sessionId?: unknown;
+    generation?: unknown;
+    selectedIdentity?: unknown;
+  };
+  try {
+    const raw = await readBody(req);
+    payload = JSON.parse(raw.toString("utf8")) as typeof payload;
+  } catch {
+    const body = JSON.stringify({ error: "Invalid JSON body" });
+    res.writeHead(400, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
+    res.end(body);
+    return true;
+  }
+  const sessionId =
+    typeof payload.sessionId === "string" && payload.sessionId.trim()
+      ? payload.sessionId.trim()
+      : sessionHeader;
+  const generation = typeof payload.generation === "number" ? payload.generation : Number.NaN;
+  const selected = payload.selectedIdentity;
+  const identityOk =
+    selected
+    && typeof selected === "object"
+    && !Array.isArray(selected)
+    && typeof (selected as SourceIdentity).connectionId === "string"
+    && typeof (selected as SourceIdentity).schema === "string"
+    && typeof (selected as SourceIdentity).sourceName === "string"
+    && typeof (selected as SourceIdentity).physicalTable === "string";
+  if (!sessionId || !Number.isInteger(generation) || !identityOk) {
+    const body = JSON.stringify({
+      error: "Invalid confirm payload",
+      detail: "sessionId, generation, selectedIdentity required"
+    });
+    res.writeHead(400, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
+    res.end(body);
+    return true;
+  }
+  const identityKey = budgetIdentityKey(
+    identify.identity.userId,
+    identify.identity.tokenHashPrefix ?? ""
+  );
+  const scopeKey = ambiguityScopeKey(identityKey, sessionId);
+  const attested = await attestSourceConfirmation({
+    scopeKey,
+    generation,
+    selectedIdentity: selected as SourceIdentity
+  });
+  if (!attested.ok) {
+    const body = JSON.stringify({ ok: false, reason: attested.reason });
+    res.writeHead(409, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
+    res.end(body);
+    return true;
+  }
+  const body = JSON.stringify({
+    ok: true,
+    confirmedSourceKey: attested.journey.confirmedSourceKey,
+    generation: attested.journey.generation
+  });
+  res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(body) });
+  res.end(body);
+  return true;
+}
+
 export function buildProxy(options: BuildProxyOptions = {}) {
   assertSkillsPassthroughPolicy();
+  // P1-82：容量上限按本次启动的环境装配（计数保留）；顺序非法时修正并告警，不让进程起不来。
+  getMcpExecutionCapacity().configure(resolveCapacityLimits().limits);
+  buildBasicInstructions(); // 预热进程级基础指引：降级路径只同步取值。
   const ledger = options.ledger ?? new ReleaseLedger();
   const skillsPassthroughEnabled = skillsPassthroughRequested();
   const port = Number(process.env.LUCY_PROXY_PORT ?? 7879);
@@ -6353,7 +8804,32 @@ export function buildProxy(options: BuildProxyOptions = {}) {
   void runStartupRecoveryScan();
 
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
+    // Atomic SERVING check + ticket precedes every async admission/dispatch step.
+    // GET is an idle transport subscription, not an accepted business RPC.
+    const work = req.method === "GET" ? null : admitMcpProcessWork(res);
+    const phase = getProcessLifecyclePhase();
+    if ((work && !work.ok) || phase === "DRAINING" || phase === "STOPPING" || phase === "STOPPED") {
+      res.writeHead(503, { "content-type": "application/json", "cache-control": "no-store" });
+      const denied = work && !work.ok ? work.error : null;
+      res.end(JSON.stringify({ ok: false, error: {
+        code: denied?.code ?? SERVICE_DRAINING, message: denied?.message ?? SERVICE_DRAINING_MESSAGE,
+        ...(denied && "requestId" in denied ? { requestId: denied.requestId, deadlineAt: denied.deadlineAt, rejectedAt: denied.rejectedAt } : {})
+      } }));
+      return;
+    }
+    const idleReloadError = req.method === "GET" ? mcpReloadAdmissionError() : null;
+    if (idleReloadError) {
+      res.writeHead(503, { "content-type": "application/json", "cache-control": "no-store" });
+      res.end(JSON.stringify({ ok: false, error: { code: idleReloadError.code, message: idleReloadError.message,
+        requestId: idleReloadError.requestId, deadlineAt: idleReloadError.deadlineAt, rejectedAt: idleReloadError.rejectedAt } }));
+      return;
+    }
+    const readWait = createSemanticReadWaitContext(req, res, "");
+    const handle = async () => {
     try {
+      // 宿主 attested 确认：非 tools/call，先于 MCP 准入信封校验。
+      if (await handleSourceAmbiguityHostConfirm(req, res)) return;
+
       // T04-3: stamp before admission so a narrowing committed while identity
       // is being resolved still covers this request.
       const authorizationStamp = currentAuthorizationSequence();
@@ -6361,6 +8837,7 @@ export function buildProxy(options: BuildProxyOptions = {}) {
       // 入口身份在**准入之前**分配：operation_id / attempt_id / ingress_event_id
       // 同时分配（D3）。被拒绝的请求也有 attempt_id，只是 execution=not_executed。
       const ingress = allocateIngressIdentity({ endpointId: "mcp-http", operationPrefix: "mcp" });
+      readWait.ingressId = ingress.operationId;
       const admitted = await admitMcpRequest(req, res, ADMISSION_AUDIT, {
         skillsPassthroughEnabled,
         readBody,
@@ -6423,6 +8900,7 @@ export function buildProxy(options: BuildProxyOptions = {}) {
         requestId: shape.requestId,
         isCurrent: () => barrier.isCurrent(),
         config: options.responseCommit,
+        onWorkRegistered: trackMcpResponseCommit,
         onSettled: options.onOperationSettled
       });
       if (!gated) return;
@@ -6430,7 +8908,7 @@ export function buildProxy(options: BuildProxyOptions = {}) {
         if (admitted.route === "skills") {
           await handleSkillsPassthrough(req, res, admitted);
         } else if (req.method === "POST") {
-          await handlePost(req, res, admitted);
+          await handlePost(req, res, admitted, readWait);
         } else {
           await handlePassthrough(req, res, admitted);
         }
@@ -6443,6 +8921,11 @@ export function buildProxy(options: BuildProxyOptions = {}) {
         res.end(JSON.stringify({ error: "Proxy error", detail }));
       }
     }
+    };
+    try {
+      if (work?.ok) await work.run(handle);
+      else await handle();
+    } finally { readWait.close(); }
   });
 
   return { server, host, port };

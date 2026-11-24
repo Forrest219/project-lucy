@@ -3,7 +3,11 @@ import os from "node:os";
 import path from "node:path";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { agentCommitTestHooks } from "../admin/agents.js";
+import * as configAuditWrite from "../admin/config-audit-write.js";
+import * as accessRecovery from "../access-recovery.js";
+import * as fsSafe from "../fs-safe.js";
+import { activeCommittedView, startDisplayReconciler, stopDisplayReconciler } from "../display-snapshot.js";
+import { agentCommitTestHooks, agentStatisticsDisplayTestState } from "../admin/agents.js";
 import { buildServer } from "../index";
 import { isMcpProtocolMethod } from "../proxy/usage-classification.js";
 
@@ -28,16 +32,21 @@ const KX_TEMPLATE_NAMES = [
 vi.mock("../admin/audit.js", () => ({
   getAuditDb: vi.fn(() => ({
     prepare: vi.fn((sql: string) => {
-      if (sql.includes("ROW_NUMBER() OVER")) {
+      if (sql.includes("ROW_NUMBER() OVER") || sql.includes("WITH configured")) {
         return {
-          all: vi.fn((...userIds: string[]) => auditRows
-            .filter((row) => userIds.includes(row.user_id))
-            .sort((a, b) => b.ts.localeCompare(a.ts)))
+          all: vi.fn((...args: unknown[]) => {
+            const userIds = args.filter(
+              (value): value is string => typeof value === "string" && !/^\d{4}-\d{2}-\d{2}T/.test(value)
+            );
+            return auditRows
+              .filter((row) => userIds.includes(row.user_id))
+              .sort((a, b) => b.ts.localeCompare(a.ts));
+          })
         };
       }
       // M55 + Spec 128 Task 7: COUNT(DISTINCT token_hash_prefix) can be called
       // per-agent (args: userId, startIso, endIso) or globally (args: startIso, endIso).
-      if (sql.includes("COUNT(DISTINCT token_hash_prefix)")) {
+      if (sql.includes("COUNT(DISTINCT token_hash_prefix)") && !sql.includes("AS business_calls7")) {
         const isGlobal = !sql.includes("user_id = ?");
         return {
           get: vi.fn((...args: unknown[]) => {
@@ -65,36 +74,59 @@ vi.mock("../admin/audit.js", () => ({
           })
         };
       }
-      if (sql.includes("AS business_calls7")) {
+      const parseWindowedUserArgs = (args: unknown[]) => {
+        const userIds: string[] = [];
+        let index = 0;
+        while (index < args.length && typeof args[index] === "string" && !/^\d{4}-\d{2}-\d{2}T/.test(String(args[index]))) {
+          userIds.push(args[index] as string);
+          index += 1;
+        }
+        const startMs = Date.parse(String(args[index]));
+        const endMs = Date.parse(String(args[index + 1]));
+        return { userIds, startMs, endMs };
+      };
+      const statsForUser = (userId: string, startMs: number, endMs: number, includeLatest: boolean) => {
+        const allForUser = auditRows.filter((row) => row.user_id === userId);
+        if (allForUser.length === 0) return null;
+        const matched = allForUser.filter((row) => {
+          const ts = new Date(row.ts).getTime();
+          return Number.isFinite(startMs) && Number.isFinite(endMs)
+            ? ts >= startMs && ts < endMs
+            : false;
+        });
+        const business = matched.filter((row) => !isMcpProtocolMethod(row.tool));
+        const base = {
+          user_id: userId,
+          calls7: matched.length,
+          business_calls7: business.length,
+          protocol_calls7: matched.length - business.length,
+          usage_calls7: business.length,
+          eval_probe_calls7: 0,
+          denied7: business.filter((row) => row.outcome === "denied").length,
+          active_tokens: new Set(matched.map((row) => row.token_hash_prefix).filter(Boolean)).size
+        };
+        if (!includeLatest) return base;
+        return {
+          ...base,
+          last_seen: allForUser.map((row) => row.ts).sort().at(-1) ?? null,
+          last_business_seen: allForUser
+            .filter((row) => !isMcpProtocolMethod(row.tool))
+            .map((row) => row.ts)
+            .sort()
+            .at(-1) ?? null
+        };
+      };
+      if (sql.includes("AS last_seen") && sql.includes("last_business_seen")) {
         return {
           all: vi.fn((...args: unknown[]) => {
-            // Spec 189 — the stats query binds seven window pairs (14 params)
-            // before the user id list. The protocol set comes from the shared
-            // classification module, never from a local copy.
-            // Window bounds come from the first pair (args[0]/args[1]) so range=30d
-            // is not silently clamped to a hard-coded 7-day cutoff.
-            const startMs = Date.parse(String(args[0]));
-            const endMs = Date.parse(String(args[1]));
-            const userIds = args.slice(14) as string[];
+            const userIds = args.filter(
+              (value): value is string => typeof value === "string" && !/^\d{4}-\d{2}-\d{2}T/.test(value)
+            );
             return userIds.flatMap((userId) => {
               const allForUser = auditRows.filter((row) => row.user_id === userId);
               if (allForUser.length === 0) return [];
-              const matched = allForUser.filter((row) => {
-                const ts = new Date(row.ts).getTime();
-                return Number.isFinite(startMs) && Number.isFinite(endMs)
-                  ? ts >= startMs && ts < endMs
-                  : false;
-              });
-              const business = matched.filter((row) => !isMcpProtocolMethod(row.tool));
               return [{
                 user_id: userId,
-                calls7: matched.length,
-                business_calls7: business.length,
-                protocol_calls7: matched.length - business.length,
-                usage_calls7: business.length,
-                eval_probe_calls7: 0,
-                denied7: business.filter((row) => row.outcome === "denied").length,
-                active_tokens: new Set(matched.map((row) => row.token_hash_prefix).filter(Boolean)).size,
                 last_seen: allForUser.map((row) => row.ts).sort().at(-1) ?? null,
                 last_business_seen: allForUser
                   .filter((row) => !isMcpProtocolMethod(row.tool))
@@ -105,6 +137,22 @@ vi.mock("../admin/audit.js", () => ({
             });
           })
         };
+      }
+      if (sql.includes("AS business_calls7")) {
+        return {
+          all: vi.fn((...args: unknown[]) => {
+            const { userIds, startMs, endMs } = parseWindowedUserArgs(args);
+            return userIds.flatMap((userId) => {
+              const row = statsForUser(userId, startMs, endMs, false);
+              return row ? [row] : [];
+            });
+          })
+        };
+      }
+      // inferred-turn-maintainer.scanFull() reads the access_log high-water mark
+      // on server start; an undefined row makes every buildServer() call throw.
+      if (sql.includes("MAX(id)")) {
+        return { get: vi.fn(() => ({ id: 0 })), all: vi.fn(() => []), run: vi.fn(() => ({ lastInsertRowid: 1 })) };
       }
       return { get: vi.fn(() => undefined), all: vi.fn(() => []), run: vi.fn(() => ({ lastInsertRowid: 1 })) };
     }),
@@ -157,6 +205,7 @@ defaults:
 `;
 
 let projectRoot: string;
+let previousAuth: string | undefined;
 let prevRoot: string | undefined;
 
 async function makeProject(yamlContent = ACCESS_YAML) {
@@ -187,6 +236,8 @@ ${allEnabled.map((t) => `      - ${t}`).join("\n")}
 }
 
 beforeEach(async () => {
+  previousAuth = process.env.LUCY_WEBUI_AUTH;
+  process.env.LUCY_WEBUI_AUTH = "off";
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-08-02T12:00:00.000Z"));
   projectRoot = await makeProject();
@@ -194,9 +245,22 @@ beforeEach(async () => {
   process.env.KTX_PROJECT_ROOT = projectRoot;
   process.env.LUCY_CONTENT_ROOT = ".";
   auditRows.length = 0;
+  agentStatisticsDisplayTestState.setReader(async (input) => {
+    const { agentStatsTestExports } = await import("../admin/agents.js");
+    const { getAuditDb } = await import("../admin/audit.js");
+    const { buildAgentStatsWindow } = await import("../admin/metric-window.js");
+    const db = await getAuditDb(); const window = buildAgentStatsWindow(input.range);
+    const snapshot = agentStatsTestExports.captureAgentAuditReadSnapshot(db);
+    return { asOf: window.endIso, window, snapshot,
+      stats: [...agentStatsTestExports.queryAgentStatsFromDb(db, input.users, window, snapshot)],
+      globalActiveTokenCount: agentStatsTestExports.queryGlobalActiveTokenCount(db, window, snapshot),
+      tokenUsage: [...agentStatsTestExports.queryLastUsedMapFromDb(db, input.users.map(user=>user.id), snapshot, input.users, Date.parse(window.endIso))].map(([id,tokens])=>[id,[...tokens]]) };
+  });
 });
 
 afterEach(async () => {
+  if (previousAuth === undefined) delete process.env.LUCY_WEBUI_AUTH; else process.env.LUCY_WEBUI_AUTH = previousAuth;
+  agentStatisticsDisplayTestState.setReader();
   agentCommitTestHooks.afterCapture = null;
   agentCommitTestHooks.beforeResponse = null;
   if (prevRoot === undefined) delete process.env.KTX_PROJECT_ROOT;
@@ -418,7 +482,78 @@ describe("GET /api/admin/agents", () => {
   });
 });
 
+describe("P1-58 agent roster and statistics partitions", () => {
+  beforeEach(() => {
+    agentStatisticsDisplayTestState.reset();
+  });
+
+  it("GET ?view=roster omits audit statistics on agents", async () => {
+    auditRows.push(
+      { user_id: "zhangsan", token_hash_prefix: "sha256:aaaa", ts: "2026-08-02T08:00:00.000Z", tool: "sl_query", outcome: "ok" }
+    );
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server).get("/api/admin/agents?view=roster").expect(200);
+    expect(res.body.data.agents).toHaveLength(2);
+    expect(res.body.data.agents[0].stats).toBeUndefined();
+    expect(res.body.data.summary).toBeUndefined();
+    expect(res.body.data.meta?.snapshotVersion).toBeTruthy();
+    await app.close();
+  });
+
+  it("GET /api/admin/agents/statistics returns stats and is not swallowed by :userId", async () => {
+    auditRows.push(
+      { user_id: "zhangsan", token_hash_prefix: "sha256:aaaa", ts: "2026-08-02T08:00:00.000Z", tool: "sl_query", outcome: "ok" }
+    );
+    const app = buildServer();
+    await app.ready();
+    const res = await request(app.server).get("/api/admin/agents/statistics?range=7d").expect(200);
+    expect(res.body.data.agents[0].stats.callsLast7d).toBe(1);
+    expect(res.body.data.summary).toBeTruthy();
+    expect(res.body.data.meta.statisticsAsOf).toBeTruthy();
+    expect(res.body.data.meta.cache).toBe("miss");
+    const notFound = await request(app.server).get("/api/admin/agents/statistics").expect(200);
+    expect(notFound.body.ok).toBe(true);
+    await app.close();
+  });
+
+  it("SC-06 reuses completed statistics within 5s; refresh=true bypasses", async () => {
+    const app = buildServer();
+    await app.ready();
+    const first = await request(app.server).get("/api/admin/agents/statistics?range=7d").expect(200);
+    const asOf = first.body.data.meta.statisticsAsOf;
+    const second = await request(app.server).get("/api/admin/agents/statistics?range=7d").expect(200);
+    expect(second.body.data.meta.cache).toBe("hit");
+    expect(second.body.data.meta.statisticsAsOf).toBe(asOf);
+    const refreshed = await request(app.server).get("/api/admin/agents/statistics?range=7d&refresh=true").expect(200);
+    expect(refreshed.body.data.meta.cache).toBe("bypass");
+    await app.close();
+  });
+});
+
 describe("POST /api/admin/agents", () => {
+  it("P1-58 SC-07: a failed audit worker preserves the compatible full roster with unavailable metrics", async () => {
+    agentStatisticsDisplayTestState.setReader(async () => { throw new Error("real read unavailable"); });
+    const app = buildServer(); await app.ready();
+    const response = await request(app.server).get("/api/admin/agents?range=7d").expect(200);
+    expect(response.body.data.agents.length).toBeGreaterThan(0);
+    expect(response.body.data.summary.metricsState).toBe("unavailable");
+    expect(response.body.data.agents[0].stats.callsLast7d).toBeNull();
+    await app.close();
+  });
+  it("P1-59 SC-02: a deleted/recreated Agent cannot accept the previous lifetime's draft", async () => {
+    const app = buildServer(); await app.ready();
+    const body = { dryRun: false, agent: { id: "lifetime", name: "Lifetime", roles: ["analyst"] } };
+    await request(app.server).post("/api/admin/agents").send(body).expect(200);
+    const before = await request(app.server).get("/api/admin/agents/lifetime").expect(200);
+    await request(app.server).delete("/api/admin/agents/lifetime").expect(200);
+    await request(app.server).post("/api/admin/agents").send(body).expect(200);
+    const after = await request(app.server).get("/api/admin/agents/lifetime").expect(200);
+    expect(after.body.data.baseObjectVersion).not.toEqual(before.body.data.baseObjectVersion);
+    await request(app.server).patch("/api/admin/agents/lifetime").send({ dryRun: true,
+      baseObjectVersion: before.body.data.baseObjectVersion, patch: { note: "old draft" } }).expect(409);
+    await app.close();
+  });
   it("returns diff on dryRun", async () => {
     const app = buildServer();
     await app.ready();
@@ -570,6 +705,45 @@ describe("DELETE /api/admin/agents/:userId", () => {
     expect(yaml).not.toContain("zhangsan");
     await app.close();
   });
+
+  // P1-42 — a rolled-back delete must never be reported as deleted. The
+  // ROLLED BACK outcome is unreachable without a runtime that refuses to
+  // acknowledge the write, so it is injected for this test only (module mock,
+  // reset afterwards — see p1-row-policy-templates W8 for the same reasoning).
+  it("reports the rollback instead of `written: true` when the delete did not take effect", async () => {
+    vi.resetModules();
+    vi.doMock("../admin/access-config.js", async () => {
+      const actual = await vi.importActual<typeof import("../admin/access-config.js")>(
+        "../admin/access-config.js"
+      );
+      return {
+        ...actual,
+        writeAccessConfigFileWithAuditClosure: vi.fn(async () => ({
+          status: "rolled_back",
+          written: false,
+          runtimeAck: false,
+          recoveryRequired: false,
+          policyVersion: "policy-version-rolled-back",
+          policyRuntimeAck: false
+        }))
+      };
+    });
+    try {
+      const { buildServer: buildFreshServer } = await import("../index");
+      const app = buildFreshServer();
+      await app.ready();
+      const res = await request(app.server).delete("/api/admin/agents/zhangsan");
+      expect(res.status).toBe(500);
+      expect(res.body.ok).toBe(false);
+      expect(res.body.written).toBe(false);
+      expect(res.body.data?.written).not.toBe(true);
+      expect(res.body.error.code).toBe("ROW_POLICY_SAVE_ROLLED_BACK");
+      await app.close();
+    } finally {
+      vi.doUnmock("../admin/access-config.js");
+      vi.resetModules();
+    }
+  });
 });
 
 describe("Access Governance Gate — Agent endpoints", () => {
@@ -694,7 +868,7 @@ defaults:
           rollbackPlan: "Revert via git"
         }
       })
-      .expect(200);
+      .expect((response) => expect(response.status, JSON.stringify(response.body)).toBe(200));
     expect(ok.body.ok).toBe(true);
     expect(ok.body.data.gate.decision).toBe("override_required");
     expect(ok.body.data.written).toBe(true);
@@ -1138,7 +1312,7 @@ describe("Spec 168 Agent role set", () => {
     const res = await request(app.server)
       .post("/api/admin/agents")
       .send({ dryRun: false, agent: { id: "multi", name: "Multi", roles: ["reader", "analyst"] } })
-      .expect(200);
+      .expect((response) => expect(response.status, JSON.stringify(response.body)).toBe(200));
     expect(res.body.data.agent.roles).toEqual(["analyst", "reader"]);
     expect(res.body.data.agent.role).toBeUndefined();
     const yaml = await readFile(path.join(projectRoot, "webui", "config", "access.yaml"), "utf8");
@@ -1149,7 +1323,7 @@ describe("Spec 168 Agent role set", () => {
     const preview = await request(app.server)
       .post("/api/admin/agents")
       .send({ dryRun: true, agent: { id: "multi2", name: "Multi 2", roles: ["reader", "analyst"] } })
-      .expect(200);
+      .expect((response) => expect(response.status, JSON.stringify(response.body)).toBe(200));
     expect(preview.body.data.effectivePermissions.roleIds).toEqual(["analyst", "reader"]);
     const pairs = preview.body.data.effectivePermissions.capabilities.map(
       (capability: { tool: string; sourceName: string }) => `${capability.tool}:${capability.sourceName}`
@@ -1159,7 +1333,7 @@ describe("Spec 168 Agent role set", () => {
     expect(gateText).toContain("dataforai.superstore_orders");
     expect(gateText).toContain("dataforai.superstore_returns");
 
-    const roles = await request(app.server).get("/api/admin/roles?includeTemplates=false").expect(200);
+    const roles = await request(app.server).get("/api/admin/roles?includeTemplates=false").expect((response) => expect(response.status, JSON.stringify(response.body)).toBe(200));
     const reader = roles.body.data.roles.find((role: { id: string }) => role.id === "reader");
     expect(reader.users.map((user: { id: string }) => user.id)).toContain("multi");
     expect(reader.users.map((user: { id: string }) => user.id)).not.toContain("conflicted");
@@ -1351,7 +1525,7 @@ describe("admin agent discoverability writes", () => {
     const created = await request(app.server)
       .post("/api/admin/agents")
       .send({ dryRun: false, agent: { id: "okbot", name: "成功", role: "analyst" } })
-      .expect(200);
+      .expect((response) => expect(response.status, JSON.stringify(response.body)).toBe(200));
     expect(created.body.data.written).toBe(true);
     expect(created.body.data.after.agent.id).toBe("okbot");
     expect(created.body.data.after.version).not.toBe(created.body.data.policyVersion);
@@ -1367,5 +1541,280 @@ describe("admin agent discoverability writes", () => {
     expect(JSON.stringify(failed.body)).not.toContain('"after"');
     expect(await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8")).toBe(before);
     await app.close();
+  });
+});
+
+describe("P1-75 roster stays readable during a note-only save", () => {
+  // The busy path waits on a real recovery timer; fake timers would never fire it.
+  beforeEach(() => { vi.useRealTimers(); });
+  const ROSTER = "/api/admin/agents?view=roster&projection=summary";
+  const noteOf = (body: { data: { agents: Array<{ id: string; note?: string }> } }, id = "zhangsan") =>
+    body.data.agents.find((agent) => agent.id === id)?.note;
+  const duringWrite = (app: ReturnType<typeof buildServer>, into: Array<{ status: number; body: any }>, url = ROSTER) => async () => {
+    const res = await request(app.server).get(url);
+    into.push({ status: res.status, body: res.body });
+  };
+  async function seedNote(app: ReturnType<typeof buildServer>, note: string) {
+    await request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch: { note } }).expect(200);
+  }
+
+  it.each([ROSTER, "/api/admin/agents?view=roster"])("serves the committed old note with 200 during the write and the new note right after (%s)", async (url) => {
+    const app = buildServer();
+    await app.ready();
+    await seedNote(app, "旧备注");
+    expect(noteOf((await request(app.server).get(url).expect(200)).body)).toBe("旧备注");
+    const seen: Array<{ status: number; body: any }> = [];
+    agentCommitTestHooks.afterCapture = duringWrite(app, seen, url);
+    const saved = await request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch: { note: "新备注" } }).expect(200);
+    expect(seen).toHaveLength(1);
+    expect(seen[0].status).toBe(200);
+    expect(noteOf(seen[0].body)).toBe("旧备注");
+    const after = await request(app.server).get(url).expect(200);
+    expect(noteOf(after.body)).toBe("新备注");
+    expect(after.body.data.version).toBe(saved.body.data.after.version);
+    expect(saved.body.data.after.agent.note).toBe("新备注");
+    await app.close();
+  });
+
+  it("keeps the committed version, permission summary and note bound to one revision while the write is pending", async () => {
+    const app = buildServer();
+    await app.ready();
+    await seedNote(app, "旧备注");
+    const before = (await request(app.server).get(ROSTER).expect(200)).body;
+    const seen: Array<{ status: number; body: any }> = [];
+    agentCommitTestHooks.afterCapture = duringWrite(app, seen);
+    await request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch: { note: "新备注" } }).expect(200);
+    expect(seen[0].body.data.version).toBe(before.data.version);
+    // The runtime may already serve the new digest, so only consistency (not the revision) may differ.
+    expect(seen[0].body.data.meta.permissionsState).toBe(before.data.meta.permissionsState);
+    expect(["matched", "unconfirmed"]).toContain(seen[0].body.data.meta.runtimeConsistency);
+    expect(seen[0].body.data.agents.map((agent: { permissionSummary: unknown }) => agent.permissionSummary))
+      .toEqual(before.data.agents.map((agent: { permissionSummary: unknown }) => agent.permissionSummary));
+    expect(noteOf(seen[0].body)).toBe("旧备注");
+    await app.close();
+  });
+
+  it.each([
+    ["mixed note + name PATCH", { note: "混合", name: "改名" }],
+    ["real authority change (disable)", { enabled: false }]
+  ])("%s keeps the existing verified path (503 while pending)", async (_label, patch) => {
+    const app = buildServer();
+    await app.ready();
+    await request(app.server).get(ROSTER).expect(200);
+    const seen: Array<{ status: number; body: any }> = [];
+    agentCommitTestHooks.afterCapture = duringWrite(app, seen);
+    await request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch }).expect(200);
+    expect(seen[0].status).toBe(503);
+    expect(seen[0].body.error.code).toBe("DISPLAY_SNAPSHOT_BUSY");
+    await request(app.server).get(ROSTER).expect(200);
+    await app.close();
+  });
+
+  it("does not open the write-time read path without a verified committed roster", async () => {
+    const app = buildServer();
+    await app.ready();
+    // No roster has ever been built, so there is no committed view to serve.
+    const seen: Array<{ status: number; body: any }> = [];
+    agentCommitTestHooks.afterCapture = duringWrite(app, seen);
+    await request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch: { note: "冷启动" } }).expect(200);
+    expect(seen[0].status).toBe(503);
+    expect(noteOf((await request(app.server).get(ROSTER).expect(200)).body)).toBe("冷启动");
+    await app.close();
+  });
+
+  it("withdraws the committed view when the write is rolled back and restores normal reads", async () => {
+    const app = buildServer();
+    await app.ready();
+    await seedNote(app, "旧备注");
+    await request(app.server).get(ROSTER).expect(200);
+    const acl = await import("../proxy/acl.js");
+    vi.spyOn(acl, "evaluateRuntimeAck").mockReturnValueOnce(false);
+    const failed = await request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch: { note: "失败备注" } });
+    expect(failed.status).toBe(500);
+    const yaml = await readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+    expect(yaml).not.toContain("失败备注");
+    expect(activeCommittedView("agent-permissions")).toBeNull();
+    expect(noteOf((await request(app.server).get(ROSTER).expect(200)).body)).toBe("旧备注");
+    await app.close();
+  });
+
+  it("a concurrent second save is rejected by the publish window and the first stays consistent", async () => {
+    const app = buildServer();
+    await app.ready();
+    await seedNote(app, "旧备注");
+    await request(app.server).get(ROSTER).expect(200);
+    let second: Promise<unknown> | undefined;
+    agentCommitTestHooks.afterCapture = async () => {
+      agentCommitTestHooks.afterCapture = null;
+      second = new Promise((resolve) => {
+        request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch: { note: "第二次" } }).end((_err, res) => resolve(res));
+      });
+      await second;
+    };
+    await request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch: { note: "第一次" } }).expect(200);
+    const secondRes = (await second) as { status: number; body: { error: { code: string } } };
+    expect(secondRes.status).toBe(503);
+    expect(secondRes.body.error.code).toBe("PUBLISH_COORDINATOR_BUSY");
+    expect(noteOf((await request(app.server).get(ROSTER).expect(200)).body)).toBe("第一次");
+    expect(activeCommittedView("agent-permissions")).toBeNull();
+    await app.close();
+  });
+
+  // ── failure paths: eligibility is withdrawn BEFORE rollback / recovery runs ──
+  describe("failure paths", () => {
+    type Probe = { status: number; note?: string };
+    /** Record whether the committed view is still eligible at every rollback-capable disk write. */
+    async function watchDiskWrites() {
+        const eligibleAtWrite: boolean[] = [];
+      const realWrite = fsSafe.safeWriteAtomic;
+      const spy = vi.spyOn(fsSafe, "safeWriteAtomic").mockImplementation(async (...args: Parameters<typeof realWrite>) => {
+        eligibleAtWrite.push(activeCommittedView("agent-permissions") !== null);
+        return realWrite(...args);
+      });
+      return { eligibleAtWrite, spy };
+    }
+    async function warmRoster(app: ReturnType<typeof buildServer>) {
+      await app.ready();
+      await seedNote(app, "旧备注");
+      await request(app.server).get(ROSTER).expect(200);
+    }
+    const probe = async (app: ReturnType<typeof buildServer>): Promise<Probe> => {
+      const res = await request(app.server).get(ROSTER);
+      return { status: res.status, note: res.status === 200 ? noteOf(res.body) : undefined };
+    };
+    const accessYaml = () => readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
+
+    it("persist failure: served while pending, then withdrawn before the rollback write, then normal reads", async () => {
+      const app = buildServer();
+      await warmRoster(app);
+      const { eligibleAtWrite, spy } = await watchDiskWrites();
+      const pending: Probe[] = [];
+      let eligibleWhilePending = false;
+      const persist = vi.spyOn(configAuditWrite, "auditedWriteFile").mockImplementationOnce(async () => {
+        eligibleWhilePending = activeCommittedView("agent-permissions") !== null;
+        pending.push(await probe(app));
+        throw new Error("disk_full");
+      });
+      try {
+        const failed = await request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch: { note: "失败备注" } });
+        expect(failed.status).toBe(500);
+        expect(failed.body.ok).toBe(false);
+      } finally {
+        persist.mockRestore();
+        spy.mockRestore();
+      }
+      expect(eligibleWhilePending).toBe(true);
+      expect(pending).toEqual([{ status: 200, note: "旧备注" }]);
+      // The only disk write after the failure is the rollback, and eligibility was gone before it.
+      expect(eligibleAtWrite).toEqual([false]);
+      expect(await accessYaml()).not.toContain("失败备注");
+      expect(activeCommittedView("agent-permissions")).toBeNull();
+      expect(await probe(app)).toEqual({ status: 200, note: "旧备注" });
+      await app.close();
+    });
+
+    it("terminal audit failure: rolls back, withdraws first, never serves the rolled-back note", async () => {
+      const app = buildServer();
+      await warmRoster(app);
+      const { eligibleAtWrite, spy } = await watchDiskWrites();
+      const terminal = vi.spyOn(configAuditWrite, "completeConfigAuditTerminal").mockRejectedValueOnce(new Error("audit_terminal_down"));
+      try {
+        const failed = await request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch: { note: "审计失败备注" } });
+        expect(failed.status).toBe(500);
+        expect(failed.body.ok).toBe(false);
+        expect(failed.body.written).toBe(false);
+      } finally {
+        terminal.mockRestore();
+        spy.mockRestore();
+      }
+      // [0] = the candidate persist inside the open window, last = the rollback write after withdrawal.
+      expect(eligibleAtWrite.length).toBeGreaterThanOrEqual(1);
+      expect(eligibleAtWrite.at(-1)).toBe(false);
+      expect(await accessYaml()).not.toContain("审计失败备注");
+      expect(activeCommittedView("agent-permissions")).toBeNull();
+      expect(await probe(app)).toEqual({ status: 200, note: "旧备注" });
+      await app.close();
+    });
+
+    it("recovery latch closing mid-write refuses the committed view at read time; reads recover once it clears", async () => {
+      const app = buildServer();
+      await warmRoster(app);
+      const seen: Probe[] = [];
+      const persist = vi.spyOn(configAuditWrite, "auditedWriteFile").mockImplementationOnce(async () => {
+        seen.push(await probe(app));
+        accessRecovery.setInMemoryRecoveryRequiredSync({ reason: "test_latch" });
+        seen.push(await probe(app));
+        throw new Error("disk_full");
+      });
+      try {
+        await request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch: { note: "闩锁备注" } });
+      } finally {
+        persist.mockRestore();
+        // Isolation: never leave the process-wide recovery latch closed for the rest of the suite.
+        accessRecovery.clearInMemoryRecoveryRequiredSync();
+        await (await import("../proxy/acl.js")).commitEffectivePolicy();
+      }
+      expect(seen[0]).toEqual({ status: 200, note: "旧备注" });
+      expect(seen[1].status).toBe(503);
+      expect(await accessYaml()).not.toContain("闩锁备注");
+      expect(await probe(app)).toEqual({ status: 200, note: "旧备注" });
+      await app.close();
+    });
+
+    it("unverifiable snapshot during the write: bounded 503 (no stale 200), then the same process recovers", async () => {
+      const app = buildServer();
+      await warmRoster(app);
+      const seen: Array<Probe & { ms: number }> = [];
+      agentCommitTestHooks.afterCapture = async () => {
+        // The view can no longer be verified: refuse within the request budget, never guess.
+        stopDisplayReconciler();
+        const started = Date.now();
+        seen.push({ ...(await probe(app)), ms: Date.now() - started });
+        // Verification conditions hold again inside the same process.
+        await startDisplayReconciler();
+      };
+      try {
+        await request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch: { note: "恢复备注" } }).expect(200);
+      } finally {
+        await startDisplayReconciler();
+      }
+      expect(seen[0].status).toBe(503);
+      expect(seen[0].ms).toBeLessThan(3000);
+      const started = Date.now();
+      expect(await probe(app)).toEqual({ status: 200, note: "恢复备注" });
+      expect(Date.now() - started).toBeLessThan(3000);
+      await app.close();
+    });
+
+    // Keep this LAST in the file: a closed gate re-syncs process-wide policy state that a later test would inherit.
+    it("unverifiable rollback closes the gate: eligibility is withdrawn before the rollback attempt and reads recover after restore", async () => {
+      const app = buildServer();
+      await warmRoster(app);
+        let eligibleAtRollback: boolean | undefined;
+      const persist = vi.spyOn(configAuditWrite, "auditedWriteFile").mockImplementationOnce(async () => { throw new Error("disk_full"); });
+      const rollback = vi.spyOn(fsSafe, "safeWriteAtomic").mockImplementationOnce(async () => {
+        eligibleAtRollback = activeCommittedView("agent-permissions") !== null;
+        throw new Error("rollback_disk_down");
+      });
+      try {
+        const failed = await request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch: { note: "不可回滚备注" } });
+        expect(failed.status).toBe(503);
+        expect(failed.body.ok).toBe(false);
+        expect(failed.body.error.code).toBe("ACCESS_RECOVERY_REQUIRED");
+        expect(eligibleAtRollback).toBe(false);
+        expect(activeCommittedView("agent-permissions")).toBeNull();
+        expect(accessRecovery.getAccessRecoveryStateSync().required).toBe(true);
+      } finally {
+        persist.mockRestore();
+        rollback.mockRestore();
+        // Clears the durable marker too: a marker left behind would re-latch the process on the next read.
+        await accessRecovery.clearAccessRecoveryRequired(projectRoot);
+        await (await import("../proxy/acl.js")).commitEffectivePolicy();
+      }
+      const started = Date.now();
+      expect(await probe(app)).toEqual({ status: 200, note: "旧备注" });
+      expect(Date.now() - started).toBeLessThan(3000);
+      await app.close();
+    });
   });
 });

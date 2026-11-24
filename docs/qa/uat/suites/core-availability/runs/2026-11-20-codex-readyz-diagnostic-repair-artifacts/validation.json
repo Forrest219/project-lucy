@@ -1,0 +1,37 @@
+{
+  "targetedVitest": {
+    "passed": 31,
+    "failed": 0
+  },
+  "authVitest": {
+    "passed": 27,
+    "failed": 0
+  },
+  "nodeBash": {
+    "passed": 32,
+    "failed": 0
+  },
+  "typecheckAtRun": "PASS, zero diagnostics",
+  "expandedSmoke": {
+    "before": {
+      "passed": 19,
+      "failed": 8
+    },
+    "after": {
+      "passed": 19,
+      "failed": 8
+    },
+    "sameFailures": true,
+    "reason": "existing begin expectations; not fixed in this scope"
+  },
+  "ownedSpecPlanShape": "PASS, zero violations in five files",
+  "globalSpecDocLint": "FAIL, 5 violations in unrelated tracked page-dom-scale-assessment Plan",
+  "scopedDiffCheck": "PASS",
+  "globalDiffCheck": "FAIL, unrelated admin/agents.ts trailing whitespace",
+  "specTerminologyIaAndE2e": "PASS",
+  "restoredDocuments": "Original SC matrices and core pseudocode preserved; metadata/header uniqueness and exact mirrors verified",
+  "runtimeHashes": "all nine match final Docker source manifest",
+  "evidenceJsonAndLinks": "PASS",
+  "dockerRuns": "four final scoped runs PASS WITH GAP; all owned resources and credentials cleaned",
+  "limitations": "full F61/F63 and R-CAV incomplete; no customer change/commit/push/release"
+}

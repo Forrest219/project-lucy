@@ -1,0 +1,148 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 531,
+  "body": {
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"answer_verifiability\":{\"schema_version\":\"1\",\"sources\":[{\"connectionId\":\"hive-1\",\"schema\":\"weather\",\"sourceName\":\"city\",\"table\":\"weather.city\",\"display\":\"hive-1.weather.city\"}],\"caliber\":{\"measures\":[\"row_count\"],\"dimensions\":[],\"segments\":[],\"orderBy\":[],\"userFilters\":[],\"systemConstraints\":[],\"caliberBinding\":{\"status\":\"none\"},\"omissions\":{}},\"cutoff\":{\"status\":\"not_checked\",\"note\":\"数据截止期未校验\"},\"carriers\":{\"structuredContent\":\"projected\"}},\"connectionId\":\"hive-1\",\"dialect\":\"mysql\",\"headers\":[\"row_count\"],\"rows\":[[1]],\"totalRows\":1,\"sql\":\"SELECT COUNT(city.id) AS row_count FROM weather.city AS city LIMIT 1\"}"
+        }
+      ],
+      "structuredContent": {
+        "answer_verifiability": {
+          "schema_version": "1",
+          "sources": [
+            {
+              "connectionId": "hive-1",
+              "schema": "weather",
+              "sourceName": "city",
+              "table": "weather.city",
+              "display": "hive-1.weather.city"
+            }
+          ],
+          "caliber": {
+            "measures": [
+              "row_count"
+            ],
+            "dimensions": [],
+            "segments": [],
+            "orderBy": [],
+            "userFilters": [],
+            "systemConstraints": [],
+            "caliberBinding": {
+              "status": "none"
+            },
+            "omissions": {}
+          },
+          "cutoff": {
+            "status": "not_checked",
+            "note": "数据截止期未校验"
+          },
+          "carriers": {
+            "structuredContent": "projected"
+          }
+        },
+        "connectionId": "hive-1",
+        "dialect": "mysql",
+        "headers": [
+          "row_count"
+        ],
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "totalRows": 1,
+        "sql": "SELECT COUNT(city.id) AS row_count FROM weather.city AS city LIMIT 1"
+      },
+      "_meta": {
+        "lucy": {
+          "contract": "lucy-r1-controlled-data-service",
+          "tool": "lucy_query",
+          "upstreamTool": "sl_query",
+          "sources": [
+            {
+              "connectionId": "hive-1",
+              "schema": "weather",
+              "sourceName": "city",
+              "physicalTable": "weather.city",
+              "extractionMethod": "field_ref",
+              "confidence": "high"
+            }
+          ],
+          "guardrails": {
+            "rawSqlAllowed": false,
+            "writeOperationsAllowed": false,
+            "defaultLimit": 100,
+            "maxLimit": 1000,
+            "maxConcurrentQueries": 4,
+            "effectiveLimit": 1
+          },
+          "result": {
+            "rowCount": 1,
+            "columnCount": 1,
+            "truncated": true
+          },
+          "repair": "结果已截断，改为聚合后再取明细。",
+          "provenance": {
+            "connectionId": "hive-1",
+            "sourceName": "city",
+            "measures": [
+              {
+                "expr": "COUNT(city.id)",
+                "name": "row_count"
+              }
+            ],
+            "dimensions": null,
+            "filters": null,
+            "segments": null,
+            "orderBy": null,
+            "sourceResolution": "acl_source_map",
+            "freshness": {
+              "status": "not_checked",
+              "tool": "lucy_freshness",
+              "note": "Call lucy_freshness for metadata freshness before presenting freshness-sensitive answers."
+            },
+            "truncation": "unknown; upstream did not expose a truncated flag"
+          },
+          "answer_verifiability": {
+            "schema_version": "1",
+            "sources": [
+              {
+                "connectionId": "hive-1",
+                "schema": "weather",
+                "sourceName": "city",
+                "table": "weather.city",
+                "display": "hive-1.weather.city"
+              }
+            ],
+            "caliber": {
+              "measures": [
+                "row_count"
+              ],
+              "dimensions": [],
+              "segments": [],
+              "orderBy": [],
+              "userFilters": [],
+              "systemConstraints": [],
+              "caliberBinding": {
+                "status": "none"
+              },
+              "omissions": {}
+            },
+            "cutoff": {
+              "status": "not_checked",
+              "note": "数据截止期未校验"
+            },
+            "carriers": {
+              "structuredContent": "projected"
+            }
+          }
+        }
+      }
+    },
+    "jsonrpc": "2.0",
+    "id": 23
+  }
+}

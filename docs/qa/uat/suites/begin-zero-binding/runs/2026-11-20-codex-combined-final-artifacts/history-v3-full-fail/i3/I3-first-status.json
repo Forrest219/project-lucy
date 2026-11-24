@@ -1,0 +1,59 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 8.474,
+  "body": {
+    "ok": true,
+    "data": {
+      "release": {
+        "id": "rel_20261120_044243_350_84395083",
+        "createdAt": "2026-11-20T04:42:43.353Z",
+        "actor": "uat_owner",
+        "status": "published",
+        "trigger": "webui_publish",
+        "connectionIds": [
+          "uat-mysql"
+        ],
+        "files": [
+          {
+            "targetPath": "semantic-layer/uat-mysql/_schema/uat.yaml",
+            "kind": "schemaManifest",
+            "sha256": "730904c0d0f5150eaff763ea10be5afd0cb5de464a79a95d740c78620448aa3e",
+            "overwritten": true
+          }
+        ],
+        "changedSources": [
+          {
+            "connectionId": "uat-mysql",
+            "sourceName": "uat_begin_zero_orders"
+          }
+        ],
+        "diff": "Index: semantic-layer/uat-mysql/_schema/uat.yaml\n===================================================================\n--- semantic-layer/uat-mysql/_schema/uat.yaml\tcurrent\n+++ semantic-layer/uat-mysql/_schema/uat.yaml\tproposed\n@@ -1,1 +1,2 @@\n-{\"tables\": {\"uat_begin_zero_orders\": {\"table\": \"uat.uat_begin_zero_orders\", \"columns\": [{\"name\": \"order_id\", \"type\": \"number\", \"pk\": true}, {\"name\": \"tenant\", \"type\": \"string\"}, {\"name\": \"amount\", \"type\": \"number\"}]}}}\n\\ No newline at end of file\n+{\"tables\": {\"uat_begin_zero_orders\": {\"table\": \"uat.uat_begin_zero_orders\", \"columns\": [{\"name\": \"order_id\", \"type\": \"number\", \"pk\": true}, {\"name\": \"tenant\", \"type\": \"string\"}, {\"name\": \"amount\", \"type\": \"number\"}]}}}\n+# I3-first\n",
+        "validation": {
+          "ok": true,
+          "results": [
+            {
+              "connectionId": "uat-mysql",
+              "sourceName": "uat_begin_zero_orders",
+              "ok": true,
+              "exitCode": 0,
+              "issues": []
+            }
+          ]
+        },
+        "recoveryRequired": false,
+        "activationStatus": "confirmed",
+        "attemptId": "att_dea22fb9-741a-4086-93ae-38b5abd030d9",
+        "idempotencyKey": "zb-I3-first",
+        "snapshotId": "snap_92efed32-71fc-4e0c-a795-83a03235db7c",
+        "recoveryJournalId": "rj_2c19fe0e-60f4-41f6-8dc2-3499df66d9ac",
+        "reindex": {
+          "ok": true,
+          "exitCode": 0,
+          "stdout": "reindex\tscopes=2\tscanned=13\tupdated=0\tdeleted=0\tembeddings=-\tduration_ms=129\n",
+          "stderr": "Project: /data/lucy\nEmbeddings: not configured — indexing lexical only\nsl/lucy-ops\tscanned=12\tupdated=0\tdeleted=0\tembeddings=-\tduration_ms=103\nsl/uat-mysql\tscanned=1\tupdated=0\tdeleted=0\tembeddings=-\tduration_ms=4\n"
+        },
+        "terminalAuditPending": false
+      }
+    }
+  }
+}

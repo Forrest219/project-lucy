@@ -34,7 +34,7 @@
  * ──────────────────────────────────────────────────────────────────────────────
  */
 import { createHash } from "node:crypto";
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
 import { loadContentPaths } from "../paths.js";
@@ -241,7 +241,7 @@ interface CachedCatalog {
   overlayContentDigest?: string;
 }
 
-const catalogCache = new Map<string, CachedCatalog>();
+const catalogCache = new Map<string, { signature: string; entry: CachedCatalog }>();
 
 export function resetRowPolicyCatalogCacheForTests(): void {
   catalogCache.clear();
@@ -759,9 +759,41 @@ async function cachedCatalogEntry(
   schema?: string
 ): Promise<CachedCatalog> {
   const key = catalogCacheKey(connectionId, sourceName, schema);
+  // P1-75 增量 A：先按文件签名核对再复用；签名取构建前的值，构建期间文件变化会在下次读取时判失效。
+  const signature = await catalogFileSignature(connectionId, sourceName);
+  const hit = catalogCache.get(key);
+  if (hit && hit.signature === signature) return hit.entry;
   const built = await buildCachedCatalog(connectionId, sourceName, schema);
-  catalogCache.set(key, built);
+  catalogCache.set(key, { signature, entry: built });
   return built;
+}
+
+async function statToken(file: string): Promise<string> {
+  try {
+    const info = await stat(file);
+    return `${info.mtimeMs}:${info.size}:${info.ino}`;
+  } catch {
+    return "missing";
+  }
+}
+
+/**
+ * 字段目录依赖：Manifest 目录（增删改名）、其中全部 YAML 文件、以及 Source overlay。
+ * 任一项的 mtime／size／inode 变化即视为失效；取不到 stat 记 `missing`，同样参与比较。
+ */
+async function catalogFileSignature(connectionId: string, sourceName: string): Promise<string> {
+  const semanticLayer = (await loadContentPaths()).semanticLayer;
+  const schemaDir = path.join(semanticLayer, connectionId, "_schema");
+  const parts: string[] = [await statToken(schemaDir)];
+  let names: string[] = [];
+  try {
+    names = (await readdir(schemaDir)).filter((n) => n.endsWith(".yaml") || n.endsWith(".yml")).sort();
+  } catch {
+    // 目录缺失已由 schemaDir 的 `missing` 记录
+  }
+  for (const name of names) parts.push(`${name}=${await statToken(path.join(schemaDir, name))}`);
+  parts.push(`overlay=${await statToken(path.join(semanticLayer, connectionId, `${sourceName}.yaml`))}`);
+  return parts.join("|");
 }
 
 /**

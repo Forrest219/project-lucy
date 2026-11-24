@@ -1,9 +1,24 @@
 #!/usr/bin/env node
-import { spawn } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import { once } from "node:events";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+function resolveLucyGitSha() {
+  const fromEnv = String(process.env.LUCY_GIT_SHA ?? "").trim();
+  if (/^[0-9a-f]{40}$/.test(fromEnv)) return fromEnv;
+  try {
+    const sha = execFileSync("git", ["rev-parse", "HEAD"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+    if (/^[0-9a-f]{40}$/.test(sha)) return sha;
+  } catch {
+    /* fall through */
+  }
+  throw new Error("LUCY_GIT_SHA (40 lowercase hex) is required for docker image BUILD_REVISION");
+}
 
 const args = new Set(process.argv.slice(2));
 const runDocker = args.has("--docker");
@@ -158,6 +173,21 @@ async function fetchMcpStatus(url) {
   return res.status;
 }
 
+async function waitForMcpStatus(url, options = {}) {
+  const timeoutMs = options.timeoutMs ?? 60_000;
+  const started = Date.now();
+  let lastError;
+  while (Date.now() - started < timeoutMs) {
+    try {
+      return await fetchMcpStatus(url);
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+    }
+  }
+  throw lastError ?? new Error(`Timed out waiting for MCP ${url}`);
+}
+
 async function waitFor(url, options = {}) {
   const timeoutMs = options.timeoutMs ?? 60_000;
   const started = Date.now();
@@ -229,6 +259,8 @@ async function dockerSmoke() {
   const hostArch = process.arch === "arm64" ? "arm64" : "amd64";
   const targetPlatform = process.env.TARGETPLATFORM ?? `linux/${hostArch}`;
   const targetArch = process.env.TARGETARCH ?? hostArch;
+  const lucyGitSha = resolveLucyGitSha();
+  const lucyGitDirty = String(process.env.LUCY_GIT_DIRTY ?? "0").trim() === "1" ? "1" : "0";
   const composeEnv = {
     LUCY_WEBUI_HOST_PORT: dockerWebPort,
     LUCY_PROXY_HOST_PORT: dockerProxyPort,
@@ -236,11 +268,15 @@ async function dockerSmoke() {
     TARGETPLATFORM: targetPlatform,
     TARGETARCH: targetArch,
     KTX_VERSION: expectedKtxVersion,
-    LUCY_EXPECTED_KTX_VERSION: expectedKtxVersion
+    LUCY_EXPECTED_KTX_VERSION: expectedKtxVersion,
+    LUCY_GIT_SHA: lucyGitSha,
+    LUCY_GIT_DIRTY: lucyGitDirty
   };
   let buildEnv = {
     TARGETPLATFORM: targetPlatform,
-    TARGETARCH: targetArch
+    TARGETARCH: targetArch,
+    LUCY_GIT_SHA: lucyGitSha,
+    LUCY_GIT_DIRTY: lucyGitDirty
   };
   if (!defaultDockerConfig) {
     tempDockerConfig = await mkdtemp(path.join(tmpdir(), "lucy-docker-config-"));
@@ -253,6 +289,8 @@ async function dockerSmoke() {
     "--build-arg", `KTX_VERSION=${expectedKtxVersion}`,
     "--build-arg", `TARGETPLATFORM=${targetPlatform}`,
     "--build-arg", `TARGETARCH=${targetArch}`,
+    "--build-arg", `LUCY_GIT_SHA=${lucyGitSha}`,
+    "--build-arg", `LUCY_GIT_DIRTY=${lucyGitDirty}`,
     "-t", "project-lucy:p0-smoke",
     "."
   ], { env: buildEnv, timeoutMs: 20 * 60_000 });
@@ -273,7 +311,8 @@ async function dockerSmoke() {
     if (health?.data?.bundledKtxVersion !== expectedKtxVersion) {
       throw new Error(`docker /api/health bundledKtxVersion expected ${expectedKtxVersion}, got ${health?.data?.bundledKtxVersion}`);
     }
-    const proxyStatus = await fetchMcpStatus(`http://127.0.0.1:${dockerProxyPort}/mcp`);
+    // Proxy may lag /api/health by a few seconds after container start; retry.
+    const proxyStatus = await waitForMcpStatus(`http://127.0.0.1:${dockerProxyPort}/mcp`, { timeoutMs: 60_000 });
     if (![200, 400, 401, 403].includes(proxyStatus)) {
       throw new Error(`docker MCP proxy returned unexpected HTTP ${proxyStatus}`);
     }
@@ -283,6 +322,18 @@ async function dockerSmoke() {
     }
     await run("bash", ["scripts/release/assert-image-elf-arch.sh", "project-lucy:local", targetArch], { env: composeEnv, timeoutMs: 5 * 60_000 });
     await run("docker", ["compose", "-p", "lucy-p0-smoke", "ps"], { env: composeEnv, timeoutMs: 5 * 60_000 });
+  } catch (error) {
+    await run("docker", ["compose", "-p", "lucy-p0-smoke", "logs", "--no-color", "lucy"], {
+      capture: true,
+      env: composeEnv,
+      timeoutMs: 60_000
+    }).then((result) => {
+      if (result.stdout) console.error("[p0-smoke] docker lucy logs:\n" + result.stdout);
+      if (result.stderr) console.error(result.stderr);
+    }).catch((logError) => {
+      console.error(`[p0-smoke] failed to dump docker logs: ${logError.message}`);
+    });
+    throw error;
   } finally {
     await run("docker", ["compose", "-p", "lucy-p0-smoke", "down", "-v"], { capture: true, env: composeEnv, timeoutMs: 10 * 60_000 }).catch((error) => {
       console.error(error.message);

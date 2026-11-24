@@ -1,0 +1,171 @@
+{
+  "ack": "phase=DRAINING\npid=290",
+  "probes": {
+    "/api/livez": {
+      "httpStatus": 200,
+      "elapsedMs": 2.617,
+      "body": {
+        "ok": true
+      }
+    },
+    "/api/readyz": {
+      "httpStatus": 503,
+      "elapsedMs": 2.117,
+      "body": {
+        "ok": false,
+        "reason": "draining",
+        "data": {
+          "status": "ok",
+          "insecureTestProfile": true,
+          "lucyVersion": "0.30.0",
+          "gitSha": "6b8deec4d4750fe5f35f3510192e968844a5c0e1",
+          "gitDirty": true,
+          "bundledKtxVersion": "0.16.0",
+          "ktxRuntime": {
+            "ready": true,
+            "status": "ready",
+            "detail": "status: ready"
+          },
+          "policy": {
+            "policyVersion": "a142814f61529f940fea8fe6deb85ce567dd166f0b8499cbd5e576f191b324cc",
+            "degradedGlobal": false,
+            "degradedAgents": [],
+            "healthy": true
+          },
+          "execution": {
+            "status": "unknown",
+            "lastCheckedAt": "2026-11-20T04:52:04.985Z",
+            "unknownConnections": [
+              "lucy-ops",
+              "uat-mysql"
+            ],
+            "activation": "unknown",
+            "reload": {
+              "state": "idle"
+            },
+            "verification": {
+              "state": "unverified"
+            }
+          },
+          "dataQaInstructions": {
+            "source": "missing",
+            "length": 0,
+            "lastError": null,
+            "loadedAt": null
+          },
+          "contentLayout": {
+            "contentRoot": "/data/lucy/config",
+            "contentRootSource": "env",
+            "authoring": {
+              "semanticLayer": "/data/lucy/config/semantic-layer",
+              "wiki": "/data/lucy/config/wiki",
+              "evals": "/data/lucy/config/evals",
+              "skills": "/data/lucy/config/skills"
+            },
+            "mirror": {
+              "semanticLayer": "/data/lucy/semantic-layer",
+              "wiki": "/data/lucy/wiki",
+              "evals": "/data/lucy/evals",
+              "skills": "/data/lucy/skills"
+            },
+            "mirrorActive": true,
+            "drift": [],
+            "driftTruncated": false
+          }
+        },
+        "diagnostics": {
+          "observedAt": "2026-11-20T04:52:09.856Z",
+          "ageMs": 16647,
+          "freshness": "stale"
+        }
+      }
+    },
+    "/api/health": {
+      "httpStatus": 200,
+      "elapsedMs": 2.054,
+      "body": {
+        "ok": true,
+        "data": {
+          "status": "ok",
+          "insecureTestProfile": true,
+          "lucyVersion": "0.30.0",
+          "gitSha": "6b8deec4d4750fe5f35f3510192e968844a5c0e1",
+          "gitDirty": true,
+          "bundledKtxVersion": "0.16.0",
+          "ktxRuntime": {
+            "ready": true,
+            "status": "ready",
+            "detail": "status: ready"
+          },
+          "policy": {
+            "policyVersion": "a142814f61529f940fea8fe6deb85ce567dd166f0b8499cbd5e576f191b324cc",
+            "degradedGlobal": false,
+            "degradedAgents": [],
+            "healthy": true
+          },
+          "execution": {
+            "status": "unknown",
+            "lastCheckedAt": "2026-11-20T04:52:04.985Z",
+            "unknownConnections": [
+              "lucy-ops",
+              "uat-mysql"
+            ],
+            "activation": "unknown",
+            "reload": {
+              "state": "idle"
+            },
+            "verification": {
+              "state": "unverified"
+            }
+          },
+          "dataQaInstructions": {
+            "source": "missing",
+            "length": 0,
+            "lastError": null,
+            "loadedAt": null
+          },
+          "contentLayout": {
+            "contentRoot": "/data/lucy/config",
+            "contentRootSource": "env",
+            "authoring": {
+              "semanticLayer": "/data/lucy/config/semantic-layer",
+              "wiki": "/data/lucy/config/wiki",
+              "evals": "/data/lucy/config/evals",
+              "skills": "/data/lucy/config/skills"
+            },
+            "mirror": {
+              "semanticLayer": "/data/lucy/semantic-layer",
+              "wiki": "/data/lucy/wiki",
+              "evals": "/data/lucy/evals",
+              "skills": "/data/lucy/skills"
+            },
+            "mirrorActive": true,
+            "drift": [],
+            "driftTruncated": false
+          },
+          "eventLoop": {
+            "p99Ms": 57.311,
+            "maxMs": 134.48,
+            "windowSeconds": 60
+          }
+        },
+        "diagnostics": {
+          "observedAt": "2026-11-20T04:52:09.856Z",
+          "ageMs": 16649,
+          "freshness": "stale"
+        }
+      }
+    },
+    "newMcp": {
+      "httpStatus": 503,
+      "elapsedMs": 1.299,
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "SERVICE_DRAINING",
+          "message": "服务正在停止接收新请求，请在服务恢复后重试。"
+        }
+      }
+    }
+  }
+}

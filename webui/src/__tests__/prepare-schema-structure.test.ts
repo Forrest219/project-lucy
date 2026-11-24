@@ -1,10 +1,37 @@
-import { parse as parseYaml } from "yaml";
-import { describe, expect, it } from "vitest";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "../lib/apiClient";
 import {
   manifestTableNames,
   mergeManifestTables,
-  newTablesFromGenerated
+  newTablesFromGenerated,
+  readCheckedTableColumns
 } from "../lib/prepareSchemaStructure";
+
+const { apiPost, yamlCalls } = vi.hoisted(() => ({
+  apiPost: vi.fn(),
+  yamlCalls: { parse: 0, stringify: 0 }
+}));
+
+vi.mock("../lib/apiClient", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/apiClient")>()),
+  apiPost
+}));
+
+vi.mock("yaml", async (importOriginal) => {
+  const real = await importOriginal<typeof import("yaml")>();
+  return {
+    ...real,
+    parse: ((...args: Parameters<typeof real.parse>) => {
+      yamlCalls.parse += 1;
+      return real.parse(...args);
+    }) as typeof real.parse,
+    stringify: ((...args: Parameters<typeof real.stringify>) => {
+      yamlCalls.stringify += 1;
+      return real.stringify(...args);
+    }) as typeof real.stringify
+  };
+});
 
 const existing = `schema: dataforai
 tables:
@@ -46,5 +73,132 @@ describe("mergeManifestTables", () => {
     expect(merged).not.toContain("extra:");
     const tables = (parseYaml(merged) as { tables: Record<string, { columns: Array<{ type?: string }> }> }).tables;
     expect(tables.orders.columns[0]?.type).toBe("number");
+  });
+});
+
+type Part = { yaml: string; columnCount: number };
+
+/** Server stand-in: per-table YAML text is prebuilt, a response is plain string concatenation. */
+function serverOf(names: string[], columns: number, opts: {
+  rejected?: Record<string, string>;
+  deferOnce?: Set<string>;
+  deferAll?: boolean;
+} = {}) {
+  const entry = new Map<string, string>();
+  for (const name of names) {
+    const cols = Array.from({ length: columns }, (_, index) => ({ name: `c${index}`, type: index % 3 === 0 ? "number" : "string" }));
+    entry.set(
+      name,
+      stringifyYaml({ [name]: { table: `dw.${name}`, columns: cols } })
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => `  ${line}`)
+        .join("\n") + "\n"
+    );
+  }
+  const deferred = new Set<string>();
+  const requests: string[][] = [];
+  apiPost.mockImplementation(async (_path: string, body: { tables: string[] }) => {
+    requests.push(body.tables);
+    const readable: string[] = [];
+    const rejections: Array<{ table: string; reason: string; message: string }> = [];
+    const later: string[] = [];
+    for (const table of body.tables) {
+      if (opts.deferAll) later.push(table);
+      else if (opts.deferOnce?.has(table) && !deferred.has(table)) {
+        deferred.add(table);
+        later.push(table);
+      } else if (opts.rejected?.[table]) rejections.push({ table, reason: opts.rejected[table], message: `表「${table}」x。` });
+      else readable.push(table);
+    }
+    return {
+      schema: "dw",
+      readable: true,
+      yaml: `tables:\n${readable.map((table) => entry.get(table)).join("")}`,
+      tableCount: readable.length,
+      columnCount: readable.length * columns,
+      namesOnly: false,
+      mapped: { number: readable.length * Math.ceil(columns / 3), string: 0, time: 0 },
+      downgraded: [],
+      ...(rejections.length > 0 ? { rejections } : {}),
+      ...(later.length > 0 ? { deferred: later } : {})
+    };
+  });
+  return { requests };
+}
+
+const tableNames = (count: number) => Array.from({ length: count }, (_, index) => `t_${String(index).padStart(4, "0")}`);
+
+describe("readCheckedTableColumns", () => {
+  beforeEach(() => {
+    apiPost.mockReset();
+    yamlCalls.parse = 0;
+    yamlCalls.stringify = 0;
+  });
+
+  it("LS-10 reads 600 tables in batches of 50 and re-asks for the deferred ones", async () => {
+    const names = tableNames(600);
+    const deferOnce = new Set(["t_0003", "t_0004", "t_0100"]);
+    const { requests } = serverOf(names, 3, { deferOnce });
+    const progress: Array<[number, number]> = [];
+    const result = await readCheckedTableColumns("c1", "dw", names, (done, total) => progress.push([done, total]));
+    expect(requests.every((tables) => tables.length <= 50)).toBe(true);
+    expect(requests.length).toBe(12 + 1);
+    expect(new Set(requests.flat())).toEqual(new Set(names));
+    expect(manifestTableNames(result.yaml)).toEqual(names);
+    expect(result.tableCount).toBe(600);
+    expect(result.columnCount).toBe(1800);
+    expect(progress[0]).toEqual([0, 600]);
+    expect(progress.at(-1)?.[1]).toBe(600);
+  });
+
+  it("LS-11 accumulates 600 tables x 30 columns with one serialisation and a parse per batch", async () => {
+    const names = tableNames(600);
+    serverOf(names, 30);
+    yamlCalls.parse = 0;
+    yamlCalls.stringify = 0;
+    const started = performance.now();
+    const result = await readCheckedTableColumns("c1", "dw", names);
+    const elapsed = performance.now() - started;
+    expect(yamlCalls.stringify).toBe(1);
+    expect(yamlCalls.parse).toBeLessThanOrEqual(12 + 1);
+    expect(elapsed).toBeLessThan(5_000);
+    expect(result.columnCount).toBe(18_000);
+    expect(manifestTableNames(result.yaml)).toHaveLength(600);
+  });
+
+  it("LS-12 reads the other 597 tables and reports all three failures in one error", async () => {
+    const names = tableNames(600);
+    const { requests } = serverOf(names, 2, {
+      rejected: { t_0010: "permission", t_0300: "timeout", t_0599: "ambiguous" }
+    });
+    const failure = await readCheckedTableColumns("c1", "dw", names).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(ApiError);
+    const message = (failure as ApiError).message;
+    expect(message).toContain("有 3 张表没有读到字段");
+    expect(message).toContain("表「t_0010」没有读取权限");
+    expect(message).toContain("表「t_0300」读取超时");
+    expect(message).toContain("表「t_0599」对应多张表");
+    expect(requests).toHaveLength(12);
+  });
+
+  it("stops instead of looping when the server makes no progress (C6: single-table consecutive deferral terminates)", async () => {
+    // P1-34 §11 C2+C6: client halves batch size on all-deferred, then stops at single-table with 2 consecutive defers.
+    // With 5 tables: 50→25 (halved), 25→12, 12→6, 6→3, 3→1 (singleton), then 2x deferred per table → fail.
+    // Upper bound: batch halvings (⌈log₂5⌉=3) + 2 single-table retries × 5 tables = bounded.
+    const names = tableNames(5);
+    serverOf(names, 2, { deferAll: true });
+    const error = await readCheckedTableColumns("c1", "dw", names).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    // All 5 tables should end up as failures (C6)
+    expect((error as ApiError).message).toContain("5 张表");
+    // Upper bound on calls: should not exceed 100 (the safety limit)
+    expect(apiPost.mock.calls.length).toBeLessThan(50);
+  });
+
+  it("keeps the request order of the tables in the manifest", async () => {
+    serverOf(["b", "a", "c"], 1);
+    const result = await readCheckedTableColumns("c1", "dw", ["b", "a", "c"]);
+    expect(Object.keys((parseYaml(result.yaml) as { tables: Record<string, unknown> }).tables)).toEqual(["b", "a", "c"]);
   });
 });

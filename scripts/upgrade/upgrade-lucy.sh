@@ -32,10 +32,17 @@ Options:
       --skip-preserve-check Skip before/after preserve marker verification
   -h, --help                Show this help
 
+MCP compatibility (P1-53, optional; default off):
+  After /api/health, when LUCY_MCP_COMPAT=1, runs
+  node scripts/e2e/run-mcp-compatibility.mjs candidate (via mcp-compatibility-hook).
+  Set LUCY_MCP_URL (demo default http://127.0.0.1:57881/mcp). Missing env → BLOCKED,
+  never fake PASS. Health alone is not MCP compatibility PASS. Does not auto-rollback.
+
 Examples:
   npm run demo:upgrade
   bash scripts/upgrade/upgrade-lucy.sh -f docker-compose.yml --backup-dir inbox/backups
   bash scripts/upgrade/upgrade-lucy.sh --fresh
+  LUCY_MCP_COMPAT=1 LUCY_MCP_URL=http://127.0.0.1:57881/mcp npm run demo:upgrade
 EOF
 }
 
@@ -172,6 +179,21 @@ ensure_bootstrap_token() {
   done
 }
 
+export_product_version() {
+  local repo_version
+  repo_version="$(tr -d '[:space:]' < "${ROOT}/VERSION" 2>/dev/null || true)"
+  if [[ ! "${repo_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "[lucy-upgrade] FAIL: VERSION must use numeric X.Y.Z form; got: ${repo_version:-<empty>}" >&2
+    exit 1
+  fi
+  if [[ -n "${LUCY_VERSION:-}" && "${LUCY_VERSION}" != "${repo_version}" ]]; then
+    echo "[lucy-upgrade] FAIL: host LUCY_VERSION=${LUCY_VERSION} does not match repo VERSION=${repo_version}" >&2
+    exit 1
+  fi
+  export LUCY_VERSION="${repo_version}"
+  echo "[lucy-upgrade] product version ${LUCY_VERSION}"
+}
+
 export_source_revision() {
   local sha
   sha="$(git -C "${ROOT}" rev-parse HEAD 2>/dev/null || true)"
@@ -184,23 +206,76 @@ export_source_revision() {
     fi
     echo "[lucy-upgrade] source revision ${sha} dirty=${LUCY_GIT_DIRTY}"
   else
-    export LUCY_GIT_SHA=
-    export LUCY_GIT_DIRTY=0
-    echo "[lucy-upgrade] WARN: no source git sha; image revision will be unknown" >&2
+    echo "[lucy-upgrade] FAIL: source git sha required to stamp BUILD_REVISION; got: ${sha:-<empty>}" >&2
+    exit 1
   fi
 }
 
+# Local demo builds: prefer Tencent mirrors when unset, so a KTX cache miss
+# does not burn 120s+ on registry.npmjs.org. Opt out:
+#   LUCY_DEMO_BUILD_MIRRORS=0
+#   NPM_REGISTRY=            # empty = Dockerfile official-first ladder
+#   UV_INDEX_URL=            # empty = Dockerfile official-first ladder
+apply_demo_build_defaults() {
+  if ! printf '%s\n' "${COMPOSE_FILES[@]}" | grep -q 'deploy/compose/docker-compose.demo.yml'; then
+    return 0
+  fi
+  if [[ "${LUCY_DEMO_BUILD_MIRRORS:-1}" == "0" ]]; then
+    echo "[lucy-upgrade] demo build mirrors: disabled (LUCY_DEMO_BUILD_MIRRORS=0)"
+    return 0
+  fi
+  if [[ -z "${NPM_REGISTRY+x}" ]]; then
+    export NPM_REGISTRY="mirrors.cloud.tencent.com/npm"
+    echo "[lucy-upgrade] demo NPM_REGISTRY default: ${NPM_REGISTRY}"
+  elif [[ -z "${NPM_REGISTRY}" ]]; then
+    echo "[lucy-upgrade] NPM_REGISTRY empty: using Dockerfile npm mirror ladder"
+  else
+    echo "[lucy-upgrade] NPM_REGISTRY=${NPM_REGISTRY}"
+  fi
+  if [[ -z "${UV_INDEX_URL+x}" ]]; then
+    export UV_INDEX_URL="https://mirrors.cloud.tencent.com/pypi/simple/"
+    echo "[lucy-upgrade] demo UV_INDEX_URL default: ${UV_INDEX_URL}"
+  elif [[ -z "${UV_INDEX_URL}" ]]; then
+    echo "[lucy-upgrade] UV_INDEX_URL empty: using Dockerfile pypi mirror ladder"
+  else
+    echo "[lucy-upgrade] UV_INDEX_URL=${UV_INDEX_URL}"
+  fi
+}
+
+report_ktx_layer_status() {
+  local log_file="$1"
+  local status
+  status="$(
+    node --input-type=module -e '
+      import { readFileSync } from "node:fs";
+      import { pathToFileURL } from "node:url";
+      const lib = await import(pathToFileURL(process.argv[1]).href);
+      const log = readFileSync(process.argv[2], "utf8");
+      process.stdout.write(lib.parseKtxInstallLayerStatus(log));
+    ' "${ROOT}/scripts/upgrade/upgrade-lucy-lib.mjs" "${log_file}" 2>/dev/null || echo UNKNOWN
+  )"
+  echo "[lucy-upgrade] ktx install layer: ${status}"
+}
+
 build_and_up() {
+  local build_log
+  export_product_version
   export_source_revision
+  apply_demo_build_defaults
   if printf '%s\n' "${COMPOSE_FILES[@]}" | grep -q 'deploy/compose/docker-compose.demo.yml'; then
     bash "${ROOT}/scripts/demo/sync-demo-skills-template.sh"
   fi
+  build_log="$(mktemp "${TMPDIR:-/tmp}/lucy-upgrade-build.XXXXXX")"
+  # Always build explicitly (with plain progress) so we can report KTX CACHED/MISS,
+  # then recreate the container without a second build.
   if [[ "${NO_CACHE}" -eq 1 ]]; then
-    "${COMPOSE[@]}" build --no-cache "${SERVICE}"
-    "${COMPOSE[@]}" up -d --force-recreate --no-deps "${SERVICE}"
+    BUILDKIT_PROGRESS=plain "${COMPOSE[@]}" build --no-cache --progress=plain "${SERVICE}" 2>&1 | tee "${build_log}"
   else
-    "${COMPOSE[@]}" up -d --build --force-recreate --no-deps "${SERVICE}"
+    BUILDKIT_PROGRESS=plain "${COMPOSE[@]}" build --progress=plain "${SERVICE}" 2>&1 | tee "${build_log}"
   fi
+  report_ktx_layer_status "${build_log}"
+  rm -f "${build_log}"
+  "${COMPOSE[@]}" up -d --force-recreate --no-deps "${SERVICE}"
 }
 
 wait_for_health() {
@@ -250,6 +325,35 @@ fi
 ensure_bootstrap_token
 build_and_up
 wait_for_health
+
+# Optional MCP upgrade-compatibility candidate hook (P1-53 Task 5). Default off.
+# Exit 3 = SKIPPED (flag off); exit 2 = BLOCKED (fail closed). Never invents PASS.
+maybe_run_mcp_compat_candidate() {
+  local hook_rc=0
+  local demo_mcp_port
+  if [[ -z "${LUCY_MCP_URL:-}" ]]; then
+    if printf '%s\n' "${COMPOSE_FILES[@]}" | grep -q demo; then
+      demo_mcp_port="${LUCY_DEMO_PROXY_HOST_PORT:-57881}"
+      export LUCY_MCP_URL="${LUCY_MCP_URL:-http://127.0.0.1:${demo_mcp_port}/mcp}"
+    fi
+  fi
+  export LUCY_MCP_COMPAT_LANE="${LUCY_MCP_COMPAT_LANE:-compose}"
+  set +e
+  bash "${ROOT}/scripts/e2e/mcp-compatibility-hook.sh" run --lane "${LUCY_MCP_COMPAT_LANE}"
+  hook_rc=$?
+  set -e
+  if [[ "${hook_rc}" -eq 3 ]]; then
+    echo "[lucy-upgrade] mcp-compat: SKIPPED (set LUCY_MCP_COMPAT=1 to run candidate after health)"
+    return 0
+  fi
+  if [[ "${hook_rc}" -ne 0 ]]; then
+    echo "[lucy-upgrade] mcp-compat: blocked/failed (exit ${hook_rc}); health alone is not compatibility PASS" >&2
+    exit "${hook_rc}"
+  fi
+  echo "[lucy-upgrade] mcp-compat: candidate hook finished"
+}
+
+maybe_run_mcp_compat_candidate
 
 if [[ "${FRESH}" -eq 0 && "${SKIP_PRESERVE_CHECK}" -eq 0 && "${VOLUME_KIND}" == "named" && -n "${BEFORE_SNAPSHOT}" ]]; then
   AFTER_SNAPSHOT="$(snapshot_preserve_state || true)"

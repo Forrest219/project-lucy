@@ -1,0 +1,5 @@
+
+> webui@1.0.0 lint:terminology
+> node scripts/lint-terminology.mjs
+
+Terminology lint passed (1187 files scanned).

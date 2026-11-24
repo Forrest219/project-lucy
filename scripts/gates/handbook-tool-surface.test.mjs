@@ -72,9 +72,9 @@ test("extractObjectArrayNames reads the name field of tool-spec objects", () => 
   );
 });
 
-test("readRuntimeToolNames resolves the real repo registry to 21 grantable tools", () => {
+test("readRuntimeToolNames resolves the real repo registry to 27 grantable tools", () => {
   const names = readRuntimeToolNames(ROOT);
-  assert.equal(names.size, 21);
+  assert.equal(names.size, 27);
   for (const expected of [
     "lucy_query",
     "lucy_read_source",
@@ -96,7 +96,13 @@ test("readRuntimeToolNames resolves the real repo registry to 21 grantable tools
     "lucy_certified_route",
     "lucy_report_template",
     "lucy_ops_connection_tables",
-    "lucy_ops_source_import"
+    "lucy_ops_source_import",
+    "lucy_ops_concept_list",
+    "lucy_ops_concept_show",
+    "lucy_ops_concept_summary",
+    "lucy_ops_concept_scan",
+    "lucy_ops_concept_set_canonical",
+    "lucy_ops_concept_reject"
   ]) {
     assert.ok(names.has(expected), `runtime registry should contain ${expected}`);
   }
@@ -224,5 +230,5 @@ test("assertToolSurfaceParity reports tools documented but not registered", () =
 
 test("runToolSurfaceCheck passes on the real repo", () => {
   const result = runToolSurfaceCheck(ROOT);
-  assert.equal(result.count, 21);
+  assert.equal(result.count, 27);
 });

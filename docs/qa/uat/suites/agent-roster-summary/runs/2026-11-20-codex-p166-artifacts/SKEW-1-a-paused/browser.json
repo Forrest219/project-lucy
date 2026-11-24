@@ -1,0 +1,701 @@
+{
+  "probeRevision": 2,
+  "fixture": "SKEW-1",
+  "candidate": "a",
+  "startedAt": "2026-11-20T06:57:20.193Z",
+  "browser": "157.0.8103.79",
+  "headed": true,
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "samples": [
+    {
+      "kind": "cold-navigation",
+      "n": 0,
+      "primaryReadyMs": 896,
+      "statsReadyMs": 1053.5,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2425,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 135.39999999850988,
+          "ttfbMs": 152.70000000298023,
+          "durationMs": 233.20000000298023,
+          "transferSize": 7546434,
+          "decodedBodySize": 7546134
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 399.29999999701977,
+          "ttfbMs": 617.4000000059605,
+          "durationMs": 617.7000000029802,
+          "transferSize": 39011,
+          "decodedBodySize": 38711
+        }
+      ]
+    },
+    {
+      "kind": "cold-navigation",
+      "n": 1,
+      "primaryReadyMs": 357.30000000447035,
+      "statsReadyMs": 373.30000000447035,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2425,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 83.5,
+          "ttfbMs": 90.39999999850988,
+          "durationMs": 151.20000000298023,
+          "transferSize": 7546434,
+          "decodedBodySize": 7546134
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 263.20000000298023,
+          "ttfbMs": 83,
+          "durationMs": 83.19999999552965,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "cold-navigation",
+      "n": 2,
+      "primaryReadyMs": 276.20000000298023,
+      "statsReadyMs": 343.8999999985099,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2425,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 81.39999999850988,
+          "ttfbMs": 91.10000000149012,
+          "durationMs": 127.30000000447035,
+          "transferSize": 7546434,
+          "decodedBodySize": 7546134
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 236.89999999850988,
+          "ttfbMs": 74.5,
+          "durationMs": 74.80000000447035,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "cold-navigation",
+      "n": 3,
+      "primaryReadyMs": 391.20000000298023,
+      "statsReadyMs": 408,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2425,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 91.60000000149012,
+          "ttfbMs": 81.79999999701977,
+          "durationMs": 117.60000000149012,
+          "transferSize": 7546434,
+          "decodedBodySize": 7546134
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 237.10000000149012,
+          "ttfbMs": 73.19999999552965,
+          "durationMs": 73.39999999850988,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "cold-navigation",
+      "n": 4,
+      "primaryReadyMs": 348.5,
+      "statsReadyMs": 423.5,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2425,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 82.19999999552965,
+          "ttfbMs": 109,
+          "durationMs": 183.80000000447035,
+          "transferSize": 7546434,
+          "decodedBodySize": 7546134
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 293.79999999701977,
+          "ttfbMs": 97.20000000298023,
+          "durationMs": 97.39999999850988,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 0,
+      "primaryReadyMs": 479.79999999701977,
+      "statsReadyMs": 571.2999999970198,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 382.19999999552965,
+          "ttfbMs": 104.90000000596046,
+          "durationMs": 145.80000000447035,
+          "transferSize": 7546434,
+          "decodedBodySize": 7546134
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 557.6000000014901,
+          "ttfbMs": 88.5,
+          "durationMs": 88.69999999552965,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 1,
+      "primaryReadyMs": 262.29999999701977,
+      "statsReadyMs": 311.79999999701977,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 148.10000000149012,
+          "ttfbMs": 87.89999999850988,
+          "durationMs": 131.39999999850988,
+          "transferSize": 7546434,
+          "decodedBodySize": 7546134
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 307.79999999701977,
+          "ttfbMs": 71.60000000149012,
+          "durationMs": 71.70000000298023,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 2,
+      "error": "Error: page.waitForResponse: Target page, context or browser has been closed",
+      "visible": "visible",
+      "focused": true
+    }
+  ],
+  "requests": [
+    {
+      "at": "2026-11-20T06:57:20.553Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 0
+      },
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:20.574Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 0
+      },
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:20.732Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 0
+      },
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:20.871Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 0
+      },
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:20.929Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 0
+      },
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:57:21.462Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 0
+      },
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:21.719Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 1
+      },
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:21.739Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 1
+      },
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:21.832Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 1
+      },
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:21.938Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 1
+      },
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:22.004Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 1
+      },
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:22.028Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 1
+      },
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:57:22.262Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 2
+      },
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:22.284Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 2
+      },
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:22.378Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 2
+      },
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:22.471Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 2
+      },
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:22.517Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 2
+      },
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:22.833Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 3
+      },
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:22.851Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 3
+      },
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:22.939Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 3
+      },
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:23.051Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 3
+      },
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:23.075Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 3
+      },
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:23.147Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 3
+      },
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:57:23.393Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 4
+      },
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:23.413Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 4
+      },
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:23.525Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 4
+      },
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:23.643Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 4
+      },
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:23.724Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 4
+      },
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:23.745Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 4
+      },
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:57:24.067Z",
+      "sample": {
+        "kind": "cold-navigation",
+        "n": 4
+      },
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:24.089Z",
+      "sample": {
+        "kind": "no-cache-spa",
+        "n": 0
+      },
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:24.482Z",
+      "sample": {
+        "kind": "no-cache-spa",
+        "n": 0
+      },
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:24.483Z",
+      "sample": {
+        "kind": "no-cache-spa",
+        "n": 0
+      },
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:57:24.568Z",
+      "sample": {
+        "kind": "no-cache-spa",
+        "n": 0
+      },
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:24.639Z",
+      "sample": {
+        "kind": "no-cache-spa",
+        "n": 0
+      },
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:24.888Z",
+      "sample": {
+        "kind": "no-cache-spa",
+        "n": 0
+      },
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:24.913Z",
+      "sample": {
+        "kind": "no-cache-spa",
+        "n": 1
+      },
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:24.925Z",
+      "sample": {
+        "kind": "no-cache-spa",
+        "n": 1
+      },
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:25.068Z",
+      "sample": {
+        "kind": "no-cache-spa",
+        "n": 1
+      },
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:25.167Z",
+      "sample": {
+        "kind": "no-cache-spa",
+        "n": 1
+      },
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:25.212Z",
+      "sample": {
+        "kind": "no-cache-spa",
+        "n": 1
+      },
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:25.447Z",
+      "sample": {
+        "kind": "no-cache-spa",
+        "n": 1
+      },
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:25.470Z",
+      "sample": {
+        "kind": "no-cache-spa",
+        "n": 2
+      },
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:57:25.476Z",
+      "sample": {
+        "kind": "no-cache-spa",
+        "n": 2
+      },
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    }
+  ],
+  "failures": [
+    {
+      "kind": "no-cache-spa",
+      "n": 2,
+      "error": "Error: page.waitForResponse: Target page, context or browser has been closed"
+    },
+    {
+      "error": "Error: browserContext.addCookies: Target page, context or browser has been closed\nBrowser logs:\n\n<launching> /Applications/Google Chrome.app/Contents/MacOS/Google Chrome --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,BlockOriginHeaderModificationOnRedirect,Translate,AutoDeElevate,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --disable-updater-scheduler --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --no-sandbox --user-data-dir=/var/folders/tv/2lzs4s3n4g5cj6r0g0yx08cr0000gq/T/playwright_chromiumdev_profile-9MuqkP --remote-debugging-pipe --no-startup-window\n<launched> pid=48485\n[pid=48485][err] Trying to load the allocator multiple times. This is *not* supported.\n[pid=48485] <gracefully close start>"
+    }
+  ],
+  "consoleErrors": [],
+  "cgroup": {
+    "memoryCurrentBytes": 813326336,
+    "memoryPeakBytes": 956026880,
+    "kernelCounters": {
+      "low": 0,
+      "high": 0,
+      "max": 0,
+      "oom": 0,
+      "oom_kill": 0,
+      "oom_group_kill": 0,
+      "usage_usec": 265473301,
+      "user_usec": 248733264,
+      "system_usec": 16740037,
+      "nice_usec": 0,
+      "nr_periods": 2318,
+      "nr_throttled": 137,
+      "throttled_usec": 8921652,
+      "nr_bursts": 0,
+      "burst_usec": 0
+    }
+  },
+  "interruptedByUser": true,
+  "excludedFromFormalBrowserVerdict": true,
+  "interruptionNote": "User requested progress report and a decision before continuing; closed-browser errors during SIGTERM are interruption artifacts."
+}

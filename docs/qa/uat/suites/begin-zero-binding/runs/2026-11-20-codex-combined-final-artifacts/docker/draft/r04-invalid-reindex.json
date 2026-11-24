@@ -1,0 +1,11 @@
+{
+  "httpStatus": 409,
+  "elapsedMs": 31.694,
+  "body": {
+    "ok": false,
+    "error": {
+      "code": "caliber_binding_candidate_failed",
+      "message": "口径绑定候选校验失败（schema_invalid:bindingId_required），本次发布批次未成功。"
+    }
+  }
+}

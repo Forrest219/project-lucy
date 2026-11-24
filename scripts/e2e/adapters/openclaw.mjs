@@ -31,8 +31,22 @@ export function prepare({ workDir, mcpUrl }) {
   return { env: { OPENCLAW_HOME: dir }, files: [file], mcpConfigPath: file };
 }
 
-export function buildInvocation({ binaryPath, question, workDir, prepared, env, secrets = [] }) {
+export const supportsContinuation = true;
+
+export function buildInvocation({
+  binaryPath,
+  question,
+  workDir,
+  prepared,
+  env,
+  secrets = [],
+  sessionId = null,
+  continueSession = false
+}) {
   const args = ["agent", "-m", question, "--mcp-config", prepared.mcpConfigPath];
+  if ((continueSession || sessionId) && sessionId) {
+    args.push("--resume", String(sessionId));
+  }
   assertNoSecretInArgv(args, secrets);
   return {
     command: binaryPath,

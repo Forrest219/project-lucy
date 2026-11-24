@@ -11,4 +11,4 @@ alwaysApply: false
 - 本机放行只要求构建成功、G1、G2（`node`/`tini` 为 x86-64）。QEMU `signal 11` 不能作废已构建镜像，也不能改去复用历史 tar。
 - G4/G4b 与平滑升级验收在自备 amd64 服务器上做。待测包使用新的 `*-test` 后缀，不用默认 `20260902-v3`。
 - `build-k8s-delivery-package.sh` 收尾会在本机再跑 `ktx`，失败时删除 tar。待测包不要因此回退到旧包。
-- 客户包仍走 `docs/runbooks/customer-delivery-preflight-checklist.md` 的 Go / No-Go。
+- 客户包走 `docs/runbooks/customer-amd64-image-build-checklist.md`（及适用的 v2 升级清单）；原 preflight 大清单已作废，经验见 `docs/lessons/`。

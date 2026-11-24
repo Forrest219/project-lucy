@@ -28,14 +28,35 @@ export function quoteMysqlIdent(value: string): string {
   return `\`${value.replace(/`/g, "``")}\``;
 }
 
-export function showDatabasesFromCatalogSql(catalog: string): string {
+/** SHOW is sent by the direct MySQL adapter, never by ktx sql. */
+export function catalogSchemataSql(catalog: string): string {
   return `SHOW DATABASES FROM ${quoteMysqlIdent(catalog)}`;
 }
 
-export function showTablesFromCatalogSql(catalog: string, database: string): string {
+export function catalogTablesSql(catalog: string, database: string): string {
   return `SHOW TABLES FROM ${quoteMysqlIdent(catalog)}.${quoteMysqlIdent(database)}`;
 }
 
-export function showFullColumnsSql(catalog: string, database: string, table: string): string {
-  return `SHOW FULL COLUMNS FROM ${quoteMysqlIdent(catalog)}.${quoteMysqlIdent(database)}.${quoteMysqlIdent(table)}`;
+/**
+ * SelectDB rejects LIMIT on SHOW TABLES, so one direct response is the full
+ * name list. A result that fills this ceiling is incomplete and is not published
+ * as the table count. 200_000 leaves room above the measured hive.temp list.
+ */
+export const CATALOG_TABLE_NAME_LIMIT = 200_000;
+
+/** One scan or `ktx sql` statement. */
+export const CATALOG_SCAN_TIMEOUT_MS = 120_000;
+
+export function describeCatalogTableSql(catalog: string, database: string, table: string): string {
+  return `DESC ${quoteMysqlIdent(catalog)}.${quoteMysqlIdent(database)}.${quoteMysqlIdent(table)}`;
+}
+
+/** Narrower than SHOW FULL COLUMNS; some SelectDB external catalogs accept this. */
+export function showColumnsSql(catalog: string, database: string, table: string): string {
+  return `SHOW COLUMNS FROM ${quoteMysqlIdent(catalog)}.${quoteMysqlIdent(database)}.${quoteMysqlIdent(table)}`;
+}
+
+/** Last-resort column probe for external catalogs that reject SHOW * COLUMNS. */
+export function describeTableSql(catalog: string, database: string, table: string): string {
+  return `DESCRIBE ${quoteMysqlIdent(catalog)}.${quoteMysqlIdent(database)}.${quoteMysqlIdent(table)}`;
 }

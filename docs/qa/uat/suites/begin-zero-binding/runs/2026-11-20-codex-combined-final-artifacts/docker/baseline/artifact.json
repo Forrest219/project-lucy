@@ -1,0 +1,20 @@
+{
+  "image": "sha256:d4ee128c273873b06c0e8fcee296638e030882f08a3d05a745a4fa39be981af8 linux/arm64",
+  "container": "f12e88cbd90e740777dd057b172ae3c07c9308b94b7a231adff7ce94f0ba8385",
+  "code": "b8c10b294ad41e88c71376caf6dac77de35cddea6bd1ee72c70789f4d7d02d57  /app/webui/server/proxy/mcp-proxy.ts\n7ae3fe42e536df8fc26bc45ad3135498eb429769a5375a2f452e47f998bee9bc  /app/webui/server/proxy/caliber-binding-registry.ts\nb20986b5e2617af11a05bdc24b61f959544fd8cf0833281ab129f2cde1546b12  /app/webui/server/proxy/caliber-binding-session.ts\n4ab92acb162f1165203c94536f88a4d7fff926edf431adbc6b2f3d7c213ade2b  /app/webui/server/proxy/caliber-binding.ts\n553a328a06e1854cdfbb8e08a9ad8b06782513507bc0e334f1db55877da01ab3  /app/webui/server/proxy/source-ambiguity-gate.ts\nb0542ac1f663640bb99ff8cbc6948c99a66a866dd14fe6b7bc32d228d2e3197d  /app/webui/server/proxy/audit.ts",
+  "resources": {
+    "cpus": 2,
+    "memory": "2g",
+    "stateStorage": "Docker native named volume",
+    "mysqlStorage": "Docker native anonymous volume"
+  },
+  "webUrl": "http://127.0.0.1:59394",
+  "mcpUrl": "http://127.0.0.1:59395/mcp",
+  "fixtureFingerprints": {
+    "ktx.yaml": "689af1fe58d7d38c1648cf84af8bcedae834b4ef9695194a13be3513ef59b06d",
+    "config/semantic-layer/uat-mysql/uat_begin_zero_orders.yaml": "a753c40c4eb7e5ba65a40a5fa5fe9fd841d238531284455bb48f46c2b8e06bac",
+    "config/semantic-layer/uat-mysql/_schema/uat.yaml": "49904b314ccefbe1b4e73d8d01911e3e230360cb15d00c84ec894c2392e9a9b9",
+    "webui/config/access.yaml": "53a5684193fbcd5a9c4848f0b7000eccb9e028bafb9055e4b21a5f18bae11f00"
+  },
+  "startedAt": "2026-11-20T05:11:53.114148+00:00"
+}

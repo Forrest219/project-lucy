@@ -1,7 +1,64 @@
 # E2E 用例变更日志
 
 > 维护规则：每次 PR 涉及 E2E 用例 / Selector 契约 / 影响映射 / 术语表，必须在本文件追加一节。
-> CI 守门：PR 模板勾选"E2E 变更"时，要求本文件有本次 PR 对应的小节；否则阻断合并。
+> CI 守门：PR 模板勾选"E2E 变更"时，要求本文件有本次 PR 对应的章节；否则阻断合并。
+
+---
+
+## 2026-11-13 · Edit 连接成功面执行层三段事实
+
+- `EditConnectionDialog` 成功步对齐 create：`edit-connection-execution-runtime`（已加载／尚未确认加载＋重载引导）。
+- `POST /api/connections/:id/endpoint` 非 dryRun 回报 `executionRuntimeAck`（canary）。
+- 父 Plan Task 3 edit 勾选；中间态出口 Task 1。
+
+---
+
+## 2026-11-13 · B 轨：E2E-CON-07／E2E-MCP-02／UAT-CONN-RELOAD-01 绿证
+
+### 实现落地
+- live-e2e：`webui/tests/live-e2e/connection-execution-reload.spec.ts`；脚本 `npm run e2e:live:connection-reload`。
+- 本机 demo `http://127.0.0.1:55176`：**2/2 PASSED**（MCP-02 手动重载协议；CON-07 UI 新建→执行层 `activation=current`）。
+- UAT-CONN-RELOAD-01：同路径取证；端点闸走「仍要新建连接」；测后 `remove` 清理；无 Pod 重启。
+- Plan：[lucy-20261113-connection-reload-live-e2e-uat-plan.md](../plans/lucy-20261113-connection-reload-live-e2e-uat-plan.md)；父 Plan Task 5／6 勾选；[middev 收口](../reviews/2026-11-13-connection-reload-middev-closure.md) 更新。
+
+### 仍 OPEN（非本缺陷主关闭阻塞）
+- EditConnectionDialog 成功面三段事实；UAT-CONN-RELOAD-02。
+
+---
+
+## 2026-11-13 · 写路径 supervisor + UT + VERIFY-191-C01 落地
+
+### 实现落地
+- 审计确认：`reloadKtxMcpAfterConfigWrite` 在 capability 有效时已委托 `reloadExecutionRuntime`（方案 C）；CLI 回退补齐 `already in use` → `failed`。
+- 单测：`UT-RELOAD-01`／`UT-RELOAD-02`／`UT-CONN-01`（create ack 随 reload+canary 变化；禁止固定 ack=false）。
+- UI：`CreateConnectionDrawer` 成功步展示执行层三段事实；失败引导「重载执行层」。
+- 容器门禁：`VERIFY-191-C01` 写入 `scripts/verify/verify-ktx-reload-lifecycle.sh --container` Phase C；本机 **25/25 PASSED**（含 canary `connection_list` 证据）。
+- 顺带修复 AC-3 live PID 探测：排除 `node -e` 自引用，避免伪报 WebUI PID 变化。
+
+### 计划勾选
+- 见 `docs/plans/lucy-20261112-connection-create-execution-runtime-reload-plan.md` Task 1–6 现值；浏览器债见上一节 B 轨。
+
+---
+
+## 2026-11-12 · 登记新建连接执行层生效门禁（缺陷复现后补网）
+
+### 新增
+- `E2E-CON-07`（P0 / L3 Live·Container）：新建连接后执行层必须加载新 `connectionId`；禁止仅 WebUI 落盘伪生效；禁止依赖 `docker restart`。
+- `E2E-MCP-02`（P0 / L3 Live·Container）：配置写路径自动重载与手动「重载执行层」必须走同一 Spec 191 supervisor 协议。
+- 计划内单测 ID：`UT-RELOAD-01` / `UT-RELOAD-02` / `UT-CONN-01`；容器门禁 `VERIFY-191-C01`（见计划 §3）。
+- 优化／修复计划：`docs/plans/lucy-20261112-connection-create-execution-runtime-reload-plan.md`。
+
+### 修改
+- `docs/qa/lucy-webui-e2e-test-suite.md` → v0.3：§7 影响映射示例、§10 矩阵、§11.5–11.7 详细用例与漏检说明；明确 `E2E-MCP-01` 不得代替进程级生效取证。
+- `docs/qa/impact-map.json` → `0.6.0`：挂接 `/connections`、`CreateConnectionDrawer`、`POST /api/connections`、`mcp-runtime/*`、`create-connection-*` selector。
+
+### 范围声明
+- **当时只登记用例与计划。** 2026-11-13 起见上一节实现落地；关闭缺陷前仍须 `E2E-CON-07` 或等价 UAT 绿证（C01 已具备）。
+
+### 缺陷摘要（2026-11-12 本机 demo）
+- 症状：新建连接后 Agent／MCP 看不到新连接，需重启 KTX。
+- 日志：`[ktx-mcp-reload] failed … Port 7878 is already in use`。
+- 状态：`execution.activation=reload_required`。根因：写路径旁路 `ktx mcp stop/start` 与 `supervise_ktx` 抢端口。
 
 ---
 

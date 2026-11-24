@@ -51,7 +51,7 @@ P0 冻结  →  P1 合流 main  →  P2 开 2.5 线  →  P3 开发循环  →  
 
 `main` 的内容 = **已发布版本 + 已验收并准备发版的批次**。2.5 的日常开发全部发生在 `lucy-v2.5` 上；只有当一个批次准备随下一个版本交付时，才合回 `main`。
 
-**为什么不能把仍标着旧产品版本的分支合回 `main`：** 产品版本按产品线确定，不在出包时才递增。`lucy-v0.25` 的产品版本是 `0.25.0`。若 `main` 装进这一线的能力而 `VERSION` 仍是上一发布值，客户镜像 tag `customer-amd64-<VERSION>-<日期>-<sha>` 的版本段就会与内容不符。
+**为什么不能把仍标着旧产品版本的分支合回 `main`：** 产品版本按产品线确定，不在出包时才递增。`lucy-v0.30` 的产品版本是 `0.30.0`。若 `main` 装进这一线的能力而 `VERSION` 仍是上一发布值，客户镜像 tag `customer-amd64-<VERSION>-<日期>-<sha>` 的版本段就会与内容不符。
 
 `main` 保持"发布主线"语义，客户永远能从 `main` 复现出已交付的镜像。
 
@@ -70,18 +70,16 @@ npm run lint:version:test   # 通过：Node 测试全绿（含"错误 tag 被拒
 
 `scripts/release/lucy-version-governance.mjs` 同时强制：产品版本必须是严格 `X.Y.Z`（无 `v` 前缀、无预发布后缀）；客户镜像 tag 与 release tag 必须与 `VERSION` 匹配。
 
-### 2.2 本分支的产品版本是 `0.25.0`
+### 2.2 本分支的产品版本是 `0.30.0`
 
-产品版本按产品线确定。分支 `lucy-v0.25` 的产品版本是 **`0.25.0`**。出包、修改 Chart、升级捆绑 KTX 都不因此再升产品版本。
-
-早先的 v2.0 列车曾建议本波次按「第二段 +10」切到 `0.30.0`，并写过「分支名不是产品版本」。那是当时的设想，不是当前基线。不要再把 `0.30.0` 或 `2.10.0` 当作这一线的目标版本。
+产品版本按产品线确定。分支 `lucy-v0.30` 的产品版本是 **`0.30.0`**。出包、修改 Chart、升级捆绑 KTX 都不因此再升产品版本。日常开发改上 `lucy-v0.30`；`lucy-v0.25` / `v0.25.0` 只接 hotfix（`hotfix/lucy-0.25.0-<slug>` 从 tag 切）。
 
 ### 2.3 切线时点
 
 产品版本在产品线确定时写入 `VERSION`，不绑在候选出包上。日常提交不自动改这个号。
 
-- 2026-11-01 起当前 `VERSION` 为 `0.25.0`。候选构建沿用这个号，不同步再切一版。
-- Chart 包版本当前 `0.2.8`。只有安装行为变了才升 `version`。`appVersion` 保持与 `VERSION` 相同。
+- 2026-11-07 起当前产品线 `VERSION` 为 `0.30.0`。候选构建沿用这个号，不同步再切一版。
+- Chart 包版本当前 `0.2.9`（探针改挂 `/api/livez` 与 `/api/readyz`）。只有安装行为变了才升 `version`。`appVersion` 保持与 `VERSION` 相同。
 
 ---
 
@@ -224,7 +222,7 @@ gh release create v2.0.0 \
 | ② 实现分支 | `feature/lucy-2.5/<L25-id>-<slug>`，从 `lucy-v2.5` 切。一个 L25 一条线，≤5 天 |
 | ③ 验收 | 按该 Spec 自己的 V 矩阵逐条过，写"未执行"及原因，不留空 |
 | ④ 合回 | 回 `lucy-v2.5`，不是回 `main`（§1.2） |
-| ⑤ 批次回归 | `lucy-v2.5` 上的完整门禁；证据按 L25 归档到 `docs/uat/` 或 `docs/specs/` 对应位置 |
+| ⑤ 批次回归 | `lucy-v2.5` 上的完整门禁；客户场景 UAT 证据归档到 **测试台唯一 SOT** [`docs/qa/uat/`](../qa/uat/README.md)（`suites/*/runs/`＋[`INDEX.md`](../qa/uat/INDEX.md)）；合同／取证材料仍按 Spec／reviews 落位。旧 `docs/uat/` 仅为历史归档 |
 | ⑥ 合回 `main` | 只在 P4 发版时做 |
 
 **排期优先级**（取自 2.5 建议书自身的建议，不另造）：
@@ -241,7 +239,7 @@ gh release create v2.0.0 \
 
 | 步骤 | 动作 | 门 |
 |---|---|---|
-| P4-1 | 产品版本沿用已确定的 `0.25.0`（§2.2）。候选构建不另切 `0.30.0` 或 `2.10.0` | `VERSION` 与 §2.2 一致 |
+| P4-1 | 产品版本沿用已确定的 `0.30.0`（§2.2）。候选构建不另切下一产品线号 | `VERSION` 与 §2.2 一致 |
 | P4-2 | 核对 `VERSION` + 投影已经一致 | `npm run lint:version` 绿；`npm run lint:version:test` 绿 |
 | P4-3 | CHANGELOG 的 `0.25.0` 节就是这一产品版本的记录，不另开 `2.10.0` 标题 | 人工复核 |
 | P4-4 | 更新 version-matrix 基线行（产品版本、包名、发布元数据模板、§1.1 递增例子） | 人工复核 |
@@ -249,6 +247,16 @@ gh release create v2.0.0 \
 | P4-6 | 合回 `main`（此时 `main` 才前进，§1.2） | 走 PR，必需检查绿 |
 | P4-7 | 在 `main` 的发版提交上打 `v<版本>` tag，推送 | tag 保护已开 |
 | P4-8 | CI 从 tag 触发全量发版门禁 | §4 门禁矩阵 |
+| P4-9 | **发版性能基线（REQ-030-034）**：跑 release-medium；相对上一正式基线按 D6；通过后写入 formal 副本 | 见下节勾选；本条通过不表示可上线 |
+
+#### P4-9 发版性能基线勾选（REQ-030-034／SC-11）
+
+未跑或相对失败且无接受记录 → **不得宣称性能取证通过**。夹具分档见 [`release-perf-baseline-fixture-tiers.md`](release-perf-baseline-fixture-tiers.md)。
+
+- [ ] `npm run perf:release-baseline -- --tier release-medium --output inbox/perf-baselines/<run> --previous inbox/perf-baselines/formal/LATEST/report.json`（无 LATEST 时省略 `--previous`，报告须为 `baseline-seed`）
+- [ ] 报告 `status` 为 `pass` 或首次 `baseline-seed`（绝对闸全绿）；相对失败须带 `--accepted-regression` 与书面接受人
+- [ ] 正式副本：`npm run perf:release-baseline:formal-seed -- --from inbox/perf-baselines/<run>`（写入 `inbox/perf-baselines/formal/<lucyVersion>-<gitShaShort>/` 并更新 `formal/LATEST`）
+- [ ] 报告不含 Token／密码／客户 DSN（SC-15）
 
 **候选与放行分离**（`docs/specs/lucy-20261018-enterprise-security-and-real-e2e-spec.md` §8.3）：
 
@@ -352,6 +360,12 @@ npm run lint:version && npm run lint:version:test   # 版本投影
 npm run lint:spec                                    # 路由 ↔ 文档
 npm run gate:k8s-static                              # Helm 渲染 + 负例
 actionlint .github/workflows/lucy-release.yml         # 工作流文件可加载
+
+# 发版性能取证（REQ-030-034；P4-9）
+npm run perf:release-baseline -- --tier release-medium \
+  --output inbox/perf-baselines/<run> \
+  --previous inbox/perf-baselines/formal/LATEST/report.json
+npm run perf:release-baseline:formal-seed -- --from inbox/perf-baselines/<run>
 
 # 合流
 git checkout main && git pull --ff-only

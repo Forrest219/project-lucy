@@ -1,0 +1,206 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 104.872,
+  "body": {
+    "ok": true,
+    "data": {
+      "written": true,
+      "policyVersion": "97a4a77eadcd47539feb0b31ca8eb7cd69528ed98479f92489c51aaf2f51d862",
+      "policyRuntimeAck": true,
+      "runtimeAck": true,
+      "after": {
+        "agent": {
+          "id": "uat_zb_denied",
+          "name": "ZB denied",
+          "note": "isolated UAT control r06-deny-activate",
+          "enabled": true,
+          "roles": [
+            "a"
+          ],
+          "role": "a",
+          "tokens": [
+            {
+              "hash": "sha256:d07d51ceb0173825830c8533ee6516305189f21c835aa9af7ca22a1aa4957713",
+              "label": "isolated-denied",
+              "created": "2026-11-20",
+              "expires_at": null,
+              "device_name": null,
+              "last_ip": null,
+              "last_user_agent": null,
+              "last_client": null,
+              "last_client_version": null,
+              "last_device_name_seen": null
+            }
+          ],
+          "effectivePermissions": {
+            "roleIds": [
+              "a"
+            ],
+            "snapshotHash": "e5adc5b6f0eba13138aa18d9a10811b98e31e0ea15e455269b8ded3c387b5270",
+            "sourceMapVersion": "9933be71e9430f0e",
+            "tools": [
+              "connection_list",
+              "lucy_catalog",
+              "lucy_continue_question",
+              "lucy_explain_query",
+              "lucy_read_source"
+            ],
+            "connections": [
+              "uat-mysql"
+            ],
+            "sources": [
+              {
+                "connectionId": "uat-mysql",
+                "schema": "uat",
+                "sourceName": "uat_begin_zero_orders",
+                "table": "uat.uat_begin_zero_orders"
+              }
+            ],
+            "legacyAllow": false,
+            "capabilityDigest": "1fd6d70f1cba6879",
+            "capabilities": [
+              {
+                "tool": "lucy_explain_query",
+                "connectionId": "uat-mysql",
+                "schema": "uat",
+                "sourceName": "uat_begin_zero_orders",
+                "physicalTable": "uat.uat_begin_zero_orders",
+                "sourceKey": "uat-mysql|uat|uat_begin_zero_orders|uat.uat_begin_zero_orders",
+                "rowGrant": "all",
+                "finalRows": "all",
+                "protected": false
+              },
+              {
+                "tool": "lucy_read_source",
+                "connectionId": "uat-mysql",
+                "schema": "uat",
+                "sourceName": "uat_begin_zero_orders",
+                "physicalTable": "uat.uat_begin_zero_orders",
+                "sourceKey": "uat-mysql|uat|uat_begin_zero_orders|uat.uat_begin_zero_orders",
+                "rowGrant": "all",
+                "finalRows": "all",
+                "protected": false
+              }
+            ]
+          },
+          "permissionWarnings": []
+        },
+        "version": "1795149836426-cb7e3b0af80e2adf"
+      },
+      "agent": {
+        "id": "uat_zb_denied",
+        "name": "ZB denied",
+        "note": "isolated UAT control r06-deny-activate",
+        "enabled": true,
+        "roles": [
+          "a"
+        ],
+        "role": "a",
+        "tokens": [
+          {
+            "hash": "sha256:d07d51ceb0173825830c8533ee6516305189f21c835aa9af7ca22a1aa4957713",
+            "label": "isolated-denied",
+            "created": "2026-11-20",
+            "expires_at": null,
+            "device_name": null,
+            "last_ip": null,
+            "last_user_agent": null,
+            "last_client": null,
+            "last_client_version": null,
+            "last_device_name_seen": null
+          }
+        ],
+        "effectivePermissions": {
+          "roleIds": [
+            "a"
+          ],
+          "snapshotHash": "e5adc5b6f0eba13138aa18d9a10811b98e31e0ea15e455269b8ded3c387b5270",
+          "sourceMapVersion": "9933be71e9430f0e",
+          "tools": [
+            "connection_list",
+            "lucy_catalog",
+            "lucy_continue_question",
+            "lucy_explain_query",
+            "lucy_read_source"
+          ],
+          "connections": [
+            "uat-mysql"
+          ],
+          "sources": [
+            {
+              "connectionId": "uat-mysql",
+              "schema": "uat",
+              "sourceName": "uat_begin_zero_orders",
+              "table": "uat.uat_begin_zero_orders"
+            }
+          ],
+          "legacyAllow": false,
+          "capabilityDigest": "1fd6d70f1cba6879",
+          "capabilities": [
+            {
+              "tool": "lucy_explain_query",
+              "connectionId": "uat-mysql",
+              "schema": "uat",
+              "sourceName": "uat_begin_zero_orders",
+              "physicalTable": "uat.uat_begin_zero_orders",
+              "sourceKey": "uat-mysql|uat|uat_begin_zero_orders|uat.uat_begin_zero_orders",
+              "rowGrant": "all",
+              "finalRows": "all",
+              "protected": false
+            },
+            {
+              "tool": "lucy_read_source",
+              "connectionId": "uat-mysql",
+              "schema": "uat",
+              "sourceName": "uat_begin_zero_orders",
+              "physicalTable": "uat.uat_begin_zero_orders",
+              "sourceKey": "uat-mysql|uat|uat_begin_zero_orders|uat.uat_begin_zero_orders",
+              "rowGrant": "all",
+              "finalRows": "all",
+              "protected": false
+            }
+          ]
+        },
+        "permissionWarnings": []
+      },
+      "gate": {
+        "traceId": "gate-cf839d94-5790-402b-8fbb-d7fddaecd8e8",
+        "targetKind": "agent",
+        "targetId": "uat_zb_denied",
+        "decision": "allow",
+        "tierSummary": {
+          "P0": {
+            "count": 0,
+            "reasons": []
+          },
+          "P1": {
+            "count": 0,
+            "reasons": []
+          },
+          "P2": {
+            "count": 0,
+            "reasons": []
+          }
+        },
+        "findings": [],
+        "evidenceRefs": [
+          {
+            "kind": "permission_snapshot",
+            "ref": "e5adc5b6f0eba13138aa18d9a10811b98e31e0ea15e455269b8ded3c387b5270",
+            "relation": "used"
+          },
+          {
+            "kind": "permission_snapshot",
+            "ref": "e5adc5b6f0eba13138aa18d9a10811b98e31e0ea15e455269b8ded3c387b5270",
+            "relation": "observed"
+          },
+          {
+            "kind": "role_diff_hash",
+            "ref": "f6b45dfe20fd949d2768c1b07e9be5d5",
+            "relation": "observed"
+          }
+        ]
+      }
+    }
+  }
+}

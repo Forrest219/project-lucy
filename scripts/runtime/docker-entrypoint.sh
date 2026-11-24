@@ -115,6 +115,15 @@ KTX_RELOAD_REQUEST_FILE="${KTX_UI_DIR}/ktx-reload.request"
 KTX_RELOAD_RESULT_FILE="${KTX_UI_DIR}/ktx-reload.result"
 KTX_RELOAD_CAPABILITY_FILE="${KTX_UI_DIR}/ktx-reload.capability"
 KTX_READY_FILE="${KTX_UI_DIR}/ktx-ready"
+# P1-63 — whole-instance drain IPC (no credentials). Parent owns shutdown.
+LUCY_DRAIN_REQUEST_FILE="${KTX_UI_DIR}/lucy-process-drain.request"
+LUCY_DRAIN_ACK_FILE="${KTX_UI_DIR}/lucy-process-drain.ack"
+# Budgets: drain ≤20s, supervisor/KTX 10s, orphan ≤5s, wrap-up 5s, total ≤40s.
+# External stop grace must be ≥45s (demo compose stop_grace_period: 45s).
+LUCY_DRAIN_BUDGET_S="${LUCY_DRAIN_BUDGET_S:-20}"
+LUCY_DRAIN_ACK_WAIT_S="${LUCY_DRAIN_ACK_WAIT_S:-5}"
+LUCY_ORPHAN_CLEANUP_BUDGET_S="${LUCY_ORPHAN_CLEANUP_BUDGET_S:-5}"
+LUCY_WRAP_UP_BUDGET_S="${LUCY_WRAP_UP_BUDGET_S:-5}"
 KTX_RELOAD_PROTOCOL="lucy-ktx-reload/1"
 # Poll interval is 0.2s, so 25 ticks ≈ 5s between capability heartbeats.
 KTX_RELOAD_HEARTBEAT_TICKS="${LUCY_KTX_RELOAD_HEARTBEAT_TICKS:-25}"
@@ -391,11 +400,47 @@ KTX_SUPERVISOR_STOP=0
 KTX_SUPERVISOR_STATE="idle"
 # The request the supervisor is currently executing (empty when idle).
 KTX_SUPERVISOR_REQUEST_ID=""
+KTX_SUPERVISOR_COMPLETED_REQUEST_ID=""
 # The pid of the running KTX daemon, owned by the supervisor.
 KTX_CHILD_PID=""
 # The request currently being processed by the supervisor.
 KTX_RELOAD_REQUEST_ID=""
 KTX_RELOAD_REQUESTED_DIGEST=""
+# P1-69: one caller deadline; empty outside an explicit reload (startup/backoff unchanged).
+KTX_RELOAD_DEADLINE_MS=""
+KTX_RELOAD_STAGE_DEADLINE_MS=""
+
+# Existing parent-owned whole-instance facts; reload never clears or reverses them.
+ktx_instance_draining() {
+  [[ -e "${LUCY_DRAIN_REQUEST_FILE}" || -e "${LUCY_DRAIN_ACK_FILE}" ]]
+}
+
+ktx_epoch_ms() { node -e 'process.stdout.write(String(Date.now()))'; }
+
+ktx_reload_remaining_ms() {
+  local now remaining
+  now="$(ktx_epoch_ms)" || return 1
+  remaining=$((KTX_RELOAD_DEADLINE_MS - now))
+  if [[ -n "${KTX_RELOAD_STAGE_DEADLINE_MS}" ]] && [[ "${KTX_RELOAD_STAGE_DEADLINE_MS}" -lt "${KTX_RELOAD_DEADLINE_MS}" ]]; then
+    remaining=$((KTX_RELOAD_STAGE_DEADLINE_MS - now))
+  fi
+  [[ "${remaining}" -gt 0 ]] || return 1
+  printf '%s' "${remaining}"
+}
+
+ktx_reload_stage() {
+  local now
+  now="$(ktx_epoch_ms)" || return 1
+  KTX_RELOAD_STAGE_DEADLINE_MS=$((now + $1))
+  if [[ "${KTX_RELOAD_STAGE_DEADLINE_MS}" -gt "${KTX_RELOAD_DEADLINE_MS}" ]]; then
+    KTX_RELOAD_STAGE_DEADLINE_MS="${KTX_RELOAD_DEADLINE_MS}"
+  fi
+}
+
+# Sleep only within the current request/stage deadline (startup still uses original sleeps).
+ktx_reload_pause() {
+  node -e 'const [total,stage,delay]=process.argv.slice(1).map(Number); const end=Math.min(total,stage||Infinity,Date.now()+delay); setTimeout(()=>{},Math.max(0,end-Date.now()));' "${KTX_RELOAD_DEADLINE_MS}" "${KTX_RELOAD_STAGE_DEADLINE_MS:-0}" "$1"
+}
 
 ktx_utc_now() {
   date -u +%Y-%m-%dT%H:%M:%S.000Z
@@ -429,10 +474,17 @@ ktx_write_atomic() {
   mv -f "${tmp}" "${target}"
 }
 
-# The supervisor's own pid. `$$` keeps the PARENT shell's pid inside a
-# background subshell, so BASHPID is the only reliable source here.
+# The supervisor's own pid.
+#
+# Callers publish this value from command substitutions. Inside $(...), both
+# $$ (parent of that subshell) and BASHPID (the subshell itself) are wrong:
+# the subshell exits as soon as printf returns, and Node then treats the
+# supervisor as dead. Capture the pid once in the supervisor shell and only
+# echo that saved value from here.
 ktx_supervisor_pid() {
-  if [[ -n "${BASHPID:-}" ]]; then
+  if [[ -n "${KTX_SUPERVISOR_SELF_PID:-}" ]]; then
+    printf '%s' "${KTX_SUPERVISOR_SELF_PID}"
+  elif [[ -n "${BASHPID:-}" ]]; then
     printf '%s' "${BASHPID}"
   else
     printf '%s' "$$"
@@ -448,9 +500,9 @@ ktx_write_capability() {
   local heartbeat_at
   heartbeat_at="$(ktx_utc_now)"
   ktx_write_atomic "${KTX_RELOAD_CAPABILITY_FILE}" \
-    "$(printf '{"protocol":"%s","supervisorPid":%s,"startedAt":"%s","heartbeatAt":"%s","state":"%s","currentRequestId":"%s"}' \
+    "$(printf '{"protocol":"%s","supervisorPid":%s,"startedAt":"%s","heartbeatAt":"%s","state":"%s","currentRequestId":"%s","completedRequestId":"%s"}' \
       "${KTX_RELOAD_PROTOCOL}" "$(ktx_supervisor_pid)" "${started_at}" "${heartbeat_at}" \
-      "${KTX_SUPERVISOR_STATE}" "${KTX_SUPERVISOR_REQUEST_ID}")" || true
+      "${KTX_SUPERVISOR_STATE}" "${KTX_SUPERVISOR_REQUEST_ID}" "${KTX_SUPERVISOR_COMPLETED_REQUEST_ID}")" || true
 }
 
 # Revoke the capability file when the supervisor stops (Spec 191 §9.1 H3).
@@ -483,13 +535,18 @@ fs.writeFileSync(file, JSON.stringify(payload) + "\n");
 
 # Is the upstream MCP port accepting connections?
 ktx_port_ready() {
+  local probe_ms=500 remaining
+  if [[ -n "${KTX_RELOAD_DEADLINE_MS}" ]]; then
+    remaining="$(ktx_reload_remaining_ms)" || return 1
+    if [[ "${remaining}" -lt "${probe_ms}" ]]; then probe_ms="${remaining}"; fi
+  fi
   node -e '
     const net = require("net");
     const socket = net.createConnection({ host: process.argv[1], port: Number(process.argv[2]) });
     socket.on("connect", () => { socket.end(); process.exit(0); });
     socket.on("error", () => process.exit(1));
-    setTimeout(() => process.exit(1), 500);
-  ' "${KTX_MCP_HOST}" "${KTX_MCP_PORT}" >/dev/null 2>&1
+    setTimeout(() => process.exit(1), Math.max(1, Number(process.argv[3])));
+  ' "${KTX_MCP_HOST}" "${KTX_MCP_PORT}" "${probe_ms}" >/dev/null 2>&1
 }
 
 # Wait for the port, the daemon's early exit, or a shutdown request.
@@ -503,6 +560,8 @@ ktx_wait_ready() {
   local beats=0
   while [[ "${waited}" -lt 60 ]]; do
     if [[ "${KTX_SUPERVISOR_STOP}" -ne 0 ]]; then return 1; fi
+    if [[ -n "${KTX_RELOAD_DEADLINE_MS}" ]] && ktx_instance_draining; then return 1; fi
+    if [[ -n "${KTX_RELOAD_DEADLINE_MS}" ]] && ! ktx_reload_remaining_ms >/dev/null; then return 1; fi
     if ! kill -0 "${pid}" >/dev/null 2>&1; then return 1; fi
     if ktx_port_ready; then return 0; fi
     waited=$((waited + 1))
@@ -511,7 +570,7 @@ ktx_wait_ready() {
       beats=0
       ktx_write_capability "${started_at}"
     fi
-    sleep 1
+    if [[ -n "${KTX_RELOAD_DEADLINE_MS}" ]]; then ktx_reload_pause 1000; else sleep 1; fi
   done
   echo "[lucy] timed out waiting for KTX MCP upstream on ${KTX_MCP_HOST}:${KTX_MCP_PORT}" >&2
   return 1
@@ -521,9 +580,12 @@ ktx_wait_ready() {
 ktx_wait_port_released() {
   local waited=0
   while [[ "${waited}" -lt 50 ]]; do
+    if [[ "${KTX_SUPERVISOR_STOP}" -ne 0 ]]; then return 1; fi
+    if [[ -n "${KTX_RELOAD_DEADLINE_MS}" ]] && ktx_instance_draining; then return 1; fi
+    if [[ -n "${KTX_RELOAD_DEADLINE_MS}" ]] && ! ktx_reload_remaining_ms >/dev/null; then return 1; fi
     if ! ktx_port_ready; then return 0; fi
     waited=$((waited + 1))
-    sleep 0.2
+    if [[ -n "${KTX_RELOAD_DEADLINE_MS}" ]]; then ktx_reload_pause 200; else sleep 0.2; fi
   done
   return 1
 }
@@ -532,7 +594,7 @@ ktx_wait_port_released() {
 # `wait` reaps the child, so a zombie never looks "still alive" to the caller.
 ktx_stop_child() {
   local pid="${1:-}"
-  local killer
+  local killer stop_s="${KTX_RELOAD_STOP_TIMEOUT_S}" remaining
   [[ -n "${pid}" ]] || return 0
   kill -0 "${pid}" >/dev/null 2>&1 || {
     wait "${pid}" >/dev/null 2>&1 || true
@@ -540,7 +602,12 @@ ktx_stop_child() {
   }
   kill -TERM "${pid}" >/dev/null 2>&1 || true
   # Bounded wait: a watchdog escalates to SIGKILL if the child ignores TERM.
-  ( sleep "${KTX_RELOAD_STOP_TIMEOUT_S}"; kill -KILL "${pid}" >/dev/null 2>&1 || true ) &
+  if [[ -n "${KTX_RELOAD_DEADLINE_MS}" ]]; then
+    # The private watchdog computes remaining time AFTER its own startup overhead.
+    node -e 'const [pid,total,stage,cap]=process.argv.slice(1).map(Number); const end=Math.min(total,stage||Infinity,Date.now()+cap*1000); setTimeout(()=>{try{process.kill(pid,"SIGKILL")}catch{}},Math.max(0,end-Date.now()));' "${pid}" "${KTX_RELOAD_DEADLINE_MS}" "${KTX_RELOAD_STAGE_DEADLINE_MS:-0}" "${stop_s}" &
+  else
+    ( sleep "${stop_s}"; kill -KILL "${pid}" >/dev/null 2>&1 || true ) &
+  fi
   killer="$!"
   wait "${pid}" >/dev/null 2>&1 || true
   kill -TERM "${killer}" >/dev/null 2>&1 || true
@@ -556,6 +623,8 @@ ktx_consume_reload_request() {
   local parsed
   KTX_RELOAD_REQUEST_ID=""
   KTX_RELOAD_REQUESTED_DIGEST=""
+  KTX_RELOAD_DEADLINE_MS=""
+  KTX_RELOAD_STAGE_DEADLINE_MS=""
   if ! mv -f "${KTX_RELOAD_REQUEST_FILE}" "${tmp}" >/dev/null 2>&1; then
     rm -f "${tmp}" >/dev/null 2>&1 || true
     return 0
@@ -565,14 +634,16 @@ const fs = require("fs");
 const file = process.argv[1];
 let doc = {};
 try { doc = JSON.parse(fs.readFileSync(file, "utf8")); } catch (error) { doc = {}; }
-process.stdout.write([String(doc.requestId ?? ""), String(doc.requestedDigest ?? "")].join("\u001f"));
+const requestedAt = Date.parse(String(doc.requestedAt ?? ""));
+const deadline = Number(doc.deadlineAt ?? (Number.isFinite(requestedAt) ? requestedAt + 60000 : 0));
+process.stdout.write([String(doc.requestId ?? ""), String(doc.requestedDigest ?? ""), String(Number.isFinite(deadline) ? Math.min(deadline,Date.now()+60000) : 0)].join("\u001f"));
 ' "${tmp}" 2>/dev/null || true)"
   rm -f "${tmp}" >/dev/null 2>&1 || true
   if [[ -z "${parsed}" ]]; then
     echo "[lucy] reload request file was not readable JSON; ignoring" >&2
     return 0
   fi
-  IFS=$'\x1f' read -r KTX_RELOAD_REQUEST_ID KTX_RELOAD_REQUESTED_DIGEST <<< "${parsed}" || true
+  IFS=$'\x1f' read -r KTX_RELOAD_REQUEST_ID KTX_RELOAD_REQUESTED_DIGEST KTX_RELOAD_DEADLINE_MS <<< "${parsed}" || true
   if [[ -z "${KTX_RELOAD_REQUEST_ID}" ]]; then
     echo "[lucy] reload request had no requestId; ignoring" >&2
     return 0
@@ -582,6 +653,11 @@ process.stdout.write([String(doc.requestId ?? ""), String(doc.requestedDigest ??
 
 # Start the KTX daemon and record its pid.
 ktx_start_daemon() {
+  if [[ "${KTX_SUPERVISOR_STOP}" -ne 0 ]]; then return 1; fi
+  if ktx_instance_draining; then return 1; fi
+  if [[ -n "${KTX_RELOAD_DEADLINE_MS}" ]] && ! ktx_reload_remaining_ms >/dev/null; then return 1; fi
+  # Final synchronous shutdown check after deadline helper process returned.
+  if ktx_instance_draining || [[ "${KTX_SUPERVISOR_STOP}" -ne 0 ]]; then return 1; fi
   ktx mcp start \
     --project-dir "${PROJECT_ROOT}" \
     --host "${KTX_MCP_HOST}" \
@@ -598,6 +674,8 @@ ktx_start_daemon() {
 # The supervisor owns the daemon lifecycle; the parent shell only waits for the
 # supervisor and for Lucy.
 supervise_ktx() {
+  # This assignment must stay in the supervisor shell, before any $(...).
+  KTX_SUPERVISOR_SELF_PID="${BASHPID:-$$}"
   local started_at
   local failures=0
   local backoff=1
@@ -625,6 +703,9 @@ supervise_ktx() {
       fi
     fi
 
+    # Do not turn a failed reload into a new BACKOFF restart during whole-instance drain.
+    while ktx_instance_draining && [[ "${KTX_SUPERVISOR_STOP}" -eq 0 ]]; do sleep 0.2; done
+    if [[ "${KTX_SUPERVISOR_STOP}" -ne 0 ]]; then break; fi
     ktx_start_daemon
     ktx_pid="${KTX_CHILD_PID}"
 
@@ -658,24 +739,49 @@ supervise_ktx() {
         if [[ -z "${KTX_RELOAD_REQUEST_ID}" ]]; then
           continue
         fi
+        # Expired or draining work must never restart KTX later.
+        if ktx_instance_draining || ! ktx_reload_remaining_ms >/dev/null || [[ "${KTX_SUPERVISOR_STOP}" -ne 0 ]]; then
+          ktx_write_reload_result "${KTX_RELOAD_REQUEST_ID}" "$(ktx_sha256 "${PROJECT_ROOT}/ktx.yaml")" "failed" "执行层重载请求已过期或服务正在停止；未停止执行层"
+          KTX_SUPERVISOR_COMPLETED_REQUEST_ID="${KTX_RELOAD_REQUEST_ID}"
+          KTX_RELOAD_DEADLINE_MS=""; KTX_RELOAD_STAGE_DEADLINE_MS=""
+          ktx_write_capability "${started_at}"
+          continue
+        fi
         echo "[lucy] reload requested (${KTX_RELOAD_REQUEST_ID}); restarting KTX MCP upstream" >&2
         KTX_SUPERVISOR_STATE="reloading"
         KTX_SUPERVISOR_REQUEST_ID="${KTX_RELOAD_REQUEST_ID}"
+        ktx_reload_stage 10000
         ktx_write_capability "${started_at}"
-        ktx_stop_child "${ktx_pid}"
-        ktx_wait_port_released || true
-        ktx_start_daemon
-        ktx_pid="${KTX_CHILD_PID}"
-        if ktx_wait_ready "${ktx_pid}" "${started_at}"; then
-          ktx_write_reload_result \
-            "${KTX_RELOAD_REQUEST_ID}" \
-            "$(ktx_sha256 "${PROJECT_ROOT}/ktx.yaml")" \
-            "succeeded" \
-            ""
-          KTX_SUPERVISOR_STATE="idle"
-          KTX_SUPERVISOR_REQUEST_ID=""
+        # Parent can begin whole-instance drain while capability publication awaited I/O.
+        if ! ktx_reload_remaining_ms >/dev/null || ktx_instance_draining || [[ "${KTX_SUPERVISOR_STOP}" -ne 0 ]]; then
+          ktx_write_reload_result "${KTX_RELOAD_REQUEST_ID}" "$(ktx_sha256 "${PROJECT_ROOT}/ktx.yaml")" "failed" "服务正在停止；未停止执行层"
+          KTX_SUPERVISOR_COMPLETED_REQUEST_ID="${KTX_RELOAD_REQUEST_ID}"
+          KTX_SUPERVISOR_STATE="idle"; KTX_SUPERVISOR_REQUEST_ID=""
+          KTX_RELOAD_DEADLINE_MS=""; KTX_RELOAD_STAGE_DEADLINE_MS=""
           ktx_write_capability "${started_at}"
           continue
+        fi
+        ktx_stop_child "${ktx_pid}"
+        ktx_wait_port_released || true
+        KTX_RELOAD_STAGE_DEADLINE_MS=""
+        local loaded_digest
+        loaded_digest="$(ktx_sha256 "${PROJECT_ROOT}/ktx.yaml")"
+        ktx_reload_stage 20000
+        if ktx_start_daemon; then
+          ktx_pid="${KTX_CHILD_PID}"
+          if ktx_wait_ready "${ktx_pid}" "${started_at}"; then
+            if [[ "${loaded_digest}" == "$(ktx_sha256 "${PROJECT_ROOT}/ktx.yaml")" ]]; then
+              ktx_write_reload_result "${KTX_RELOAD_REQUEST_ID}" "${loaded_digest}" "succeeded" ""
+            else
+              ktx_write_reload_result "${KTX_RELOAD_REQUEST_ID}" "${loaded_digest}" "failed" "配置在执行层启动期间发生变化，未确认加载"
+            fi
+            KTX_SUPERVISOR_COMPLETED_REQUEST_ID="${KTX_RELOAD_REQUEST_ID}"
+            KTX_SUPERVISOR_STATE="idle"
+            KTX_SUPERVISOR_REQUEST_ID=""
+            KTX_RELOAD_DEADLINE_MS=""; KTX_RELOAD_STAGE_DEADLINE_MS=""
+            ktx_write_capability "${started_at}"
+            continue
+          fi
         fi
         # The daemon did not come back: report the failure honestly and fall
         # back to the bounded retry path. The configuration is NOT rolled back.
@@ -685,8 +791,10 @@ supervise_ktx() {
           "$(ktx_sha256 "${PROJECT_ROOT}/ktx.yaml")" \
           "failed" \
           "KTX MCP upstream did not become ready after the reload"
+        KTX_SUPERVISOR_COMPLETED_REQUEST_ID="${KTX_RELOAD_REQUEST_ID}"
         KTX_SUPERVISOR_STATE="idle"
         KTX_SUPERVISOR_REQUEST_ID=""
+        KTX_RELOAD_DEADLINE_MS=""; KTX_RELOAD_STAGE_DEADLINE_MS=""
         ktx_write_capability "${started_at}"
         failures=$((failures + 1))
         if [[ "${failures}" -gt "${KTX_RELOAD_BACKOFF_LIMIT}" ]]; then
@@ -730,7 +838,7 @@ supervise_ktx() {
 wait_for_child_exit() {
   local pid="${1:-}"
   local timeout_s="${2:-10}"
-  local killer
+  local killer stop_s="${KTX_RELOAD_STOP_TIMEOUT_S}" remaining
   [[ -n "${pid}" ]] || return 0
   kill -0 "${pid}" >/dev/null 2>&1 || {
     wait "${pid}" >/dev/null 2>&1 || true
@@ -766,10 +874,10 @@ ktx_kill_leftover_daemon() {
   return 0
 }
 
-# Spec 191 §4.4 — graceful shutdown.
-# The supervisor is stopped first: it forwards TERM to the KTX daemon and reaps
-# it. Only then is Lucy stopped. The leftover sweep is the belt-and-braces path
-# for the case where the supervisor itself was SIGKILLed.
+# Spec 191 §4.4 / P1-63 — graceful shutdown (drain-first).
+# Whole-instance TERM/INT: notify Lucy DRAINING and wait for bounded drain while
+# KTX stays up; then stop supervisor/KTX with the original cleanup; then wrap up.
+# Duplicate TERM/INT/EXIT join the same shutdown via LUCY_SHUTDOWN_STARTED.
 # Wait until the supervisor reports a ready daemon, so the WebUI still starts
 # only after the KTX upstream is listening (the pre-Spec 191 ordering).
 wait_for_ktx_ready() {
@@ -783,15 +891,112 @@ wait_for_ktx_ready() {
   return 1
 }
 
+# Validate custom stop timeout against the whole-instance budget (no silent shrink).
+lucy_validate_stop_timeout_budget() {
+  local stop_s="${KTX_RELOAD_STOP_TIMEOUT_S:-10}"
+  local drain_s="${LUCY_DRAIN_BUDGET_S:-20}"
+  local orphan_s="${LUCY_ORPHAN_CLEANUP_BUDGET_S:-5}"
+  local wrap_s="${LUCY_WRAP_UP_BUDGET_S:-5}"
+  local total=$((drain_s + stop_s + orphan_s + wrap_s))
+  if [[ "${total}" -gt 40 ]]; then
+    echo "[lucy] warning: stop/drain budget conflict: drain=${drain_s}s stop=${stop_s}s orphan=${orphan_s}s wrap=${wrap_s}s total=${total}s > 40s" >&2
+  fi
+  if [[ "${stop_s}" -gt 10 ]]; then
+    echo "[lucy] warning: KTX_RELOAD_STOP_TIMEOUT_S=${stop_s} exceeds default 10s; total exit budget may miss ≤40s" >&2
+  fi
+  return 0
+}
+
+# Notify Lucy to drain and wait for DRAINING ack + process exit (KTX still alive).
+lucy_request_and_wait_drain() {
+  local waited=0
+  local ack_waited=0
+  local drain_s="${LUCY_DRAIN_BUDGET_S:-20}"
+  local ack_s="${LUCY_DRAIN_ACK_WAIT_S:-5}"
+
+  if [[ -z "${LUCY_PID:-}" ]]; then
+    return 0
+  fi
+  if ! kill -0 "${LUCY_PID}" >/dev/null 2>&1; then
+    wait "${LUCY_PID}" >/dev/null 2>&1 || true
+    return 0
+  fi
+
+  mkdir -p "${KTX_UI_DIR}" >/dev/null 2>&1 || true
+  rm -f "${LUCY_DRAIN_ACK_FILE}" >/dev/null 2>&1 || true
+  # Request file carries no credentials — phase marker only.
+  printf 'phase=DRAIN\n' > "${LUCY_DRAIN_REQUEST_FILE}" 2>/dev/null || true
+  # Signal Lucy as a second confirmable channel within this instance.
+  kill -TERM "${LUCY_PID}" >/dev/null 2>&1 || true
+
+  echo "[lucy] drain: begin pid=${LUCY_PID} budget=${drain_s}s" >&2
+
+  # Handoff window: external TERM → DRAINING ack. Work admitted in this window
+  # is counted by Lucy; parent must not treat signal send time as barrier close.
+  while [[ "${ack_waited}" -lt $((ack_s * 5)) ]]; do
+    if [[ -f "${LUCY_DRAIN_ACK_FILE}" ]]; then
+      echo "[lucy] drain: ack received" >&2
+      break
+    fi
+    if ! kill -0 "${LUCY_PID}" >/dev/null 2>&1; then
+      wait "${LUCY_PID}" >/dev/null 2>&1 || true
+      echo "[lucy] drain: lucy exited before ack" >&2
+      return 0
+    fi
+    ack_waited=$((ack_waited + 1))
+    sleep 0.2
+  done
+
+  # Wait for Lucy to finish drain and exit while KTX remains up (≤ drain budget).
+  while [[ "${waited}" -lt $((drain_s * 5)) ]]; do
+    if ! kill -0 "${LUCY_PID}" >/dev/null 2>&1; then
+      wait "${LUCY_PID}" >/dev/null 2>&1 || true
+      echo "[lucy] drain: lucy settled exit" >&2
+      return 0
+    fi
+    waited=$((waited + 1))
+    sleep 0.2
+  done
+
+  echo "[lucy] drain: deadline reached; forcing lucy exit" >&2
+  kill -TERM "${LUCY_PID}" >/dev/null 2>&1 || true
+  wait_for_child_exit "${LUCY_PID}" "${LUCY_WRAP_UP_BUDGET_S:-5}"
+  return 0
+}
+
+LUCY_SHUTDOWN_STARTED=0
+
 shutdown() {
   local status="${1:-0}"
+  # Duplicate TERM/INT/EXIT join the same process (idempotent).
+  if [[ "${LUCY_SHUTDOWN_STARTED}" -ne 0 ]]; then
+    return 0
+  fi
+  LUCY_SHUTDOWN_STARTED=1
   trap - TERM INT EXIT
+
+  lucy_validate_stop_timeout_budget
+
+  # 1) Drain Lucy first (KTX stays alive for in-flight dependency work).
+  lucy_request_and_wait_drain
+
+  # 2) Original supervisor → KTX cleanup (default 10s).
   if [[ -n "${SUPERVISOR_PID:-}" ]]; then
+    echo "[lucy] drain: stopping supervisor pid=${SUPERVISOR_PID}" >&2
     kill -TERM "${SUPERVISOR_PID}" >/dev/null 2>&1 || true
     wait_for_child_exit "${SUPERVISOR_PID}" "${KTX_RELOAD_STOP_TIMEOUT_S}"
   fi
+
+  # 3) Orphan KTX sweep (≤5s bound via existing loop + kill).
   ktx_kill_leftover_daemon
-  if [[ -n "${LUCY_PID:-}" ]]; then kill "${LUCY_PID}" >/dev/null 2>&1 || true; fi
+
+  # 4) Remaining Lucy wrap-up if still alive.
+  if [[ -n "${LUCY_PID:-}" ]] && kill -0 "${LUCY_PID}" >/dev/null 2>&1; then
+    kill -TERM "${LUCY_PID}" >/dev/null 2>&1 || true
+    wait_for_child_exit "${LUCY_PID}" "${LUCY_WRAP_UP_BUDGET_S:-5}"
+  fi
+
+  rm -f "${LUCY_DRAIN_REQUEST_FILE}" "${LUCY_DRAIN_ACK_FILE}" >/dev/null 2>&1 || true
   wait >/dev/null 2>&1 || true
   exit "${status}"
 }
@@ -860,6 +1065,7 @@ echo "[lucy] project root: ${PROJECT_ROOT}"
 # previous run so a stale receipt can never be read as this boot's answer.
 rm -f "${KTX_RELOAD_CAPABILITY_FILE}" "${KTX_RELOAD_RESULT_FILE}" \
   "${KTX_RELOAD_REQUEST_FILE}" "${KTX_SUPERVISOR_PID_FILE}" "${KTX_READY_FILE}" \
+  "${LUCY_DRAIN_REQUEST_FILE}" "${LUCY_DRAIN_ACK_FILE}" \
   >/dev/null 2>&1 || true
 
 supervise_ktx &
@@ -879,7 +1085,13 @@ if ! wait_for_ktx_ready; then
 fi
 
 cd "${WEBUI_ROOT}"
-npm run start &
+# P1-81/82: libuv defaults to 4 threads. Catalog/gate scans and display reconciliation all stat
+# hundreds of files, so one burst starved every other file operation (f5e4b14d). Operators can
+# override; this only affects the Node process, not KTX.
+export UV_THREADPOOL_SIZE="${UV_THREADPOOL_SIZE:-16}"
+# Own the actual server PID. npm/tsx launchers may exit on TERM while their
+# Node child is still draining, which would stop KTX before its RPC settles.
+node --import tsx server/index.ts &
 LUCY_PID="$!"
 
 wait -n "${SUPERVISOR_PID}" "${LUCY_PID}"

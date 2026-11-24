@@ -1,3 +1,4 @@
+# P1-72: legacy-env compatibility fixture only. The variable is ignored; row policies always enforce.
 services:
   lucy:
     environment:

@@ -1,0 +1,14 @@
+✔ same Agent count and thin permission DTOs cannot pass R0 (4.30775ms)
+✔ public finalRows and Constraints affect normalized graph identity (1.268666ms)
+✔ nearest-rank includes the slowest of five cold samples (0.083333ms)
+✔ duplicate capabilities are rejected independently of total and bytes (0.10375ms)
+✔ padding bytes alone cannot pass WIDTH and identity drift is rejected (0.099208ms)
+✔ full AST detects changed OR grouping even when flattened predicates are identical (0.136583ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 54.982458

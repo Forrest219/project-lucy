@@ -1,0 +1,54 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 18,
+  "body": {
+    "ok": true,
+    "data": {
+      "valid": true,
+      "connectionId": "hive-1",
+      "schema": "d5",
+      "assetKind": "schema_manifest",
+      "assetType": "schemaManifest",
+      "targetPath": "semantic-layer/hive-1/_schema/d5.yaml",
+      "originalFilename": "d5.yaml",
+      "sizeBytes": 83,
+      "sha256": "9b898f549c0521c7f5f9880192a01b4d36d65fb746a33d82e90b0a99a14c5896",
+      "errors": [],
+      "warnings": [
+        {
+          "code": "TARGET_EXISTS",
+          "message": "目标文件已存在：semantic-layer/hive-1/_schema/d5.yaml"
+        },
+        {
+          "code": "PREEXISTING_SOURCE_NAME_CONFLICT",
+          "message": "连接内已有与本次候选无关的短名冲突「t6」（物理表：c6.t、d6.t）。可继续上传能减少旧冲突的修复，但运行时 Source Map 在全部消除前仍不可用。"
+        }
+      ],
+      "tableNames": [
+        "d5_t"
+      ],
+      "tables": 1,
+      "sourceNameConflicts": [
+        {
+          "sourceName": "t6",
+          "entries": [
+            {
+              "targetPath": "hive-1/_schema/c6.yaml",
+              "schema": "c6",
+              "physicalTable": "c6.t",
+              "sourceName": "t6"
+            },
+            {
+              "targetPath": "hive-1/_schema/d6.yaml",
+              "schema": "d6",
+              "physicalTable": "d6.t",
+              "sourceName": "t6"
+            }
+          ],
+          "involvesCandidate": false
+        }
+      ],
+      "exists": true
+    }
+  }
+}

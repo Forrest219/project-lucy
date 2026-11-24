@@ -169,32 +169,38 @@ export type BudgetResult = {
 
 type BudgetRule = { id: string; scenario: ScenarioName; routes: string[]; metric: string; stat: "p95" | "max"; limit: number };
 
+/** Spec 174 four routes (probe-load stays on these — Roles has no connection probes). */
 const PAGE_ROUTES = ["connections", "catalog", "overview", "agents"];
+/** REQ-030-034 D4 — Roles list added to warm browser / route-query cells (not probe-load). */
+const PAGE_ROUTES_WITH_ROLES = [...PAGE_ROUTES, "roles"];
+const ROUTES_WITH_ROLES_CSV = PAGE_ROUTES_WITH_ROLES.join(",");
+const ROUTES_SPEC174_CSV = PAGE_ROUTES.join(",");
 
 /** Spec 174 §8 budgets; every rule names its routes (never derived from what was measured). */
 export const BUDGET_RULES: BudgetRule[] = [
-  { id: "PERF-01", scenario: "route-warm", routes: PAGE_ROUTES, metric: "feedbackMs", stat: "p95", limit: 50 },
-  { id: "PERF-02", scenario: "route-warm", routes: PAGE_ROUTES, metric: "primaryReadyMs", stat: "p95", limit: 100 },
-  { id: "PERF-03", scenario: "route-query-cold", routes: PAGE_ROUTES, metric: "primaryReadyMs", stat: "p95", limit: 500 },
+  { id: "PERF-01", scenario: "route-warm", routes: PAGE_ROUTES_WITH_ROLES, metric: "feedbackMs", stat: "p95", limit: 50 },
+  { id: "PERF-02", scenario: "route-warm", routes: PAGE_ROUTES_WITH_ROLES, metric: "primaryReadyMs", stat: "p95", limit: 100 },
+  { id: "PERF-03", scenario: "route-query-cold", routes: PAGE_ROUTES_WITH_ROLES, metric: "primaryReadyMs", stat: "p95", limit: 500 },
   { id: "PERF-03", scenario: "probe-load", routes: ["catalog", "overview", "agents"], metric: "primaryReadyMs", stat: "p95", limit: 500 },
   { id: "PERF-04", scenario: "browser-cold", routes: ["connections", "catalog", "overview"], metric: "shellReadyMs", stat: "p95", limit: 500 },
   { id: "PERF-04", scenario: "browser-warm-refresh", routes: ["connections", "catalog", "overview"], metric: "shellReadyMs", stat: "p95", limit: 500 },
-  { id: "PERF-05", scenario: "browser-cold", routes: PAGE_ROUTES, metric: "primaryReadyMs", stat: "p95", limit: 800 },
-  { id: "PERF-05", scenario: "browser-warm-refresh", routes: PAGE_ROUTES, metric: "primaryReadyMs", stat: "p95", limit: 800 },
+  { id: "PERF-05", scenario: "browser-cold", routes: PAGE_ROUTES_WITH_ROLES, metric: "primaryReadyMs", stat: "p95", limit: 800 },
+  { id: "PERF-05", scenario: "browser-warm-refresh", routes: PAGE_ROUTES_WITH_ROLES, metric: "primaryReadyMs", stat: "p95", limit: 800 },
   { id: "PERF-05", scenario: "login-required", routes: ["overview"], metric: "loginToPrimaryReadyMs", stat: "p95", limit: 800 },
   { id: "PERF-05", scenario: "probe-load", routes: ["connections"], metric: "primaryReadyMs", stat: "p95", limit: 800 },
   { id: "PERF-05", scenario: "probe-load-slow", routes: ["connections"], metric: "primaryReadyMs", stat: "p95", limit: 800 },
   { id: "PERF-06", scenario: "api-warm", routes: ["sources"], metric: "httpTotalMs", stat: "p95", limit: 100 },
   { id: "PERF-06", scenario: "api-warm", routes: ["agents"], metric: "httpTotalMs", stat: "p95", limit: 200 },
+  { id: "PERF-06", scenario: "api-warm", routes: ["roles"], metric: "httpTotalMs", stat: "p95", limit: 200 },
   { id: "PERF-07", scenario: "display-cold", routes: ["sources"], metric: "buildMs", stat: "p95", limit: 500 },
-  { id: "PERF-09", scenario: "browser-cold", routes: PAGE_ROUTES, metric: "cls", stat: "max", limit: 0.05 },
-  { id: "PERF-09", scenario: "browser-warm-refresh", routes: PAGE_ROUTES, metric: "cls", stat: "max", limit: 0.05 },
-  { id: "PERF-09", scenario: "route-warm", routes: [...PAGE_ROUTES, "catalog-filter"], metric: "cls", stat: "max", limit: 0.05 },
-  { id: "PERF-09", scenario: "route-query-cold", routes: PAGE_ROUTES, metric: "cls", stat: "max", limit: 0.05 },
+  { id: "PERF-09", scenario: "browser-cold", routes: PAGE_ROUTES_WITH_ROLES, metric: "cls", stat: "max", limit: 0.05 },
+  { id: "PERF-09", scenario: "browser-warm-refresh", routes: PAGE_ROUTES_WITH_ROLES, metric: "cls", stat: "max", limit: 0.05 },
+  { id: "PERF-09", scenario: "route-warm", routes: [...PAGE_ROUTES_WITH_ROLES, "catalog-filter"], metric: "cls", stat: "max", limit: 0.05 },
+  { id: "PERF-09", scenario: "route-query-cold", routes: PAGE_ROUTES_WITH_ROLES, metric: "cls", stat: "max", limit: 0.05 },
   { id: "PERF-09", scenario: "probe-load", routes: PAGE_ROUTES, metric: "cls", stat: "max", limit: 0.05 },
   { id: "PERF-09", scenario: "probe-load-slow", routes: ["connections"], metric: "cls", stat: "max", limit: 0.05 },
-  { id: "PERF-10", scenario: "browser-cold", routes: PAGE_ROUTES, metric: "businessLongTasks", stat: "max", limit: 0 },
-  { id: "PERF-10", scenario: "route-warm", routes: [...PAGE_ROUTES, "catalog-filter"], metric: "businessLongTasks", stat: "max", limit: 0 }
+  { id: "PERF-10", scenario: "browser-cold", routes: PAGE_ROUTES_WITH_ROLES, metric: "businessLongTasks", stat: "max", limit: 0 },
+  { id: "PERF-10", scenario: "route-warm", routes: [...PAGE_ROUTES_WITH_ROLES, "catalog-filter"], metric: "businessLongTasks", stat: "max", limit: 0 }
 ];
 
 /**
@@ -236,14 +242,14 @@ export function evaluateBudgets(
  * (display snapshot ready time), so they are required in the after phase only.
  */
 export const EXPECTED_CELLS: Array<{ scenario: ScenarioName; routes: string[]; metrics: string[]; afterOnly?: string[] }> = [
-  { scenario: "api-warm", routes: ["sources", "agents"], metrics: ["httpTotalMs"] },
+  { scenario: "api-warm", routes: ["sources", "agents", "roles"], metrics: ["httpTotalMs"] },
   { scenario: "display-cold", routes: ["sources", "agents"], metrics: ["buildMs", "httpTotalMs", "displayBuilds"] },
   { scenario: "service-cold", routes: ["sources"], metrics: ["processToSocketMs", "firstSourcesHttpMs"], afterOnly: ["displayReadyMs"] },
-  { scenario: "browser-cold", routes: PAGE_ROUTES, metrics: ["shellReadyMs", "primaryReadyMs", "cls", "businessLongTasks"] },
-  { scenario: "browser-warm-refresh", routes: PAGE_ROUTES, metrics: ["shellReadyMs", "primaryReadyMs", "cls"] },
-  { scenario: "route-warm", routes: PAGE_ROUTES, metrics: ["feedbackMs", "primaryReadyMs", "cls", "businessLongTasks"] },
+  { scenario: "browser-cold", routes: PAGE_ROUTES_WITH_ROLES, metrics: ["shellReadyMs", "primaryReadyMs", "cls", "businessLongTasks"] },
+  { scenario: "browser-warm-refresh", routes: PAGE_ROUTES_WITH_ROLES, metrics: ["shellReadyMs", "primaryReadyMs", "cls"] },
+  { scenario: "route-warm", routes: PAGE_ROUTES_WITH_ROLES, metrics: ["feedbackMs", "primaryReadyMs", "cls", "businessLongTasks"] },
   { scenario: "route-warm", routes: ["catalog-filter"], metrics: ["filterMs", "cls", "businessLongTasks"] },
-  { scenario: "route-query-cold", routes: PAGE_ROUTES, metrics: ["feedbackMs", "primaryReadyMs", "cls"] },
+  { scenario: "route-query-cold", routes: PAGE_ROUTES_WITH_ROLES, metrics: ["feedbackMs", "primaryReadyMs", "cls"] },
   { scenario: "login-required", routes: ["overview"], metrics: ["passwordSubmitMs", "loginToPrimaryReadyMs", "cls"] },
   { scenario: "probe-load", routes: PAGE_ROUTES, metrics: ["primaryReadyMs", "cls", "healthIntents", "liveIntents", "probeTasksStarted"] },
   { scenario: "probe-load-slow", routes: ["connections"], metrics: ["primaryReadyMs", "cls", "slowProbeDoneMs", "healthIntents", "liveIntents"] }
@@ -295,7 +301,7 @@ export function collectionProblems(
     }
   }
   if (scenarios.includes("browser-cold")) {
-    for (const route of PAGE_ROUTES) {
+    for (const route of PAGE_ROUTES_WITH_ROLES) {
       const info = assets[route];
       if (!info) problems.push(`PERF-08 ${route}: no JS/CSS resource evidence`);
       else {
@@ -410,10 +416,11 @@ async function freePort(): Promise<number> {
   });
 }
 
-type ServerHandle = {
+export type ServerHandle = {
   child: ChildProcess;
   baseUrl: string;
-  ready: { startup: Record<string, number | null>; displayCacheAvailable: boolean };
+  mcpUrl: string;
+  ready: { port: number; startup: Record<string, number | null>; displayCacheAvailable: boolean };
   forkToReadyMs: number;
   request: (type: string) => Promise<Record<string, unknown>>;
   stop: () => Promise<void>;
@@ -436,7 +443,7 @@ function sanitizedEnv(): NodeJS.ProcessEnv {
   return env;
 }
 
-async function startFixtureServer(options: ServerOptions): Promise<ServerHandle> {
+export async function startFixtureServer(options: ServerOptions): Promise<ServerHandle> {
   const port = await freePort();
   const proxyPort = await freePort();
   const upstreamPort = await freePort(); // intentionally closed: no KTX daemon is contacted
@@ -524,7 +531,15 @@ async function startFixtureServer(options: ServerOptions): Promise<ServerHandle>
     await exited;
     clearTimeout(timer);
   };
-  return { child, baseUrl: `http://127.0.0.1:${port}`, ready, forkToReadyMs, request, stop };
+  return {
+    child,
+    baseUrl: `http://127.0.0.1:${port}`,
+    mcpUrl: `http://127.0.0.1:${proxyPort}/mcp`,
+    ready,
+    forkToReadyMs,
+    request,
+    stop
+  };
 }
 
 function parseServerTiming(header: string | null): Record<string, number | string> {
@@ -550,7 +565,11 @@ async function timedFetch(url: string): Promise<{ totalMs: number; status: numbe
   return { totalMs, status: response.status, bytes: body.byteLength, serverTiming: parseServerTiming(response.headers.get("server-timing")) };
 }
 
-const API_ENDPOINTS: Record<string, string> = { sources: "/api/sources", agents: "/api/admin/agents" };
+const API_ENDPOINTS: Record<string, string> = {
+  sources: "/api/sources",
+  agents: "/api/admin/agents",
+  roles: "/api/admin/roles"
+};
 
 async function runApiWarm(server: ServerHandle, options: CliOptions): Promise<RawSample[]> {
   const samples: RawSample[] = [];
@@ -685,7 +704,7 @@ async function runPlaywright(
   options: CliOptions,
   commands: CommandRecord[],
   specFile = "tests/performance/entry-performance.spec.ts",
-  routes = "connections,catalog,overview,agents",
+  routes = ROUTES_WITH_ROLES_CSV,
   // The expectations come from the CLEAN fixture: the fixture server creates
   // its own semantic assets at startup (e.g. the Spec 149 `lucy-ops` block),
   // and those are not part of the performance fixture's declared shape.
@@ -904,6 +923,7 @@ export function expectationsFromFixture(input: {
   connections: Array<{ id: string; schemas: string[]; enabledTables: string[] }>;
   tables: FixtureTable[];
   agentIds: string[];
+  roleIds?: string[];
 }): PerfExpected {
   const enabled = input.tables.filter((table) => table.enabled);
   const configuredSchemas = input.connections.flatMap((conn) => conn.schemas.map((schema) => `${conn.id}/${schema}`));
@@ -923,6 +943,7 @@ export function expectationsFromFixture(input: {
     agents: input.agentIds.length,
     connectionIds: input.connections.map((conn) => conn.id),
     agentIds: input.agentIds,
+    roleIds: input.roleIds ?? [],
     enabledTableNames: enabled.map((table) => table.name).sort(),
     connectionMetricValues: [String(input.connections.length), String(missingManifest), String(input.tables.length), String(input.tables.length - enabled.length)],
     schemaCount: configuredSchemas.length,
@@ -954,7 +975,12 @@ export async function readFixtureExpectations(fixture: FixtureManifest): Promise
       }
     }
   }
-  const expected = expectationsFromFixture({ connections, tables, agentIds: fixture.agents.map((agent) => agent.id) });
+  const expected = expectationsFromFixture({
+    connections,
+    tables,
+    agentIds: fixture.agents.map((agent) => agent.id),
+    roleIds: fixture.roles
+  });
   if (expected.tables !== fixture.tableCount || expected.enabledTables !== fixture.enabledTableCount) {
     throw new Error(`fixture expectations (${expected.tables}/${expected.enabledTables}) disagree with the fixture manifest`);
   }
@@ -1013,7 +1039,8 @@ async function main(): Promise<number> {
       for (const scenario of ["browser-cold", "browser-warm-refresh", "route-warm", "route-query-cold", "probe-load"] as const) {
         if (!has(scenario)) continue;
         await setStubConfig(warmFixture, ["* 50 ok"]);
-        samples.push(...(await runPlaywright(server, warmFixture, runDir, scenario, options, commands, undefined, undefined, cleanManifest)).map(postProcessBrowserSample));
+        const routes = scenario === "probe-load" ? ROUTES_SPEC174_CSV : ROUTES_WITH_ROLES_CSV;
+        samples.push(...(await runPlaywright(server, warmFixture, runDir, scenario, options, commands, undefined, routes, cleanManifest)).map(postProcessBrowserSample));
       }
       if (has("spec195-roundtrip")) {
         // Spec 195 SI-14 — sidebar round-trips with one overlay edit in the
@@ -1087,7 +1114,7 @@ async function main(): Promise<number> {
   const budgets = evaluateBudgets(summary, { scenarios: options.scenarios, minSamples: formal ? FORMAL_MIN_SAMPLES : 1 });
   const initialAssets = initialAssetBudget(samples, assets);
   if (has("browser-cold")) {
-    for (const route of PAGE_ROUTES) {
+    for (const route of PAGE_ROUTES_WITH_ROLES) {
       const info = initialAssets[route];
       const complete = Boolean(info) && info!.problems.length === 0 && info!.samples >= (formal ? FORMAL_MIN_SAMPLES : 1);
       const note = info ? (info.problems.length ? `${info.problems.length} evidence problems` : undefined) : "no samples";

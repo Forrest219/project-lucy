@@ -184,7 +184,13 @@ export function CaseList() {
   async function downloadSuite() {
     if (!activeDomain) return;
     const downloadHref = `/api/eval/suites/${encodeURIComponent(activeDomain)}/download`;
-    const response = await fetch(downloadHref);
+    let response: Response;
+    try {
+      response = await fetch(downloadHref);
+    } catch {
+      toast.error("下载 Eval YAML 失败：网络请求未完成");
+      return;
+    }
     if (!response.ok) {
       toast.error("下载 Eval YAML 失败");
       return;

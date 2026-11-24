@@ -1,9 +1,11 @@
 {
   "mcpServers": {
-    "lucy-skills": {
+    "lucy": {
       "type": "http",
-      "url": "http://localhost:7879/mcp/skills",
-      "headers": { "Authorization": "Bearer ${LUCY_LOCAL_TOKEN}" }
+      "url": "http://127.0.0.1:57881/mcp",
+      "headers": {
+        "Authorization": "Bearer ${LUCY_LOCAL_TOKEN}"
+      }
     }
   }
 }

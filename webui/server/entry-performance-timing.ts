@@ -27,12 +27,17 @@ export type RequestTiming = {
   startedAt: number;
   durations: Map<ServerTimingName, number>;
   cache?: DisplayCacheState;
+  /** P1-75：本次读取是受限降级（宽限内服务已提交快照），如实暴露，不改 `cache` 取值。 */
+  degraded?: "grace";
   builds: number;
 };
 
 export type EntryPerfCounters = {
   manifestParses: number;
   overlayReads: number;
+  catalogYamlParses: number;
+  catalogYamlHits: number;
+  catalogYamlJoins: number;
   sourceMapBuilds: number;
   accessReads: number;
   enabledTableReads: number;
@@ -45,6 +50,9 @@ function emptyCounters(): EntryPerfCounters {
   return {
     manifestParses: 0,
     overlayReads: 0,
+    catalogYamlParses: 0,
+    catalogYamlHits: 0,
+    catalogYamlJoins: 0,
     sourceMapBuilds: 0,
     accessReads: 0,
     enabledTableReads: 0,
@@ -98,6 +106,10 @@ export function markDisplayCache(state: DisplayCacheState, timing = currentReque
   if (timing) timing.cache = state;
 }
 
+export function markDisplayDegraded(kind: "grace", timing = currentRequestTiming()): void {
+  if (timing) timing.degraded = kind;
+}
+
 export function markDisplayBuild(timing = currentRequestTiming()): void {
   if (timing) timing.builds += 1;
 }
@@ -112,6 +124,7 @@ export function formatServerTiming(timing: RequestTiming, now = performance.now(
   }
   parts.push(`total;dur=${(now - timing.startedAt).toFixed(1)}`);
   if (timing.cache) parts.push(`cache;desc=${timing.cache}`);
+  if (timing.degraded) parts.push(`degraded;desc=${timing.degraded}`);
   parts.push(`builds;desc=${timing.builds}`);
   return parts.join(", ");
 }

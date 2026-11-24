@@ -1,0 +1,80 @@
+{
+  "asOf": "2026-11-20T05:20:57.998459+00:00",
+  "candidate": "sha256:30ec4ae032db81201f35f78a8c1b56592ada53d5577862b1d6e7879db25fec3a",
+  "repairSourceManifest": "docs/qa/uat/suites/core-availability/runs/2026-11-20-codex-readyz-diagnostic-repair-artifacts/source-manifest.json",
+  "comparison": [
+    {
+      "path": "webui/server/index.ts",
+      "candidateSha256": "f724b05921916641848ef073e2eaf4c16bce3920b8d2e23188e25d327e42e8b3",
+      "matchesPriorFailureSource": true,
+      "priorSource": "6b8deec4",
+      "repairSha256": "cdf7c64a474cbece3804c83860e41594d390d3ce59419bb205c0ba3a6d509203",
+      "matchesRepair": false
+    },
+    {
+      "path": "webui/server/mcp-runtime-state.ts",
+      "candidateSha256": "046b9721b0d446aca7d13098591954bb89fe41c8d8f6b61dda7a9b1cce165217",
+      "matchesPriorFailureSource": true,
+      "priorSource": "6b8deec4",
+      "repairSha256": "63808a1778cc62b1dd4bfcdaf06cef3b9182f0f500271ffe3977672dfaa3a572",
+      "matchesRepair": false
+    },
+    {
+      "path": "webui/server/proxy/mcp-proxy.ts",
+      "candidateSha256": "b260cc653b04fd055405b2072684670d44cf49524dd037236aace0b8588f5fae",
+      "matchesPriorFailureSource": true,
+      "priorSource": "6b8deec4",
+      "repairSha256": "73e128dd3f88ec763af4be1cfc7067922b5797fd0342a29c28bcf5580850296d",
+      "matchesRepair": false
+    },
+    {
+      "path": "webui/server/runtime/diagnostic-snapshot.ts",
+      "candidateSha256": "d209950f6a290b7557ee9e5eec0611d79c21b3fc944b778b3dbd14e2485945dc",
+      "matchesPriorFailureSource": true,
+      "priorSource": "6b8deec4",
+      "repairSha256": "f018d1e1006afeba031e7d78510657bf682e2e0d8e408b6688319009abac2f06",
+      "matchesRepair": false
+    },
+    {
+      "path": "webui/server/runtime/diagnostic-collector.ts",
+      "candidateSha256": null,
+      "matchesPriorFailureSource": true,
+      "priorSource": "6b8deec4",
+      "repairSha256": "f4cb59fee068b3ea4f8c34c70c5587e8280c0b7de2a42c9c9f1f39857df97803",
+      "matchesRepair": false
+    },
+    {
+      "path": "webui/server/runtime/diagnostic-collector-worker.ts",
+      "candidateSha256": null,
+      "matchesPriorFailureSource": true,
+      "priorSource": "6b8deec4",
+      "repairSha256": "e93bf211a2a1edc950f27d37eaabee2f9bc637b4eaac3d4096f1b96e0eaa7df8",
+      "matchesRepair": false
+    },
+    {
+      "path": "webui/server/runtime/mcp-process-work.ts",
+      "candidateSha256": null,
+      "matchesPriorFailureSource": true,
+      "priorSource": "6b8deec4",
+      "repairSha256": "b9c5e11a02a3e390c8b7de3cf6a506a4a4bc940c6a5f0948cdee8d76a6b79879",
+      "matchesRepair": false
+    },
+    {
+      "path": "scripts/runtime/docker-entrypoint.sh",
+      "candidateSha256": "25e248b0af0142de184680ebc4de0f4dd33756170216f25f747b9c3e76cbd59f",
+      "matchesPriorFailureSource": true,
+      "priorSource": "6b8deec4",
+      "repairSha256": "08c7dc71c427d4e24ed85e98f57d4d4e0836ab94b74d761b25f5a07bd8549b19",
+      "matchesRepair": false
+    },
+    {
+      "path": "webui/server/runtime/process-drain.ts",
+      "candidateSha256": "8c4e425334ded9a0e449f86139c33f0c89fcd7dddf34a3f76b84a0196c94f0b4",
+      "matchesPriorFailureSource": true,
+      "priorSource": "6b8deec4",
+      "repairSha256": "c50d28a9cccf43eb72020003e063c67e6fb1e2f7066043b9e231a3f55c11467d",
+      "matchesRepair": false
+    }
+  ],
+  "finding": "The final two-fix image retains the prior diagnostic/drain implementation. No repair file matches the separate qualified repair image. The separate CAV partial PASS cannot be credited to this image. Complete F61/F62/F63 and R-CAV remain unqualified on this image."
+}

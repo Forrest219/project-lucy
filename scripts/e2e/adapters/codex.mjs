@@ -30,8 +30,46 @@ export function prepare({ workDir, mcpUrl }) {
   return { env: { CODEX_HOME: home }, files: [path.join(home, "config.toml")], lastMessageFile: path.join(workDir, "codex-last-message.txt") };
 }
 
-export function buildInvocation({ binaryPath, question, workDir, prepared, env, secrets = [] }) {
-  const args = ["exec", "--skip-git-repo-check", "--json", "--sandbox", "read-only", "--cd", workDir, "--output-last-message", prepared.lastMessageFile, question];
+export const supportsContinuation = true;
+
+export function buildInvocation({
+  binaryPath,
+  question,
+  workDir,
+  prepared,
+  env,
+  secrets = [],
+  sessionId = null,
+  continueSession = false
+}) {
+  const args =
+    (continueSession || sessionId) && sessionId
+      ? [
+          "exec",
+          "resume",
+          String(sessionId),
+          "--skip-git-repo-check",
+          "--json",
+          "--sandbox",
+          "read-only",
+          "--cd",
+          workDir,
+          "--output-last-message",
+          prepared.lastMessageFile,
+          question
+        ]
+      : [
+          "exec",
+          "--skip-git-repo-check",
+          "--json",
+          "--sandbox",
+          "read-only",
+          "--cd",
+          workDir,
+          "--output-last-message",
+          prepared.lastMessageFile,
+          question
+        ];
   assertNoSecretInArgv(args, secrets);
   return {
     command: binaryPath,

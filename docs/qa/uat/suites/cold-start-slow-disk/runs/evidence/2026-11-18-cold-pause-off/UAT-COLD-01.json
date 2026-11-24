@@ -1,0 +1,84 @@
+{
+  "id": "UAT-COLD-01",
+  "title": "对照：0.25.0 在同一限速冷启动台上能起来",
+  "pass": true,
+  "checks": [
+    {
+      "name": "process stayed up (no exit)",
+      "pass": true,
+      "actual": {
+        "running": true,
+        "exitCode": 0,
+        "restarts": 0,
+        "oomKilled": false
+      },
+      "limit": "running"
+    },
+    {
+      "name": "no FST_ERR_HOOK_TIMEOUT / AVV_ERR_READY_TIMEOUT",
+      "pass": true,
+      "actual": false,
+      "limit": false
+    },
+    {
+      "name": "restart count == 0",
+      "pass": true,
+      "actual": 0,
+      "limit": 0
+    },
+    {
+      "name": "ready within 120s",
+      "pass": true,
+      "actual": 37.1,
+      "limit": "≤ 120s"
+    },
+    {
+      "name": "health all 200 in 60s window",
+      "pass": true,
+      "actual": 0,
+      "limit": 0
+    }
+  ],
+  "image": "project-lucy:old-9c78b0e3",
+  "readyT": 37.1,
+  "exited": null,
+  "finalState": {
+    "running": true,
+    "exitCode": 0,
+    "restarts": 0,
+    "oomKilled": false
+  },
+  "windowStart": 37.1,
+  "windowEnd": 97.1,
+  "stats": {
+    "samples": 30,
+    "livezMaxMs": null,
+    "livezP99Ms": null,
+    "livezNon200": 0,
+    "readyzMaxMs": null,
+    "readyzP99Ms": null,
+    "readyzP50Ms": null,
+    "readyzP95Ms": null,
+    "readyzNon200": 0,
+    "healthMaxMs": 1373,
+    "healthNon200": 0
+  },
+  "logFindings": {
+    "hookTimeout": false,
+    "auditSchemaReady": null,
+    "tail": [
+      "Project: /data/lucy",
+      "{\"level\":30,\"time\":1794996055557,\"pid\":270,\"hostname\":\"37c2bcbad2d9\",\"sessionId\":\"ff9fcbfd-b91f-40ff-be42-2cd78a0ef2c6\",\"msg\":\"session.open\"}",
+      "{\"level\":30,\"time\":1794996062173,\"pid\":270,\"hostname\":\"37c2bcbad2d9\",\"sessionId\":\"e21c2968-c893-45d9-b3d8-242e19db8cc8\",\"msg\":\"session.open\"}",
+      "{\"level\":30,\"time\":1794996068337,\"pid\":270,\"hostname\":\"37c2bcbad2d9\",\"sessionId\":\"8ec6c00e-c58f-49af-a77b-7b0fcd7eb0d8\",\"msg\":\"session.open\"}",
+      "{\"level\":30,\"time\":1794996074475,\"pid\":270,\"hostname\":\"37c2bcbad2d9\",\"sessionId\":\"6b427fd6-303d-4962-b8ce-e7ae97a0b5d6\",\"msg\":\"session.open\"}",
+      "{\"level\":30,\"time\":1794996080596,\"pid\":270,\"hostname\":\"37c2bcbad2d9\",\"sessionId\":\"d80cc6d8-4e17-4f7a-aba6-d712b24e93d8\",\"msg\":\"session.open\"}",
+      "{\"level\":30,\"time\":1794996086805,\"pid\":270,\"hostname\":\"37c2bcbad2d9\",\"sessionId\":\"4391e527-103e-41fc-949a-4115a5b43567\",\"msg\":\"session.open\"}",
+      "{\"level\":30,\"time\":1794996093053,\"pid\":270,\"hostname\":\"37c2bcbad2d9\",\"sessionId\":\"b3a3574f-7174-415a-976c-398a7100eb5e\",\"msg\":\"session.open\"}",
+      "{\"level\":30,\"time\":1794996099033,\"pid\":270,\"hostname\":\"37c2bcbad2d9\",\"sessionId\":\"0e321e15-e07d-4e55-a84e-713d3e95e06d\",\"msg\":\"session.open\"}",
+      "{\"level\":30,\"time\":1794996105110,\"pid\":270,\"hostname\":\"37c2bcbad2d9\",\"sessionId\":\"1332e5b6-0e12-4a86-9229-b08ba6018d5c\",\"msg\":\"session.open\"}",
+      "{\"level\":30,\"time\":1794996111264,\"pid\":270,\"hostname\":\"37c2bcbad2d9\",\"sessionId\":\"83c344b9-73b7-4a6b-b824-a5c550c4d6b2\",\"msg\":\"session.open\"}",
+      ""
+    ]
+  }
+}

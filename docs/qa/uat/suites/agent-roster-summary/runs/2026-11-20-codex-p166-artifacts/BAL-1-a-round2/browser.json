@@ -1,0 +1,5131 @@
+{
+  "probeRevision": 2,
+  "fixture": "BAL-1",
+  "candidate": "a",
+  "startedAt": "2026-11-20T06:51:42.251Z",
+  "browser": "157.0.8103.79",
+  "headed": true,
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "samples": [
+    {
+      "kind": "cold-navigation",
+      "n": 0,
+      "primaryReadyMs": 438.5,
+      "statsReadyMs": 838.6000000014901,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2425,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 92.39999999850988,
+          "ttfbMs": 118.5,
+          "durationMs": 158.89999999850988,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 282.29999999701977,
+          "ttfbMs": 496.3999999985099,
+          "durationMs": 496.70000000298023,
+          "transferSize": 39011,
+          "decodedBodySize": 38711
+        }
+      ]
+    },
+    {
+      "kind": "cold-navigation",
+      "n": 1,
+      "primaryReadyMs": 383,
+      "statsReadyMs": 415.3999999985099,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2425,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 80.5,
+          "ttfbMs": 107.39999999850988,
+          "durationMs": 189.70000000298023,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 302.29999999701977,
+          "ttfbMs": 85.5,
+          "durationMs": 85.70000000298023,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "cold-navigation",
+      "n": 2,
+      "primaryReadyMs": 876.6000000014901,
+      "statsReadyMs": 892.6000000014901,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2425,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 128.10000000149012,
+          "ttfbMs": 253.79999999701977,
+          "durationMs": 425.29999999701977,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 589.3000000044703,
+          "ttfbMs": 104.19999999552965,
+          "durationMs": 104.39999999850988,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "cold-navigation",
+      "n": 3,
+      "primaryReadyMs": 350.09999999403954,
+      "statsReadyMs": 383.8999999985099,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2425,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 88,
+          "ttfbMs": 99.69999999552965,
+          "durationMs": 160,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 278.09999999403954,
+          "ttfbMs": 75.70000000298023,
+          "durationMs": 75.90000000596046,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "cold-navigation",
+      "n": 4,
+      "primaryReadyMs": 327.1000000014901,
+      "statsReadyMs": 377.70000000298023,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2425,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 83.5,
+          "ttfbMs": 111.89999999850988,
+          "durationMs": 158,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 272.3999999985099,
+          "ttfbMs": 69.89999999850988,
+          "durationMs": 70.10000000149012,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 0,
+      "primaryReadyMs": 255.39999999850988,
+      "statsReadyMs": 322.29999999701977,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 142.5,
+          "ttfbMs": 90,
+          "durationMs": 137.89999999850988,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 311,
+          "ttfbMs": 71.60000000149012,
+          "durationMs": 71.70000000298023,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 1,
+      "primaryReadyMs": 272.5,
+      "statsReadyMs": 330.6000000014901,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 153.09999999403954,
+          "ttfbMs": 102.30000000447035,
+          "durationMs": 150,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 333.8999999985099,
+          "ttfbMs": 70.39999999850988,
+          "durationMs": 70.69999999552965,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 2,
+      "primaryReadyMs": 303.70000000298023,
+      "statsReadyMs": 746.3000000044703,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 164.10000000149012,
+          "ttfbMs": 101.89999999850988,
+          "durationMs": 146.39999999850988,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 343.30000000447035,
+          "ttfbMs": 471.8999999985099,
+          "durationMs": 472.29999999701977,
+          "transferSize": 39011,
+          "decodedBodySize": 38711
+        }
+      ]
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 3,
+      "primaryReadyMs": 288.8999999985099,
+      "statsReadyMs": 322.30000000447035,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 137.5,
+          "ttfbMs": 94.20000000298023,
+          "durationMs": 141.60000000149012,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 310.5,
+          "ttfbMs": 70.29999999701977,
+          "durationMs": 70.39999999850988,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 4,
+      "primaryReadyMs": 281.69999999552965,
+      "statsReadyMs": 322.29999999701977,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 141.10000000149012,
+          "ttfbMs": 92.20000000298023,
+          "durationMs": 129,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 301,
+          "ttfbMs": 77.20000000298023,
+          "durationMs": 77.5,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 5,
+      "primaryReadyMs": 296.3999999985099,
+      "statsReadyMs": 329.8999999985099,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 150.09999999403954,
+          "ttfbMs": 98.90000000596046,
+          "durationMs": 144.70000000298023,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 326.09999999403954,
+          "ttfbMs": 72.40000000596046,
+          "durationMs": 72.60000000149012,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 6,
+      "primaryReadyMs": 282,
+      "statsReadyMs": 314.40000000596046,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 143.10000000149012,
+          "ttfbMs": 92.20000000298023,
+          "durationMs": 129.39999999850988,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 303.8999999985099,
+          "ttfbMs": 73.60000000149012,
+          "durationMs": 73.80000000447035,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 7,
+      "primaryReadyMs": 462.79999999701977,
+      "statsReadyMs": 638.2999999970198,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 168.70000000298023,
+          "ttfbMs": 176.5,
+          "durationMs": 328.3999999985099,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 531,
+          "ttfbMs": 178.40000000596046,
+          "durationMs": 178.60000000149012,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 8,
+      "primaryReadyMs": 538.2000000029802,
+      "statsReadyMs": 712.8000000044703,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 244.90000000596046,
+          "ttfbMs": 307.59999999403954,
+          "durationMs": 371.5,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 648.8000000044703,
+          "ttfbMs": 182.60000000149012,
+          "durationMs": 182.79999999701977,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 9,
+      "primaryReadyMs": 272.70000000298023,
+      "statsReadyMs": 815.1000000014901,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 166.09999999403954,
+          "ttfbMs": 104.80000000447035,
+          "durationMs": 149,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 346.3999999985099,
+          "ttfbMs": 536,
+          "durationMs": 536.3999999985099,
+          "transferSize": 39011,
+          "decodedBodySize": 38711
+        }
+      ]
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 10,
+      "primaryReadyMs": 305,
+      "statsReadyMs": 397.5,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 143.10000000149012,
+          "ttfbMs": 113.69999999552965,
+          "durationMs": 177.59999999403954,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 353.69999999552965,
+          "ttfbMs": 90.5,
+          "durationMs": 90.70000000298023,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 11,
+      "primaryReadyMs": 280.3999999985099,
+      "statsReadyMs": 322.1000000014901,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 143.29999999701977,
+          "ttfbMs": 97.39999999850988,
+          "durationMs": 136.10000000149012,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 311.3999999985099,
+          "ttfbMs": 74.70000000298023,
+          "durationMs": 74.79999999701977,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 12,
+      "primaryReadyMs": 255,
+      "statsReadyMs": 322.59999999403954,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 144.09999999403954,
+          "ttfbMs": 94.80000000447035,
+          "durationMs": 141.90000000596046,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 316.8999999985099,
+          "ttfbMs": 69.10000000149012,
+          "durationMs": 69.29999999701977,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 13,
+      "primaryReadyMs": 273.1000000014901,
+      "statsReadyMs": 330.70000000298023,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 152.69999999552965,
+          "ttfbMs": 110.60000000149012,
+          "durationMs": 148.60000000149012,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 332.09999999403954,
+          "ttfbMs": 70.40000000596046,
+          "durationMs": 70.60000000149012,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 14,
+      "primaryReadyMs": 259.70000000298023,
+      "statsReadyMs": 327.29999999701977,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 145.5,
+          "ttfbMs": 94.5,
+          "durationMs": 140.20000000298023,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 317.1000000014901,
+          "ttfbMs": 69.69999999552965,
+          "durationMs": 69.89999999850988,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 15,
+      "primaryReadyMs": 258.1000000014901,
+      "statsReadyMs": 341.5,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 138.89999999850988,
+          "ttfbMs": 94.5,
+          "durationMs": 133.29999999701977,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 303.69999999552965,
+          "ttfbMs": 89.10000000149012,
+          "durationMs": 89.40000000596046,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 16,
+      "primaryReadyMs": 279,
+      "statsReadyMs": 338,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 140.90000000596046,
+          "ttfbMs": 100.19999999552965,
+          "durationMs": 160.29999999701977,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 331.40000000596046,
+          "ttfbMs": 69.59999999403954,
+          "durationMs": 69.79999999701977,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 17,
+      "primaryReadyMs": 290.30000000447035,
+      "statsReadyMs": 740.3000000044703,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 142.70000000298023,
+          "ttfbMs": 97.89999999850988,
+          "durationMs": 140.29999999701977,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 315.1000000014901,
+          "ttfbMs": 474.3999999985099,
+          "durationMs": 474.79999999701977,
+          "transferSize": 39011,
+          "decodedBodySize": 38711
+        }
+      ]
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 18,
+      "primaryReadyMs": 277.8999999985099,
+      "statsReadyMs": 352.79999999701977,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 152.80000000447035,
+          "ttfbMs": 97.5,
+          "durationMs": 150.29999999701977,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 335.80000000447035,
+          "ttfbMs": 75.09999999403954,
+          "durationMs": 75.29999999701977,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "no-cache-spa",
+      "n": 19,
+      "primaryReadyMs": 270.5,
+      "statsReadyMs": 345.3999999985099,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 138.30000000447035,
+          "ttfbMs": 96.19999999552965,
+          "durationMs": 149.19999999552965,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 320.1000000014901,
+          "ttfbMs": 80.20000000298023,
+          "durationMs": 80.39999999850988,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "hot-spa",
+      "n": 0,
+      "primaryReadyMs": 312,
+      "statsReadyMs": 328,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 484.90000000596046,
+          "ttfbMs": 169.29999999701977,
+          "durationMs": 221.29999999701977,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 485,
+          "ttfbMs": 205.80000000447035,
+          "durationMs": 205.90000000596046,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "hot-spa",
+      "n": 1,
+      "primaryReadyMs": 302.79999999701977,
+      "statsReadyMs": 319.29999999701977,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 842.4000000059605,
+          "ttfbMs": 147.09999999403954,
+          "durationMs": 209.59999999403954,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 842.6000000014901,
+          "ttfbMs": 168.30000000447035,
+          "durationMs": 168.5,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "hot-spa",
+      "n": 2,
+      "primaryReadyMs": 284.8999999985099,
+      "statsReadyMs": 301.5,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 1193.4000000059605,
+          "ttfbMs": 159.89999999850988,
+          "durationMs": 197.19999999552965,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 1193.5,
+          "ttfbMs": 182.30000000447035,
+          "durationMs": 182.5,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "hot-spa",
+      "n": 3,
+      "primaryReadyMs": 288.20000000298023,
+      "statsReadyMs": 304.80000000447035,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 1526.6000000014901,
+          "ttfbMs": 165.5,
+          "durationMs": 203,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 1526.8000000044703,
+          "ttfbMs": 121,
+          "durationMs": 121.19999999552965,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "hot-spa",
+      "n": 4,
+      "primaryReadyMs": 333.70000000298023,
+      "statsReadyMs": 350.20000000298023,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 1867.5,
+          "ttfbMs": 202.40000000596046,
+          "durationMs": 241.30000000447035,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 1867.7000000029802,
+          "ttfbMs": 133.10000000149012,
+          "durationMs": 133.20000000298023,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "hot-spa",
+      "n": 5,
+      "primaryReadyMs": 286.30000000447035,
+      "statsReadyMs": 302.6000000014901,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 2250.8000000044703,
+          "ttfbMs": 144.5,
+          "durationMs": 197.29999999701977,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 2250.9000000059605,
+          "ttfbMs": 171.09999999403954,
+          "durationMs": 171.29999999701977,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "hot-spa",
+      "n": 6,
+      "primaryReadyMs": 285.70000000298023,
+      "statsReadyMs": 302,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 2584,
+          "ttfbMs": 162.10000000149012,
+          "durationMs": 196.90000000596046,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 2584.10000000149,
+          "ttfbMs": 118.39999999850988,
+          "durationMs": 118.60000000149012,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "hot-spa",
+      "n": 7,
+      "primaryReadyMs": 283.90000000596046,
+      "statsReadyMs": 299.20000000298023,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 2916.5,
+          "ttfbMs": 155.10000000149012,
+          "durationMs": 196.90000000596046,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 2916.60000000149,
+          "ttfbMs": 113.39999999850988,
+          "durationMs": 113.5,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "hot-spa",
+      "n": 8,
+      "primaryReadyMs": 669.2999999970198,
+      "statsReadyMs": 686.1999999955297,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 3250.7000000029802,
+          "ttfbMs": 528.7000000029802,
+          "durationMs": 585.1000000014901,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 3250.9000000059605,
+          "ttfbMs": 483.69999999552965,
+          "durationMs": 486.3999999985099,
+          "transferSize": 39011,
+          "decodedBodySize": 38711
+        }
+      ]
+    },
+    {
+      "kind": "hot-spa",
+      "n": 9,
+      "primaryReadyMs": 302.1000000014901,
+      "statsReadyMs": 318.8999999985099,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 3975.9000000059605,
+          "ttfbMs": 169.09999999403954,
+          "durationMs": 216.69999999552965,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 3976.10000000149,
+          "ttfbMs": 125.30000000447035,
+          "durationMs": 125.5,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "hot-spa",
+      "n": 10,
+      "primaryReadyMs": 327.3999999985099,
+      "statsReadyMs": 343.8999999985099,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 4325.4000000059605,
+          "ttfbMs": 200.19999999552965,
+          "durationMs": 236.69999999552965,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 4325.60000000149,
+          "ttfbMs": 143.30000000447035,
+          "durationMs": 143.5,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "hot-spa",
+      "n": 11,
+      "primaryReadyMs": 278.20000000298023,
+      "statsReadyMs": 293.5,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 4708.80000000447,
+          "ttfbMs": 141.60000000149012,
+          "durationMs": 188.79999999701977,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 4708.9000000059605,
+          "ttfbMs": 166.79999999701977,
+          "durationMs": 167,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "hot-spa",
+      "n": 12,
+      "primaryReadyMs": 269.20000000298023,
+      "statsReadyMs": 286.70000000298023,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 5033.5,
+          "ttfbMs": 144.10000000149012,
+          "durationMs": 182.60000000149012,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 5033.70000000298,
+          "ttfbMs": 170.70000000298023,
+          "durationMs": 170.89999999850988,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "hot-spa",
+      "n": 13,
+      "primaryReadyMs": 270.20000000298023,
+      "statsReadyMs": 285.40000000596046,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 5350.10000000149,
+          "ttfbMs": 143.60000000149012,
+          "durationMs": 187.30000000447035,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 5350.20000000298,
+          "ttfbMs": 170.39999999850988,
+          "durationMs": 170.5,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "hot-spa",
+      "n": 14,
+      "primaryReadyMs": 270.20000000298023,
+      "statsReadyMs": 287.1000000014901,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 5667.20000000298,
+          "ttfbMs": 146.20000000298023,
+          "durationMs": 184.79999999701977,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 5667.4000000059605,
+          "ttfbMs": 171.39999999850988,
+          "durationMs": 171.59999999403954,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "hot-spa",
+      "n": 15,
+      "primaryReadyMs": 295.3999999985099,
+      "statsReadyMs": 311.20000000298023,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 5983.9000000059605,
+          "ttfbMs": 139.89999999850988,
+          "durationMs": 205.79999999701977,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 5984.10000000149,
+          "ttfbMs": 178.89999999850988,
+          "durationMs": 179.10000000149012,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "hot-spa",
+      "n": 16,
+      "primaryReadyMs": 303.20000000298023,
+      "statsReadyMs": 319.80000000447035,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 6325.80000000447,
+          "ttfbMs": 164.79999999701977,
+          "durationMs": 209.39999999850988,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 6326,
+          "ttfbMs": 194.90000000596046,
+          "durationMs": 195,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "hot-spa",
+      "n": 17,
+      "primaryReadyMs": 333.1000000014901,
+      "statsReadyMs": 349.90000000596046,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 6675.10000000149,
+          "ttfbMs": 187.39999999850988,
+          "durationMs": 249.60000000149012,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 6675.20000000298,
+          "ttfbMs": 135.89999999850988,
+          "durationMs": 136.10000000149012,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "hot-spa",
+      "n": 18,
+      "primaryReadyMs": 327.19999999552965,
+      "statsReadyMs": 343.69999999552965,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 7067.30000000447,
+          "ttfbMs": 186.19999999552965,
+          "durationMs": 240,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 7067.4000000059605,
+          "ttfbMs": 143.79999999701977,
+          "durationMs": 144,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "hot-spa",
+      "n": 19,
+      "primaryReadyMs": 294,
+      "statsReadyMs": 310.6000000014901,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 7441.80000000447,
+          "ttfbMs": 167.39999999850988,
+          "durationMs": 206.39999999850988,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d",
+          "startTime": 7441.9000000059605,
+          "ttfbMs": 123.09999999403954,
+          "durationMs": 123.29999999701977,
+          "transferSize": 39010,
+          "decodedBodySize": 38710
+        }
+      ]
+    },
+    {
+      "kind": "refresh",
+      "n": 0,
+      "primaryReadyMs": 747.8999999985099,
+      "statsReadyMs": 789.3999999985099,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 7745.20000000298,
+          "ttfbMs": 140.10000000149012,
+          "durationMs": 674.2000000029802,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+          "startTime": 7745.30000000447,
+          "ttfbMs": 636.8999999985099,
+          "durationMs": 637.2999999970198,
+          "transferSize": 39013,
+          "decodedBodySize": 38713
+        }
+      ]
+    },
+    {
+      "kind": "refresh",
+      "n": 1,
+      "primaryReadyMs": 755.3000000044703,
+      "statsReadyMs": 772.8999999985099,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 8535.10000000149,
+          "ttfbMs": 252.10000000149012,
+          "durationMs": 701.1000000014901,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+          "startTime": 8535.30000000447,
+          "ttfbMs": 683.1000000014901,
+          "durationMs": 683.1999999955297,
+          "transferSize": 39013,
+          "decodedBodySize": 38713
+        }
+      ]
+    },
+    {
+      "kind": "refresh",
+      "n": 2,
+      "primaryReadyMs": 667.1999999955297,
+      "statsReadyMs": 701.8999999985099,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 9318,
+          "ttfbMs": 162,
+          "durationMs": 600.7000000029802,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+          "startTime": 9318.10000000149,
+          "ttfbMs": 581,
+          "durationMs": 581.5,
+          "transferSize": 39013,
+          "decodedBodySize": 38713
+        }
+      ]
+    },
+    {
+      "kind": "refresh",
+      "n": 3,
+      "primaryReadyMs": 723.1000000014901,
+      "statsReadyMs": 739.7999999970198,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 10076.60000000149,
+          "ttfbMs": 575.8999999985099,
+          "durationMs": 646.2000000029802,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+          "startTime": 10076.80000000447,
+          "ttfbMs": 524.3999999985099,
+          "durationMs": 524.6999999955297,
+          "transferSize": 39013,
+          "decodedBodySize": 38713
+        }
+      ]
+    },
+    {
+      "kind": "refresh",
+      "n": 4,
+      "primaryReadyMs": 649.5,
+      "statsReadyMs": 666.0999999940395,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 10805.70000000298,
+          "ttfbMs": 550.8999999985099,
+          "durationMs": 585.3999999985099,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+          "startTime": 10805.90000000596,
+          "ttfbMs": 508,
+          "durationMs": 508.79999999701977,
+          "transferSize": 39013,
+          "decodedBodySize": 38713
+        }
+      ]
+    },
+    {
+      "kind": "refresh",
+      "n": 5,
+      "primaryReadyMs": 669.3000000044703,
+      "statsReadyMs": 686.9000000059605,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 11497.70000000298,
+          "ttfbMs": 158.29999999701977,
+          "durationMs": 596.7999999970198,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+          "startTime": 11497.90000000596,
+          "ttfbMs": 570.0999999940395,
+          "durationMs": 570.2999999970198,
+          "transferSize": 39013,
+          "decodedBodySize": 38713
+        }
+      ]
+    },
+    {
+      "kind": "refresh",
+      "n": 6,
+      "primaryReadyMs": 636.5,
+      "statsReadyMs": 652.7000000029802,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 12189.30000000447,
+          "ttfbMs": 151.60000000149012,
+          "durationMs": 569,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+          "startTime": 12189.40000000596,
+          "ttfbMs": 551.5999999940395,
+          "durationMs": 551.8999999985099,
+          "transferSize": 39013,
+          "decodedBodySize": 38713
+        }
+      ]
+    },
+    {
+      "kind": "refresh",
+      "n": 7,
+      "primaryReadyMs": 670.0999999940395,
+      "statsReadyMs": 686.6999999955297,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 12855.90000000596,
+          "ttfbMs": 148,
+          "durationMs": 603.7999999970198,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+          "startTime": 12856,
+          "ttfbMs": 578.7000000029802,
+          "durationMs": 579.1000000014901,
+          "transferSize": 39013,
+          "decodedBodySize": 38713
+        }
+      ]
+    },
+    {
+      "kind": "refresh",
+      "n": 8,
+      "primaryReadyMs": 633.8000000044703,
+      "statsReadyMs": 652.3000000044703,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+          "startTime": 13564.30000000447,
+          "ttfbMs": 548.7999999970198,
+          "durationMs": 550.1999999955297,
+          "transferSize": 39013,
+          "decodedBodySize": 38713
+        },
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 13564.30000000447,
+          "ttfbMs": 147.39999999850988,
+          "durationMs": 565.6999999955297,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        }
+      ]
+    },
+    {
+      "kind": "refresh",
+      "n": 9,
+      "primaryReadyMs": 661.2000000029802,
+      "statsReadyMs": 678.1000000014901,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 14222.20000000298,
+          "ttfbMs": 561.3999999985099,
+          "durationMs": 597.3999999985099,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+          "startTime": 14222.40000000596,
+          "ttfbMs": 512.5,
+          "durationMs": 513,
+          "transferSize": 39013,
+          "decodedBodySize": 38713
+        }
+      ]
+    },
+    {
+      "kind": "refresh",
+      "n": 10,
+      "primaryReadyMs": 802,
+      "statsReadyMs": 852.2000000029802,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+          "startTime": 14922.60000000149,
+          "ttfbMs": 641.3000000044703,
+          "durationMs": 641.5,
+          "transferSize": 39013,
+          "decodedBodySize": 38713
+        },
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 14922.60000000149,
+          "ttfbMs": 146.10000000149012,
+          "durationMs": 723.5,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        }
+      ]
+    },
+    {
+      "kind": "refresh",
+      "n": 11,
+      "primaryReadyMs": 818.2000000029802,
+      "statsReadyMs": 834.8999999985099,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 15789.20000000298,
+          "ttfbMs": 704.7999999970198,
+          "durationMs": 759.3999999985099,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+          "startTime": 15789.40000000596,
+          "ttfbMs": 653.6999999955297,
+          "durationMs": 653.8999999985099,
+          "transferSize": 39013,
+          "decodedBodySize": 38713
+        }
+      ]
+    },
+    {
+      "kind": "refresh",
+      "n": 12,
+      "primaryReadyMs": 652.1999999955297,
+      "statsReadyMs": 668.7999999970198,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 16646.90000000596,
+          "ttfbMs": 537,
+          "durationMs": 575.5999999940395,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+          "startTime": 16647.10000000149,
+          "ttfbMs": 490.80000000447035,
+          "durationMs": 491,
+          "transferSize": 39013,
+          "decodedBodySize": 38713
+        }
+      ]
+    },
+    {
+      "kind": "refresh",
+      "n": 13,
+      "primaryReadyMs": 679.6999999955297,
+      "statsReadyMs": 712.2999999970198,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 17321.70000000298,
+          "ttfbMs": 160.5,
+          "durationMs": 615.3999999985099,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+          "startTime": 17321.80000000447,
+          "ttfbMs": 588,
+          "durationMs": 588.2999999970198,
+          "transferSize": 39013,
+          "decodedBodySize": 38713
+        }
+      ]
+    },
+    {
+      "kind": "refresh",
+      "n": 14,
+      "primaryReadyMs": 640,
+      "statsReadyMs": 658,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 18038.90000000596,
+          "ttfbMs": 162,
+          "durationMs": 572.2999999970198,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+          "startTime": 18039,
+          "ttfbMs": 561.2000000029802,
+          "durationMs": 561.7000000029802,
+          "transferSize": 39013,
+          "decodedBodySize": 38713
+        }
+      ]
+    },
+    {
+      "kind": "refresh",
+      "n": 15,
+      "primaryReadyMs": 740.8000000044703,
+      "statsReadyMs": 757.6000000014901,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 18706.20000000298,
+          "ttfbMs": 629.2999999970198,
+          "durationMs": 678.7000000029802,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+          "startTime": 18706.40000000596,
+          "ttfbMs": 563.8999999985099,
+          "durationMs": 564.2999999970198,
+          "transferSize": 39013,
+          "decodedBodySize": 38713
+        }
+      ]
+    },
+    {
+      "kind": "refresh",
+      "n": 16,
+      "primaryReadyMs": 689.8000000044703,
+      "statsReadyMs": 706.5,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 19472.30000000447,
+          "ttfbMs": 143.10000000149012,
+          "durationMs": 617.2999999970198,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+          "startTime": 19472.40000000596,
+          "ttfbMs": 605,
+          "durationMs": 605.5999999940395,
+          "transferSize": 39013,
+          "decodedBodySize": 38713
+        }
+      ]
+    },
+    {
+      "kind": "refresh",
+      "n": 17,
+      "primaryReadyMs": 660.6000000014901,
+      "statsReadyMs": 719.7000000029802,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 20189.30000000447,
+          "ttfbMs": 146.5,
+          "durationMs": 596.5,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+          "startTime": 20189.40000000596,
+          "ttfbMs": 567.1999999955297,
+          "durationMs": 567.5999999940395,
+          "transferSize": 39013,
+          "decodedBodySize": 38713
+        }
+      ]
+    },
+    {
+      "kind": "refresh",
+      "n": 18,
+      "primaryReadyMs": 718,
+      "statsReadyMs": 759.7999999970198,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 20931,
+          "ttfbMs": 606.4000000059605,
+          "durationMs": 645.5,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+          "startTime": 20931.20000000298,
+          "ttfbMs": 554.8999999985099,
+          "durationMs": 555.2999999970198,
+          "transferSize": 39013,
+          "decodedBodySize": 38713
+        }
+      ]
+    },
+    {
+      "kind": "refresh",
+      "n": 19,
+      "primaryReadyMs": 646.6999999955297,
+      "statsReadyMs": 663.7999999970198,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2427,
+      "resources": [
+        {
+          "path": "/api/admin/agents?view=roster",
+          "startTime": 21688.90000000596,
+          "ttfbMs": 153.39999999850988,
+          "durationMs": 587.5,
+          "transferSize": 8421253,
+          "decodedBodySize": 8420953
+        },
+        {
+          "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+          "startTime": 21689.10000000149,
+          "ttfbMs": 574.1000000014901,
+          "durationMs": 574.8999999985099,
+          "transferSize": 39013,
+          "decodedBodySize": 38713
+        }
+      ]
+    },
+    {
+      "kind": "drawer",
+      "n": 0,
+      "primaryReadyMs": 1021.7999999970198,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2479,
+      "resources": [
+        {
+          "path": "/api/admin/agents",
+          "startTime": 22685,
+          "ttfbMs": 598.9000000059605,
+          "durationMs": 670,
+          "transferSize": 8476143,
+          "decodedBodySize": 8475843
+        }
+      ]
+    },
+    {
+      "kind": "drawer",
+      "n": 1,
+      "primaryReadyMs": 1121.8999999985099,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2479,
+      "resources": [
+        {
+          "path": "/api/admin/agents",
+          "startTime": 23472.30000000447,
+          "ttfbMs": 933.5,
+          "durationMs": 1045.1000000014901,
+          "transferSize": 8476143,
+          "decodedBodySize": 8475843
+        }
+      ]
+    },
+    {
+      "kind": "drawer",
+      "n": 2,
+      "primaryReadyMs": 591.0999999940395,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2479,
+      "resources": [
+        {
+          "path": "/api/admin/agents",
+          "startTime": 24664.20000000298,
+          "ttfbMs": 470.29999999701977,
+          "durationMs": 516.7999999970198,
+          "transferSize": 8476143,
+          "decodedBodySize": 8475843
+        }
+      ]
+    },
+    {
+      "kind": "drawer",
+      "n": 3,
+      "primaryReadyMs": 749.5,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2479,
+      "resources": [
+        {
+          "path": "/api/admin/agents",
+          "startTime": 25296.10000000149,
+          "ttfbMs": 608,
+          "durationMs": 680.7000000029802,
+          "transferSize": 8476143,
+          "decodedBodySize": 8475843
+        }
+      ]
+    },
+    {
+      "kind": "drawer",
+      "n": 4,
+      "primaryReadyMs": 997.6000000014901,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2479,
+      "resources": [
+        {
+          "path": "/api/admin/agents",
+          "startTime": 26113.80000000447,
+          "ttfbMs": 872.1999999955297,
+          "durationMs": 932.1000000014901,
+          "transferSize": 8476143,
+          "decodedBodySize": 8475843
+        }
+      ]
+    },
+    {
+      "kind": "drawer",
+      "n": 5,
+      "primaryReadyMs": 875.7000000029802,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2479,
+      "resources": [
+        {
+          "path": "/api/admin/agents",
+          "startTime": 27222.20000000298,
+          "ttfbMs": 658.7999999970198,
+          "durationMs": 768.8999999985099,
+          "transferSize": 8476143,
+          "decodedBodySize": 8475843
+        }
+      ]
+    },
+    {
+      "kind": "drawer",
+      "n": 6,
+      "primaryReadyMs": 1002.3000000044703,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2479,
+      "resources": [
+        {
+          "path": "/api/admin/agents",
+          "startTime": 28166.20000000298,
+          "ttfbMs": 832.3999999985099,
+          "durationMs": 914.5,
+          "transferSize": 8476143,
+          "decodedBodySize": 8475843
+        }
+      ]
+    },
+    {
+      "kind": "drawer",
+      "n": 7,
+      "primaryReadyMs": 1746.7999999970198,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [
+        {
+          "startTime": 30911.10000000149,
+          "duration": 52
+        }
+      ],
+      "focusEvents": [],
+      "domNodes": 2479,
+      "resources": [
+        {
+          "path": "/api/admin/agents",
+          "startTime": 29276.80000000447,
+          "ttfbMs": 1479.3999999985099,
+          "durationMs": 1633.8999999985099,
+          "transferSize": 8476143,
+          "decodedBodySize": 8475843
+        }
+      ]
+    },
+    {
+      "kind": "drawer",
+      "n": 8,
+      "primaryReadyMs": 1617.3999999985099,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2479,
+      "resources": [
+        {
+          "path": "/api/admin/agents",
+          "startTime": 31155.60000000149,
+          "ttfbMs": 1322.5,
+          "durationMs": 1527.6000000014901,
+          "transferSize": 8476143,
+          "decodedBodySize": 8475843
+        }
+      ]
+    },
+    {
+      "kind": "drawer",
+      "n": 9,
+      "primaryReadyMs": 1696.7000000029802,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2479,
+      "resources": [
+        {
+          "path": "/api/admin/agents",
+          "startTime": 32911.60000000149,
+          "ttfbMs": 1479.3999999985099,
+          "durationMs": 1590.8999999985099,
+          "transferSize": 8476143,
+          "decodedBodySize": 8475843
+        }
+      ]
+    },
+    {
+      "kind": "drawer",
+      "n": 10,
+      "primaryReadyMs": 1851.1000000014901,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2479,
+      "resources": [
+        {
+          "path": "/api/admin/agents",
+          "startTime": 34743.40000000596,
+          "ttfbMs": 1640.6999999955297,
+          "durationMs": 1764.5,
+          "transferSize": 8476143,
+          "decodedBodySize": 8475843
+        }
+      ]
+    },
+    {
+      "kind": "drawer",
+      "n": 11,
+      "primaryReadyMs": 2053,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2479,
+      "resources": [
+        {
+          "path": "/api/admin/agents",
+          "startTime": 36715.90000000596,
+          "ttfbMs": 1629.6999999955297,
+          "durationMs": 1931.8999999985099,
+          "transferSize": 8476143,
+          "decodedBodySize": 8475843
+        }
+      ]
+    },
+    {
+      "kind": "drawer",
+      "n": 12,
+      "primaryReadyMs": 2107.4000000059605,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2479,
+      "resources": [
+        {
+          "path": "/api/admin/agents",
+          "startTime": 38922.10000000149,
+          "ttfbMs": 1835.7000000029802,
+          "durationMs": 2017.8000000044703,
+          "transferSize": 8476143,
+          "decodedBodySize": 8475843
+        }
+      ]
+    },
+    {
+      "kind": "drawer",
+      "n": 13,
+      "primaryReadyMs": 1540.0999999940395,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2479,
+      "resources": [
+        {
+          "path": "/api/admin/agents",
+          "startTime": 41162.90000000596,
+          "ttfbMs": 1287.5999999940395,
+          "durationMs": 1446.5,
+          "transferSize": 8476143,
+          "decodedBodySize": 8475843
+        }
+      ]
+    },
+    {
+      "kind": "drawer",
+      "n": 14,
+      "primaryReadyMs": 1341.6000000014901,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2479,
+      "resources": [
+        {
+          "path": "/api/admin/agents",
+          "startTime": 42800.20000000298,
+          "ttfbMs": 1104.7000000029802,
+          "durationMs": 1270.6000000014901,
+          "transferSize": 8476143,
+          "decodedBodySize": 8475843
+        }
+      ]
+    },
+    {
+      "kind": "drawer",
+      "n": 15,
+      "primaryReadyMs": 1211.6999999955297,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2479,
+      "resources": [
+        {
+          "path": "/api/admin/agents",
+          "startTime": 44273.80000000447,
+          "ttfbMs": 1049.1000000014901,
+          "durationMs": 1121.1000000014901,
+          "transferSize": 8476143,
+          "decodedBodySize": 8475843
+        }
+      ]
+    },
+    {
+      "kind": "drawer",
+      "n": 16,
+      "primaryReadyMs": 1333.3000000044703,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2479,
+      "resources": [
+        {
+          "path": "/api/admin/agents",
+          "startTime": 45543.20000000298,
+          "ttfbMs": 1004.6000000014901,
+          "durationMs": 1253.1000000014901,
+          "transferSize": 8476143,
+          "decodedBodySize": 8475843
+        }
+      ]
+    },
+    {
+      "kind": "drawer",
+      "n": 17,
+      "primaryReadyMs": 2111.39999999851,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2479,
+      "resources": [
+        {
+          "path": "/api/admin/agents",
+          "startTime": 46996.80000000447,
+          "ttfbMs": 1707.6999999955297,
+          "durationMs": 2006.1000000014901,
+          "transferSize": 8476143,
+          "decodedBodySize": 8475843
+        }
+      ]
+    },
+    {
+      "kind": "drawer",
+      "n": 18,
+      "primaryReadyMs": 1159.7999999970198,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2479,
+      "resources": [
+        {
+          "path": "/api/admin/agents",
+          "startTime": 49272.80000000447,
+          "ttfbMs": 996.5,
+          "durationMs": 1083.3999999985099,
+          "transferSize": 8476143,
+          "decodedBodySize": 8475843
+        }
+      ]
+    },
+    {
+      "kind": "drawer",
+      "n": 19,
+      "primaryReadyMs": 593.5,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 2479,
+      "resources": [
+        {
+          "path": "/api/admin/agents",
+          "startTime": 50504.40000000596,
+          "ttfbMs": 464.09999999403954,
+          "durationMs": 529,
+          "transferSize": 8476143,
+          "decodedBodySize": 8475843
+        }
+      ]
+    },
+    {
+      "kind": "editor",
+      "n": 0,
+      "primaryReadyMs": 1650.6000000014901,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 23796,
+      "resources": []
+    },
+    {
+      "kind": "editor",
+      "n": 1,
+      "primaryReadyMs": 801.3999999985099,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 23796,
+      "resources": []
+    },
+    {
+      "kind": "editor",
+      "n": 2,
+      "primaryReadyMs": 1348.1000000014901,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 23796,
+      "resources": []
+    },
+    {
+      "kind": "editor",
+      "n": 3,
+      "primaryReadyMs": 876.9000000059605,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 23796,
+      "resources": []
+    },
+    {
+      "kind": "editor",
+      "n": 4,
+      "primaryReadyMs": 1490.8999999985099,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 23796,
+      "resources": []
+    },
+    {
+      "kind": "editor",
+      "n": 5,
+      "primaryReadyMs": 738.2999999970198,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 23796,
+      "resources": []
+    },
+    {
+      "kind": "editor",
+      "n": 6,
+      "primaryReadyMs": 659.5,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 23796,
+      "resources": []
+    },
+    {
+      "kind": "editor",
+      "n": 7,
+      "primaryReadyMs": 922.4000000059605,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 23796,
+      "resources": []
+    },
+    {
+      "kind": "editor",
+      "n": 8,
+      "primaryReadyMs": 732.6000000014901,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 23796,
+      "resources": []
+    },
+    {
+      "kind": "editor",
+      "n": 9,
+      "primaryReadyMs": 685.7999999970198,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 23796,
+      "resources": []
+    },
+    {
+      "kind": "editor",
+      "n": 10,
+      "primaryReadyMs": 718.4000000059605,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 23796,
+      "resources": []
+    },
+    {
+      "kind": "editor",
+      "n": 11,
+      "primaryReadyMs": 981.1999999955297,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 23796,
+      "resources": []
+    },
+    {
+      "kind": "editor",
+      "n": 12,
+      "primaryReadyMs": 984.1999999955297,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 23796,
+      "resources": []
+    },
+    {
+      "kind": "editor",
+      "n": 13,
+      "primaryReadyMs": 1267.7999999970198,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 23796,
+      "resources": []
+    },
+    {
+      "kind": "editor",
+      "n": 14,
+      "primaryReadyMs": 1023.3999999985099,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 23796,
+      "resources": []
+    },
+    {
+      "kind": "editor",
+      "n": 15,
+      "primaryReadyMs": 781.7000000029802,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 23796,
+      "resources": []
+    },
+    {
+      "kind": "editor",
+      "n": 16,
+      "primaryReadyMs": 855.5,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 23796,
+      "resources": []
+    },
+    {
+      "kind": "editor",
+      "n": 17,
+      "primaryReadyMs": 1301.6999999955297,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 23796,
+      "resources": []
+    },
+    {
+      "kind": "editor",
+      "n": 18,
+      "primaryReadyMs": 1728.8999999985099,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 23796,
+      "resources": []
+    },
+    {
+      "kind": "editor",
+      "n": 19,
+      "primaryReadyMs": 1674.1999999955297,
+      "visible": "visible",
+      "focused": true,
+      "longTasks": [],
+      "focusEvents": [],
+      "domNodes": 23796,
+      "resources": []
+    }
+  ],
+  "requests": [
+    {
+      "at": "2026-11-20T06:51:42.595Z",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:42.615Z",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:42.737Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:42.849Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:43.305Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:43.346Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:51:43.602Z",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:43.625Z",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:43.743Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:43.867Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:43.937Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:43.949Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:51:44.232Z",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:44.252Z",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:44.511Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:44.554Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:51:44.745Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:44.823Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:45.369Z",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:45.388Z",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:45.493Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:45.599Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:45.659Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:45.681Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:51:45.923Z",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:45.942Z",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:46.057Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:46.149Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:46.204Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:46.249Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:51:46.441Z",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:46.461Z",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:46.473Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:46.620Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:46.715Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:46.770Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:47.006Z",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:47.024Z",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:47.039Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:47.206Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:47.302Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:47.355Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:47.622Z",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:47.634Z",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:47.641Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:47.806Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:47.926Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:48.356Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:48.377Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:51:48.611Z",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:48.634Z",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:48.640Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:48.791Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:48.911Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:48.940Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:49.162Z",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:49.189Z",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:49.191Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:49.341Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:49.452Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:49.486Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:49.719Z",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:49.742Z",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:49.749Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:49.908Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:50.027Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:50.057Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:50.265Z",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:50.292Z",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:50.298Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:50.450Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:50.562Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:50.592Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:50.831Z",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:50.855Z",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:50.863Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:51.111Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:51.255Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:51:51.314Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:51.475Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:51.798Z",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:51.821Z",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:51.827Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:52.227Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:52.236Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:51:52.353Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:52.506Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:52.779Z",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:52.796Z",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:52.807Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:52.972Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:53.064Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:53.585Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:53.598Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:51:53.907Z",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:53.932Z",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:53.940Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:54.113Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:54.228Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:54.308Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:54.316Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:51:54.574Z",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:54.607Z",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:54.607Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:54.760Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:54.872Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:54.905Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:55.123Z",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:55.144Z",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:55.156Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:55.308Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:55.402Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:55.455Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:55.691Z",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:55.713Z",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:55.721Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:55.894Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:55.980Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:56.033Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:56.246Z",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:56.263Z",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:56.270Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:56.423Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:56.516Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:56.570Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:56.803Z",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:56.826Z",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:56.833Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:56.982Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:57.070Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:57.142Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:57.365Z",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:57.391Z",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:57.400Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:57.555Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:57.661Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:57.715Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:57.968Z",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:57.992Z",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:57.998Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:58.156Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:58.273Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:58.707Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:58.727Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:51:58.936Z",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:58.964Z",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:58.970Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:59.131Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:59.234Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:59.291Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:59.524Z",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:59.548Z",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:59.553Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:59.702Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:59.805Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:51:59.867Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:00.109Z",
+      "path": "/api/auth/status",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:00.129Z",
+      "path": "/api/branding",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:00.236Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:00.327Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:00.391Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:00.420Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:52:00.496Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:00.701Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:00.737Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:00.835Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:52:00.856Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:01.036Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:01.057Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:01.203Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:52:01.206Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:01.402Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:01.423Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:01.542Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:01.694Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:01.739Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:01.882Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:02.047Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:02.117Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:02.219Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:52:02.264Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:02.442Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:02.469Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:02.598Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:02.749Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:02.795Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:02.930Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:03.077Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:03.123Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:03.263Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:03.784Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:03.826Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:03.834Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:52:03.987Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:04.148Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:04.192Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:04.335Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:52:04.339Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:04.516Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:04.572Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:04.677Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:52:04.719Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:04.897Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:04.922Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:05.046Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:05.224Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:05.251Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:05.363Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:05.408Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:05.540Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:05.568Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:05.680Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:05.860Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:05.885Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:05.997Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:06.171Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:06.210Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:06.340Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:06.537Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:06.567Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:06.687Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:52:06.687Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:06.858Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:06.909Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:07.026Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:52:07.077Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:07.258Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:07.300Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:07.417Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:52:07.456Z",
+      "path": "/api/health",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:07.612Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:07.656Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:07.800Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:52:07.932Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:08.430Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:08.834Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:09.265Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:09.527Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:09.948Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:10.648Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:10.699Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:11.362Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:11.403Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:11.704Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:12.115Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:12.388Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:12.788Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:13.051Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:13.487Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:13.759Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:14.163Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:14.783Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:14.832Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:15.116Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:15.611Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:16.490Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:16.541Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:17.185Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:17.231Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:17.529Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:17.957Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:18.248Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:18.648Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:19.318Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:19.383Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:19.662Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:20.125Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:20.383Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:20.804Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:21.536Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:21.587Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:21.889Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:22.313Z",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:22.491Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:23.331Z",
+      "path": "/api/admin/agents",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:24.454Z",
+      "path": "/api/admin/agents",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:25.182Z",
+      "path": "/api/admin/agents",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:25.951Z",
+      "path": "/api/admin/agents",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:27.036Z",
+      "path": "/api/admin/agents",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:27.929Z",
+      "path": "/api/admin/agents",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:29.053Z",
+      "path": "/api/admin/agents",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:30.813Z",
+      "path": "/api/admin/agents",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:32.539Z",
+      "path": "/api/admin/agents",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:34.451Z",
+      "path": "/api/admin/agents",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:36.448Z",
+      "path": "/api/admin/agents",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:38.400Z",
+      "path": "/api/admin/agents",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:38.497Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:40.813Z",
+      "path": "/api/admin/agents",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:42.503Z",
+      "path": "/api/admin/agents",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:43.977Z",
+      "path": "/api/admin/agents",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:45.371Z",
+      "path": "/api/admin/agents",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:46.598Z",
+      "path": "/api/admin/agents",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:48.777Z",
+      "path": "/api/admin/agents",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:50.318Z",
+      "path": "/api/admin/agents",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:51.016Z",
+      "path": "/api/admin/agents",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:51.609Z",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:51.615Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:52:51.836Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:51.850Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:52.373Z",
+      "path": "/api/admin/authorization-summary/agent/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:53.178Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:53.825Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:53.836Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:52:54.087Z",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:54.195Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:54.233Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:52:54.815Z",
+      "path": "/api/admin/authorization-summary/agent/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:55.051Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:55.252Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:52:55.471Z",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:55.546Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:52:55.714Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:56.545Z",
+      "path": "/api/admin/authorization-summary/agent/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:56.707Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:57.044Z",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:57.082Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:52:57.186Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:57.730Z",
+      "path": "/api/admin/authorization-summary/agent/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:57.737Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:57.962Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:58.018Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:58.028Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:52:58.749Z",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:58.765Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:52:58.983Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:52:59.674Z",
+      "path": "/api/admin/authorization-summary/agent/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:00.538Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:00.625Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:53:00.826Z",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:00.906Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:53:00.928Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:01.220Z",
+      "path": "/api/admin/authorization-summary/agent/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:01.580Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:01.581Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:01.787Z",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:01.885Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:01.938Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:53:02.354Z",
+      "path": "/api/admin/authorization-summary/agent/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:02.472Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:02.533Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:02.940Z",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:02.944Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:53:03.068Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:03.446Z",
+      "path": "/api/admin/authorization-summary/agent/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:03.595Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:03.779Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:03.780Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:04.019Z",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:04.137Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:04.166Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:53:04.445Z",
+      "path": "/api/admin/authorization-summary/agent/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:04.840Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:04.847Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:04.989Z",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:05.155Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:05.196Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:53:05.864Z",
+      "path": "/api/admin/authorization-summary/agent/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:06.052Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:06.406Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:06.414Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:53:06.653Z",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:06.743Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:06.817Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:53:07.236Z",
+      "path": "/api/admin/authorization-summary/agent/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:07.742Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:07.794Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:07.817Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:53:08.008Z",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:08.146Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:53:08.313Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:08.773Z",
+      "path": "/api/admin/authorization-summary/agent/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:08.921Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:09.139Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:09.524Z",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:09.530Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:53:09.643Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:10.291Z",
+      "path": "/api/admin/authorization-summary/agent/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:10.567Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:10.629Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:10.636Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:53:11.103Z",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:11.106Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:53:11.384Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:12.923Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:13.010Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:53:13.210Z",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:13.323Z",
+      "path": "/api/admin/authorization-summary/agent/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:13.327Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:53:13.473Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:14.314Z",
+      "path": "/api/admin/authorization-summary/agent/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:14.330Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:14.550Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:14.808Z",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:14.949Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:14.957Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:53:15.467Z",
+      "path": "/api/admin/authorization-summary/agent/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:15.626Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:15.651Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:15.957Z",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:15.996Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:53:16.073Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:16.938Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:17.217Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:53:17.270Z",
+      "path": "/api/admin/authorization-summary/agent/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:17.510Z",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:17.511Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:53:17.670Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:18.152Z",
+      "path": "/api/admin/authorization-summary/agent/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:18.927Z",
+      "path": "/api/admin/agents?view=roster",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:20.401Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:20.562Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:53:20.571Z",
+      "path": "/api/admin/policy-runtime",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:21.228Z",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "status": 503,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:21.231Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:53:21.620Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:22.379Z",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:22.649Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:22.859Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:53:23.336Z",
+      "path": "/api/admin/ui-usage/page-view",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "at": "2026-11-20T06:53:23.337Z",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:23.508Z",
+      "path": "/api/admin/authorization-summary/agent/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:23.700Z",
+      "path": "/api/admin/agents/ars_00_a00",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "at": "2026-11-20T06:53:25.980Z",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "status": 200,
+      "method": "GET"
+    }
+  ],
+  "failures": [
+    {
+      "kind": "network",
+      "errors": [
+        {
+          "at": "2026-11-20T06:53:21.228Z",
+          "path": "/api/admin/roles?includeTemplates=false",
+          "status": 503,
+          "method": "GET"
+        }
+      ]
+    }
+  ],
+  "consoleErrors": [],
+  "p95": {
+    "cold-navigation": {
+      "n": 5,
+      "primaryReadyMs": 876.6000000014901,
+      "statsReadyMs": 892.6000000014901
+    },
+    "no-cache-spa": {
+      "n": 20,
+      "primaryReadyMs": 462.79999999701977,
+      "statsReadyMs": 746.3000000044703
+    },
+    "hot-spa": {
+      "n": 20,
+      "primaryReadyMs": 333.70000000298023,
+      "statsReadyMs": 350.20000000298023
+    },
+    "refresh": {
+      "n": 20,
+      "primaryReadyMs": 802,
+      "statsReadyMs": 834.8999999985099
+    },
+    "drawer": {
+      "n": 20,
+      "primaryReadyMs": 2107.4000000059605,
+      "statsReadyMs": null
+    },
+    "editor": {
+      "n": 20,
+      "primaryReadyMs": 1674.1999999955297,
+      "statsReadyMs": null
+    }
+  },
+  "cgroup": {
+    "memoryCurrentBytes": 1073102848,
+    "memoryPeakBytes": 1397620736,
+    "kernelCounters": {
+      "low": 0,
+      "high": 0,
+      "max": 0,
+      "oom": 0,
+      "oom_kill": 0,
+      "oom_group_kill": 0,
+      "usage_usec": 743310992,
+      "user_usec": 666589271,
+      "system_usec": 76721720,
+      "nice_usec": 0,
+      "nr_periods": 7392,
+      "nr_throttled": 506,
+      "throttled_usec": 48677305,
+      "nr_bursts": 0,
+      "burst_usec": 0
+    }
+  }
+}

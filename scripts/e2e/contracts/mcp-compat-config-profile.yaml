@@ -1,0 +1,362 @@
+# CompatConfigProfile — non-secret description (P1-54 / Wave A1)
+# Authority: docs/specs/lucy-20261118-mcp-upgrade-question-bank-spec.md §0 / §3
+# Secrets (Token plaintext, DB passwords) stay on protected paths; never commit them here.
+#
+# configProfileId / version bind to journeys.yaml via requiredConfigFingerprint (P1-53 D27).
+
+configProfileId: lucy-mcp-compat-demo
+version: 1
+
+connections:
+  - demo-mysql
+  - lucy-ops
+
+# Product Role inventory fingerprints — verify presence; do NOT mutate as permanent deny carriers.
+productRoles:
+  demo_readonly:
+    purpose: inventory
+    connections: [demo-mysql]
+    sources:
+      - superstore_orders
+      - superstore_returns
+      - superstore_people
+  lucy_ops_reader:
+    purpose: inventory
+    note: "W0-only on demo; healable under P1-49. NEVER the permanent Source-deny carrier (QB-ACL-02c)."
+    connections: [lucy-ops]
+    sources:
+      - ops_calls
+      - ops_call_tables
+  demo_ops:
+    purpose: inventory_ops_askable_w0
+    note: "Current Ops askable identity (W0 two tables). Not the permanent Source-deny carrier."
+    connections: [lucy-ops]
+    sources:
+      - ops_calls
+      - ops_call_tables
+
+# Controlled fixtures applied by applyCompatConfigProfile (merge into access.yaml roles).
+fixtureRoles:
+  compat_fixture_no_lucy_query:
+    purpose: deny_no_query
+    mapsTo: [QB-ACL-01]
+    allow:
+      connections: [demo-mysql]
+      tableSelectors:
+        - connection: demo-mysql
+          schema: dataforai
+          names: [superstore_orders]
+      tools:
+        - lucy_catalog
+        - connection_list
+        - lucy_begin_question
+        # intentionally no lucy_query
+
+  compat_fixture_frozen_w0_only:
+    purpose: permanent_w0_source_deny
+    mapsTo: [QB-ACL-02c]
+    permanentDenyCarrier: true
+    note: "Frozen W0-only fixture. Never heal. Must not be lucy_ops_reader."
+    allow:
+      connections: [lucy-ops]
+      tableSelectors:
+        - connection: lucy-ops
+          schema: main
+          names: [ops_calls, ops_call_tables]
+          row_access: all
+      tools:
+        - lucy_catalog
+        - connection_list
+        - lucy_query
+        - lucy_read_source
+        - lucy_explain_query
+        - lucy_freshness
+        - lucy_begin_question
+
+  # O1 FROZEN (P1-54 S5 T-BANK-1, 2026-11-22): minimal dual-connection tool set =
+  #   lucy_catalog, connection_list, lucy_query, lucy_read_source,
+  #   lucy_explain_query, lucy_freshness, lucy_begin_question  (7 tools).
+  # No wiki_*, no lucy_admin, no connections:["*"]. Same 7 tools as W1/W2 ops fixtures.
+  # Guarded by mcp-compat-config-profile.test.mjs "O1 frozen ...". Changing this list
+  # changes the profile fingerprint and requires a deliberate re-freeze.
+  compat_fixture_dual_readonly:
+    purpose: dual_connection_readonly
+    mapsTo: [QB-DB-01]
+    note: "Readonly across demo-mysql + lucy-ops. FORBID lucy_admin / connections:['*']."
+    forbidAdmin: true
+    allow:
+      connections: [demo-mysql, lucy-ops]
+      tableSelectors:
+        - connection: demo-mysql
+          schema: dataforai
+          names: [superstore_orders, superstore_returns, superstore_people]
+        - connection: lucy-ops
+          schema: main
+          names: [ops_calls, ops_call_tables]
+          row_access: all
+      tools:
+        - lucy_catalog
+        - lucy_query
+        - lucy_read_source
+        - lucy_explain_query
+        - lucy_freshness
+        - lucy_begin_question
+        - connection_list
+
+  compat_fixture_table_a_only:
+    purpose: table_a_visible
+    mapsTo: [QB-ACL-03a]
+    allow:
+      connections: [demo-mysql]
+      tableSelectors:
+        - connection: demo-mysql
+          schema: dataforai
+          names: [superstore_orders]
+      tools:
+        - lucy_catalog
+        - lucy_query
+        - lucy_read_source
+        - lucy_explain_query
+        - lucy_begin_question
+        - connection_list
+
+  compat_fixture_table_b_denied:
+    purpose: table_b_invisible_pair
+    mapsTo: [QB-ACL-03a]
+    note: "Same connection; returns/people not granted — asking B must deny."
+    allow:
+      connections: [demo-mysql]
+      tableSelectors:
+        - connection: demo-mysql
+          schema: dataforai
+          names: [superstore_orders]
+      tools:
+        - lucy_catalog
+        - lucy_query
+        - lucy_read_source
+        - lucy_explain_query
+        - lucy_begin_question
+        - connection_list
+
+  compat_fixture_table_ab:
+    purpose: table_a_and_b_visible
+    mapsTo: [QB-ACL-03a]
+    note: "Allow orders + returns as table A/B pair for allow identity."
+    allow:
+      connections: [demo-mysql]
+      tableSelectors:
+        - connection: demo-mysql
+          schema: dataforai
+          names: [superstore_orders, superstore_returns]
+      tools:
+        - lucy_catalog
+        - lucy_query
+        - lucy_read_source
+        - lucy_explain_query
+        - lucy_begin_question
+        - connection_list
+
+  compat_fixture_fields_full:
+    purpose: field_exposure_allow
+    mapsTo: [QB-ACL-03c]
+    fieldExposure: full
+    allow:
+      connections: [demo-mysql]
+      tableSelectors:
+        - connection: demo-mysql
+          schema: dataforai
+          names: [superstore_orders]
+      tools:
+        - lucy_catalog
+        - lucy_query
+        - lucy_read_source
+        - lucy_explain_query
+        - lucy_begin_question
+        - connection_list
+
+  compat_fixture_fields_masked:
+    purpose: field_exposure_diff
+    mapsTo: [QB-ACL-03c]
+    fieldExposure: masked
+    note: "Hidden business fields must not appear in success payloads; legal fields remain queryable. Overlay/ledger paths stay non-secret refs only."
+    hiddenFieldRefs:
+      - source: demo-mysql.dataforai.superstore_orders
+        fields: [customer_name, postal_code]
+    allow:
+      connections: [demo-mysql]
+      tableSelectors:
+        - connection: demo-mysql
+          schema: dataforai
+          names: [superstore_orders]
+      tools:
+        - lucy_catalog
+        - lucy_query
+        - lucy_read_source
+        - lucy_explain_query
+        - lucy_begin_question
+        - connection_list
+
+  compat_fixture_ops_w1_reader:
+    purpose: w1_source_allowlist
+    mapsTo: [QB-OPS-05b, QB-OPS-06, QB-OPS-07a, QB-OPS-07b]
+    allow:
+      connections: [lucy-ops]
+      tableSelectors:
+        - connection: lucy-ops
+          schema: main
+          names:
+            - ops_calls
+            - ops_call_tables
+            - ops_agents
+            - ops_tokens
+            - ops_agent_activity
+            - ops_question_kpi_agents
+          row_access: all
+      tools:
+        - lucy_catalog
+        - connection_list
+        - lucy_query
+        - lucy_read_source
+        - lucy_explain_query
+        - lucy_freshness
+        - lucy_begin_question
+
+  compat_fixture_ops_w2_reader:
+    purpose: w2_source_allowlist
+    mapsTo: [QB-OPS-08, QB-OPS-09, QB-OPS-10, QB-OPS-11]
+    allow:
+      connections: [lucy-ops]
+      tableSelectors:
+        - connection: lucy-ops
+          schema: main
+          names:
+            - ops_calls
+            - ops_call_tables
+            - ops_agents
+            - ops_tokens
+            - ops_agent_activity
+            - ops_question_kpi_agents
+            - ops_grant_paths
+            - ops_access_paths
+            - ops_edge_signals
+            - ops_map_nodes
+            - ops_map_meta
+            - ops_table_adoption
+          row_access: all
+      tools:
+        - lucy_catalog
+        - connection_list
+        - lucy_query
+        - lucy_read_source
+        - lucy_explain_query
+        - lucy_freshness
+        - lucy_begin_question
+
+  compat_fixture_ops_w1w2:
+    purpose: w1_w2_combined_allowlist
+    mapsTo: [QB-ACL-02c, QB-OPS-05b, QB-OPS-06, QB-OPS-07a, QB-OPS-07b, QB-OPS-08, QB-OPS-09, QB-OPS-10, QB-OPS-11]
+    note: "Union of W1+W2 sources for journeys identity allow_ops_w1w2; still not the permanent deny carrier."
+    allow:
+      connections: [lucy-ops]
+      tableSelectors:
+        - connection: lucy-ops
+          schema: main
+          names:
+            - ops_calls
+            - ops_call_tables
+            - ops_agents
+            - ops_tokens
+            - ops_agent_activity
+            - ops_question_kpi_agents
+            - ops_grant_paths
+            - ops_access_paths
+            - ops_edge_signals
+            - ops_map_nodes
+            - ops_map_meta
+            - ops_table_adoption
+          row_access: all
+      tools:
+        - lucy_catalog
+        - connection_list
+        - lucy_query
+        - lucy_read_source
+        - lucy_explain_query
+        - lucy_freshness
+        - lucy_begin_question
+
+  compat_fixture_row_policy_unproven_gate:
+    purpose: row_isolation_deal
+    mapsTo: [QB-ACL-03b-gate]
+    note: "Scoped row_access (region in East/Southwest) on a single protected source for QB-ACL-03b-gate v2 row-isolation DEAL (P1-72 / 2026-11-22 option 2). Role id kept for fingerprint continuity; NOT an unproven-deny carrier. Shape: row_access: scoped + row_policy.predicates (product v2)."
+    allow:
+      permission_model_version: 2
+      connections: [demo-mysql]
+      tableSelectors:
+        - connection: demo-mysql
+          schema: dataforai
+          names: [superstore_orders]
+          row_access: scoped
+          row_policy:
+            predicates:
+              - field: region
+                op: in
+                values: [East, Southwest]
+      tools:
+        - lucy_catalog
+        - lucy_query
+        - lucy_read_source
+        - lucy_explain_query
+        - lucy_begin_question
+        - connection_list
+
+sources:
+  demo-mysql:
+    schema: dataforai
+    tables:
+      - superstore_orders
+      - superstore_returns
+      - superstore_people
+    joinsDeclared: true
+  lucy-ops:
+    schema: main
+    w0: [ops_calls, ops_call_tables]
+    w1: [ops_agents, ops_tokens, ops_agent_activity, ops_question_kpi_agents]
+    w2:
+      - ops_grant_paths
+      - ops_access_paths
+      - ops_edge_signals
+      - ops_map_nodes
+      - ops_map_meta
+      - ops_table_adoption
+
+constraints:
+  dualConnectionForbidRoles: [lucy_admin]
+  permanentDenyCarrierMustNotBe: lucy_ops_reader
+  rowIsolationDealOnGeneralLane: false
+  regionVocabularyDemo: [East, Southwest, Central South, Northeast]
+  forbidRegionVocabulary: [华东, 西南]
+
+govFilterRules:
+  w0:
+    forbid: [gov.*]
+    note: "W0 MCP controls must not include any gov.* filter."
+  w1w2:
+    requireOneOf:
+      - { field: gov.calendar_days, op: eq, values: [7, 30] }
+      - { field: gov.window_hours, op: eq, values: [24, 168] }
+      - { kind: iso_half_open_window }
+    mapping: "lucy_query.filters[]"
+    note: "Mutual exclusion follows product rules; not a top-level gov object."
+
+lifecycle:
+  backupBeforeApply: true
+  restoreAfterUse: true
+  restoreFailureStops: true
+
+tokenRefs:
+  note: "Token plaintext only from protected env / secrets dirs; refs are labels."
+  refs:
+    - env:COMPAT_TOKEN_NO_QUERY
+    - env:COMPAT_TOKEN_READONLY
+    - env:COMPAT_TOKEN_FROZEN_W0
+    - env:COMPAT_TOKEN_DUAL_READONLY

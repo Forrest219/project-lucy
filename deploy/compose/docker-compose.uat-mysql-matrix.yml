@@ -1,0 +1,45 @@
+# UAT MySQL version matrix (merge with docker-compose.demo.yml).
+# Usage:
+#   docker compose -f deploy/compose/docker-compose.demo.yml \
+#     -f deploy/compose/docker-compose.uat-mysql-matrix.yml \
+#     up -d uat-mysql57 uat-mysql80
+# Hosts from lucy container: uat-mysql57 / uat-mysql80 (port 3306).
+# Root password matches demo-db default (lucy_demo_root) — local UAT only.
+services:
+  uat-mysql57:
+    # 5.7 official images are amd64-only; QEMU on Apple Silicon.
+    # Prefer locally cached tag; pin via LUCY_UAT_MYSQL57_IMAGE when pull works.
+    image: ${LUCY_UAT_MYSQL57_IMAGE:-mysql:5.7}
+    platform: linux/amd64
+    environment:
+      MYSQL_ROOT_PASSWORD: lucy_demo_root
+      MYSQL_DATABASE: uat_wide_scan
+    ports:
+      - "${LUCY_UAT_MYSQL57_HOST_PORT:-53357}:3306"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -plucy_demo_root --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 20s
+
+  uat-mysql80:
+    # Use locally available tag by default (arm64 Mac often has mysql:8.0 cached).
+    image: ${LUCY_UAT_MYSQL80_IMAGE:-mysql:8.0}
+    environment:
+      MYSQL_ROOT_PASSWORD: lucy_demo_root
+      MYSQL_DATABASE: uat_wide_scan
+    ports:
+      - "${LUCY_UAT_MYSQL80_HOST_PORT:-53380}:3306"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -plucy_demo_root --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 15s

@@ -44,7 +44,7 @@ export const RECONCILIATION_DERIVATION_VERSION = "v2p5-1";
  * `access_log.attribution_rule_version` 列，本视图不改写、不重新归因。
  */
 export const RECONCILIATION_ATTRIBUTION_RULE_VERSION = "audit-reconciliation-attribution/v1";
-/** 问询预算规则版本：Spec 162（20 次数据工具 / 120 秒墙钟）语义，只读引用。 */
+/** 问询预算规则版本：Spec 162（默认 60 次数据工具 / 300 秒已结算忙时，见 lucy-20261111）语义，只读引用。 */
 export const RECONCILIATION_BUDGET_RULE_VERSION = "spec-162-question-budget/v1";
 /** 与既有审计导出保持同一时区口径。 */
 export const RECONCILIATION_TIMEZONE = "Asia/Shanghai";

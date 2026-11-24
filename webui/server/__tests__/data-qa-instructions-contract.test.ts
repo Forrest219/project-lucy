@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { QUESTION_BUDGET_MAX_BUSY_MS, QUESTION_BUDGET_MAX_CALLS } from "../proxy/question-experience";
 
 describe("data QA fallback instructions contract", () => {
   it("contains the enterprise answerability and delivery gates", async () => {
@@ -14,24 +15,31 @@ describe("data QA fallback instructions contract", () => {
     // WO-202610-12 T3: the 8-minute wording became the proxy budget
     // (20 data-tool calls / 120s wall clock, with one continuation).
     // Spec 162 修订（D8 / SC-40）：口径改为「已结算数据处理时长」，不含思考时间。
-    expect(text).toContain("同一问询最多 20 次数据工具调用，或累计 120 秒数据处理时长（不含思考时间）");
+    expect(text).toContain("同一问询最多 60 次数据工具调用，或累计 300 秒数据处理时长（不含思考时间）");
+    // 防漂移：md 里的数字必须等于代理实际执行的预算常量（initialize role-aware 路径同样取这两个常量）。
+    expect(text).toContain(`同一问询最多 ${QUESTION_BUDGET_MAX_CALLS} 次`);
+    expect(text).toContain(`累计 ${QUESTION_BUDGET_MAX_BUSY_MS / 1000} 秒`);
     expect(text).toContain("question_budget_exhausted");
     expect(text).toContain("部分可回答时仍必须回复");
     expect(text).toContain("`ok` / `no_data` / `unavailable` / `partial`");
   });
 
   // Spec 162 修订 / D8 / SC-40 —— 指导文本按 `continuable` 分支处置，
-  // 且不得宽于代理预算（次数上限仍是 20，续查只能一次）。
+  // 且不得宽于代理预算（次数上限现行 60，续查只能一次）。
   it("routes the budget stop by continuable and keeps the guidance within the proxy budget", async () => {    const text = await readFile(path.join(process.cwd(), "config", "data-qa-instructions.md"), "utf8");
 
     expect(text).toContain("若 `continuable` 为 true，调用 `lucy_continue_question`");
     expect(text).toContain("传入返回的 `continueToken`");
-    expect(text).toContain("若 `continuable` 为 false，直接交付已验证的部分结果并说明缺口，不要重试");
-    expect(text).toContain("同一问询只能继续一次");
+    // P1-74：continuable=false 时按 next_step（begin／new_question／hard_budget_stop）处置，
+    // 不再写「直接交付部分结果」的旧口径。
+    expect(text).toContain("若 `continuable` 为 false（续查档数用尽），按返回的结构化 `next_step` 执行");
+    expect(text).toContain("只有 `next_step` 为 `hard_budget_stop` 时，才交付已验证的部分结果并说明缺口");
     // 协议工具不占数据额度：声明与续查本身不计次数。
     expect(text).toContain("`lucy_begin_question` 与 `lucy_continue_question`）不占这个预算");
     // 指导不得宽于代理预算：不得出现比代理更宽松的上限表述。
     expect(text).not.toContain("墙钟 120 秒");
+    // 续查档数已扩到 5（非「只能继续一次」）。
+    expect(text).toContain("默认可继续至多 5 次");
   });
 
   // Spec 162 修订 / SC-41 —— 术语标准的三条**既有**词条按新口径修订
@@ -50,16 +58,27 @@ describe("data QA fallback instructions contract", () => {
     expect(standard).toContain("问询预算用尽后，该调用者是否仍有一条可达的继续通道");
   });
 
-  // WO-202610-13 T8 / SC-25 — 复述范围 lives in the instructions only.
-  // The proxy never gates on a confirmation field (SC-1).
-  it("states the restatement scope and skips it for inferred questions", async () => {
+  // WO-202610-13 T8 + P0-3：复述范围仍在 instructions；表级选表由硬门闩执行。
+  it("states the restatement scope, multi-source ask-first, and tool gate", async () => {
     const text = await readFile(path.join(process.cwd(), "config", "data-qa-instructions.md"), "utf8");
 
-    expect(text).toContain("问询范围确认");
+    expect(text).toContain("问询范围确认／多表命中先问");
     expect(text).toContain("先复述账户、月份和产品线");
     expect(text).toContain("用户确认后再发 `lucy_query`");
     expect(text).toContain("跳过复述");
-    expect(text).toContain("代理不实现确认门闩");
-    expect(text).toContain("仍然转发 `lucy_query`");
+    expect(text).toContain("source_ambiguity_gate");
+    expect(text).toContain("放行并披露");
+    expect(text).not.toContain("代理不实现确认门闩");
+  });
+
+  // P0-4／SC-08 — fallback md 须要求引用可核对块且不得要求隐藏。
+  it("requires citing answer_verifiability and forbids hiding it", async () => {
+    const text = await readFile(path.join(process.cwd(), "config", "data-qa-instructions.md"), "utf8");
+    expect(text).toContain("answer_verifiability");
+    expect(text).toContain("必须在用户可见答复中复述／引用");
+    expect(text).toContain("不得隐藏、省略或剥离");
+    expect(text).toContain("not_checked");
+    expect(text.toLowerCase()).not.toContain("hide answer_verifiability");
+    expect(text).not.toContain("不要向用户展示可核对");
   });
 });

@@ -1,0 +1,16 @@
+{
+  "source": "task-owned synthetic audit.sqlite; SQLite backup API",
+  "cutoff": "2026-10-21T11:18:29.613012+00:00",
+  "maxId": 233481,
+  "sqliteSha256": "77e4e0641a7db511a940197c7d102b6842a983286ece83254926ae4cf714bb8b",
+  "gzipSha256": "f7ff27d51fa7e74a9e6fffe1d966d7735b9330654943ddd6d1d6e02b9872fe0c",
+  "sqliteBytes": 2533433344,
+  "gzipBytes": 93300959,
+  "capturedAt": "2026-11-20T11:53:52.963814+00:00",
+  "elapsedSeconds": 17.997698217004654,
+  "deadlineSeconds": 89.99999775000015,
+  "path": "audit-evidence.sqlite.gz",
+  "copied": true,
+  "collectionElapsedSeconds": 18.59050570799991,
+  "collectionDeadlineSeconds": 90.0
+}

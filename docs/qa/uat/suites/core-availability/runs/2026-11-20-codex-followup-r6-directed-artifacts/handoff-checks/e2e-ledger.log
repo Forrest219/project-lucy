@@ -1,0 +1,163 @@
+== e2e ledger link check ==
+  ok   — DEVELOPMENT: docs/governance/DEVELOPMENT.md
+  ok   — e2e-ledger: docs/governance/e2e-ledger.md
+  ok   — UAT INDEX: docs/qa/uat/INDEX.md
+  ok   — DEVELOPMENT.md has 端到端三台账
+  ok   — P0-3 suite.md: docs/qa/uat/suites/source-ambiguity-gate/suite.md
+  ok   — P0-3 cases.md: docs/qa/uat/suites/source-ambiguity-gate/cases.md
+  ok   — P0-3 fixtures.md: docs/qa/uat/suites/source-ambiguity-gate/fixtures.md
+  ok   — P0-3 latest run: docs/qa/uat/suites/source-ambiguity-gate/runs/2026-11-14-claude-macmini-p0-post-upgrade.md
+  ok   — INDEX lists UAT-SUITE-SOURCE-AMBIGUITY
+  ok   — e2e-ledger links P0-3 ↔ UAT-SUITE-SOURCE-AMBIGUITY
+  ok   — P0-1 suite.md: docs/qa/uat/suites/question-type-caliber-binding/suite.md
+  ok   — P0-1 cases.md: docs/qa/uat/suites/question-type-caliber-binding/cases.md
+  ok   — P0-1 fixtures.md: docs/qa/uat/suites/question-type-caliber-binding/fixtures.md
+  ok   — P0-1 latest run: docs/qa/uat/suites/question-type-caliber-binding/runs/2026-11-14-claude-macmini-p0-post-upgrade.md
+  ok   — INDEX lists UAT-SUITE-CALIBER-BINDING
+  ok   — e2e-ledger links P0-1 ↔ UAT-SUITE-CALIBER-BINDING
+  ok   — P0-A suite.md: docs/qa/uat/suites/semantic-source-field-exposure/suite.md
+  ok   — P0-A cases.md: docs/qa/uat/suites/semantic-source-field-exposure/cases.md
+  ok   — P0-A fixtures.md: docs/qa/uat/suites/semantic-source-field-exposure/fixtures.md
+  ok   — P0-A latest run: docs/qa/uat/suites/semantic-source-field-exposure/runs/2026-11-14-claude-macmini-p0-post-upgrade.md
+  ok   — INDEX lists UAT-SUITE-FIELD-EXPOSURE
+  ok   — e2e-ledger links P0-A ↔ UAT-SUITE-FIELD-EXPOSURE
+  ok   — P0-4 suite.md: docs/qa/uat/suites/answer-verifiability/suite.md
+  ok   — P0-4 cases.md: docs/qa/uat/suites/answer-verifiability/cases.md
+  ok   — P0-4 fixtures.md: docs/qa/uat/suites/answer-verifiability/fixtures.md
+  ok   — P0-4 latest run: docs/qa/uat/suites/answer-verifiability/runs/2026-11-14-claude-macmini-p0-post-upgrade.md
+  ok   — INDEX lists UAT-SUITE-ANSWER-VERIFIABILITY
+  ok   — e2e-ledger links P0-4 ↔ UAT-SUITE-ANSWER-VERIFIABILITY
+  ok   — P0-5 suite.md: docs/qa/uat/suites/empty-result-next-step/suite.md
+  ok   — P0-5 cases.md: docs/qa/uat/suites/empty-result-next-step/cases.md
+  ok   — P0-5 fixtures.md: docs/qa/uat/suites/empty-result-next-step/fixtures.md
+  ok   — P0-5 latest run: docs/qa/uat/suites/empty-result-next-step/runs/2026-11-14-claude-macmini-p0-post-upgrade.md
+  ok   — INDEX lists UAT-SUITE-EMPTY-NEXT-STEP
+  ok   — e2e-ledger links P0-5 ↔ UAT-SUITE-EMPTY-NEXT-STEP
+  ok   — P0-2 suite.md: docs/qa/uat/suites/catalog-business-semantics/suite.md
+  ok   — P0-2 cases.md: docs/qa/uat/suites/catalog-business-semantics/cases.md
+  ok   — P0-2 fixtures.md: docs/qa/uat/suites/catalog-business-semantics/fixtures.md
+  ok   — P0-2 latest run: docs/qa/uat/suites/catalog-business-semantics/runs/2026-11-14-claude-macmini-p0-post-upgrade.md
+  ok   — INDEX lists UAT-SUITE-CATALOG-SEMANTICS
+  ok   — e2e-ledger links P0-2 ↔ UAT-SUITE-CATALOG-SEMANTICS
+  ok   — P1-15 suite.md: docs/qa/uat/suites/connection-runtime-reload/suite.md
+  ok   — P1-15 cases.md: docs/qa/uat/suites/connection-runtime-reload/cases.md
+  ok   — P1-15 fixtures.md: docs/qa/uat/suites/connection-runtime-reload/fixtures.md
+  ok   — P1-15 latest run: docs/qa/uat/suites/connection-runtime-reload/runs/2026-11-13-claude-adversarial.md
+  ok   — INDEX lists UAT-SUITE-CONN-RELOAD
+  ok   — e2e-ledger links P1-15 ↔ UAT-SUITE-CONN-RELOAD
+  ok   — P1-16 suite.md: docs/qa/uat/suites/catalog-scan-read-path/suite.md
+  ok   — P1-16 cases.md: docs/qa/uat/suites/catalog-scan-read-path/cases.md
+  ok   — P1-16 fixtures.md: docs/qa/uat/suites/catalog-scan-read-path/fixtures.md
+  ok   — P1-16 latest run: docs/qa/uat/suites/catalog-scan-read-path/runs/2026-11-13-claude-adversarial.md
+  ok   — INDEX lists UAT-SUITE-CATALOG-SCAN
+  ok   — e2e-ledger links P1-16 ↔ UAT-SUITE-CATALOG-SCAN
+  ok   — P1-17 suite.md: docs/qa/uat/suites/access-map-sankey-empty/suite.md
+  ok   — P1-17 cases.md: docs/qa/uat/suites/access-map-sankey-empty/cases.md
+  ok   — P1-17 fixtures.md: docs/qa/uat/suites/access-map-sankey-empty/fixtures.md
+  ok   — P1-17 latest run: docs/qa/uat/suites/access-map-sankey-empty/runs/2026-11-14-claude-macmini-p119-access-map.md
+  ok   — INDEX lists UAT-SUITE-ACCESS-MAP
+  ok   — e2e-ledger links P1-17 ↔ UAT-SUITE-ACCESS-MAP
+  ok   — P1-19 suite.md: docs/qa/uat/suites/access-map-sankey-empty/suite.md
+  ok   — P1-19 cases.md: docs/qa/uat/suites/access-map-sankey-empty/cases.md
+  ok   — P1-19 fixtures.md: docs/qa/uat/suites/access-map-sankey-empty/fixtures.md
+  ok   — P1-19 latest run: docs/qa/uat/suites/access-map-sankey-empty/runs/2026-11-14-claude-macmini-p119-access-map.md
+  ok   — INDEX lists UAT-SUITE-ACCESS-MAP
+  ok   — e2e-ledger links P1-19 ↔ UAT-SUITE-ACCESS-MAP
+  ok   — P1-13 suite.md: docs/qa/uat/suites/roles-agent-page-perf/suite.md
+  ok   — P1-13 cases.md: docs/qa/uat/suites/roles-agent-page-perf/cases.md
+  ok   — P1-13 fixtures.md: docs/qa/uat/suites/roles-agent-page-perf/fixtures.md
+  ok   — P1-13 latest run: docs/qa/uat/suites/roles-agent-page-perf/runs/2026-11-13-cursor-docker-page-perf.md
+  ok   — INDEX lists UAT-SUITE-ROLES-AGENT-PERF
+  ok   — e2e-ledger links P1-13 ↔ UAT-SUITE-ROLES-AGENT-PERF
+  ok   — P1-21 suite.md: docs/qa/uat/suites/event-loop-relief/suite.md
+  ok   — P1-21 cases.md: docs/qa/uat/suites/event-loop-relief/cases.md
+  ok   — P1-21 fixtures.md: docs/qa/uat/suites/event-loop-relief/fixtures.md
+  ok   — P1-21 latest run: docs/qa/uat/suites/event-loop-relief/runs/2026-11-13-cursor-demo-event-loop.md
+  ok   — INDEX lists UAT-SUITE-EVENT-LOOP-RELIEF
+  ok   — e2e-ledger links P1-21 ↔ UAT-SUITE-EVENT-LOOP-RELIEF
+  ok   — P1-40 suite.md: docs/qa/uat/suites/copy-fake-success/suite.md
+  ok   — P1-40 cases.md: docs/qa/uat/suites/copy-fake-success/cases.md
+  ok   — P1-40 fixtures.md: docs/qa/uat/suites/copy-fake-success/fixtures.md
+  ok   — P1-40 latest run: docs/qa/uat/suites/copy-fake-success/runs/2026-11-17-cursor-copy-probe-hardened.md
+  ok   — INDEX lists UAT-SUITE-COPY-FAKE-SUCCESS
+  ok   — e2e-ledger links P1-40 ↔ UAT-SUITE-COPY-FAKE-SUCCESS
+  ok   — P1-42 suite.md: docs/qa/uat/suites/button-feedback/suite.md
+  ok   — P1-42 cases.md: docs/qa/uat/suites/button-feedback/cases.md
+  ok   — P1-42 fixtures.md: docs/qa/uat/suites/button-feedback/fixtures.md
+  ok   — P1-42 latest run: docs/qa/uat/suites/button-feedback/runs/2026-11-17-cursor-button-feedback-after-fix.md
+  ok   — INDEX lists UAT-SUITE-BUTTON-FEEDBACK
+  ok   — e2e-ledger links P1-42 ↔ UAT-SUITE-BUTTON-FEEDBACK
+  ok   — P1-31 suite.md: docs/qa/uat/suites/page-event-loop-sweep/suite.md
+  ok   — P1-31 cases.md: docs/qa/uat/suites/page-event-loop-sweep/cases.md
+  ok   — P1-31 fixtures.md: docs/qa/uat/suites/page-event-loop-sweep/fixtures.md
+  ok   — P1-31 latest run: docs/qa/uat/suites/page-event-loop-sweep/runs/2026-11-16-claude-page-sweep-after-rebuild.md
+  ok   — INDEX lists UAT-SUITE-PAGE-SWEEP
+  ok   — e2e-ledger links P1-31 ↔ UAT-SUITE-PAGE-SWEEP
+  ok   — P1-32 suite.md: docs/qa/uat/suites/page-event-loop-sweep/suite.md
+  ok   — P1-32 cases.md: docs/qa/uat/suites/page-event-loop-sweep/cases.md
+  ok   — P1-32 fixtures.md: docs/qa/uat/suites/page-event-loop-sweep/fixtures.md
+  ok   — P1-32 latest run: docs/qa/uat/suites/page-event-loop-sweep/runs/2026-11-16-claude-page-sweep-after-rebuild.md
+  ok   — INDEX lists UAT-SUITE-PAGE-SWEEP
+  ok   — e2e-ledger links P1-32 ↔ UAT-SUITE-PAGE-SWEEP
+  ok   — P1-33 suite.md: docs/qa/uat/suites/page-event-loop-sweep/suite.md
+  ok   — P1-33 cases.md: docs/qa/uat/suites/page-event-loop-sweep/cases.md
+  ok   — P1-33 fixtures.md: docs/qa/uat/suites/page-event-loop-sweep/fixtures.md
+  ok   — P1-33 latest run: docs/qa/uat/suites/page-event-loop-sweep/runs/2026-11-16-claude-page-sweep-after-rebuild.md
+  ok   — INDEX lists UAT-SUITE-PAGE-SWEEP
+  ok   — e2e-ledger links P1-33 ↔ UAT-SUITE-PAGE-SWEEP
+  ok   — P1-32 suite.md: docs/qa/uat/suites/audit-scale-equivalence-guard/suite.md
+  ok   — P1-32 cases.md: docs/qa/uat/suites/audit-scale-equivalence-guard/cases.md
+  ok   — P1-32 fixtures.md: docs/qa/uat/suites/audit-scale-equivalence-guard/fixtures.md
+  ok   — P1-32 latest run: docs/qa/uat/suites/audit-scale-equivalence-guard/runs/2026-11-16-claude-equiv-first.md
+  ok   — INDEX lists UAT-SUITE-EQUIV-GUARD
+  ok   — e2e-ledger links P1-32 ↔ UAT-SUITE-EQUIV-GUARD
+  ok   — P1-33 suite.md: docs/qa/uat/suites/audit-scale-equivalence-guard/suite.md
+  ok   — P1-33 cases.md: docs/qa/uat/suites/audit-scale-equivalence-guard/cases.md
+  ok   — P1-33 fixtures.md: docs/qa/uat/suites/audit-scale-equivalence-guard/fixtures.md
+  ok   — P1-33 latest run: docs/qa/uat/suites/audit-scale-equivalence-guard/runs/2026-11-16-claude-equiv-first.md
+  ok   — INDEX lists UAT-SUITE-EQUIV-GUARD
+  ok   — e2e-ledger links P1-33 ↔ UAT-SUITE-EQUIV-GUARD
+  ok   — P1-30 suite.md: docs/qa/uat/suites/context-content/suite.md
+  ok   — P1-30 cases.md: docs/qa/uat/suites/context-content/cases.md
+  ok   — P1-30 fixtures.md: docs/qa/uat/suites/context-content/fixtures.md
+  ok   — P1-30 latest run: docs/qa/uat/suites/context-content/runs/2026-11-15-claude-ctx-content.md
+  ok   — INDEX lists UAT-SUITE-CONTEXT-CONTENT
+  ok   — e2e-ledger links P1-30 ↔ UAT-SUITE-CONTEXT-CONTENT
+  ok   — P1-11 suite.md: docs/qa/uat/suites/ops-concepts/suite.md
+  ok   — P1-11 cases.md: docs/qa/uat/suites/ops-concepts/cases.md
+  ok   — P1-11 fixtures.md: docs/qa/uat/suites/ops-concepts/fixtures.md
+  ok   — P1-11 latest run: docs/qa/uat/suites/ops-concepts/runs/2026-11-15-cursor-p1-27-ops-retest.md
+  ok   — INDEX lists UAT-SUITE-OPS-CONCEPTS
+  ok   — e2e-ledger links P1-11 ↔ UAT-SUITE-OPS-CONCEPTS
+  ok   — P1-27 suite.md: docs/qa/uat/suites/ops-concepts/suite.md
+  ok   — P1-27 cases.md: docs/qa/uat/suites/ops-concepts/cases.md
+  ok   — P1-27 fixtures.md: docs/qa/uat/suites/ops-concepts/fixtures.md
+  ok   — P1-27 latest run: docs/qa/uat/suites/ops-concepts/runs/2026-11-15-cursor-p1-27-ops-retest.md
+  ok   — INDEX lists UAT-SUITE-OPS-CONCEPTS
+  ok   — e2e-ledger links P1-27 ↔ UAT-SUITE-OPS-CONCEPTS
+  ok   — P1-28 suite.md: docs/qa/uat/suites/row-policy-finance-scenario/suite.md
+  ok   — P1-28 cases.md: docs/qa/uat/suites/row-policy-finance-scenario/cases.md
+  ok   — P1-28 fixtures.md: docs/qa/uat/suites/row-policy-finance-scenario/fixtures.md
+  ok   — P1-28 latest run: docs/qa/uat/suites/row-policy-finance-scenario/runs/2026-11-15-cursor-row-policy-retest.md
+  ok   — INDEX lists UAT-SUITE-ROW-POLICY
+  ok   — e2e-ledger links P1-28 ↔ UAT-SUITE-ROW-POLICY
+  ok   — P1-29 suite.md: docs/qa/uat/suites/row-policy-finance-scenario/suite.md
+  ok   — P1-29 cases.md: docs/qa/uat/suites/row-policy-finance-scenario/cases.md
+  ok   — P1-29 fixtures.md: docs/qa/uat/suites/row-policy-finance-scenario/fixtures.md
+  ok   — P1-29 latest run: docs/qa/uat/suites/row-policy-finance-scenario/runs/2026-11-15-cursor-row-policy-retest.md
+  ok   — INDEX lists UAT-SUITE-ROW-POLICY
+  ok   — e2e-ledger links P1-29 ↔ UAT-SUITE-ROW-POLICY
+  ok   — P1-12 suite.md: docs/qa/uat/suites/question-budget/suite.md
+  ok   — P1-12 cases.md: docs/qa/uat/suites/question-budget/cases.md
+  ok   — P1-12 fixtures.md: docs/qa/uat/suites/question-budget/fixtures.md
+  ok   — P1-12 latest run: docs/qa/uat/suites/question-budget/runs/2026-11-16-cursor-p1-12-budget-uat-rerun.md
+  ok   — INDEX lists UAT-SUITE-QUESTION-BUDGET
+  ok   — e2e-ledger links P1-12 ↔ UAT-SUITE-QUESTION-BUDGET
+  ok   — P1-14 suite.md: docs/qa/uat/suites/budget-audit/suite.md
+  ok   — P1-14 cases.md: docs/qa/uat/suites/budget-audit/cases.md
+  ok   — P1-14 fixtures.md: docs/qa/uat/suites/budget-audit/fixtures.md
+  ok   — P1-14 latest run: docs/qa/uat/suites/budget-audit/runs/2026-11-15-cursor-p1-14-audit-retest.md
+  ok   — INDEX lists UAT-SUITE-BUDGET-AUDIT
+  ok   — e2e-ledger links P1-14 ↔ UAT-SUITE-BUDGET-AUDIT
+
+PASSED: e2e ledger links

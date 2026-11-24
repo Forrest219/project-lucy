@@ -1,0 +1,13 @@
+{
+  "Dockerfile.patch": "99cbdbea447e5a2c12c88cc0bb72c296ee79292181139e4b6df9ec2d5d68be0b",
+  "README.md": "94faabb127e6fe4d4b67e484166a246802d4b327bdd5c5f3f97fc3b4351de34e",
+  "artifact-manifest.json": "abbaf246347c1ae900615aece7965171e6273faf0641a168dd5ba1790be2fad4",
+  "case-results.json": "2bd55a6d44fd9899b23cc4d8b8c306bff5ec8b05bfe4b47f50f9d1e04777b2d2",
+  "cleanup-summary.json": "a3d907a958af3a1f4101906f00a1f3e5d26e3bac6f60c78df9d9ed2c87d98133",
+  "client-summary.json": "181a535522465f49a65359e346be9ee8255e9b5bab6f465ed72ac02ed1ed9e0b",
+  "final-governance-check.json": "a598d2f688a2bff79de810712159912b1fc2b48b83ee8f3e3a3209909a5f34b3",
+  "performance-summary.json": "713a36b90c15321542c84ef66c37309d5b76ba965cb1528fdd719db80349b866",
+  "qualification-history.json": "0e7a75e8d84c539022ddbd0b8d7c4cc4c54917833092cc7be64b8036b65fc72b",
+  "raw-evidence-index.json": "56f24d1037e5473d94f2e5a445355f954454a5083e870bbde69dc7e062d3c0f9",
+  "raw-evidence.tar.gz": "29fd27cc88db7b12c513c4c93bff00bc87f5d2b0964d78938d038eb07c4341ef"
+}

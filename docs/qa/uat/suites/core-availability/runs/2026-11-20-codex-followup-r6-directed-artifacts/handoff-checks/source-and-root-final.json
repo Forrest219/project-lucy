@@ -1,0 +1,13 @@
+{
+  "at": "2026-11-20T13:27:00.939715+00:00",
+  "candidate": "sha256:ae0eb26a73d9331f45e4276f9839c442f9c8ada0ff2701366c7c2b099b8f7a4f",
+  "candidateSourceChecked": 1247,
+  "candidateSourceMismatches": [],
+  "owned25ChangedSinceMove": [],
+  "protectedRoot28Changed": [],
+  "rootHeadUnchanged": true,
+  "rootHead": "7dded5478a05e256aa23d33567b49beb3820ec3b",
+  "durableWorktree": "/Users/zhangxingchen/Projects/project-lucy/.worktrees/core-availability-followup-20261120",
+  "compatibilitySymlink": true,
+  "compatibilityResolves": "/Users/zhangxingchen/Projects/project-lucy/.worktrees/core-availability-followup-20261120"
+}

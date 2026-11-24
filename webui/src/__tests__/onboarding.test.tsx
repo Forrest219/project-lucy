@@ -250,6 +250,40 @@ describe("Onboarding", () => {
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Bearer <LUCY_AGENT_TOKEN>"));
   });
 
+  it("does not claim the MCP config was copied when the clipboard write fails", async () => {
+    // copyTextToClipboard returns `{ ok, reason }`, an object that is always truthy:
+    // treating it as a boolean made the failure branch dead and the success Toast unconditional.
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: vi.fn(async () => { throw new Error("denied"); }) }
+    });
+    Object.defineProperty(document, "execCommand", { configurable: true, value: undefined });
+    toastSpy.mockClear();
+
+    renderPage();
+    await screen.findByRole("heading", { name: "MCP 接入" });
+    fireEvent.click(screen.getByRole("button", { name: "复制 MCP 配置" }));
+
+    await waitFor(() => expect(toastSpy).toHaveBeenCalledWith("error", expect.anything()));
+    expect(toastSpy.mock.calls.some(([kind]) => kind === "success")).toBe(false);
+    expect(screen.queryByRole("button", { name: "已复制" })).not.toBeInTheDocument();
+  });
+
+  it("reports the MCP config as copied only after the clipboard write succeeds", async () => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: vi.fn(async () => undefined) }
+    });
+    toastSpy.mockClear();
+
+    renderPage();
+    await screen.findByRole("heading", { name: "MCP 接入" });
+    fireEvent.click(screen.getByRole("button", { name: "复制 MCP 配置" }));
+
+    await waitFor(() => expect(toastSpy.mock.calls.some(([kind]) => kind === "success")).toBe(true));
+    expect(toastSpy.mock.calls.some(([kind]) => kind === "error")).toBe(false);
+  });
+
   it("surfaces the local fallback URL as not deployment-ready when LUCY_PUBLIC_MCP_URL is unset", async () => {
     renderPage({
       mcpEndpoint: {

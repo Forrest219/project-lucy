@@ -1,0 +1,1053 @@
+[
+  {
+    "id": "ars_00_a00",
+    "roles": [
+      "ars_00_r00"
+    ],
+    "capabilities": 2100,
+    "sources": 350,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 574818,
+    "semanticDigest": "7e7b22387a608c1e7435ce8e1681aa762216cd42c26dfaf69f23bfede4ac71d3"
+  },
+  {
+    "id": "ars_00_a01",
+    "roles": [
+      "ars_00_r02"
+    ],
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "semanticDigest": "d90b01ba1b7da1d621867723ea70acc1c117aa13c8a3cd0fe13bb7d5d33b4eb8"
+  },
+  {
+    "id": "ars_00_a02",
+    "roles": [
+      "ars_00_r03"
+    ],
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "semanticDigest": "4ef3b5d27feed1adafe0d3fee8f518914133031dd786baa0c7966ee3fbc9f52c"
+  },
+  {
+    "id": "ars_00_a03",
+    "roles": [
+      "ars_00_r04"
+    ],
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "semanticDigest": "8775ea769145af58583ed52b994720c156614c625258f509553952ac0f8193a0"
+  },
+  {
+    "id": "ars_00_a04",
+    "roles": [
+      "ars_00_r05"
+    ],
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "semanticDigest": "d31e87b35a8b56485042552c39840ed379875ff5ab8e579ca7cd4a23114230b5"
+  },
+  {
+    "id": "ars_00_a05",
+    "roles": [
+      "ars_00_r06"
+    ],
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "semanticDigest": "69e52b8669ba084d1e4ba916800674ed116304c88f849f8cc9dc5c0c70d2804d"
+  },
+  {
+    "id": "ars_00_a06",
+    "roles": [
+      "ars_00_r07"
+    ],
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "semanticDigest": "92bedcef82ee74d7e7a6a4dede6673ff9192d71a63115f6401ad16a58bb3462f"
+  },
+  {
+    "id": "ars_00_a07",
+    "roles": [
+      "ars_00_r08"
+    ],
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "semanticDigest": "3902da324445144e591b8f22f2a7033a26ead6a6643189c9964674e83ab6110d"
+  },
+  {
+    "id": "ars_00_a08",
+    "roles": [
+      "ars_00_r09"
+    ],
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "semanticDigest": "98f4f41a219c151ba551e1c3bcfcc237fe5ad950cc9048130740397f1f6b6ebb"
+  },
+  {
+    "id": "ars_00_a09",
+    "roles": [
+      "ars_00_r10"
+    ],
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "semanticDigest": "a5f0b18500e4f22a55c39836bf94549251afb000633abd432d5c6834926a84e0"
+  },
+  {
+    "id": "ars_00_a10",
+    "roles": [
+      "ars_00_r11"
+    ],
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "semanticDigest": "ac717796e378c9266937cfc51f681cd3d7c0366962b714d0955c5486f15b679c"
+  },
+  {
+    "id": "ars_00_a11",
+    "roles": [
+      "ars_00_r12"
+    ],
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "semanticDigest": "40e0fe7389ddcbc85a9a32c749479cf8a35e2ba8f63065b88fde5cf0abcda0bc"
+  },
+  {
+    "id": "ars_00_a12",
+    "roles": [
+      "ars_00_r13"
+    ],
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "semanticDigest": "e471dd6dd7f361b0f9c888200cc0e5bd005af656a15135b8ce918ed1d20da76f"
+  },
+  {
+    "id": "ars_00_a13",
+    "roles": [
+      "ars_00_r14"
+    ],
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "semanticDigest": "28826d2253a7ffff36b3ec92417782e5585914d1fee02bac1d1cee2b0b2b824e"
+  },
+  {
+    "id": "ars_00_a14",
+    "roles": [
+      "ars_00_r15"
+    ],
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "semanticDigest": "38f59cc3ef51a1ff56b33a121efb6250053c5734d3c7ce5b0ef70c9e2483b46a"
+  },
+  {
+    "id": "ars_00_a15",
+    "roles": [
+      "ars_00_r16"
+    ],
+    "capabilities": 216,
+    "sources": 36,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 59544,
+    "semanticDigest": "270d2b5fa89e9cfb5b6d0c664380bd6bb5eccb41d380c1316b4158bf84c62b77"
+  },
+  {
+    "id": "ars_00_a16",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r17"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 126031,
+    "semanticDigest": "b11a3390d78e42332655ba5a3eef47ea210ab8ea64b16b3c9fe1d24573920fe4",
+    "constraints": {
+      "sources": [
+        {
+          "connection": "ars_00_c0",
+          "schema": "ars_00",
+          "names": [
+            "ars_00_source_000"
+          ],
+          "predicates": [
+            {
+              "field": "department",
+              "op": "eq",
+              "value": "Finance"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "ars_00_a17",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r18"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 126031,
+    "semanticDigest": "5dfbb6b373e735a3587625445d59180cb29ea04ddd8f46892e4cfd5355c4d7a6",
+    "constraints": {
+      "sources": [
+        {
+          "connection": "ars_00_c0",
+          "schema": "ars_00",
+          "names": [
+            "ars_00_source_000"
+          ],
+          "predicates": [
+            {
+              "field": "department",
+              "op": "eq",
+              "value": "Finance"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "ars_00_a18",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r19"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 126031,
+    "semanticDigest": "b287e700817b4dabe7ad33020e291f20f39a136eaae19bfdfd273ca55120d93c",
+    "constraints": {
+      "sources": [
+        {
+          "connection": "ars_00_c0",
+          "schema": "ars_00",
+          "names": [
+            "ars_00_source_000"
+          ],
+          "predicates": [
+            {
+              "field": "department",
+              "op": "eq",
+              "value": "Finance"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "ars_00_a19",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r20"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 126031,
+    "semanticDigest": "e3b0536a837cac3c6408149aaf81f2176d3fb488d731b95d077ebab33ebb6f60",
+    "constraints": {
+      "sources": [
+        {
+          "connection": "ars_00_c0",
+          "schema": "ars_00",
+          "names": [
+            "ars_00_source_000"
+          ],
+          "predicates": [
+            {
+              "field": "department",
+              "op": "eq",
+              "value": "Finance"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "ars_00_a20",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r21"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 126031,
+    "semanticDigest": "477cfc2289f55a0fa1928b5f0c8cb478e62ffd89938040a0d8da2d09d00270b9",
+    "constraints": {
+      "sources": [
+        {
+          "connection": "ars_00_c0",
+          "schema": "ars_00",
+          "names": [
+            "ars_00_source_000"
+          ],
+          "predicates": [
+            {
+              "field": "department",
+              "op": "eq",
+              "value": "Finance"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "ars_00_a21",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r22"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 126031,
+    "semanticDigest": "582fc09705a99826b14ff2545d7991a3c1cb6a64bf3da2f324a4066a2d61b83b",
+    "constraints": {
+      "sources": [
+        {
+          "connection": "ars_00_c0",
+          "schema": "ars_00",
+          "names": [
+            "ars_00_source_000"
+          ],
+          "predicates": [
+            {
+              "field": "department",
+              "op": "eq",
+              "value": "Finance"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "ars_00_a22",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r23"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 126031,
+    "semanticDigest": "4f8843c1560e24ab8ac38547eac4d4a625b3c08dc5df9d33adb209569dfbebdc",
+    "constraints": {
+      "sources": [
+        {
+          "connection": "ars_00_c0",
+          "schema": "ars_00",
+          "names": [
+            "ars_00_source_000"
+          ],
+          "predicates": [
+            {
+              "field": "department",
+              "op": "eq",
+              "value": "Finance"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "ars_00_a23",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r24"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 126031,
+    "semanticDigest": "6fcb7125009ee578fc4a9d0d263e148d6e3d5ff630eb1ecd47789cbeb163ca16",
+    "constraints": {
+      "sources": [
+        {
+          "connection": "ars_00_c0",
+          "schema": "ars_00",
+          "names": [
+            "ars_00_source_000"
+          ],
+          "predicates": [
+            {
+              "field": "department",
+              "op": "eq",
+              "value": "Finance"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "ars_00_a24",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r25"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "d2b6c818330bfdd2c8ebb77bcb09938ddb434a190146d308f1619e3ac765e3c6"
+  },
+  {
+    "id": "ars_00_a25",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r26"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "bffb9be2652213c65ac73fc3298a06945fd06e6e1a4d136864a9b26d0a48ea87"
+  },
+  {
+    "id": "ars_00_a26",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r27"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "429a89a4b86e6cf7bff06bf99a422f0d002f507695233b66e62d07d22b5f3466"
+  },
+  {
+    "id": "ars_00_a27",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r28"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "71b14ce5520b5164d488e00a911d3123321e958372c21587038737e1e620e557"
+  },
+  {
+    "id": "ars_00_a28",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r29"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "3f6cd517384dc725b1c1763edc6dc945114f9559805ebcf9f9b4ad5277cbc578"
+  },
+  {
+    "id": "ars_00_a29",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r30"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "145579e14c8d1ca1d692bcf130351a5e2dd3e808fa305983b1366c90b4c79697"
+  },
+  {
+    "id": "ars_00_a30",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r31"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "b52db79f7340b5b9333ff6789353a12f9023ded02c886fe558f3b595c4076e8c"
+  },
+  {
+    "id": "ars_00_a31",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r32"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "7de5ab770e3f86ad2fba87dd74948c2416b3f2eec460a4bebfd517dd7f736e3b"
+  },
+  {
+    "id": "ars_00_a32",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r33"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "409a4dc41d7546eb6c444fea770ed6ae3aa71d6ade2c4de98e1f05ff3410543c"
+  },
+  {
+    "id": "ars_00_a33",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r34"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "1260804c4c68263fbf52a68a157940d4e206aa3d2ae823697f9922d79f500c98"
+  },
+  {
+    "id": "ars_00_a34",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r35"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "49f2bccf706b42056d39cb258c1b9141db451c6a89e8b613d4d0c02d6ce6c9eb"
+  },
+  {
+    "id": "ars_00_a35",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r36"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "7dbd4948aa2bad6edc893008d9c976ed24e4ff3b99f2ca3ddc34f79008289dff"
+  },
+  {
+    "id": "ars_00_a36",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r37"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "9d874d34380303edebdc1873ad641a580f62aee6e1f7c869a29cabcbd03d0d46"
+  },
+  {
+    "id": "ars_00_a37",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r38"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "23eaf93e48d4c584ca232c7a8e60ea89be1939effedf8c164451fe67868c0ec8"
+  },
+  {
+    "id": "ars_00_a38",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r39"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "5b97c0adac0607ca5af12c792a1c6b34cce38d851ad6944db1c359697527e1b7"
+  },
+  {
+    "id": "ars_00_a39",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r40"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "f1aabe21dddb620789ce6b4338201cae979fa7b0e372c06ed14df82457f8e812"
+  },
+  {
+    "id": "ars_00_a40",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r41"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "c3ac57cbafc23eea5a773aa7775c2aff28313d9b3cce58cf974f524b4f91bba6"
+  },
+  {
+    "id": "ars_00_a41",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r42"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "7ccba9fd613d4b15147e5b8e06501e6893402bfc8fc84e8a0edc7da810737591"
+  },
+  {
+    "id": "ars_00_a42",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r43"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "7549b36e17613b695d5d51d87d57cb50423935fc6b4357ebd464aa03d34958f4"
+  },
+  {
+    "id": "ars_00_a43",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r44"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "3df27ff3bb987923add97f6eefdd9cbe7951fe47c30bacbb1e4bfec22f42ed93"
+  },
+  {
+    "id": "ars_00_a44",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r45"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "47ed325240af5b57e71d3a82c6a1f0315afefeb7ccb8ee2d8f140ae8a44ac6c1"
+  },
+  {
+    "id": "ars_00_a45",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r46"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "2d55fc44f707ebe9844dc908e7e5e00dae4b70da4c9135501b2bc9041f532930"
+  },
+  {
+    "id": "ars_00_a46",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r17"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "0dd8afb65f4fa3c4ff8961de590eb66fdb4363807eed1eb6476aa81f23a3e880"
+  },
+  {
+    "id": "ars_00_a47",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r18"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "c8b7dc9b3bd4beded9ca796d47a9b83e7bf02c871b2610611754628340289064"
+  },
+  {
+    "id": "ars_00_a48",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r19"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "55fd7c6d1df769bac379d36998160c5c2d9234e432b4e71a2a173225f75f1179"
+  },
+  {
+    "id": "ars_00_a49",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r20"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "0b3113cbf461c7f0373da043d64e2033a7999edb2257fc612a865355711afdcc"
+  },
+  {
+    "id": "ars_00_a50",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r21"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "246781d3bac51808ed56d073497d78810ace615716e24a6caabe5a88a4c00328"
+  },
+  {
+    "id": "ars_00_a51",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r22"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "6c91fcb7be65e23e8e1efda8edb4ee182da2af74507b05247031c1d0833c6326"
+  },
+  {
+    "id": "ars_00_a52",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r23"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "ece87362509aef92c9f423b4b84a8780ece2716276eb88255c75ce6663d06666"
+  },
+  {
+    "id": "ars_00_a53",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r24"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "27e7a2116ce28dc63755519e4ee7b7a566ee4182a2982f68e134995978593ab0"
+  },
+  {
+    "id": "ars_00_a54",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r25"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "d2b6c818330bfdd2c8ebb77bcb09938ddb434a190146d308f1619e3ac765e3c6"
+  },
+  {
+    "id": "ars_00_a55",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r26"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "bffb9be2652213c65ac73fc3298a06945fd06e6e1a4d136864a9b26d0a48ea87"
+  },
+  {
+    "id": "ars_00_a56",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r27"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "429a89a4b86e6cf7bff06bf99a422f0d002f507695233b66e62d07d22b5f3466"
+  },
+  {
+    "id": "ars_00_a57",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r28"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "71b14ce5520b5164d488e00a911d3123321e958372c21587038737e1e620e557"
+  },
+  {
+    "id": "ars_00_a58",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r29"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "3f6cd517384dc725b1c1763edc6dc945114f9559805ebcf9f9b4ad5277cbc578"
+  },
+  {
+    "id": "ars_00_a59",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r30"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "145579e14c8d1ca1d692bcf130351a5e2dd3e808fa305983b1366c90b4c79697"
+  },
+  {
+    "id": "ars_00_a60",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r31"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "b52db79f7340b5b9333ff6789353a12f9023ded02c886fe558f3b595c4076e8c"
+  },
+  {
+    "id": "ars_00_a61",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r32"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "7de5ab770e3f86ad2fba87dd74948c2416b3f2eec460a4bebfd517dd7f736e3b"
+  },
+  {
+    "id": "ars_00_a62",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r33"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "409a4dc41d7546eb6c444fea770ed6ae3aa71d6ade2c4de98e1f05ff3410543c"
+  },
+  {
+    "id": "ars_00_a63",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r34"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "1260804c4c68263fbf52a68a157940d4e206aa3d2ae823697f9922d79f500c98"
+  },
+  {
+    "id": "ars_00_a64",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r35"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "49f2bccf706b42056d39cb258c1b9141db451c6a89e8b613d4d0c02d6ce6c9eb"
+  },
+  {
+    "id": "ars_00_a65",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r36"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "7dbd4948aa2bad6edc893008d9c976ed24e4ff3b99f2ca3ddc34f79008289dff"
+  },
+  {
+    "id": "ars_00_a66",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r37"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "9d874d34380303edebdc1873ad641a580f62aee6e1f7c869a29cabcbd03d0d46"
+  },
+  {
+    "id": "ars_00_a67",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r38"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "23eaf93e48d4c584ca232c7a8e60ea89be1939effedf8c164451fe67868c0ec8"
+  },
+  {
+    "id": "ars_00_a68",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r39"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "5b97c0adac0607ca5af12c792a1c6b34cce38d851ad6944db1c359697527e1b7"
+  },
+  {
+    "id": "ars_00_a69",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r40"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "f1aabe21dddb620789ce6b4338201cae979fa7b0e372c06ed14df82457f8e812"
+  },
+  {
+    "id": "ars_00_a70",
+    "roles": [
+      "ars_00_r01",
+      "ars_00_r41"
+    ],
+    "capabilities": 180,
+    "sources": 30,
+    "connections": 9,
+    "tools": 6,
+    "permissionBytes": 124771,
+    "semanticDigest": "c3ac57cbafc23eea5a773aa7775c2aff28313d9b3cce58cf974f524b4f91bba6"
+  }
+]

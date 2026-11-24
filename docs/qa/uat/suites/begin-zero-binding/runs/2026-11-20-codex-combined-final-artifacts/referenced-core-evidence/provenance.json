@@ -1,0 +1,33 @@
+{
+  "purpose": "read-only source evidence quoted by this process final review; does not submit the other task implementation or ledgers",
+  "sources": {
+    "repair-source-manifest.json": {
+      "originalPath": "docs/qa/uat/suites/core-availability/runs/2026-11-20-codex-readyz-diagnostic-repair-artifacts/source-manifest.json",
+      "sha256": "bc77f23ab4fcdd5e7f829671103b9a92f93c118b859348a6a38e0b21b5d1ebcf"
+    },
+    "prior-repro-report.md.txt": {
+      "originalPath": "docs/qa/uat/suites/core-availability/runs/2026-11-20-codex-readyz-diagnostic-repro.md",
+      "sha256": "eb0111b41439dd0c31c46f14f928f7e084e0f75f036267e98ef198327d9ec74a"
+    },
+    "prior-source-manifest.json": {
+      "originalPath": "docs/qa/uat/suites/core-availability/runs/2026-11-20-codex-readyz-diagnostic-repro-artifacts/source-manifest.json",
+      "sha256": "d64dedeb3afbeca593fd19b5a14c433a91078a39059c07310721613ecd674eef"
+    },
+    "control-term-states.json": {
+      "originalPath": "docs/qa/uat/suites/core-availability/runs/2026-11-20-codex-readyz-diagnostic-repro-artifacts/control-term-states.json",
+      "sha256": "233dfcc6f9d9d11a1c7f0ac82ab442cadc2872a525ed8dc6916fbb2f2b419666"
+    },
+    "fault-term-states.json": {
+      "originalPath": "docs/qa/uat/suites/core-availability/runs/2026-11-20-codex-readyz-diagnostic-repro-artifacts/fault-term-states.json",
+      "sha256": "d9f085e2f7c407af062e825221467c4e86d325496861d2bb047e3bd6abea163f"
+    },
+    "probe-summary.json": {
+      "originalPath": "docs/qa/uat/suites/core-availability/runs/2026-11-20-codex-readyz-diagnostic-repro-artifacts/probe-summary.json",
+      "sha256": "b23454bb32991b3b99e0f97793366deb85c7c183d8bc7be2bcda7a13d616aafc"
+    },
+    "path-only-recovery.json": {
+      "originalPath": "docs/qa/uat/suites/core-availability/runs/2026-11-20-codex-readyz-diagnostic-repro-artifacts/path-only-recovery.json",
+      "sha256": "fb7bd5f46573adf134e8099628875022d333ccb87233d7b04443be8cf203e4bf"
+    }
+  }
+}

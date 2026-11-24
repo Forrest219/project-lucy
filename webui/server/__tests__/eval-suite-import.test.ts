@@ -5,13 +5,10 @@ import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildServer } from "../index";
 import { getEvalDb, resetEvalDb } from "../eval/db";
+import { createEmptyAuditDbStub } from "./helpers/audit-db-stub.js";
 
 vi.mock("../admin/audit.js", () => ({
-  getAuditDb: vi.fn(() => ({
-    prepare: vi.fn(() => ({ get: vi.fn(() => undefined), all: vi.fn(() => []), run: vi.fn() })),
-    exec: vi.fn(),
-    pragma: vi.fn()
-  })),
+  getAuditDb: vi.fn(() => createEmptyAuditDbStub()),
   registerAgentAuditRoutes: vi.fn(),
   registerAuditRoutes: vi.fn(),
   recordConfigChange: vi.fn()

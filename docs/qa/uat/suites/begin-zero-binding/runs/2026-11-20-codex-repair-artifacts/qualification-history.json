@@ -1,0 +1,760 @@
+[
+  {
+    "run": "77e2ad84-strong-client",
+    "startedAt": "2026-11-20T04:43:58.924580+00:00",
+    "runnerSha256": "4d3e3cedfed89e07a5cd6d8d2447ff821aca1ac31430ae7f61673d45339c8388",
+    "image": "project-lucy:p1-60-77e2ad84-final",
+    "cases": {
+      "UAT-ZB-R0": {
+        "status": "PASS",
+        "detail": "real isolated Docker/MySQL; independent SQL oracle"
+      },
+      "UAT-ZB-01": {
+        "status": "PASS"
+      },
+      "UAT-ZB-02": {
+        "status": "PASS"
+      },
+      "UAT-ZB-03": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-04": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-05": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-06": {
+        "status": "PASS"
+      },
+      "UAT-ZB-07": {
+        "status": "PASS",
+        "revocationVariants": [
+          "draft",
+          "delete"
+        ]
+      },
+      "UAT-ZB-08": {
+        "status": "PASS"
+      },
+      "UAT-ZB-09": {
+        "status": "PASS"
+      },
+      "UAT-ZB-10": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-11": {
+        "status": "PASS",
+        "partialSubmatrix": true,
+        "variants": [
+          "L1",
+          "U0",
+          "T0"
+        ],
+        "completes": "I0–I4 including valid draft and L0 proven by 77e2ad84-late; this supplement uses genuine old-format strong state after runtime metadata is stable"
+      },
+      "UAT-ZB-12": {
+        "status": "FAIL",
+        "reason": "float() argument must be a string or a number, not 'NoneType'"
+      }
+    },
+    "status": "FAIL",
+    "error": "float() argument must be a string or a number, not 'NoneType'",
+    "finishedAt": "2026-11-20T04:47:12.767249+00:00"
+  },
+  {
+    "run": "late-qualification-2",
+    "startedAt": "2026-11-20T03:51:56.307318+00:00",
+    "image": "project-lucy:p1-60-3b69470e-verified",
+    "cases": {
+      "UAT-ZB-R0": {
+        "status": "PASS",
+        "detail": "real isolated Docker/MySQL; independent SQL oracle"
+      },
+      "UAT-ZB-01": {
+        "status": "PASS"
+      },
+      "UAT-ZB-02": {
+        "status": "PASS"
+      },
+      "UAT-ZB-03": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-04": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-05": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-06": {
+        "status": "PASS"
+      },
+      "UAT-ZB-07": {
+        "status": "PASS"
+      },
+      "UAT-ZB-08": {
+        "status": "PASS"
+      },
+      "UAT-ZB-09": {
+        "status": "PASS"
+      },
+      "UAT-ZB-10": {
+        "status": "FAIL",
+        "reason": "perf source failed"
+      },
+      "UAT-ZB-11": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-12": {
+        "status": "NOT RUN"
+      }
+    },
+    "status": "FAIL",
+    "error": "perf source failed",
+    "finishedAt": "2026-11-20T03:53:21.673631+00:00"
+  },
+  {
+    "run": "full-3",
+    "startedAt": "2026-11-20T03:59:41.211874+00:00",
+    "image": "project-lucy:p1-60-3b69470e-verified",
+    "cases": {
+      "UAT-ZB-R0": {
+        "status": "PASS",
+        "detail": "real isolated Docker/MySQL; independent SQL oracle"
+      },
+      "UAT-ZB-01": {
+        "status": "PASS"
+      },
+      "UAT-ZB-02": {
+        "status": "PASS"
+      },
+      "UAT-ZB-03": {
+        "status": "PASS",
+        "variants": [
+          "I0",
+          "I1",
+          "I2",
+          "I3"
+        ],
+        "stages": 3,
+        "sessionsPerStage": 2
+      },
+      "UAT-ZB-04": {
+        "status": "PASS"
+      },
+      "UAT-ZB-05": {
+        "status": "PASS"
+      },
+      "UAT-ZB-06": {
+        "status": "PASS"
+      },
+      "UAT-ZB-07": {
+        "status": "PASS"
+      },
+      "UAT-ZB-08": {
+        "status": "PASS"
+      },
+      "UAT-ZB-09": {
+        "status": "FAIL",
+        "reason": "source-map fault not actually reproduced"
+      },
+      "UAT-ZB-10": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-11": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-12": {
+        "status": "NOT RUN"
+      }
+    },
+    "status": "FAIL",
+    "error": "source-map fault not actually reproduced",
+    "finishedAt": "2026-11-20T04:02:38.397330+00:00"
+  },
+  {
+    "run": "native-recovery-final-v2",
+    "startedAt": "2026-11-20T04:24:34.025243+00:00",
+    "runnerSha256": "27b57331564fcae5df4721b07b59387af9238e7bd22e61755568706fbe753cf3",
+    "image": "project-lucy:p1-60-3b69470e-final-v2",
+    "cases": {
+      "UAT-ZB-R0": {
+        "status": "PASS",
+        "detail": "real isolated Docker/MySQL; independent SQL oracle"
+      },
+      "UAT-ZB-01": {
+        "status": "PASS"
+      },
+      "UAT-ZB-02": {
+        "status": "PASS"
+      },
+      "UAT-ZB-03": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-04": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-05": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-06": {
+        "status": "PASS"
+      },
+      "UAT-ZB-07": {
+        "status": "PASS",
+        "revocationVariants": [
+          "draft",
+          "delete"
+        ]
+      },
+      "UAT-ZB-08": {
+        "status": "PASS"
+      },
+      "UAT-ZB-09": {
+        "status": "PASS"
+      },
+      "UAT-ZB-10": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-11": {
+        "status": "FAIL",
+        "reason": "r11-L0-query query failed: {\"httpStatus\": 200, \"elapsedMs\": 45.916, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 6, \"result\": {\"isError\": true, \"content\": [{\"type\": \"text\", \"text\": \"Access denied: caliber_binding_unresolved（口径绑定无法解析）：本次问询的口径绑定状态不可信\"}], \"data\": {\"reason\": \"caliber_binding_unresolved\", \"failureDimension\": \"口径绑定\"}}}}"
+      },
+      "UAT-ZB-12": {
+        "status": "NOT RUN"
+      }
+    },
+    "status": "FAIL",
+    "error": "r11-L0-query query failed: {\"httpStatus\": 200, \"elapsedMs\": 45.916, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 6, \"result\": {\"isError\": true, \"content\": [{\"type\": \"text\", \"text\": \"Access denied: caliber_binding_unresolved（口径绑定无法解析）：本次问询的口径绑定状态不可信\"}], \"data\": {\"reason\": \"caliber_binding_unresolved\", \"failureDimension\": \"口径绑定\"}}}}",
+    "finishedAt": "2026-11-20T04:30:19.561740+00:00"
+  },
+  {
+    "run": "full-2",
+    "startedAt": "2026-11-20T03:45:51.514240+00:00",
+    "image": "project-lucy:p1-60-3b69470e-verified",
+    "cases": {
+      "UAT-ZB-R0": {
+        "status": "PASS",
+        "detail": "real isolated Docker/MySQL; independent SQL oracle"
+      },
+      "UAT-ZB-01": {
+        "status": "PASS"
+      },
+      "UAT-ZB-02": {
+        "status": "PASS"
+      },
+      "UAT-ZB-03": {
+        "status": "PASS",
+        "variants": [
+          "I0",
+          "I1",
+          "I2",
+          "I3"
+        ],
+        "stages": 3,
+        "sessionsPerStage": 2
+      },
+      "UAT-ZB-04": {
+        "status": "PASS"
+      },
+      "UAT-ZB-05": {
+        "status": "PASS"
+      }
+    },
+    "status": "FAIL",
+    "error": "r06-revoke failed: {\"httpStatus\": 400, \"elapsedMs\": 12.642, \"body\": {\"ok\": false, \"error\": {\"code\": \"FST_ERR_CTP_EMPTY_JSON_BODY\", \"message\": \"Body cannot be empty when content-type is set to 'application/json'\"}}}",
+    "finishedAt": "2026-11-20T03:48:34.541917+00:00"
+  },
+  {
+    "run": "77e2ad84-early",
+    "startedAt": "2026-11-20T04:36:45.339375+00:00",
+    "runnerSha256": "12f671c3e1291430d14e60edd5ac7d4faad131856737b00b61a76eb10aa138bb",
+    "image": "project-lucy:p1-60-77e2ad84-final",
+    "cases": {
+      "UAT-ZB-R0": {
+        "status": "PASS",
+        "detail": "real isolated Docker/MySQL; independent SQL oracle"
+      },
+      "UAT-ZB-01": {
+        "status": "PASS"
+      },
+      "UAT-ZB-02": {
+        "status": "PASS"
+      },
+      "UAT-ZB-03": {
+        "status": "PASS",
+        "variants": [
+          "I0",
+          "I1",
+          "I2",
+          "I3"
+        ],
+        "stages": 3,
+        "sessionsPerStage": 2
+      },
+      "UAT-ZB-04": {
+        "status": "PASS"
+      },
+      "UAT-ZB-05": {
+        "status": "PASS"
+      },
+      "UAT-ZB-06": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-07": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-08": {
+        "status": "PASS",
+        "detail": "supplemental operator/management task via public read-only audit API"
+      },
+      "UAT-ZB-09": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-10": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-11": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-12": {
+        "status": "NOT RUN"
+      }
+    },
+    "status": "EARLY_MATRIX_PARTIAL",
+    "finishedAt": "2026-11-20T04:39:55.529442+00:00"
+  },
+  {
+    "run": "tail-qualification-v2",
+    "startedAt": "2026-11-20T04:08:12.632261+00:00",
+    "image": "project-lucy:p1-60-3b69470e-final-v2",
+    "cases": {
+      "UAT-ZB-R0": {
+        "status": "PASS",
+        "detail": "real isolated Docker/MySQL; independent SQL oracle"
+      },
+      "UAT-ZB-01": {
+        "status": "PASS"
+      },
+      "UAT-ZB-02": {
+        "status": "PASS"
+      },
+      "UAT-ZB-03": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-04": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-05": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-06": {
+        "status": "PASS"
+      },
+      "UAT-ZB-07": {
+        "status": "PASS"
+      },
+      "UAT-ZB-08": {
+        "status": "PASS"
+      },
+      "UAT-ZB-09": {
+        "status": "PASS"
+      },
+      "UAT-ZB-10": {
+        "status": "FAIL",
+        "reason": "perf source failed: {\"httpStatus\": 503, \"elapsedMs\": 14.266, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 338, \"error\": {\"code\": -32000, \"message\": \"audit_unavailable\", \"data\": {\"reason\": \"question_budget_unavailable\"}}}}"
+      },
+      "UAT-ZB-11": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-12": {
+        "status": "NOT RUN"
+      }
+    },
+    "status": "FAIL",
+    "error": "perf source failed: {\"httpStatus\": 503, \"elapsedMs\": 14.266, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 338, \"error\": {\"code\": -32000, \"message\": \"audit_unavailable\", \"data\": {\"reason\": \"question_budget_unavailable\"}}}}",
+    "finishedAt": "2026-11-20T04:11:26.418674+00:00"
+  },
+  {
+    "run": "native-recovery-v2",
+    "startedAt": "2026-11-20T04:18:38.388847+00:00",
+    "image": "project-lucy:p1-60-3b69470e-final-v2",
+    "cases": {
+      "UAT-ZB-R0": {
+        "status": "PASS",
+        "detail": "real isolated Docker/MySQL; independent SQL oracle"
+      },
+      "UAT-ZB-01": {
+        "status": "PASS"
+      },
+      "UAT-ZB-02": {
+        "status": "PASS"
+      },
+      "UAT-ZB-03": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-04": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-05": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-06": {
+        "status": "PASS"
+      },
+      "UAT-ZB-07": {
+        "status": "PASS",
+        "revocationVariants": [
+          "draft",
+          "delete"
+        ]
+      },
+      "UAT-ZB-08": {
+        "status": "PASS"
+      },
+      "UAT-ZB-09": {
+        "status": "PASS"
+      },
+      "UAT-ZB-10": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-11": {
+        "status": "FAIL",
+        "reason": "readiness timeout"
+      },
+      "UAT-ZB-12": {
+        "status": "NOT RUN"
+      }
+    },
+    "status": "FAIL",
+    "error": "readiness timeout",
+    "finishedAt": "2026-11-20T04:22:40.054965+00:00"
+  },
+  {
+    "run": "full-final",
+    "startedAt": "2026-11-20T04:03:27.124327+00:00",
+    "image": "project-lucy:p1-60-3b69470e-final",
+    "cases": {
+      "UAT-ZB-R0": {
+        "status": "PASS",
+        "detail": "real isolated Docker/MySQL; independent SQL oracle"
+      },
+      "UAT-ZB-01": {
+        "status": "PASS"
+      },
+      "UAT-ZB-02": {
+        "status": "PASS"
+      },
+      "UAT-ZB-03": {
+        "status": "PASS",
+        "variants": [
+          "I0",
+          "I1",
+          "I2",
+          "I3"
+        ],
+        "stages": 3,
+        "sessionsPerStage": 2
+      },
+      "UAT-ZB-04": {
+        "status": "PASS"
+      },
+      "UAT-ZB-05": {
+        "status": "PASS"
+      },
+      "UAT-ZB-06": {
+        "status": "PASS"
+      },
+      "UAT-ZB-07": {
+        "status": "PASS"
+      },
+      "UAT-ZB-08": {
+        "status": "PASS"
+      },
+      "UAT-ZB-09": {
+        "status": "PASS"
+      },
+      "UAT-ZB-10": {
+        "status": "FAIL",
+        "reason": "r10-0-12-query query failed: {\"httpStatus\": 503, \"elapsedMs\": 80.645, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 254, \"error\": {\"code\": -32000, \"message\": \"audit_unavailable\", \"data\": {\"reason\": \"question_budget_unavailable\"}}}}"
+      },
+      "UAT-ZB-11": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-12": {
+        "status": "NOT RUN"
+      }
+    },
+    "status": "FAIL",
+    "error": "r10-0-12-query query failed: {\"httpStatus\": 503, \"elapsedMs\": 80.645, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 254, \"error\": {\"code\": -32000, \"message\": \"audit_unavailable\", \"data\": {\"reason\": \"question_budget_unavailable\"}}}}",
+    "finishedAt": "2026-11-20T04:07:32.546573+00:00"
+  },
+  {
+    "run": "77e2ad84-late",
+    "startedAt": "2026-11-20T04:36:46.158355+00:00",
+    "runnerSha256": "12f671c3e1291430d14e60edd5ac7d4faad131856737b00b61a76eb10aa138bb",
+    "image": "project-lucy:p1-60-77e2ad84-final",
+    "cases": {
+      "UAT-ZB-R0": {
+        "status": "PASS",
+        "detail": "real isolated Docker/MySQL; independent SQL oracle"
+      },
+      "UAT-ZB-01": {
+        "status": "PASS"
+      },
+      "UAT-ZB-02": {
+        "status": "PASS"
+      },
+      "UAT-ZB-03": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-04": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-05": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-06": {
+        "status": "PASS"
+      },
+      "UAT-ZB-07": {
+        "status": "PASS",
+        "revocationVariants": [
+          "draft",
+          "delete"
+        ]
+      },
+      "UAT-ZB-08": {
+        "status": "PASS"
+      },
+      "UAT-ZB-09": {
+        "status": "PASS"
+      },
+      "UAT-ZB-10": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-11": {
+        "status": "FAIL",
+        "reason": "healthy active scope failed to recover"
+      },
+      "UAT-ZB-12": {
+        "status": "NOT RUN"
+      }
+    },
+    "status": "FAIL",
+    "error": "healthy active scope failed to recover",
+    "finishedAt": "2026-11-20T04:42:58.367241+00:00"
+  },
+  {
+    "run": "late-qualification-1",
+    "startedAt": "2026-11-20T03:49:27.089647+00:00",
+    "image": "project-lucy:p1-60-3b69470e-verified",
+    "cases": {
+      "UAT-ZB-R0": {
+        "status": "PASS",
+        "detail": "real isolated Docker/MySQL; independent SQL oracle"
+      },
+      "UAT-ZB-01": {
+        "status": "PASS"
+      },
+      "UAT-ZB-02": {
+        "status": "PASS"
+      },
+      "UAT-ZB-03": {
+        "status": "FAIL",
+        "reason": "global deny bypassed"
+      },
+      "UAT-ZB-04": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-05": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-06": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-07": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-08": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-09": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-10": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-11": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-12": {
+        "status": "NOT RUN"
+      }
+    },
+    "status": "FAIL",
+    "error": "global deny bypassed",
+    "finishedAt": "2026-11-20T03:49:47.412625+00:00"
+  },
+  {
+    "run": "native-late-v2",
+    "startedAt": "2026-11-20T04:13:00.682871+00:00",
+    "image": "project-lucy:p1-60-3b69470e-final-v2",
+    "cases": {
+      "UAT-ZB-R0": {
+        "status": "PASS",
+        "detail": "real isolated Docker/MySQL; independent SQL oracle"
+      },
+      "UAT-ZB-01": {
+        "status": "PASS"
+      },
+      "UAT-ZB-02": {
+        "status": "PASS"
+      },
+      "UAT-ZB-03": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-04": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-05": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-06": {
+        "status": "PASS"
+      },
+      "UAT-ZB-07": {
+        "status": "PASS"
+      },
+      "UAT-ZB-08": {
+        "status": "PASS"
+      },
+      "UAT-ZB-09": {
+        "status": "PASS"
+      },
+      "UAT-ZB-10": {
+        "status": "FAIL",
+        "reason": "perf source failed: {\"httpStatus\": 503, \"elapsedMs\": 9.318, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 425, \"error\": {\"code\": -32000, \"message\": \"audit_unavailable\", \"data\": {\"reason\": \"question_budget_unavailable\"}}}}"
+      },
+      "UAT-ZB-11": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-12": {
+        "status": "NOT RUN"
+      }
+    },
+    "status": "FAIL",
+    "error": "perf source failed: {\"httpStatus\": 503, \"elapsedMs\": 9.318, \"body\": {\"jsonrpc\": \"2.0\", \"id\": 425, \"error\": {\"code\": -32000, \"message\": \"audit_unavailable\", \"data\": {\"reason\": \"question_budget_unavailable\"}}}}",
+    "finishedAt": "2026-11-20T04:16:33.866958+00:00"
+  },
+  {
+    "run": "smoke-1",
+    "startedAt": "2026-11-20T03:37:20.004657+00:00",
+    "image": "project-lucy:p1-60-8411138d-verified",
+    "cases": {
+      "UAT-ZB-R0": {
+        "status": "PASS",
+        "detail": "real isolated Docker/MySQL and independent oracle"
+      },
+      "UAT-ZB-01": {
+        "status": "PASS"
+      },
+      "UAT-ZB-02": {
+        "status": "PASS"
+      }
+    },
+    "status": "SMOKE_PASS",
+    "finishedAt": "2026-11-20T03:37:42.832655+00:00"
+  },
+  {
+    "run": "full-1",
+    "startedAt": "2026-11-20T03:41:47.798347+00:00",
+    "image": "project-lucy:p1-60-8411138d-verified",
+    "cases": {
+      "UAT-ZB-R0": {
+        "status": "PASS",
+        "detail": "real isolated Docker/MySQL; independent SQL oracle"
+      },
+      "UAT-ZB-01": {
+        "status": "PASS"
+      },
+      "UAT-ZB-02": {
+        "status": "PASS"
+      },
+      "UAT-ZB-03": {
+        "status": "PASS",
+        "variants": [
+          "I0",
+          "I1",
+          "I2",
+          "I3"
+        ],
+        "stages": 3,
+        "sessionsPerStage": 2
+      },
+      "UAT-ZB-04": {
+        "status": "PASS"
+      }
+    },
+    "status": "FAIL",
+    "error": "continue failed",
+    "finishedAt": "2026-11-20T03:44:31.991178+00:00"
+  },
+  {
+    "run": "native-early-v2",
+    "startedAt": "2026-11-20T04:16:35.736883+00:00",
+    "image": "project-lucy:p1-60-3b69470e-final-v2",
+    "cases": {
+      "UAT-ZB-R0": {
+        "status": "PASS",
+        "detail": "real isolated Docker/MySQL; independent SQL oracle"
+      },
+      "UAT-ZB-01": {
+        "status": "PASS"
+      },
+      "UAT-ZB-02": {
+        "status": "PASS"
+      },
+      "UAT-ZB-03": {
+        "status": "PASS",
+        "variants": [
+          "I0",
+          "I1",
+          "I2",
+          "I3"
+        ],
+        "stages": 3,
+        "sessionsPerStage": 2
+      },
+      "UAT-ZB-04": {
+        "status": "PASS"
+      },
+      "UAT-ZB-05": {
+        "status": "PASS"
+      },
+      "UAT-ZB-06": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-07": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-08": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-09": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-10": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-11": {
+        "status": "NOT RUN"
+      },
+      "UAT-ZB-12": {
+        "status": "NOT RUN"
+      }
+    },
+    "status": "EARLY_MATRIX_PARTIAL",
+    "finishedAt": "2026-11-20T04:19:34.994993+00:00"
+  }
+]

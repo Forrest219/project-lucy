@@ -420,4 +420,71 @@ describe("Audit", () => {
       expect(callUrl).toContain("user=hehe");
     });
   });
+
+  it("renders auth_failure rows without crashing the calls view", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/admin/audit/turns")) {
+        return new Response(JSON.stringify({
+          ok: true,
+          data: {
+            total: 0,
+            entries: [],
+            summary: { reportedCount: 0, inferredCount: 0, reportedShare: 0 },
+            referenceLatency: { windowHours: 720, p95Ms: 0, totalCallsInWindow: 0, slowCallsInFilter: 0 }
+          }
+        }));
+      }
+      if (url.includes("/api/admin/agents")) {
+        return new Response(JSON.stringify({ ok: true, data: { agents: [] } }));
+      }
+      if (url.startsWith("/api/admin/audit")) {
+        return new Response(JSON.stringify({
+          ok: true,
+          data: {
+            total: 1,
+            projection: { complete: true, cursor: 1, latestSeq: 1, lag: 0, delayMs: 0 },
+            entries: [
+              {
+                id: 1,
+                eventType: "auth_failure",
+                ts: "2026-11-18T00:17:32.241Z",
+                reason: "token_unrecognized",
+                clientIp: "203.0.113.10",
+                userAgent: "Python-urllib/3.9",
+                tokenHashPrefix: "sha256:31427b4e2092"
+              },
+              {
+                id: 7,
+                eventType: "call",
+                ts: "2026-11-18T00:16:47.987Z",
+                userId: "demo_agent",
+                tool: "lucy_query",
+                outcome: "ok",
+                durationMs: 12,
+                requestId: "req-7",
+                primaryStatus: "ok"
+              }
+            ],
+            summary: {
+              businessCalls: 1,
+              protocolCalls: 0,
+              deniedCalls: 0,
+              dataBearingCalls: 1
+            }
+          }
+        }));
+      }
+      return new Response(JSON.stringify({ ok: false, error: { code: "NOT_FOUND", message: url } }), { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderAudit("/admin/audit?range=30d&view=calls");
+    expect(await screen.findByRole("heading", { name: "访问日志" })).toBeInTheDocument();
+    const authRow = await screen.findByTestId("audit-auth-failure-row-1");
+    expect(within(authRow).getAllByText("token_unrecognized").length).toBeGreaterThan(0);
+    expect(within(authRow).getByText("鉴权失败")).toBeInTheDocument();
+    expect(screen.getByTestId("audit-call-action-7")).toHaveTextContent("查数");
+    expect(screen.queryByText("页面资源加载失败")).not.toBeInTheDocument();
+  });
 });

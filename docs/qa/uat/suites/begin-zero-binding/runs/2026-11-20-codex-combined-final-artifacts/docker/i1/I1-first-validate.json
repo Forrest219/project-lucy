@@ -1,0 +1,45 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 11.637,
+  "body": {
+    "ok": true,
+    "data": {
+      "valid": true,
+      "validationId": "val_20261120_050853_473_ec54f79b",
+      "files": [
+        {
+          "originalFilename": "uat.yaml",
+          "kind": "schemaManifest",
+          "targetPath": "semantic-layer/uat-mysql/_schema/uat.yaml",
+          "exists": true,
+          "sizeBytes": 230,
+          "sha256": "0f1213d36425cf9fea0bdc11b971020b4d5278ab06e85b7a32b3395d23fe4c75",
+          "connectionId": "uat-mysql",
+          "schema": "uat",
+          "warnings": [
+            {
+              "code": "TARGET_EXISTS",
+              "message": "目标文件已存在：semantic-layer/uat-mysql/_schema/uat.yaml",
+              "filePath": "semantic-layer/uat-mysql/_schema/uat.yaml"
+            }
+          ]
+        }
+      ],
+      "changedSources": [
+        {
+          "connectionId": "uat-mysql",
+          "sourceName": "uat_begin_zero_orders"
+        }
+      ],
+      "diff": "Index: semantic-layer/uat-mysql/_schema/uat.yaml\n===================================================================\n--- semantic-layer/uat-mysql/_schema/uat.yaml\tcurrent\n+++ semantic-layer/uat-mysql/_schema/uat.yaml\tproposed\n@@ -1,1 +1,2 @@\n-{\"tables\": {\"uat_begin_zero_orders\": {\"table\": \"uat.uat_begin_zero_orders\", \"columns\": [{\"name\": \"order_id\", \"type\": \"number\", \"pk\": true}, {\"name\": \"tenant\", \"type\": \"string\"}, {\"name\": \"amount\", \"type\": \"number\"}]}}}\n\\ No newline at end of file\n+{\"tables\": {\"uat_begin_zero_orders\": {\"table\": \"uat.uat_begin_zero_orders\", \"columns\": [{\"name\": \"order_id\", \"type\": \"number\", \"pk\": true}, {\"name\": \"tenant\", \"type\": \"string\"}, {\"name\": \"amount\", \"type\": \"number\"}]}}}\n+# I1-first\n",
+      "warnings": [
+        {
+          "code": "TARGET_EXISTS",
+          "message": "目标文件已存在：semantic-layer/uat-mysql/_schema/uat.yaml",
+          "filePath": "semantic-layer/uat-mysql/_schema/uat.yaml"
+        }
+      ],
+      "errors": []
+    }
+  }
+}

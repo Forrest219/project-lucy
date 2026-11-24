@@ -1,0 +1,45 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 1363,
+  "body": {
+    "ok": true,
+    "data": {
+      "written": true,
+      "auditId": 29,
+      "oldEnabledTables": [
+        "weather.city",
+        "ods.city"
+      ],
+      "newEnabledTables": [
+        "weather.city",
+        "ods.city"
+      ],
+      "warnings": [],
+      "policyVersion": "0b7d9d1e975a594d5900f915143c7ffd528ee010323a929804abbb9f723ae55e",
+      "policyRuntimeAck": false,
+      "policyRuntimeIssues": [
+        {
+          "agentId": "repro_reader",
+          "reason": "source_map_compile_failed:duplicate_source_name:hive-1:t6",
+          "diagnostic": {
+            "declaredRoleIds": [],
+            "steps": [],
+            "contentRoot": "/data/lucy/config",
+            "contentRootSource": "env",
+            "sourceMapVersion": "2b9d22ac223e0baf",
+            "sourceMapConnectionIds": [
+              "hive-1",
+              "lucy-ops"
+            ]
+          }
+        }
+      ],
+      "catalogRuntimeAck": false,
+      "executionRuntimeAck": true,
+      "executionRuntimeStatus": "ok",
+      "executionDecisionReason": "allowed",
+      "executionRuntimePending": false,
+      "runtimeAck": false
+    }
+  }
+}

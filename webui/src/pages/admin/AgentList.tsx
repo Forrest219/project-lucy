@@ -1,9 +1,20 @@
-import { useState } from "react";
+import { useRolesAgentDraftGuard } from "../../lib/useRolesAgentDraftGuard";
+import { AccessWriteRecoveryPanel } from "../../components/admin/AccessWriteRecoveryPanel";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { classifyRolesAgentWriteError, MSG_PUBLISH_BUSY, buildRacsWriteBody, extractRacsPreviewBinding, newRolesAgentOperationId, pollAccessWriteStatusBounded, type DryRunRacsFields, type AccessWriteStatusResult } from "../../lib/rolesAgentAccessWrite";
 import { apiGet, apiPost } from "../../lib/apiClient";
-import type { Agent, AgentsResponseSummary, CreateAgentBody, EffectivePermissionsPreview, Role } from "../../lib/types";
+import type {
+  Agent,
+  AgentsResponseSummary,
+  AgentRosterSummaryRow,
+  AgentStats,
+  CreateAgentBody,
+  EffectivePermissionsPreview,
+  Role
+} from "../../lib/types";
 import { buildMcpConfig } from "../../lib/mcpEndpoint";
 import { AgentRoleCapability, AgentRoleField, agentRoleIds, roleSelectionSavable } from "../../components/AgentRoleField";
 import { PageHeader } from "../../components/PageHeader";
@@ -11,12 +22,18 @@ import { AsyncRegion, asyncStatus } from "../../components/AsyncRegion";
 import { DisplayRefreshNotice } from "../../components/DisplayRefreshNotice";
 import { MetricCard } from "../../components/MetricCard";
 import { PolicyDegradeMetric } from "../../components/PolicyDegradeMetric";
-import { buildObjectDetailSearch } from "../../lib/objectDetail";
+import { mergeObjectDetailSearch } from "../../lib/objectDetail";
 import { RowMoreMenu } from "../../components/RowMoreMenu";
 import { isLucyAdminDataPlaneRole } from "../../lib/lucyAdminRole";
 import { LucyAdminRoleWarning } from "../../lib/LucyAdminRoleWarning";
 import { OPS_EVIDENCE_ROLE_ID, OPS_EVIDENCE_ROLE_WARNING } from "../../lib/opsEvidence";
-import { adminAgentsQueryOptions } from "../../lib/displayQueryOptions";
+import {
+  adminAgentsSummaryQueryOptions,
+  adminAgentsCompatibleStatisticsQueryOptions,
+
+  formatListLoadError
+} from "../../lib/displayQueryOptions";
+import { rosterConfigurationSummary, rosterStatisticsSummary } from "../../lib/agentRosterSummary";
 import { queryKeys } from "../../lib/queryKeys";
 import {
   AGENT_STATS_RANGE_HOURS,
@@ -26,15 +43,23 @@ import {
   type AgentStatsRange
 } from "../../lib/agentStatsRange";
 
-type AgentsResponse = {
-  agents: Agent[];
-  version: string;
-  /** Optional server-side aggregate; absent on backends pre-dating M55. */
-  summary?: AgentsResponseSummary;
-  /** Spec 174 §3.3 — display permission meta. */
-  meta?: { runtimeConsistency?: "matched" | "unconfirmed" };
-};
 type RolesResponse = { roles: Role[] };
+
+function agentStatisticsVersionsMatch(
+  rosterVersion: string | undefined,
+  rosterSnapshot: string | undefined,
+  statsVersion: string | undefined,
+  statsSnapshot: string | undefined
+): boolean {
+  return Boolean(
+    rosterVersion
+    && statsVersion
+    && rosterSnapshot
+    && statsSnapshot
+    && rosterVersion === statsVersion
+    && rosterSnapshot === statsSnapshot
+  );
+}
 
 /**
  * Placeholder token marker used in the safe .mcp.json template.
@@ -321,31 +346,73 @@ function LastSeen({
   );
 }
 
-function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: () => void; onCreated: (id: string) => void }) {
+function NewAgentModal({
+  roles,
+  rolesLoading = false,
+  onClose,
+  onCreated
+}: {
+  roles: Role[];
+  rolesLoading?: boolean;
+  onClose: () => void;
+  onCreated: (id: string) => void;
+}) {
   const formalRoles = roles.filter((item) => item.source !== "template");
   const [id, setId] = useState("");
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
-  const [preview, setPreview] = useState<{ diff: string; proposedYaml: string } | null>(null);
+  const [preview, setPreview] = useState<({ diff: string; proposedYaml: string } & DryRunRacsFields) | null>(null);
   const [step, setStep] = useState<"form" | "diff">("form");
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
+  const inflightOperation = useRef<string | null>(null);
+  const [pendingOperation, setPendingOperation] = useState<{ operationId: string; status?: AccessWriteStatusResult; checking?: boolean } | null>(null);
+  const hasDraft = Boolean(id || name || note || selectedRoles.length || pendingOperation);
+  useRolesAgentDraftGuard(hasDraft, Boolean(pendingOperation));
+  function closeCreation() {
+    if (!hasDraft || window.confirm(pendingOperation ? "保存结果仍待确认，离开后请使用请求编号继续核对。确认离开？" : "您有未保存的修改，离开后将丢失。确认离开？")) onClose();
+  }
+  async function recheckCreation(operationId: string) {
+    setPendingOperation({ operationId, checking: true });
+    const status = await pollAccessWriteStatusBounded(operationId);
+    setPendingOperation({ operationId, checking: false, status });
+    if (status.outcome === "committed") { toast.success("Agent 已创建"); onCreated(status.objectId ?? id.trim()); }
+  }
 
   const previewMutation = useMutation({
-    mutationFn: (body: { dryRun: boolean; agent: CreateAgentBody }) => apiPost<{ diff: string; proposedYaml: string }>("/api/admin/agents", body),
+    mutationFn: (body: { dryRun: boolean; agent: CreateAgentBody }) => apiPost<{ diff: string; proposedYaml: string } & DryRunRacsFields>("/api/admin/agents", body),
     onSuccess: (data) => {
       setPreview(data);
       setStep("diff");
     },
-    onError: (err: Error) => toast.error(err.message)
+    onError: (err: Error) => {
+      const classified = classifyRolesAgentWriteError(err);
+      setSaveNotice(classified.userMessage);
+      toast.error(classified.userMessage);
+    }
   });
 
   const saveMutation = useMutation({
-    mutationFn: (body: { dryRun: boolean; agent: CreateAgentBody }) => apiPost<{ written: boolean; agent: Agent }>("/api/admin/agents", body),
+    mutationFn: (body: { dryRun: boolean; agent: CreateAgentBody }) => {
+      const binding = preview ? extractRacsPreviewBinding(preview) : undefined;
+      const operationId = binding ? newRolesAgentOperationId() : undefined;
+      inflightOperation.current = operationId ?? null;
+      return apiPost<{ written: boolean; agent: Agent }>("/api/admin/agents",
+        binding && operationId ? buildRacsWriteBody(binding, operationId, body) : body);
+    },
     onSuccess: (data) => {
       toast.success(`Agent ${data.agent.name} 已创建`);
       onCreated(data.agent.id);
     },
-    onError: (err: Error) => toast.error(err.message)
+    onError: (err: Error) => {
+      const classified = classifyRolesAgentWriteError(err);
+      if (classified.kind === "transport_uncertain" && inflightOperation.current) {
+        void recheckCreation(inflightOperation.current);
+        setSaveNotice(classified.userMessage); return;
+      }
+      setSaveNotice(classified.kind === "publish_busy" ? MSG_PUBLISH_BUSY : classified.userMessage);
+      toast.error(classified.userMessage);
+    }
   });
 
   function buildAgent(): CreateAgentBody {
@@ -387,6 +454,11 @@ function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: 
     <div className="pl-modal-backdrop">
       <div className="pl-modal-panel flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden" data-testid="new-agent-modal">
         <h2 className="mb-4 shrink-0 text-lg font-semibold">新建 <span className="notranslate" translate="no">Agent</span></h2>
+        {saveNotice ? (
+          <p className="mb-3 rounded-md border border-warning-strong bg-warning-soft p-2 text-sm text-warning-strong" role="alert" data-testid="agent-create-save-notice">
+            {saveNotice}
+          </p>
+        ) : null}
         {step === "form" ? (
           <>
             <div className="grid min-h-0 gap-4 overflow-y-auto">
@@ -403,18 +475,24 @@ function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: 
                 <span className="text-sm font-medium">备注</span>
                 <input className="pl-input" placeholder="可选" value={note} onChange={(e) => setNote(e.target.value)} />
               </label>
-              <AgentRoleField
-                roles={formalRoles}
-                selected={selectedRoles}
-                onChange={setSelectedRoles}
-                required
-                header={
-                  <Link to="/admin/roles" className="text-xs text-accent hover:underline" aria-label="管理角色">
-                    管理角色 →
-                  </Link>
-                }
-              />
-              {formalRoles.length === 0 && (
+              {rolesLoading ? (
+                <span className="text-xs text-fg-muted" data-testid="agent-roles-loading">
+                  正在加载角色…
+                </span>
+              ) : (
+                <AgentRoleField
+                  roles={formalRoles}
+                  selected={selectedRoles}
+                  onChange={setSelectedRoles}
+                  required
+                  header={
+                    <Link to="/admin/roles" className="text-xs text-accent hover:underline" aria-label="管理角色">
+                      管理角色 →
+                    </Link>
+                  }
+                />
+              )}
+              {!rolesLoading && formalRoles.length === 0 && (
                 <span className="text-xs text-warning-strong">
                   还没有可用角色。请先创建角色。
                   <Link to="/admin/roles/new" className="ml-2 pl-btn pl-btn--secondary text-xs">
@@ -443,7 +521,7 @@ function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: 
               )}
             </div>
             <div className="flex shrink-0 justify-end gap-2 border-t border-border-default pt-3">
-              <button type="button" className="pl-btn pl-btn--ghost" onClick={onClose}>取消</button>
+              <button type="button" className="pl-btn pl-btn--ghost" onClick={closeCreation}>取消</button>
               <button type="button" className="pl-btn pl-btn--primary" onClick={handlePreview} disabled={!canSubmit || previewMutation.isPending}>
                 {previewMutation.isPending ? "生成中…" : "下一步：预览配置"}
               </button>
@@ -453,13 +531,16 @@ function NewAgentModal({ roles, onClose, onCreated }: { roles: Role[]; onClose: 
           <>
             <div className="grid min-h-0 gap-4 overflow-y-auto">
               <p className="text-sm text-fg-muted notranslate" translate="no">以下改动将写入 access.yaml：</p>
+              <AccessWriteRecoveryPanel pending={pendingOperation}
+                onRecheckStatus={() => { if (pendingOperation) void recheckCreation(pendingOperation.operationId); }}
+                onRepreview={() => { setPendingOperation(null); setStep("form"); }} />
               <pre className="pl-diff-viewer text-xs max-h-64 overflow-auto">
                 {preview?.diff}
               </pre>
             </div>
             <div className="flex shrink-0 justify-end gap-2 border-t border-border-default pt-3">
               <button type="button" className="pl-btn pl-btn--ghost" onClick={() => setStep("form")}>返回编辑</button>
-              <button type="button" className="pl-btn pl-btn--primary" onClick={handleSave} disabled={saveMutation.isPending}>
+              <button type="button" className="pl-btn pl-btn--primary" onClick={handleSave} disabled={saveMutation.isPending || Boolean(pendingOperation)}>
                 {saveMutation.isPending ? "保存中…" : "确认创建"}
               </button>
             </div>
@@ -484,9 +565,27 @@ export function AgentList() {
     "all" | "business" | "connect_only" | "idle"
   >("all");
 
-  const agentsQuery = useQuery({
-    ...adminAgentsQueryOptions<AgentsResponse>(range),
+  const statsRefreshRef = useRef(false);
+  const [joinRevision,setJoinRevision]=useState(0);
+  const joinBudget = useRef({range,startedAt:Date.now(),attempts:0});
+  if(joinBudget.current.range!==range) joinBudget.current={range,startedAt:Date.now(),attempts:0};
+  const joinDeadline=()=>joinBudget.current.attempts>0?joinBudget.current.startedAt+15000:undefined;
+  const rosterQuery = useQuery({
+    ...adminAgentsSummaryQueryOptions(range,joinDeadline),
+    queryFn:ctx=>{
+      if(joinBudget.current.attempts===0) joinBudget.current.startedAt=Date.now();
+      return adminAgentsSummaryQueryOptions(range,joinDeadline).queryFn(ctx);
+    },
     placeholderData: keepPreviousData
+  });
+  const rosterKind = rosterQuery.data?.kind;
+  const statisticsQuery = useQuery({
+    ...adminAgentsCompatibleStatisticsQueryOptions(range,rosterKind==="legacy-roster",statsRefreshRef.current,joinDeadline,rosterQuery.data),
+    queryFn: (ctx) => {
+      const refresh = statsRefreshRef.current; statsRefreshRef.current = false;
+      return adminAgentsCompatibleStatisticsQueryOptions(range,rosterKind==="legacy-roster",refresh,joinDeadline,rosterQuery.data).queryFn(ctx);
+    },
+    enabled:Boolean(rosterQuery.data) && rosterKind!=="legacy-full", placeholderData:keepPreviousData
   });
 
   function setRange(next: AgentStatsRange) {
@@ -494,20 +593,83 @@ export function AgentList() {
     nextParams.set("range", next);
     setSearchParams(nextParams, { replace: true });
   }
-  const { data, error } = agentsQuery;
-  const { data: rolesData } = useQuery({
-    queryKey: ["admin", "roles", { includeTemplates: false }],
-    queryFn: () => apiGet<RolesResponse>("/api/admin/roles?includeTemplates=false")
-  });
 
-  const agents = data?.agents ?? [];
-  const summary = data?.summary ?? summarizeAgents(agents);
+  function refreshAgents() {
+    joinBudget.current={range,startedAt:Date.now(),attempts:0};
+    setJoinRevision(value=>value+1);
+    statsRefreshRef.current = true;
+    // Finish the primary read before the audit query can occupy the server event loop.
+    void rosterQuery.refetch().then(result=>{
+      const next=result.data,previous=rosterQuery.data;
+      // A changed scope starts its own enabled statistics query on the next render.
+      if((next?.kind??rosterKind)!=="legacy-full" && next?.kind===previous?.kind && next?.version===previous?.version
+        && next?.meta?.snapshotVersion===previous?.meta?.snapshotVersion && next?.legacyReadContext===previous?.legacyReadContext)
+        void statisticsQuery.refetch();
+    });
+  }
+
+  const rosterData = rosterQuery.data;
+  const inline = rosterData?.inlineStatistics?.summary.range === range ? rosterData.inlineStatistics : undefined;
+  const statisticsData = statisticsQuery.data;
+  const statsJoined = rosterKind==="legacy-full" ? Boolean(inline) : statisticsData?.range === range && agentStatisticsVersionsMatch(
+    rosterData?.version,
+    rosterData?.meta?.snapshotVersion,
+    statisticsData?.version,
+    statisticsData?.meta?.snapshotVersion
+  );
+
+  const agents = useMemo<Array<AgentRosterSummaryRow & {stats?: AgentStats}>>(() => {
+    const rosterAgents = rosterData?.agents ?? [];
+    if (!statsJoined) return rosterAgents;
+    const statsById = new Map((inline?.agents??statisticsData?.agents??[]).map((row) => [row.id, row.stats]));
+    return rosterAgents.map((agent) => ({
+      ...agent,
+      stats: statsById.get(agent.id)
+    }));
+  }, [rosterData, statisticsData, statsJoined,inline]);
+
+  const rosterError = rosterQuery.error;
+  const statisticsError = statisticsQuery.error;
+  // REQ-030-034 RPB-W4 — do not pull full Roles permission previews on cold entry;
+  // New Agent modal is the only consumer on this page.
+  const { data: rolesData, isPending: rolesPending, isFetching: rolesFetching } = useQuery({
+    queryKey: ["admin", "roles", { includeTemplates: false }],
+    queryFn: () => apiGet<RolesResponse>("/api/admin/roles?includeTemplates=false"),
+    enabled: showNew
+  });
+  const rolesLoading = showNew && (rolesPending || rolesFetching) && !rolesData;
+
+  const configurationSummary = rosterConfigurationSummary(agents);
+  const windowSummary = statsJoined ? inline?.summary??statisticsData?.summary : undefined;
+  const joinedFallback = statsJoined ? rosterStatisticsSummary(agents) : configurationSummary;
+  const summary = {...(windowSummary??joinedFallback),configuredTokenCount:configurationSummary.configuredTokenCount,
+    availableTokenCount:configurationSummary.availableTokenCount};
+  const statisticsAsOf = statsJoined ? inline?.summary?.windowEnd??statisticsData?.meta?.statisticsAsOf : undefined;
+  const joinExhausted=joinBudget.current.attempts>=2 || Date.now()-joinBudget.current.startedAt>=15000;
+  useEffect(()=>{
+    if(rosterKind==="legacy-full" || !statisticsData || statsJoined || rosterQuery.isFetching || statisticsQuery.isFetching || joinExhausted) return;
+    joinBudget.current.attempts+=1;
+    setJoinRevision(value=>value+1);
+    void rosterQuery.refetch(); void statisticsQuery.refetch();
+  },[rosterKind,statisticsData,statsJoined,rosterQuery.isFetching,statisticsQuery.isFetching,joinExhausted,joinRevision]);
+  useEffect(()=>{
+    if(!rosterData || rosterKind==="legacy-full" || statsJoined || statisticsError || statisticsData===null || joinExhausted)return;
+    const timer=setTimeout(()=>setJoinRevision(value=>value+1),Math.max(0,joinBudget.current.startedAt+15000-Date.now()));
+    return ()=>clearTimeout(timer);
+  },[range,rosterKind,rosterData,statsJoined,statisticsError,statisticsData,joinExhausted,joinRevision]);
+  const statisticsState: "loading" | "ok" | "unavailable" | "pending" =
+    rosterKind==="legacy-full" ? inline?"ok":"unavailable"
+      : statisticsError || statisticsData===null || (statsJoined && summary.metricsState === "unavailable") || (!statsJoined && joinExhausted)?"unavailable"
+      : statisticsQuery.isPending && !statisticsData?"loading"
+      : statisticsData && !statsJoined?"pending":statisticsData?"ok":"loading";
   // 名册窗口只读本响应的 summary。缺 summary 或缺任一端时按缺窗口处理，
   // 不在页面自造 7 天（Agent 名册 Spec D12）。
   const activityWindow: AgentActivityWindow = {
-    windowStart: data?.summary?.windowStart,
-    windowEnd: data?.summary?.windowEnd
+    windowStart: summary.windowStart,
+    windowEnd: summary.windowEnd
   };
+  const statsFiltersUsable = statisticsState === "ok" && summary.metricsState !== "unavailable"
+    && summary.usageCallsLast7d != null && summary.usageActiveAgentCountLast7d != null;
   // Spec 189 §5.2 — the business-active count and the business call volume
   // read the **usage** layer. `usage*` is null when the response carries no
   // usage layer (legacy backend) — the UI then shows "—", never a 0 or a
@@ -544,15 +706,18 @@ export function AgentList() {
     const roleIds = agentRoleIds(a);
     const matchRole =
       filterRole === "all" ||
-      (filterRole === "unbound" ? roleIds.length === 0 : roleIds.includes(filterRole));
+      (filterRole === "unbound" ? roleIds.length === 0 && !a.roleResolutionError : roleIds.includes(filterRole));
     // Agent 名册 Spec §5.4 —— 四档筛选：全部、有业务调用、仅连接、闲置。
     // 指标不可用的行落在 unknown，只留在「全部」；四档都不改变行的先后。
     const bucket = classifyAgentActivity(a, activityWindow);
-    const matchActivity = filterActivity === "all" || bucket === filterActivity;
+    const matchActivity =
+      !statsFiltersUsable
+        ? filterActivity === "all" || bucket === "unknown"
+        : filterActivity === "all" || bucket === filterActivity;
     return matchSearch && matchEnabled && matchRole && matchActivity;
   });
 
-  if (!data) {
+  if (!rosterData && rosterQuery.isPending) {
     return (
       <div className="pl-page-stack">
         <PageHeader
@@ -564,10 +729,32 @@ export function AgentList() {
           }
         />
         <AsyncRegion
-          status={asyncStatus(agentsQuery)}
-          label="Agent 列表"
-          error={error}
-          onRetry={() => void agentsQuery.refetch()}
+          status={asyncStatus(rosterQuery)}
+          label="Agent 名册"
+          error={rosterError ? new Error(formatListLoadError(rosterError)) : undefined}
+          onRetry={() => void rosterQuery.refetch()}
+          minHeight={480}
+        />
+      </div>
+    );
+  }
+
+  if (!rosterData && rosterError) {
+    return (
+      <div className="pl-page-stack">
+        <PageHeader
+          title={<span className="notranslate" translate="no">Agent</span>}
+          description={
+            <>
+              管理 <span className="notranslate" translate="no">Agent</span> 身份、角色、<span className="notranslate" translate="no">Token</span> 及数据访问边界。
+            </>
+          }
+        />
+        <AsyncRegion
+          status="error"
+          label="Agent 名册"
+          error={new Error(formatListLoadError(rosterError))}
+          onRetry={() => void rosterQuery.refetch()}
           minHeight={480}
         />
       </div>
@@ -611,8 +798,8 @@ export function AgentList() {
             <button
               type="button"
               className="pl-btn pl-btn--secondary"
-              onClick={() => void agentsQuery.refetch()}
-              disabled={agentsQuery.isFetching}
+              onClick={refreshAgents}
+              disabled={rosterQuery.isFetching || statisticsQuery.isFetching}
               data-testid="agent-refresh"
             >
               刷新
@@ -622,9 +809,38 @@ export function AgentList() {
         }
       />
 
-      <DisplayRefreshNotice query={agentsQuery} className="mt-4" />
+      <DisplayRefreshNotice query={rosterQuery} className="mt-4" />
 
-      {data.meta?.runtimeConsistency === "unconfirmed" ? (
+      {statisticsState === "loading" ? (
+        <div className="pl-notice" role="status" data-testid="agent-statistics-loading">
+          统计加载中…
+        </div>
+      ) : null}
+      {statisticsState === "unavailable" ? (
+        <div className="pl-notice" role="alert" data-testid="agent-statistics-error">
+          统计暂时不可用。
+          <button
+            type="button"
+            className="pl-btn pl-btn--ghost ml-2"
+            onClick={refreshAgents}
+            data-testid="agent-statistics-retry"
+          >
+            重试
+          </button>
+        </div>
+      ) : null}
+      {statisticsState === "pending" ? (
+        <div className="pl-notice" role="status" data-testid="agent-statistics-version-mismatch">
+          配置已更新，统计与名册版本不一致，已暂缓拼接。
+        </div>
+      ) : null}
+      {statisticsAsOf ? (
+        <p className="text-sm text-fg-muted" data-testid="agent-statistics-as-of">
+          统计时间：{new Date(statisticsAsOf).toLocaleString("zh-CN")}
+        </p>
+      ) : null}
+
+      {rosterData?.meta?.runtimeConsistency === "unconfirmed" ? (
         <div className="pl-notice" role="status" data-testid="agent-runtime-unconfirmed">
           权限生效状态待确认
         </div>
@@ -724,6 +940,9 @@ export function AgentList() {
                   setFilterActivity(e.target.value as "all" | "business" | "connect_only" | "idle")
                 }
                 aria-label={`${rangeLabel}活跃`}
+                disabled={!statsFiltersUsable}
+                title={!statsFiltersUsable ? "统计不可用或加载中时，活跃筛选仅保留「全部」" : undefined}
+                data-testid="agent-activity-filter"
               >
                 <option value="all">全部</option>
                 <option value="business">有业务调用</option>
@@ -787,15 +1006,15 @@ export function AgentList() {
               <tbody>
                 {filtered.map((agent) => {
                   const legacyWildcard =
-                    agent.allow?.tables?.includes("*") || agent.allow?.tools?.includes("*");
+                    agent.legacyWildcard;
                   const metricsUnavailable = agent.stats?.metricsState === "unavailable";
                   // Spec 189 §6 — the table reads the Default Usage layer.
                   const callsLast7d = agent.stats?.usageCallsLast7d;
                   // Agent 名册 Spec §6 —— 分档在页面派生，窗口只读响应里的 summary。
                   const bucket = classifyAgentActivity(agent, activityWindow);
-                  const configuredTokens = configuredTokenCount(agent);
-                  const availableTokens = agent.stats?.availableTokens ?? (agent.enabled ? configuredTokens : 0);
-                  const noAvailableToken = availableTokens === 0 && configuredTokens > 0;
+                  const configuredTokens = agent.credentialSummary.configured;
+                  const availableTokens = agent.credentialSummary.available;
+                  const noAvailableToken = availableTokens === 0 && configuredTokens !== null && configuredTokens > 0;
 
                   return (
                     <tr key={agent.id} data-testid={`agent-row-${agent.id}`}>
@@ -803,7 +1022,7 @@ export function AgentList() {
                         <div className="pl-agent-list-table-name">
                           <div className="flex items-center gap-1.5">
                             <Link
-                              to={buildObjectDetailSearch({ kind: "agent", agentId: agent.id })}
+                              to={`?${mergeObjectDetailSearch(searchParams, { kind: "agent", agentId: agent.id }).toString()}`}
                               className="font-medium pl-agent-list-table-name-link"
                               aria-label={`查看 ${agent.name} 的对象详情`}
                               data-testid={`agent-name-link-${agent.id}`}
@@ -821,7 +1040,7 @@ export function AgentList() {
                         </div>
                       </td>
                       <td data-testid={`agent-role-line-${agent.id}`}>
-                        {agentRoleIds(agent).length > 0 ? (
+                        {agent.roleResolutionError ? <span className="text-warning-strong">角色声明冲突</span> : agentRoleIds(agent).length > 0 ? (
                           <span className="inline-flex flex-wrap gap-2">
                             {agentRoleIds(agent).map((roleId) => (
                               <Link
@@ -854,9 +1073,9 @@ export function AgentList() {
                               无可用 <span className="notranslate" translate="no">Token</span>
                             </span>
                           ) : (
-                            <span className="pl-agent-list-table-num">可用 {availableTokens}</span>
+                            <span className="pl-agent-list-table-num">可用 {availableTokens??"—"}</span>
                           )}
-                          <span className="pl-agent-list-table-meta">配置 {configuredTokens}</span>
+                          <span className="pl-agent-list-table-meta">配置 {configuredTokens??"—"}</span>
                         </div>
                       </td>
                       <td data-testid={`agent-calls-7d-${agent.id}`}>
@@ -924,6 +1143,7 @@ export function AgentList() {
       {showNew && (
         <NewAgentModal
           roles={rolesData?.roles ?? []}
+          rolesLoading={rolesLoading}
           onClose={() => setShowNew(false)}
           onCreated={(id) => {
             setShowNew(false);

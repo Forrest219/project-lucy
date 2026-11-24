@@ -71,6 +71,67 @@ export const CONTROL_PLANE_TOOLS: readonly OpsToolSpec[] = [
     ownerOnly: false,
     write: true,
     atomicity: "group_all_or_nothing"
+  },
+  {
+    name: "lucy_ops_concept_list",
+    title: "概念注册表列表",
+    description: "只读列出 concepts/ 中的概念摘要（无计划机、不创建目录）。",
+    managedAssetKinds: ["governance"],
+    connectionScoped: false,
+    ownerOnly: false,
+    write: false,
+    atomicity: "batch_all_or_nothing"
+  },
+  {
+    name: "lucy_ops_concept_show",
+    title: "概念详情",
+    description: "只读查看单个概念及冲突状态。",
+    managedAssetKinds: ["governance"],
+    connectionScoped: false,
+    ownerOnly: false,
+    write: false,
+    atomicity: "batch_all_or_nothing"
+  },
+  {
+    name: "lucy_ops_concept_summary",
+    title: "概念汇总",
+    description: "只读汇总全部概念或单概念统计。",
+    managedAssetKinds: ["governance"],
+    connectionScoped: false,
+    ownerOnly: false,
+    write: false,
+    atomicity: "batch_all_or_nothing"
+  },
+  {
+    name: "lucy_ops_concept_scan",
+    title: "扫描候选绑定",
+    description:
+      "预览→提交扫描 semantic/wiki，写集仅 concepts/*.yaml；单组 batch_all_or_nothing。",
+    managedAssetKinds: ["governance"],
+    connectionScoped: false,
+    ownerOnly: false,
+    write: true,
+    atomicity: "batch_all_or_nothing"
+  },
+  {
+    name: "lucy_ops_concept_set_canonical",
+    title: "设定权威绑定",
+    description: "预览→提交将 binding 升为 canonical（需 summary）。",
+    managedAssetKinds: ["governance"],
+    connectionScoped: false,
+    ownerOnly: false,
+    write: true,
+    atomicity: "batch_all_or_nothing"
+  },
+  {
+    name: "lucy_ops_concept_reject",
+    title: "拒绝绑定",
+    description: "预览→提交将 binding 标为 rejected。",
+    managedAssetKinds: ["governance"],
+    connectionScoped: false,
+    ownerOnly: false,
+    write: true,
+    atomicity: "batch_all_or_nothing"
   }
 ];
 

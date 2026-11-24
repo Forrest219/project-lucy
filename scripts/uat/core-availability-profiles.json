@@ -1,0 +1,5 @@
+{
+  "version": "core-availability-standard-v1",
+  "calibration": {"seconds": 120, "cycle-seconds": 60, "seed-rows": 20000, "io-seconds": 60},
+  "formal": {"seconds": 1800, "cycle-seconds": 150, "seed-rows": 200000, "io-seconds": 120}
+}

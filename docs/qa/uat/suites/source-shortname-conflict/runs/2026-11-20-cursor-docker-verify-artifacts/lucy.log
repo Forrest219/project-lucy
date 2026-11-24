@@ -1,0 +1,201 @@
+{"level":30,"time":1795142212675,"pid":315,"hostname":"820e9d827fbf","reqId":"req-c","res":{"statusCode":200},"responseTime":1416.9712090000003,"msg":"request completed"}
+{"level":30,"time":1795142212687,"pid":620,"hostname":"820e9d827fbf","sessionId":"e9322c80-b2b3-4db3-8e5d-716a19ad1ac7","msg":"session.open"}
+[lucy-proxy] re-established KTX upstream session user=repro_reader tool=tools/list
+{"level":30,"time":1795142212730,"pid":620,"hostname":"820e9d827fbf","tool":"sl_read_source","callId":"aab24119-6db1-4d1a-a9dd-f88b152b2743","sessionId":"e9322c80-b2b3-4db3-8e5d-716a19ad1ac7","params":{"connectionId":"hive-1","sourceName":"city"},"msg":"tool.start"}
+{"level":30,"time":1795142212737,"pid":620,"hostname":"820e9d827fbf","tool":"sl_read_source","callId":"aab24119-6db1-4d1a-a9dd-f88b152b2743","sessionId":"e9322c80-b2b3-4db3-8e5d-716a19ad1ac7","durationMs":6.820958000000019,"outcome":"ok","resultSize":181,"msg":"tool.end"}
+{"level":30,"time":1795142212774,"pid":620,"hostname":"820e9d827fbf","tool":"sl_query","callId":"b8aa0306-471b-4bbf-bfd2-694853cbcd4f","sessionId":"e9322c80-b2b3-4db3-8e5d-716a19ad1ac7","params":{"connectionId":"hive-1","measures":[{"expr":"COUNT(city.id)","name":"row_count"}],"dimensions":[],"filters":[],"segments":[],"order_by":[],"limit":1,"include_empty":true,"include":["sql"]},"msg":"tool.start"}
+{"level":30,"time":1795142213086,"pid":620,"hostname":"820e9d827fbf","tool":"sl_query","callId":"b8aa0306-471b-4bbf-bfd2-694853cbcd4f","sessionId":"e9322c80-b2b3-4db3-8e5d-716a19ad1ac7","durationMs":312.0122919999999,"outcome":"ok","resultSize":171,"msg":"tool.end"}
+{"level":30,"time":1795142213126,"pid":620,"hostname":"820e9d827fbf","tool":"sl_query","callId":"e37f02eb-4b86-4a3a-bfbb-a1aba72ad7bf","sessionId":"e9322c80-b2b3-4db3-8e5d-716a19ad1ac7","params":{"connectionId":"hive-1","measures":[{"expr":"COUNT(ods_city.id)","name":"row_count"}],"dimensions":[],"filters":[],"segments":[],"order_by":[],"limit":1,"include_empty":true,"include":["sql"]},"msg":"tool.start"}
+{"level":30,"time":1795142213439,"pid":620,"hostname":"820e9d827fbf","tool":"sl_query","callId":"e37f02eb-4b86-4a3a-bfbb-a1aba72ad7bf","sessionId":"e9322c80-b2b3-4db3-8e5d-716a19ad1ac7","durationMs":312.5294160000001,"outcome":"ok","resultSize":175,"msg":"tool.end"}
+{"level":30,"time":1795142213451,"pid":315,"hostname":"820e9d827fbf","reqId":"req-d","req":{"method":"POST","url":"/api/connections/hive-1/schema-structure","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":63736},"msg":"incoming request"}
+{"level":30,"time":1795142214424,"pid":315,"hostname":"820e9d827fbf","reqId":"req-d","res":{"statusCode":200},"responseTime":972.2717499999999,"msg":"request completed"}
+{"level":30,"time":1795142214428,"pid":315,"hostname":"820e9d827fbf","reqId":"req-e","req":{"method":"POST","url":"/api/connections/hive-1/schema-structure","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":63752},"msg":"incoming request"}
+{"level":30,"time":1795142215047,"pid":620,"hostname":"820e9d827fbf","sessionId":"9bcfc557-239e-4a54-81b1-36a1bc16a0ad","msg":"session.open"}
+{"level":30,"time":1795142215385,"pid":315,"hostname":"820e9d827fbf","reqId":"req-e","res":{"statusCode":200},"responseTime":957.2429589999992,"msg":"request completed"}
+{"level":30,"time":1795142215390,"pid":315,"hostname":"820e9d827fbf","reqId":"req-f","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":63762},"msg":"incoming request"}
+{"level":30,"time":1795142215395,"pid":315,"hostname":"820e9d827fbf","reqId":"req-f","res":{"statusCode":200},"responseTime":4.946624999998676,"msg":"request completed"}
+{"level":30,"time":1795142215397,"pid":315,"hostname":"820e9d827fbf","reqId":"req-g","req":{"method":"POST","url":"/api/catalog/assets/upload","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":63770},"msg":"incoming request"}
+{"level":30,"time":1795142215470,"pid":315,"hostname":"820e9d827fbf","reqId":"req-g","res":{"statusCode":200},"responseTime":72.94487499999923,"msg":"request completed"}
+{"level":30,"time":1795142215474,"pid":315,"hostname":"820e9d827fbf","reqId":"req-h","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":63780},"msg":"incoming request"}
+{"level":30,"time":1795142215477,"pid":315,"hostname":"820e9d827fbf","reqId":"req-h","res":{"statusCode":200},"responseTime":3.19116700000086,"msg":"request completed"}
+{"level":30,"time":1795142215479,"pid":315,"hostname":"820e9d827fbf","reqId":"req-i","req":{"method":"POST","url":"/api/catalog/assets/upload","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":63792},"msg":"incoming request"}
+{"level":30,"time":1795142215559,"pid":315,"hostname":"820e9d827fbf","reqId":"req-i","res":{"statusCode":200},"responseTime":80.29162600000018,"msg":"request completed"}
+{"level":30,"time":1795142215597,"pid":620,"hostname":"820e9d827fbf","tool":"sl_read_source","callId":"893d500f-a552-4500-9538-b1b0855c3ce1","sessionId":"e9322c80-b2b3-4db3-8e5d-716a19ad1ac7","params":{"connectionId":"hive-1","sourceName":"city"},"msg":"tool.start"}
+{"level":30,"time":1795142215602,"pid":620,"hostname":"820e9d827fbf","tool":"sl_read_source","callId":"893d500f-a552-4500-9538-b1b0855c3ce1","sessionId":"e9322c80-b2b3-4db3-8e5d-716a19ad1ac7","durationMs":4.952416000000085,"outcome":"ok","resultSize":272,"msg":"tool.end"}
+{"level":30,"time":1795142215641,"pid":620,"hostname":"820e9d827fbf","tool":"sl_query","callId":"3ff1f110-1cf5-4204-b3c9-1966519dc0bf","sessionId":"e9322c80-b2b3-4db3-8e5d-716a19ad1ac7","params":{"connectionId":"hive-1","measures":[{"expr":"COUNT(city.id)","name":"row_count"}],"dimensions":[],"filters":[],"segments":[],"order_by":[],"limit":1,"include_empty":true,"include":["sql"]},"msg":"tool.start"}
+{"level":30,"time":1795142215924,"pid":620,"hostname":"820e9d827fbf","tool":"sl_query","callId":"3ff1f110-1cf5-4204-b3c9-1966519dc0bf","sessionId":"e9322c80-b2b3-4db3-8e5d-716a19ad1ac7","durationMs":282.8816659999993,"outcome":"ok","resultSize":171,"msg":"tool.end"}
+{"level":30,"time":1795142215965,"pid":620,"hostname":"820e9d827fbf","tool":"sl_query","callId":"c2ead63e-499a-4cba-8f40-f3121b8a6d5a","sessionId":"e9322c80-b2b3-4db3-8e5d-716a19ad1ac7","params":{"connectionId":"hive-1","measures":[{"expr":"COUNT(ods_city.id)","name":"row_count"}],"dimensions":[],"filters":[],"segments":[],"order_by":[],"limit":1,"include_empty":true,"include":["sql"]},"msg":"tool.start"}
+{"level":30,"time":1795142216258,"pid":620,"hostname":"820e9d827fbf","tool":"sl_query","callId":"c2ead63e-499a-4cba-8f40-f3121b8a6d5a","sessionId":"e9322c80-b2b3-4db3-8e5d-716a19ad1ac7","durationMs":292.9037499999995,"outcome":"ok","resultSize":175,"msg":"tool.end"}
+{"level":30,"time":1795142216268,"pid":315,"hostname":"820e9d827fbf","reqId":"req-j","req":{"method":"GET","url":"/api/catalog/assets/uploads","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":63804},"msg":"incoming request"}
+{"level":30,"time":1795142216269,"pid":315,"hostname":"820e9d827fbf","reqId":"req-j","res":{"statusCode":200},"responseTime":1.3436669999991864,"msg":"request completed"}
+{"level":30,"time":1795142216271,"pid":315,"hostname":"820e9d827fbf","reqId":"req-k","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":63816},"msg":"incoming request"}
+{"level":30,"time":1795142216275,"pid":315,"hostname":"820e9d827fbf","reqId":"req-k","res":{"statusCode":200},"responseTime":3.6267920000009326,"msg":"request completed"}
+{"level":30,"time":1795142216277,"pid":315,"hostname":"820e9d827fbf","reqId":"req-l","req":{"method":"POST","url":"/api/catalog/assets/upload","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":63824},"msg":"incoming request"}
+{"level":30,"time":1795142216280,"pid":315,"hostname":"820e9d827fbf","reqId":"req-l","res":{"statusCode":400},"responseTime":3.1987910000007105,"msg":"request completed"}
+{"level":30,"time":1795142216283,"pid":315,"hostname":"820e9d827fbf","reqId":"req-m","req":{"method":"GET","url":"/api/catalog/assets/uploads","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":63830},"msg":"incoming request"}
+{"level":30,"time":1795142216284,"pid":315,"hostname":"820e9d827fbf","reqId":"req-m","res":{"statusCode":200},"responseTime":0.8561250000002474,"msg":"request completed"}
+{"level":30,"time":1795142216319,"pid":620,"hostname":"820e9d827fbf","tool":"sl_read_source","callId":"261481f3-39e4-4f21-aaec-bc75e84cc144","sessionId":"e9322c80-b2b3-4db3-8e5d-716a19ad1ac7","params":{"connectionId":"hive-1","sourceName":"city"},"msg":"tool.start"}
+{"level":30,"time":1795142216323,"pid":620,"hostname":"820e9d827fbf","tool":"sl_read_source","callId":"261481f3-39e4-4f21-aaec-bc75e84cc144","sessionId":"e9322c80-b2b3-4db3-8e5d-716a19ad1ac7","durationMs":3.4411250000002838,"outcome":"ok","resultSize":272,"msg":"tool.end"}
+{"level":30,"time":1795142216363,"pid":620,"hostname":"820e9d827fbf","tool":"sl_query","callId":"37a0d371-b569-4ee3-a6b6-e0e03aada38f","sessionId":"e9322c80-b2b3-4db3-8e5d-716a19ad1ac7","params":{"connectionId":"hive-1","measures":[{"expr":"COUNT(city.id)","name":"row_count"}],"dimensions":[],"filters":[],"segments":[],"order_by":[],"limit":1,"include_empty":true,"include":["sql"]},"msg":"tool.start"}
+{"level":30,"time":1795142216652,"pid":620,"hostname":"820e9d827fbf","tool":"sl_query","callId":"37a0d371-b569-4ee3-a6b6-e0e03aada38f","sessionId":"e9322c80-b2b3-4db3-8e5d-716a19ad1ac7","durationMs":288.8172919999997,"outcome":"ok","resultSize":171,"msg":"tool.end"}
+{"level":30,"time":1795142216664,"pid":315,"hostname":"820e9d827fbf","reqId":"req-n","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":63846},"msg":"incoming request"}
+{"level":30,"time":1795142216669,"pid":315,"hostname":"820e9d827fbf","reqId":"req-n","res":{"statusCode":200},"responseTime":4.594875000000684,"msg":"request completed"}
+{"level":30,"time":1795142216671,"pid":315,"hostname":"820e9d827fbf","reqId":"req-o","req":{"method":"POST","url":"/api/catalog/assets/upload","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":63858},"msg":"incoming request"}
+{"level":30,"time":1795142216750,"pid":315,"hostname":"820e9d827fbf","reqId":"req-o","res":{"statusCode":200},"responseTime":79.4169579999998,"msg":"request completed"}
+{"level":30,"time":1795142216755,"pid":315,"hostname":"820e9d827fbf","reqId":"req-p","req":{"method":"POST","url":"/api/connections/hive-1/schema-structure","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":63864},"msg":"incoming request"}
+{"level":30,"time":1795142217707,"pid":315,"hostname":"820e9d827fbf","reqId":"req-p","res":{"statusCode":200},"responseTime":951.7109999999993,"msg":"request completed"}
+{"level":30,"time":1795142217711,"pid":315,"hostname":"820e9d827fbf","reqId":"req-q","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":63872},"msg":"incoming request"}
+{"level":30,"time":1795142217715,"pid":315,"hostname":"820e9d827fbf","reqId":"req-q","res":{"statusCode":200},"responseTime":4.252167000000554,"msg":"request completed"}
+{"level":30,"time":1795142217716,"pid":315,"hostname":"820e9d827fbf","reqId":"req-r","req":{"method":"POST","url":"/api/catalog/assets/upload","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":63882},"msg":"incoming request"}
+{"level":30,"time":1795142217789,"pid":315,"hostname":"820e9d827fbf","reqId":"req-r","res":{"statusCode":200},"responseTime":72.85750000000007,"msg":"request completed"}
+{"level":30,"time":1795142217792,"pid":315,"hostname":"820e9d827fbf","reqId":"req-s","req":{"method":"PUT","url":"/api/connections/hive-1/enabled-tables","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":63890},"msg":"incoming request"}
+[acl] policy_scope_expanded roleId=repro_reader sourcesBefore=2 sourcesAfter=3 added=2 sourceMapVersion=50ca6207ade697f9
+[acl] policy_scope_expanded roleId=lucy_admin sourcesBefore=2 sourcesAfter=3 added=2 sourceMapVersion=50ca6207ade697f9
+[lucy] reload requested (d6adf383-2d1e-4e61-84ea-cf94fd742188); restarting KTX MCP upstream
+Project: /data/lucy
+ktx MCP memory_ingest disabled: createLocalProjectMemoryIngest requires llm.provider.backend or an injected agentRunner
+ktx MCP server listening at http://127.0.0.1:7878/mcp
+{"level":30,"time":1795142219044,"pid":870,"hostname":"820e9d827fbf","sessionId":"fd322ded-8d5a-4027-b150-a04d4c12e59f","msg":"session.open"}
+{"level":30,"time":1795142219052,"pid":870,"hostname":"820e9d827fbf","tool":"connection_list","callId":"a8f9753f-d43e-4a77-955d-247f71d49e44","sessionId":"fd322ded-8d5a-4027-b150-a04d4c12e59f","params":{},"msg":"tool.start"}
+{"level":30,"time":1795142219058,"pid":870,"hostname":"820e9d827fbf","tool":"connection_list","callId":"a8f9753f-d43e-4a77-955d-247f71d49e44","sessionId":"fd322ded-8d5a-4027-b150-a04d4c12e59f","durationMs":5.566000000000031,"outcome":"ok","resultSize":445,"msg":"tool.end"}
+{"level":30,"time":1795142219064,"pid":870,"hostname":"820e9d827fbf","sessionId":"f1fbd559-1d4c-4ef1-bcdb-57da7a2e1bac","msg":"session.open"}
+{"level":30,"time":1795142219073,"pid":315,"hostname":"820e9d827fbf","reqId":"req-s","res":{"statusCode":200},"responseTime":1280.9917509999996,"msg":"request completed"}
+{"level":30,"time":1795142219120,"pid":870,"hostname":"820e9d827fbf","sessionId":"15b8297c-aa58-4d1e-ab7c-f0092a540d05","msg":"session.open"}
+{"level":30,"time":1795142219123,"pid":870,"hostname":"820e9d827fbf","tool":"sl_query","callId":"07a7e4ad-fae2-470e-9df5-cafcee567ec1","sessionId":"15b8297c-aa58-4d1e-ab7c-f0092a540d05","params":{"connectionId":"hive-1","measures":[{"expr":"COUNT(ods_city.id)","name":"row_count"}],"dimensions":[],"filters":[],"segments":[],"order_by":[],"limit":1,"include_empty":true,"include":["sql"]},"msg":"tool.start"}
+{"level":30,"time":1795142219421,"pid":870,"hostname":"820e9d827fbf","tool":"sl_query","callId":"07a7e4ad-fae2-470e-9df5-cafcee567ec1","sessionId":"15b8297c-aa58-4d1e-ab7c-f0092a540d05","durationMs":298.5882080000001,"outcome":"ok","resultSize":177,"msg":"tool.end"}
+[lucy-proxy] re-established KTX upstream session user=repro_reader tool=lucy_query
+{"level":30,"time":1795142219464,"pid":870,"hostname":"820e9d827fbf","tool":"sl_query","callId":"1b9d186e-839e-45fb-8b83-0e1a9ea43b86","sessionId":"15b8297c-aa58-4d1e-ab7c-f0092a540d05","params":{"connectionId":"hive-1","measures":[{"expr":"COUNT(ods_city_2.id)","name":"row_count"}],"dimensions":[],"filters":[],"segments":[],"order_by":[],"limit":1,"include_empty":true,"include":["sql"]},"msg":"tool.start"}
+{"level":30,"time":1795142219765,"pid":870,"hostname":"820e9d827fbf","tool":"sl_query","callId":"1b9d186e-839e-45fb-8b83-0e1a9ea43b86","sessionId":"15b8297c-aa58-4d1e-ab7c-f0092a540d05","durationMs":301.0766249999999,"outcome":"ok","resultSize":179,"msg":"tool.end"}
+{"level":30,"time":1795142219777,"pid":315,"hostname":"820e9d827fbf","reqId":"req-t","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":61320},"msg":"incoming request"}
+{"level":30,"time":1795142219781,"pid":315,"hostname":"820e9d827fbf","reqId":"req-t","res":{"statusCode":200},"responseTime":4.003709000000526,"msg":"request completed"}
+{"level":30,"time":1795142219784,"pid":315,"hostname":"820e9d827fbf","reqId":"req-u","req":{"method":"POST","url":"/api/catalog/assets/upload","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":61328},"msg":"incoming request"}
+{"level":30,"time":1795142219789,"pid":315,"hostname":"820e9d827fbf","reqId":"req-u","res":{"statusCode":400},"responseTime":4.045624999998836,"msg":"request completed"}
+{"level":30,"time":1795142219792,"pid":315,"hostname":"820e9d827fbf","reqId":"req-v","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":61336},"msg":"incoming request"}
+{"level":30,"time":1795142219797,"pid":315,"hostname":"820e9d827fbf","reqId":"req-v","res":{"statusCode":200},"responseTime":4.876791999999114,"msg":"request completed"}
+{"level":30,"time":1795142219798,"pid":315,"hostname":"820e9d827fbf","reqId":"req-w","req":{"method":"POST","url":"/api/catalog/assets/upload","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":61342},"msg":"incoming request"}
+{"level":30,"time":1795142219803,"pid":315,"hostname":"820e9d827fbf","reqId":"req-w","res":{"statusCode":400},"responseTime":4.288458000000901,"msg":"request completed"}
+{"level":30,"time":1795142219810,"pid":315,"hostname":"820e9d827fbf","reqId":"req-x","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":61344},"msg":"incoming request"}
+{"level":30,"time":1795142219810,"pid":315,"hostname":"820e9d827fbf","reqId":"req-y","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":61352},"msg":"incoming request"}
+{"level":30,"time":1795142219816,"pid":315,"hostname":"820e9d827fbf","reqId":"req-x","res":{"statusCode":200},"responseTime":6.0477089999985765,"msg":"request completed"}
+{"level":30,"time":1795142219816,"pid":315,"hostname":"820e9d827fbf","reqId":"req-y","res":{"statusCode":200},"responseTime":6.352708000000348,"msg":"request completed"}
+{"level":30,"time":1795142219818,"pid":315,"hostname":"820e9d827fbf","reqId":"req-z","req":{"method":"POST","url":"/api/catalog/assets/upload","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":61372},"msg":"incoming request"}
+{"level":30,"time":1795142219818,"pid":315,"hostname":"820e9d827fbf","reqId":"req-10","req":{"method":"POST","url":"/api/catalog/assets/upload","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":61362},"msg":"incoming request"}
+{"level":30,"time":1795142219825,"pid":315,"hostname":"820e9d827fbf","reqId":"req-10","res":{"statusCode":500},"responseTime":7.144625000000815,"msg":"request completed"}
+{"level":30,"time":1795142219896,"pid":315,"hostname":"820e9d827fbf","reqId":"req-z","res":{"statusCode":200},"responseTime":78.79433400000016,"msg":"request completed"}
+{"level":30,"time":1795142219953,"pid":870,"hostname":"820e9d827fbf","tool":"sl_read_source","callId":"c895f675-4439-4a93-aba3-3c88ff54d09a","sessionId":"15b8297c-aa58-4d1e-ab7c-f0092a540d05","params":{"connectionId":"hive-1","sourceName":"city"},"msg":"tool.start"}
+{"level":30,"time":1795142219959,"pid":870,"hostname":"820e9d827fbf","tool":"sl_read_source","callId":"c895f675-4439-4a93-aba3-3c88ff54d09a","sessionId":"15b8297c-aa58-4d1e-ab7c-f0092a540d05","durationMs":6.022417000000132,"outcome":"ok","resultSize":272,"msg":"tool.end"}
+{"level":30,"time":1795142220000,"pid":870,"hostname":"820e9d827fbf","tool":"sl_query","callId":"06547290-c250-45c5-9dec-5a1564af0f70","sessionId":"15b8297c-aa58-4d1e-ab7c-f0092a540d05","params":{"connectionId":"hive-1","measures":[{"expr":"COUNT(city.id)","name":"row_count"}],"dimensions":[],"filters":[],"segments":[],"order_by":[],"limit":1,"include_empty":true,"include":["sql"]},"msg":"tool.start"}
+{"level":30,"time":1795142220049,"pid":870,"hostname":"820e9d827fbf","sessionId":"f167477d-ca92-402e-acaa-6c1b3a479379","msg":"session.open"}
+{"level":30,"time":1795142220326,"pid":870,"hostname":"820e9d827fbf","tool":"sl_query","callId":"06547290-c250-45c5-9dec-5a1564af0f70","sessionId":"15b8297c-aa58-4d1e-ab7c-f0092a540d05","durationMs":326.3214170000001,"outcome":"ok","resultSize":171,"msg":"tool.end"}
+{"level":30,"time":1795142220339,"pid":315,"hostname":"820e9d827fbf","reqId":"req-11","req":{"method":"PUT","url":"/api/connections/hive-1/enabled-tables","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":61378},"msg":"incoming request"}
+[acl] policy_degraded_deny agent=repro_reader cause=source_map_compile_failed:duplicate_source_name:hive-1:city
+[acl] policy_scope_expanded roleId=repro_reader sourcesBefore=3 sourcesAfter=1 added=1 sourceMapVersion=60c0e01300d4dced
+[acl] policy_scope_expanded roleId=lucy_admin sourcesBefore=3 sourcesAfter=1 added=1 sourceMapVersion=60c0e01300d4dced
+[enabled-tables] ktx.yaml written but policy runtime not acknowledged {
+  connId: 'hive-1',
+  policyVersion: '5d4e4cfb06b214fe18760f8333df5ff07c40018704f51d817ff836e74cf99b37',
+  degradedGlobal: false,
+  policyRuntimeIssues: [
+    {
+      agentId: 'repro_reader',
+      reason: 'source_map_compile_failed:duplicate_source_name:hive-1:city',
+      diagnostic: [Object]
+    }
+  ]
+}
+[lucy] reload requested (e92d32f9-f948-4a97-b659-fc381db34980); restarting KTX MCP upstream
+Project: /data/lucy
+ktx MCP memory_ingest disabled: createLocalProjectMemoryIngest requires llm.provider.backend or an injected agentRunner
+ktx MCP server listening at http://127.0.0.1:7878/mcp
+{"level":30,"time":1795142221689,"pid":983,"hostname":"820e9d827fbf","sessionId":"0451418e-d6ef-4e7d-beb2-14e3e6fc3c39","msg":"session.open"}
+{"level":30,"time":1795142221694,"pid":983,"hostname":"820e9d827fbf","tool":"connection_list","callId":"27da892c-798a-4c7f-965c-5808b0f5d202","sessionId":"0451418e-d6ef-4e7d-beb2-14e3e6fc3c39","params":{},"msg":"tool.start"}
+{"level":30,"time":1795142221699,"pid":983,"hostname":"820e9d827fbf","tool":"connection_list","callId":"27da892c-798a-4c7f-965c-5808b0f5d202","sessionId":"0451418e-d6ef-4e7d-beb2-14e3e6fc3c39","durationMs":4.211334000000079,"outcome":"ok","resultSize":445,"msg":"tool.end"}
+{"level":30,"time":1795142221705,"pid":983,"hostname":"820e9d827fbf","sessionId":"bbdb39db-c673-4a39-aac3-f74656e4fe39","msg":"session.open"}
+{"level":30,"time":1795142221713,"pid":315,"hostname":"820e9d827fbf","reqId":"req-11","res":{"statusCode":200},"responseTime":1374.013708999999,"msg":"request completed"}
+{"level":30,"time":1795142221718,"pid":315,"hostname":"820e9d827fbf","reqId":"req-12","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":61382},"msg":"incoming request"}
+{"level":30,"time":1795142221725,"pid":315,"hostname":"820e9d827fbf","reqId":"req-12","res":{"statusCode":200},"responseTime":6.931834000002709,"msg":"request completed"}
+{"level":30,"time":1795142221727,"pid":315,"hostname":"820e9d827fbf","reqId":"req-13","req":{"method":"POST","url":"/api/catalog/assets/upload","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":61384},"msg":"incoming request"}
+{"level":30,"time":1795142221801,"pid":315,"hostname":"820e9d827fbf","reqId":"req-13","res":{"statusCode":200},"responseTime":74.40170800000124,"msg":"request completed"}
+{"level":30,"time":1795142221807,"pid":315,"hostname":"820e9d827fbf","reqId":"req-14","req":{"method":"PUT","url":"/api/connections/hive-1/enabled-tables","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":61390},"msg":"incoming request"}
+[acl] policy_scope_expanded roleId=repro_reader sourcesBefore=1 sourcesAfter=2 added=2 sourceMapVersion=16052911b0f2154f
+[acl] policy_scope_expanded roleId=lucy_admin sourcesBefore=1 sourcesAfter=2 added=2 sourceMapVersion=16052911b0f2154f
+[lucy] reload requested (908d968a-ab71-4de3-a390-059152a85ac0); restarting KTX MCP upstream
+Project: /data/lucy
+ktx MCP memory_ingest disabled: createLocalProjectMemoryIngest requires llm.provider.backend or an injected agentRunner
+ktx MCP server listening at http://127.0.0.1:7878/mcp
+{"level":30,"time":1795142223053,"pid":1053,"hostname":"820e9d827fbf","sessionId":"7af85611-27b2-4edb-968c-9bbcbb222501","msg":"session.open"}
+{"level":30,"time":1795142223060,"pid":1053,"hostname":"820e9d827fbf","tool":"connection_list","callId":"54b04677-4c7e-4500-af40-3c269a192c7c","sessionId":"7af85611-27b2-4edb-968c-9bbcbb222501","params":{},"msg":"tool.start"}
+{"level":30,"time":1795142223065,"pid":1053,"hostname":"820e9d827fbf","tool":"connection_list","callId":"54b04677-4c7e-4500-af40-3c269a192c7c","sessionId":"7af85611-27b2-4edb-968c-9bbcbb222501","durationMs":5.09333300000003,"outcome":"ok","resultSize":445,"msg":"tool.end"}
+{"level":30,"time":1795142223072,"pid":1053,"hostname":"820e9d827fbf","sessionId":"45f8b63f-89ab-47be-8eea-0f55c8ea23fc","msg":"session.open"}
+{"level":30,"time":1795142223082,"pid":315,"hostname":"820e9d827fbf","reqId":"req-14","res":{"statusCode":200},"responseTime":1275.277750000001,"msg":"request completed"}
+{"level":30,"time":1795142223095,"pid":1053,"hostname":"820e9d827fbf","sessionId":"2fede792-61a8-4d0a-8dfc-53a93652910e","msg":"session.open"}
+[lucy-proxy] re-established KTX upstream session user=repro_reader tool=tools/list
+{"level":30,"time":1795142223147,"pid":1053,"hostname":"820e9d827fbf","tool":"sl_read_source","callId":"d10a87e6-bb84-4bf3-8bbf-cf8390ff3513","sessionId":"2fede792-61a8-4d0a-8dfc-53a93652910e","params":{"connectionId":"hive-1","sourceName":"city"},"msg":"tool.start"}
+{"level":30,"time":1795142223158,"pid":1053,"hostname":"820e9d827fbf","tool":"sl_read_source","callId":"d10a87e6-bb84-4bf3-8bbf-cf8390ff3513","sessionId":"2fede792-61a8-4d0a-8dfc-53a93652910e","durationMs":11.065875000000005,"outcome":"ok","resultSize":238,"msg":"tool.end"}
+{"level":30,"time":1795142223197,"pid":1053,"hostname":"820e9d827fbf","tool":"sl_query","callId":"57bcbd6e-8a37-4f8a-8454-a62fc04b24db","sessionId":"2fede792-61a8-4d0a-8dfc-53a93652910e","params":{"connectionId":"hive-1","measures":[{"expr":"COUNT(city.id)","name":"row_count"}],"dimensions":[],"filters":[],"segments":[],"order_by":[],"limit":1,"include_empty":true,"include":["sql"]},"msg":"tool.start"}
+{"level":30,"time":1795142223494,"pid":1053,"hostname":"820e9d827fbf","tool":"sl_query","callId":"57bcbd6e-8a37-4f8a-8454-a62fc04b24db","sessionId":"2fede792-61a8-4d0a-8dfc-53a93652910e","durationMs":296.27779199999986,"outcome":"ok","resultSize":171,"msg":"tool.end"}
+{"level":30,"time":1795142223515,"pid":315,"hostname":"820e9d827fbf","reqId":"req-15","req":{"method":"PUT","url":"/api/connections/hive-1/enabled-tables","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":61402},"msg":"incoming request"}
+[acl] policy_degraded_deny agent=repro_reader cause=source_map_compile_failed:duplicate_source_name:hive-1:t6
+[enabled-tables] ktx.yaml written but policy runtime not acknowledged {
+  connId: 'hive-1',
+  policyVersion: 'd8358a7fcf526b4273389a2585710c57317f4a5ce103c246c8d773c840802691',
+  degradedGlobal: false,
+  policyRuntimeIssues: [
+    {
+      agentId: 'repro_reader',
+      reason: 'source_map_compile_failed:duplicate_source_name:hive-1:t6',
+      diagnostic: [Object]
+    }
+  ]
+}
+[lucy] reload requested (2424b3fe-eb2f-4ab9-8dc5-bbaf460c7b48); restarting KTX MCP upstream
+Project: /data/lucy
+ktx MCP memory_ingest disabled: createLocalProjectMemoryIngest requires llm.provider.backend or an injected agentRunner
+ktx MCP server listening at http://127.0.0.1:7878/mcp
+{"level":30,"time":1795142224677,"pid":1137,"hostname":"820e9d827fbf","sessionId":"4477bb9f-e710-43ae-b529-8b5708f8a6d5","msg":"session.open"}
+{"level":30,"time":1795142224685,"pid":1137,"hostname":"820e9d827fbf","tool":"connection_list","callId":"bf253d23-c53a-47a0-88a3-efcfbade0201","sessionId":"4477bb9f-e710-43ae-b529-8b5708f8a6d5","params":{},"msg":"tool.start"}
+{"level":30,"time":1795142224689,"pid":1137,"hostname":"820e9d827fbf","tool":"connection_list","callId":"bf253d23-c53a-47a0-88a3-efcfbade0201","sessionId":"4477bb9f-e710-43ae-b529-8b5708f8a6d5","durationMs":4.638250000000198,"outcome":"ok","resultSize":445,"msg":"tool.end"}
+{"level":30,"time":1795142224697,"pid":1137,"hostname":"820e9d827fbf","sessionId":"f13209ca-9124-4719-8707-d2eca92678a2","msg":"session.open"}
+{"level":30,"time":1795142224705,"pid":315,"hostname":"820e9d827fbf","reqId":"req-15","res":{"statusCode":200},"responseTime":1189.4908340000002,"msg":"request completed"}
+{"level":30,"time":1795142224710,"pid":315,"hostname":"820e9d827fbf","reqId":"req-16","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":61414},"msg":"incoming request"}
+{"level":30,"time":1795142224725,"pid":315,"hostname":"820e9d827fbf","reqId":"req-16","res":{"statusCode":200},"responseTime":14.610625000001164,"msg":"request completed"}
+{"level":30,"time":1795142224728,"pid":315,"hostname":"820e9d827fbf","reqId":"req-17","req":{"method":"POST","url":"/api/catalog/assets/upload","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":61418},"msg":"incoming request"}
+{"level":30,"time":1795142224840,"pid":315,"hostname":"820e9d827fbf","reqId":"req-17","res":{"statusCode":200},"responseTime":112.3283330000013,"msg":"request completed"}
+{"level":30,"time":1795142224848,"pid":315,"hostname":"820e9d827fbf","reqId":"req-18","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":61428},"msg":"incoming request"}
+{"level":30,"time":1795142224857,"pid":315,"hostname":"820e9d827fbf","reqId":"req-18","res":{"statusCode":200},"responseTime":9.469333000000915,"msg":"request completed"}
+{"level":30,"time":1795142224859,"pid":315,"hostname":"820e9d827fbf","reqId":"req-19","req":{"method":"POST","url":"/api/catalog/assets/upload","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":61434},"msg":"incoming request"}
+{"level":30,"time":1795142224974,"pid":315,"hostname":"820e9d827fbf","reqId":"req-19","res":{"statusCode":200},"responseTime":115.61533299999792,"msg":"request completed"}
+{"level":30,"time":1795142224983,"pid":315,"hostname":"820e9d827fbf","reqId":"req-1a","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":61436},"msg":"incoming request"}
+{"level":30,"time":1795142224994,"pid":315,"hostname":"820e9d827fbf","reqId":"req-1a","res":{"statusCode":200},"responseTime":11.175041999998939,"msg":"request completed"}
+{"level":30,"time":1795142224996,"pid":315,"hostname":"820e9d827fbf","reqId":"req-1b","req":{"method":"POST","url":"/api/catalog/assets/upload","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":61448},"msg":"incoming request"}
+{"level":30,"time":1795142225048,"pid":1137,"hostname":"820e9d827fbf","sessionId":"f8085c39-b9b0-465e-89e2-3b4c16ff3ba0","msg":"session.open"}
+{"level":30,"time":1795142225114,"pid":315,"hostname":"820e9d827fbf","reqId":"req-1b","res":{"statusCode":200},"responseTime":117.36858300000313,"msg":"request completed"}
+{"level":30,"time":1795142225122,"pid":315,"hostname":"820e9d827fbf","reqId":"req-1c","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":61460},"msg":"incoming request"}
+{"level":30,"time":1795142225134,"pid":315,"hostname":"820e9d827fbf","reqId":"req-1c","res":{"statusCode":200},"responseTime":11.293957999998383,"msg":"request completed"}
+{"level":30,"time":1795142225137,"pid":315,"hostname":"820e9d827fbf","reqId":"req-1d","req":{"method":"POST","url":"/api/catalog/assets/upload","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":61472},"msg":"incoming request"}
+{"level":30,"time":1795142225250,"pid":315,"hostname":"820e9d827fbf","reqId":"req-1d","res":{"statusCode":200},"responseTime":112.96245899999849,"msg":"request completed"}
+{"level":30,"time":1795142225259,"pid":315,"hostname":"820e9d827fbf","reqId":"req-1e","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":61484},"msg":"incoming request"}
+{"level":30,"time":1795142225270,"pid":315,"hostname":"820e9d827fbf","reqId":"req-1e","res":{"statusCode":200},"responseTime":10.114958999998635,"msg":"request completed"}
+{"level":30,"time":1795142225272,"pid":315,"hostname":"820e9d827fbf","reqId":"req-1f","req":{"method":"POST","url":"/api/catalog/assets/upload","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":61492},"msg":"incoming request"}
+{"level":30,"time":1795142225392,"pid":315,"hostname":"820e9d827fbf","reqId":"req-1f","res":{"statusCode":200},"responseTime":120.33575099999871,"msg":"request completed"}
+{"level":30,"time":1795142225400,"pid":315,"hostname":"820e9d827fbf","reqId":"req-1g","req":{"method":"POST","url":"/api/catalog/assets/validate","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":61494},"msg":"incoming request"}
+{"level":30,"time":1795142225410,"pid":315,"hostname":"820e9d827fbf","reqId":"req-1g","res":{"statusCode":200},"responseTime":10.553750000002765,"msg":"request completed"}
+{"level":30,"time":1795142225412,"pid":315,"hostname":"820e9d827fbf","reqId":"req-1h","req":{"method":"POST","url":"/api/catalog/assets/upload","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":61508},"msg":"incoming request"}
+{"level":30,"time":1795142225533,"pid":315,"hostname":"820e9d827fbf","reqId":"req-1h","res":{"statusCode":200},"responseTime":120.73733300000094,"msg":"request completed"}
+{"level":30,"time":1795142225540,"pid":315,"hostname":"820e9d827fbf","reqId":"req-1i","req":{"method":"PUT","url":"/api/connections/hive-1/enabled-tables","host":"127.0.0.1:55982","remoteAddress":"172.25.0.1","remotePort":61518},"msg":"incoming request"}
+[lucy] reload requested (44b2033b-60d8-4e86-8737-7fbe68aad952); restarting KTX MCP upstream
+Project: /data/lucy
+ktx MCP memory_ingest disabled: createLocalProjectMemoryIngest requires llm.provider.backend or an injected agentRunner
+ktx MCP server listening at http://127.0.0.1:7878/mcp
+{"level":30,"time":1795142226803,"pid":1215,"hostname":"820e9d827fbf","sessionId":"7bf9e5da-f022-4559-ad54-f31816522f6f","msg":"session.open"}
+{"level":30,"time":1795142226810,"pid":1215,"hostname":"820e9d827fbf","tool":"connection_list","callId":"2846ebdf-c0eb-4d3d-93c9-f02c094c710e","sessionId":"7bf9e5da-f022-4559-ad54-f31816522f6f","params":{},"msg":"tool.start"}
+{"level":30,"time":1795142226814,"pid":1215,"hostname":"820e9d827fbf","tool":"connection_list","callId":"2846ebdf-c0eb-4d3d-93c9-f02c094c710e","sessionId":"7bf9e5da-f022-4559-ad54-f31816522f6f","durationMs":4.597582999999986,"outcome":"ok","resultSize":445,"msg":"tool.end"}
+{"level":30,"time":1795142226821,"pid":1215,"hostname":"820e9d827fbf","sessionId":"92360c0b-4b7c-434c-a987-b3109856c609","msg":"session.open"}
+{"level":30,"time":1795142226830,"pid":315,"hostname":"820e9d827fbf","reqId":"req-1i","res":{"statusCode":200},"responseTime":1289.6752510000006,"msg":"request completed"}
+{"level":30,"time":1795142226842,"pid":1215,"hostname":"820e9d827fbf","sessionId":"49ca56c4-01f6-41ff-982e-71c658094259","msg":"session.open"}
+[lucy-proxy] re-established KTX upstream session user=repro_reader tool=tools/list
+{"level":30,"time":1795142226897,"pid":1215,"hostname":"820e9d827fbf","tool":"sl_read_source","callId":"d9127ff8-6c52-4d51-b7f6-ab82f983d452","sessionId":"49ca56c4-01f6-41ff-982e-71c658094259","params":{"connectionId":"hive-1","sourceName":"city"},"msg":"tool.start"}
+{"level":30,"time":1795142226916,"pid":1215,"hostname":"820e9d827fbf","tool":"sl_read_source","callId":"d9127ff8-6c52-4d51-b7f6-ab82f983d452","sessionId":"49ca56c4-01f6-41ff-982e-71c658094259","durationMs":19.267708000000084,"outcome":"ok","resultSize":238,"msg":"tool.end"}
+{"level":30,"time":1795142226969,"pid":1215,"hostname":"820e9d827fbf","tool":"sl_query","callId":"765c8598-3c6a-4f59-be5a-a569eb0725e4","sessionId":"49ca56c4-01f6-41ff-982e-71c658094259","params":{"connectionId":"hive-1","measures":[{"expr":"COUNT(city.id)","name":"row_count"}],"dimensions":[],"filters":[],"segments":[],"order_by":[],"limit":1,"include_empty":true,"include":["sql"]},"msg":"tool.start"}
+{"level":30,"time":1795142227333,"pid":1215,"hostname":"820e9d827fbf","tool":"sl_query","callId":"765c8598-3c6a-4f59-be5a-a569eb0725e4","sessionId":"49ca56c4-01f6-41ff-982e-71c658094259","durationMs":363.72404200000005,"outcome":"ok","resultSize":171,"msg":"tool.end"}
+

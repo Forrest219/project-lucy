@@ -1,0 +1,11 @@
+{
+  "httpStatus": 500,
+  "elapsedMs": 8,
+  "body": {
+    "ok": false,
+    "error": {
+      "code": "PUBLISH_COORDINATOR_BUSY",
+      "message": "发布窗口被占用：当前持有者 manifest_upload（operationId=66ae1412-bc19-4644-b9a1-249b984ce46b，2026-11-20T04:08:21.576Z）。请稍后重试或先确认该发布是否已结束。"
+    }
+  }
+}

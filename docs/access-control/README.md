@@ -1,5 +1,7 @@
 # Lucy 访问权限域档案（Access Control）
 
+> 2026-11-20：行权限启用方式以 [P1-72 自动强制执行](../specs/lucy-20261120-row-policy-automatic-enforcement-spec.md) 为准。新版本无需运维设置人工证明变量；旧 Gate C 签字仍作为历史安全验证证据。
+
 | 元数据 | 内容 |
 |---|---|
 | 文档名称 | Lucy 访问权限域档案索引 |
@@ -115,7 +117,7 @@
 | `docs/design/design-row-level-acl-feasibility.md` | `docs/access-control/feasibility-row-acl.SUPERSEDED.md` |
 | `docs/design/access-governance-design.md` | `docs/access-control/design-governance-baseline.md` |
 | `docs/design/design-agent-permissions.md` | `docs/access-control/design-agent-permissions-v1.md` |
-| `docs/uat/uat-agent-permissions.md` | `docs/access-control/uat-agent-permissions-v1.md` |
+| `docs/uat/uat-agent-permissions.md`（**历史归档**；测试台 SOT＝[`docs/qa/uat/`](../qa/uat/README.md)） | `docs/access-control/uat-agent-permissions-v1.md`（本域现行） |
 | `docs/reviews/review-module1-agent-permissions.md` | `docs/access-control/review-agent-permissions-v1.md` |
 | `docs/specs/lucy-202608-access-governance-gap-analysis.md` | `docs/access-control/gap-analysis-202608.md` |
 

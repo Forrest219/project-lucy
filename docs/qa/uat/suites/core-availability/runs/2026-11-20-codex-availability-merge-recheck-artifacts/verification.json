@@ -1,0 +1,15 @@
+{
+  "sourceCommit": "d978f4df50224ce3e462a11d1f52636a28725b34",
+  "image": "sha256:8baa62dc30b8774f7ec443558a12bf72e1f40adb08d83a640036d93288230189",
+  "rawFilesVerified": 121,
+  "sourceHashesVerified": 10,
+  "vitest": "44/44 PASS",
+  "node": "32/32 PASS",
+  "typecheck": "0 errors",
+  "dockerIo": "PASS WITH GAP; 120s, two path-only recoveries",
+  "dockerTerm": "3/3 PASS WITH GAP; real10s query and same-volume recovery",
+  "specDocs": "5 unchanged baseline page-dom Plan violations; no task-owned violations",
+  "cleanup": "4/4 all true",
+  "scope": "backend-only local lab; not release image, full UAT or customer verification",
+  "followupPlan": "next development; no new hotspot/hot-reload implementation"
+}

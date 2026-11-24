@@ -1,0 +1,17 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 7,
+  "body": {
+    "jsonrpc": "2.0",
+    "id": 9,
+    "result": {
+      "isError": true,
+      "content": [
+        {
+          "type": "text",
+          "text": "Access denied: source_map_compile_failed:duplicate_source_name:hive-1:city"
+        }
+      ]
+    }
+  }
+}

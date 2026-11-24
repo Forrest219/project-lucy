@@ -1,0 +1,1896 @@
+{
+  "startedAt": "2026-11-20T07:15:07.474Z",
+  "cases": [
+    {
+      "name": "14-native-original-api-contract",
+      "status": "PASS",
+      "ms": 5055.070042,
+      "visible": "visible",
+      "focus": true
+    },
+    {
+      "name": "02-detail-identity-and-window",
+      "status": "PASS",
+      "ms": 3085.436917,
+      "visible": "visible",
+      "focus": true
+    },
+    {
+      "name": "03-pending-switch-cancel",
+      "status": "PASS",
+      "ms": 3926.4026670000003,
+      "visible": "visible",
+      "focus": true
+    },
+    {
+      "name": "04-real-detail-tcp-fault-retry",
+      "status": "PASS",
+      "ms": 3668.704167,
+      "visible": "visible",
+      "focus": true
+    },
+    {
+      "name": "05-real-statistics-tcp-fault-retry",
+      "status": "PASS",
+      "ms": 5519.470541000002,
+      "visible": "visible",
+      "focus": true
+    },
+    {
+      "name": "06-pure-mcp-positive-and-negative",
+      "status": "PASS",
+      "ms": 5233.3428749999985,
+      "visible": "visible",
+      "focus": true
+    },
+    {
+      "name": "12-independent-detail-loading-and-retry",
+      "status": "PASS",
+      "ms": 13373.777167,
+      "visible": "visible",
+      "focus": true
+    }
+  ],
+  "api": [
+    {
+      "phase": "setup",
+      "path": "/api/auth/login",
+      "method": "POST",
+      "status": 200,
+      "ms": 71.44633300000001
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents?range=7d",
+      "method": "GET",
+      "status": 200,
+      "ms": 1028.059458
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents/ars_00_a16?range=7d",
+      "method": "GET",
+      "status": 200,
+      "ms": 786.6353750000001
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents?range=14d",
+      "method": "GET",
+      "status": 200,
+      "ms": 607.7807499999999
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents/ars_00_a16?range=14d",
+      "method": "GET",
+      "status": 200,
+      "ms": 714.3190830000003
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents?range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 710.7764160000002
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents/ars_00_a16?range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 774.8447079999996
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 49.91304200000013
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/admin/agents",
+      "method": "GET",
+      "status": 200,
+      "ms": 5.737833000000137
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/jsx-runtime-bzQ4Vb5N.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 19.240708000000268
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/apiClient-iXEeuihv.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 18.69312499999978
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/react-dom-DUKFG4MT.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 19.408957999999984
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/dist-B1out86J.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 19.71074999999928
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/index-D_x1W2EE.css",
+      "method": "GET",
+      "status": 200,
+      "ms": 23.17449999999917
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/index-C4sQBe6R.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 27.184417000000394
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/RowMoreMenu-7uiYqw6w.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 13.822624999999789
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/useMutation-BpGIrM-g.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 18.9624589999994
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/lucyAdminRole-C_AWNFA0.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 18.48304199999984
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/AgentList-Bqyd0Kbu.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 20.27916699999969
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/AgentRoleField-BY2hRlA-.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 20.562332999999853
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/AsyncRegion-Bvmaq1-J.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 23.707209000000148
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/DisplayRefreshNotice-ChK6KYp7.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 22.764165999999932
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/MetricCard-h1Z3Wxhz.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 17.585250000000087
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/AccessWriteRecoveryPanel-Cke_F10J.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 15.941084000000046
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/PolicyDegradeBanner-CONV80yx.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 18.23400000000038
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/PageHeader-HPgECmoi.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 18.868625000000065
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/LucyAdminRoleWarning-DucoRXzb.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 17.641082999999526
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/auth/status",
+      "method": "GET",
+      "status": 200,
+      "ms": 5.012917000000016
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 200,
+      "ms": 6.3469169999998485
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/mcpEndpoint-_ZVROJDX.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 12.140457999999853
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/opsEvidence-BosoCzj_.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 10.234166999999616
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/objectDetail-vpVjl8QX.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 10.867457999999715
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/branding",
+      "method": "GET",
+      "status": 200,
+      "ms": 4.7462500000001455
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 74.78541700000005
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/policy-runtime",
+      "method": "GET",
+      "status": 200,
+      "ms": 3.400499999999738
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 594.2165420000001
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/ui-usage/page-view",
+      "method": "POST",
+      "status": 403,
+      "ms": 418.9762500000006
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/admin/agents",
+      "method": "GET",
+      "status": 304,
+      "ms": 451.6185000000005
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/auth/status",
+      "method": "GET",
+      "status": 200,
+      "ms": 4.365625000000364
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/branding",
+      "method": "GET",
+      "status": 200,
+      "ms": 3.812417000000096
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 3.078500000000531
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 63.73949999999968
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/policy-runtime",
+      "method": "GET",
+      "status": 200,
+      "ms": 3.855874999999287
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 68.48383399999966
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 3.6192919999994047
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents/statistics?range=7d",
+      "method": "GET",
+      "status": 200,
+      "ms": 324.31808400000045
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=7d",
+      "method": "GET",
+      "status": 200,
+      "ms": 328.62641600000006
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/ui-usage/page-view",
+      "method": "POST",
+      "status": 403,
+      "ms": 222.73599999999988
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 8.367290999999568
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 575.4721250000002
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 582.0171249999994
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 3.7255420000001322
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/assets/DecisionReasonCell-CZvh7OY1.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 5.573749999999563
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/assets/ObjectDetailDrawer-CsUnxZzO.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 6.00066599999991
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents/ars_00_a16?range=7d",
+      "method": "GET",
+      "status": 200,
+      "ms": 861.6118749999987
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 5.580291000000216
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/admin/agents",
+      "method": "GET",
+      "status": 304,
+      "ms": 3.0117079999999987
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/auth/status",
+      "method": "GET",
+      "status": 200,
+      "ms": 5.9724999999998545
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 8.085333000000901
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/branding",
+      "method": "GET",
+      "status": 200,
+      "ms": 4.6117080000003625
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 76.42645800000173
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/admin/policy-runtime",
+      "method": "GET",
+      "status": 200,
+      "ms": 3.2177080000001297
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 89.36008299999958
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 5.197583000001032
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/admin/ui-usage/page-view",
+      "method": "POST",
+      "status": 403,
+      "ms": 2.419625000000451
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 2.473249999999098
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 143.37033300000076
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/admin/agents/ars_00_a01?range=7d",
+      "method": "GET",
+      "status": 200,
+      "ms": 254.89224999999897
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/admin/agents",
+      "method": "GET",
+      "status": 304,
+      "ms": 13.259416000000783
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/auth/status",
+      "method": "GET",
+      "status": 200,
+      "ms": 3.0224159999997937
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/branding",
+      "method": "GET",
+      "status": 200,
+      "ms": 4.381166000001031
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 2.501125000000684
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 110.29591699999946
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/admin/policy-runtime",
+      "method": "GET",
+      "status": 200,
+      "ms": 3.168374999999287
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 849.1274589999994
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/admin/ui-usage/page-view",
+      "method": "POST",
+      "status": 403,
+      "ms": 691.0083340000001
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 756.6762920000001
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/admin/agents/ars_00_a16?range=7d",
+      "method": "GET",
+      "status": 200,
+      "ms": 941.0669170000019
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 4.136167000000569
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/admin/agents",
+      "method": "GET",
+      "status": 304,
+      "ms": 6.305374999999913
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/auth/status",
+      "method": "GET",
+      "status": 200,
+      "ms": 6.0257910000000265
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 6.819541000000754
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/branding",
+      "method": "GET",
+      "status": 200,
+      "ms": 4.04333399999814
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 65.9318749999984
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/policy-runtime",
+      "method": "GET",
+      "status": 200,
+      "ms": 4.051250000000437
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/ui-usage/page-view",
+      "method": "POST",
+      "status": 403,
+      "ms": 8.396833999999217
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 4.535542000001442
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/agents/ars_00_a16?range=7d",
+      "method": "GET",
+      "status": 200,
+      "ms": 1663.7297910000016
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 41.33104099999764
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 159.85158299999966
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "method": "GET",
+      "status": 200,
+      "ms": 814.0219590000015
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/admin/agents/ars_00_a17",
+      "method": "GET",
+      "status": 200,
+      "ms": 56.97112500000003
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/assets/AgentDetail-oxnMdVyd.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 16.544208999999682
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/assets/DiffViewer-B8_e5uoj.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 15.056791999999405
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/assets/clipboard-DBZRlhH1.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 14.426165999997465
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/assets/RenewTokenDialog-DB7AMZfh.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 16.088833999998315
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/assets/AuthorizationSummarySection-C96ooFUd.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 16.796082999997452
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/assets/clsx-CjueKrWZ.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 18.45233300000109
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/auth/status",
+      "method": "GET",
+      "status": 200,
+      "ms": 8.915417000000161
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 9.635916999999608
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/assets/rolePermissionDraft-BSOKsZOL.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 36.9543330000015
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/branding",
+      "method": "GET",
+      "status": 200,
+      "ms": 27.901084000000992
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/ui-usage/page-view",
+      "method": "POST",
+      "status": 403,
+      "ms": 14.969624999997905
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/agents/ars_00_a17",
+      "method": "GET",
+      "status": 200,
+      "ms": 4145.878625000001
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/policy-runtime",
+      "method": "GET",
+      "status": 200,
+      "ms": 14.319457999998122
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/admin/agents/ars_00_a17",
+      "method": "GET",
+      "status": 304,
+      "ms": 4.245708999998897
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/auth/status",
+      "method": "GET",
+      "status": 200,
+      "ms": 2.861457999999402
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 3.1882079999995767
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/branding",
+      "method": "GET",
+      "status": 200,
+      "ms": 58.12016699999731
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/ui-usage/page-view",
+      "method": "POST",
+      "status": 403,
+      "ms": 5.949875000005704
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "method": "GET",
+      "status": 200,
+      "ms": 6442.834667000003
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/agents/ars_00_a17",
+      "method": "GET",
+      "status": 200,
+      "ms": 1238.8161249999976
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/policy-runtime",
+      "method": "GET",
+      "status": 200,
+      "ms": 6.634749999997439
+    }
+  ],
+  "gateway": [
+    {
+      "phase": "setup",
+      "path": "/api/auth/login",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents?range=7d",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents/ars_00_a16?range=7d",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents?range=14d",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents/ars_00_a16?range=14d",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents?range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents/ars_00_a16?range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/admin/agents",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/index-C4sQBe6R.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/jsx-runtime-bzQ4Vb5N.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/react-dom-DUKFG4MT.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/index-D_x1W2EE.css",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/dist-B1out86J.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/apiClient-iXEeuihv.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/AgentList-Bqyd0Kbu.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/useMutation-BpGIrM-g.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/RowMoreMenu-7uiYqw6w.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/AgentRoleField-BY2hRlA-.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/lucyAdminRole-C_AWNFA0.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/AsyncRegion-Bvmaq1-J.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/DisplayRefreshNotice-ChK6KYp7.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/MetricCard-h1Z3Wxhz.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/PageHeader-HPgECmoi.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/PolicyDegradeBanner-CONV80yx.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/AccessWriteRecoveryPanel-Cke_F10J.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/LucyAdminRoleWarning-DucoRXzb.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/mcpEndpoint-_ZVROJDX.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/objectDetail-vpVjl8QX.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/opsEvidence-BosoCzj_.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/auth/status",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/branding",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/policy-runtime",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/admin/agents",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/ui-usage/page-view",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/auth/status",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/branding",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/policy-runtime",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=7d",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents/statistics?range=7d",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/ui-usage/page-view",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/assets/ObjectDetailDrawer-CsUnxZzO.js",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/assets/DecisionReasonCell-CZvh7OY1.js",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents/ars_00_a16?range=7d",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/admin/agents",
+      "event": "request"
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/auth/status",
+      "event": "request"
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/branding",
+      "event": "request"
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/admin/policy-runtime",
+      "event": "request"
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/admin/ui-usage/page-view",
+      "event": "request"
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/admin/agents/ars_00_a00?range=7d",
+      "event": "request"
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/admin/agents/ars_00_a00?range=7d",
+      "event": "client-aborted"
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/admin/agents/ars_00_a01?range=7d",
+      "event": "request"
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/admin/agents",
+      "event": "request"
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/auth/status",
+      "event": "request"
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/branding",
+      "event": "request"
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/admin/policy-runtime",
+      "event": "request"
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/admin/ui-usage/page-view",
+      "event": "request"
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/admin/agents/ars_00_a16?range=7d",
+      "event": "request"
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/admin/agents/ars_00_a16?range=7d",
+      "event": "upstream-failure",
+      "code": "ECONNREFUSED",
+      "port": 52998
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/admin/agents/ars_00_a16?range=7d",
+      "event": "request"
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/admin/agents/ars_00_a16?range=7d",
+      "event": "upstream-failure",
+      "code": "ECONNREFUSED",
+      "port": 52998
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/admin/agents/ars_00_a16?range=7d",
+      "event": "request"
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/admin/agents",
+      "event": "request"
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/auth/status",
+      "event": "request"
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/branding",
+      "event": "request"
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/policy-runtime",
+      "event": "request"
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "event": "upstream-failure",
+      "code": "ECONNREFUSED",
+      "port": 52998
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/ui-usage/page-view",
+      "event": "request"
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "event": "upstream-failure",
+      "code": "ECONNREFUSED",
+      "port": 52998
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/agents/ars_00_a16?range=7d",
+      "event": "request"
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/admin/agents/ars_00_a17",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/assets/AgentDetail-oxnMdVyd.js",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/assets/DiffViewer-B8_e5uoj.js",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/assets/clsx-CjueKrWZ.js",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/assets/AuthorizationSummarySection-C96ooFUd.js",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/assets/RenewTokenDialog-DB7AMZfh.js",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/assets/clipboard-DBZRlhH1.js",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/assets/rolePermissionDraft-BSOKsZOL.js",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/auth/status",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/branding",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/agents/ars_00_a17",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/ui-usage/page-view",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/policy-runtime",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/admin/agents/ars_00_a17",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "event": "client-aborted"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "event": "upstream-failure",
+      "code": "ECONNRESET",
+      "port": 59166
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/auth/status",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/branding",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/agents/ars_00_a17",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/agents/ars_00_a17",
+      "event": "upstream-failure",
+      "code": "ECONNREFUSED",
+      "port": 52998
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/ui-usage/page-view",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/agents/ars_00_a17",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/agents/ars_00_a17",
+      "event": "upstream-failure",
+      "code": "ECONNREFUSED",
+      "port": 52998
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/agents/ars_00_a17",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/agents/ars_00_a17",
+      "event": "upstream-failure",
+      "code": "ECONNREFUSED",
+      "port": 52998
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/agents/ars_00_a17",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/agents/ars_00_a17",
+      "event": "upstream-failure",
+      "code": "ECONNREFUSED",
+      "port": 52998
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/agents/ars_00_a17",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/policy-runtime",
+      "event": "request"
+    }
+  ],
+  "rpc": [
+    {
+      "label": "initialize",
+      "method": "initialize",
+      "status": 200,
+      "ms": 155.96879199999967,
+      "body": {
+        "result": {
+          "protocolVersion": "2024-11-05",
+          "capabilities": {
+            "tools": {
+              "listChanged": true
+            }
+          },
+          "serverInfo": {
+            "name": "ktx",
+            "version": "0.16.0"
+          },
+          "instructions": "# Lucy Data QA Runtime Instructions\n\n- Use the Lucy MCP Proxy tool surface only; do not invent data when a data tool fails.\n- Call the visible catalog tool before choosing a connection or source unless the route is already explicit in the user request.\n- Only use connections and sources listed in this session's visible scope.\n- If a query needs data, call `lucy_query` or `lucy_read_source`; do not answer from wiki-only context when data retrieval failed.\n- For simple factual questions, use the shortest verified path: catalog/source confirmation -> `lucy_query` -> answer. Do not call `entity_details` or `lucy_explain_query` before `lucy_query` unless the user asks for entity metadata or permission/guardrail diagnostics.\n- A successful `lucy_query` that returns zero fact rows carries a structured `next_step` inside the result JSON (and in `_meta.lucy.next_step`). Read it before retrying: it names the source, the filters you used, and the controlled next calls (`lucy_read_source`, `lucy_freshness`) to verify grain, period and filters. Do not substitute an approximation for the empty result.\n- When a successful `lucy_query` tool result includes `answer_verifiability`, you MUST surface its source identity, caliber highlights, and data-cutoff disclosure in the user-visible answer (cite or restate the block).\n- Do not hide, omit, or strip `answer_verifiability`. Treat cutoff.status `not_checked` as honest disclosure that the business data cutoff was not verified—never invent a checked cutoff.\n- Having the block in the tool result does not by itself mean the host UI rendered it; you still must include the verifiability points in your reply to the user.\n## 问询范围确认／多表命中先问\n\n- 问询**原文**里出现指代（\"这个\"\"上次那个\"\"它\"）或一句包含两个意图时，先复述账户、月份和产品线，等用户确认后再发 `lucy_query`。\n- 没有用户原文的推断问询（例如从历史日志或工具报错反推出来的需求）跳过复述，直接按已确认范围查数。\n- 当多个可见来源表都可能回答同一业务词时，优先向用户澄清选哪张表，再发 `lucy_query`／`lucy_explain_query`；用户无法即时确认时，按最贴近问题的来源直接查，并在答复里说明所用来源。\n- Proxy 对选表歧义采用「放行并披露」：单来源、或经语义层已声明 join 连通的同连接多来源（至多 4 个）直接放行；集外钉选或未连通的多来源同样放行，但 `answer_verifiability.sourceSelection` 会标注 `tolerated`——此时你**必须**在答复里如实告知所用来源，并说明该选表未经用户确认。\n- 仍会拦截（`source_ambiguity_gate`）：无法解析的引用、目录健康失败、跨连接多来源、来源数超过 4、ACL／行权限限制；以及请求里**没有任何带来源限定的引用**（如度量只写 `order_count`、没有 `source.` 前缀）而业务词命中多个来源时——此时改用 `source.measure` 形式钉选单一来源再重试。被拦后按返回的 `usableTargets` 改写为**单来源查询**重试；跨连接则按连接分别查。\n- 宿主 person＋attestation 确认仍可用于 WebUI；Agent 不得伪造宿主 confirm HTTP。\n- 支持／暂不支持的组合场景见 `docs/specs/lucy-20261116-source-ambiguity-mcp-escape-spec.md` §4.5。\n- 指代／双意图的复述仍约束模型行为。\n\n- Answer simple numeric questions directly first, usually as a compact table, then add brief caveats/provenance. Do not turn ordinary fact lookups into long audit reports.\n- For multi-metric, multi-period, or multi-scenario questions, build an answerability dependency matrix before querying: numerator, denominator, period/grain, batch/version, actual/forecast/budget scenario, source/measure, and governed business definition. Mark a subquestion unavailable when a required dependency is missing; do not substitute an approximation.\n- Budget requires an independent budget measure, source, or governed formula. Never substitute forecast, target, or prior actual for budget. If budget evidence is missing, deliver the answerable parts and state that budget variance is currently unavailable.\n- Calculate and label actual, forecast, and budget separately. Any cross-scenario composition must be labeled hybrid with the covered periods for each component; do not assume the current quarter is complete actual without evidence.\n- revenue/quantity or revenue/bandwidth is realized unit price and includes mix effects. Do not claim pure price, volume, or mix contribution without a governed decomposition formula and the required grain.\n- Distinguish no fact row, NULL/blank source field, and values inferred from cumulative deltas. Do not collapse all three states into `—`.\n- If a key data tool call fails, the final answer must say whether a retry succeeded, whether the failure affects the conclusion, and which values remain uncertain. Do not give numeric conclusions when no successful fact data was returned.\n- Fingerprint failures by tool, source, normalized reason, and relevant argument shape. Retry the same fingerprint at most once and only with an information-gaining correction; cycling among eq, =, and in is not a correction.\n- Per question, use at most 60 data-tool calls or 300 seconds of settled data-processing time (thinking time excluded), whichever comes first. Repeat the same input at most once, do not re-read a successful source, and retry only transient errors once. Protocol methods (question declaration and continuation) do not count toward this budget.\n- When a data tool returns `question_budget_exhausted`, stop looping, deliver the verified partial results, state the gaps, and do not retry.\n- Partial evidence still requires a final response. Give each subquestion an ok, no_data, unavailable, or partial status, plus period, batch/version, scenario, failure impact, and provenance.\n- When rows are missing, fields are NULL, a tool failed, or a value is inferred, qualify the answer with phrases such as 基于当前可查询数据 or 按累计差额推算; do not claim the data is complete or fully reconciled.\n- For `lucy_query`, use source-qualified semantic keys such as `source.measure`, `source.dimension`, and `source.segment`. Do not shorten them after an error; unqualified keys may be rejected by ACL before reaching the semantic layer.\n- In `lucy_query.measures`, use string semantic measure keys when the measure exists. Use `{expr,name}` objects only for ad hoc aggregate expressions.\n- In `lucy_query.dimensions` and `lucy_query.order_by`, use object entries such as `{field:\"source.field\"}`; do not use bare string arrays.\n- `lucy_query.filters` supports string filters and structured filters such as `{field:\"source.field\",op:\"contains\",value:\"<entity keyword>\"}`. Prefer semantic segments such as `source.segment` for common filters when available.\n- Some clients may serialize the whole `filters` value as JSON text; Lucy strictly restores that compatibility shape. Do not generate it deliberately. `orderBy` is accepted only as an alias for canonical `order_by`; conflicting aliases fail closed.\n- Interpret POC `DATE` / `DATETIME` values as Asia/Shanghai business dates when the visible source documentation says so.\n- Visible Scope below is captured at MCP initialize; call the visible catalog tool before routing if sources may have changed since this session started.\n\n## Visible Scope\n\nConnections: ars_00_c0, ars_00_c1, ars_00_c2, ars_00_c3, ars_00_c4, ars_00_c5, ars_00_c6, ars_00_c7, ars_00_c8\n\nSources:\n- ars_00_c0.ars_00.ars_00_source_000 -> ars_00.fact_000\n- ars_00_c1.ars_00.ars_00_source_001 -> ars_00.fact_001\n- ars_00_c2.ars_00.ars_00_source_002 -> ars_00.fact_002\n- ars_00_c3.ars_00.ars_00_source_003 -> ars_00.fact_003\n- ars_00_c4.ars_00.ars_00_source_004 -> ars_00.fact_004\n- ars_00_c5.ars_00.ars_00_source_005 -> ars_00.fact_005\n- ars_00_c6.ars_00.ars_00_source_006 -> ars_00.fact_006\n- ars_00_c7.ars_00.ars_00_source_007 -> ars_00.fact_007\n- ars_00_c8.ars_00.ars_00_source_008 -> ars_00.fact_008\n- ars_00_c0.ars_00.ars_00_source_009 -> ars_00.fact_009\n- ars_00_c1.ars_00.ars_00_source_010 -> ars_00.fact_010\n- ars_00_c2.ars_00.ars_00_source_011 -> ars_00.fact_011\n- ars_00_c3.ars_00.ars_00_source_012 -> ars_00.fact_012\n- ars_00_c4.ars_00.ars_00_source_013 -> ars_00.fact_013\n- ars_00_c5.ars_00.ars_00_source_014 -> ars_00.fact_014\n- ars_00_c6.ars_00.ars_00_source_015 -> ars_00.fact_015\n- ars_00_c7.ars_00.ars_00_source_016 -> ars_00.fact_016\n- ars_00_c8.ars_00.ars_00_source_017 -> ars_00.fact_017\n- ars_00_c0.ars_00.ars_00_source_018 -> ars_00.fact_018\n- ars_00_c1.ars_00.ars_00_source_019 -> ars_00.fact_019\n- ars_00_c2.ars_00.ars_00_source_020 -> ars_00.fact_020\n- ars_00_c3.ars_00.ars_00_source_021 -> ars_00.fact_021\n- ars_00_c4.ars_00.ars_00_source_022 -> ars_00.fact_022\n- ars_00_c5.ars_00.ars_00_source_023 -> ars_00.fact_023\n- ars_00_c6.ars_00.ars_00_source_024 -> ars_00.fact_024\n- ars_00_c7.ars_00.ars_00_source_025 -> ars_00.fact_025\n- ars_00_c8.ars_00.ars_00_source_026 -> ars_00.fact_026\n- ars_00_c0.ars_00.ars_00_source_027 -> ars_00.fact_027\n- ars_00_c1.ars_00.ars_00_source_028 -> ars_00.fact_028\n- ars_00_c2.ars_00.ars_00_source_029 -> ars_00.fact_029\n\n## Query Examples\n\n- Use the visible catalog and `lucy_read_source` to inspect the source before querying."
+        },
+        "jsonrpc": "2.0",
+        "id": 1
+      }
+    },
+    {
+      "label": "initialize-initialized",
+      "method": "notifications/initialized",
+      "status": 202
+    },
+    {
+      "label": "unrestricted-initialize",
+      "method": "initialize",
+      "status": 200,
+      "ms": 27.301791000001685,
+      "body": {
+        "result": {
+          "protocolVersion": "2024-11-05",
+          "capabilities": {
+            "tools": {
+              "listChanged": true
+            }
+          },
+          "serverInfo": {
+            "name": "ktx",
+            "version": "0.16.0"
+          },
+          "instructions": "# Lucy Data QA Runtime Instructions\n\n- Use the Lucy MCP Proxy tool surface only; do not invent data when a data tool fails.\n- Call the visible catalog tool before choosing a connection or source unless the route is already explicit in the user request.\n- Only use connections and sources listed in this session's visible scope.\n- If a query needs data, call `lucy_query` or `lucy_read_source`; do not answer from wiki-only context when data retrieval failed.\n- For simple factual questions, use the shortest verified path: catalog/source confirmation -> `lucy_query` -> answer. Do not call `entity_details` or `lucy_explain_query` before `lucy_query` unless the user asks for entity metadata or permission/guardrail diagnostics.\n- A successful `lucy_query` that returns zero fact rows carries a structured `next_step` inside the result JSON (and in `_meta.lucy.next_step`). Read it before retrying: it names the source, the filters you used, and the controlled next calls (`lucy_read_source`, `lucy_freshness`) to verify grain, period and filters. Do not substitute an approximation for the empty result.\n- When a successful `lucy_query` tool result includes `answer_verifiability`, you MUST surface its source identity, caliber highlights, and data-cutoff disclosure in the user-visible answer (cite or restate the block).\n- Do not hide, omit, or strip `answer_verifiability`. Treat cutoff.status `not_checked` as honest disclosure that the business data cutoff was not verified—never invent a checked cutoff.\n- Having the block in the tool result does not by itself mean the host UI rendered it; you still must include the verifiability points in your reply to the user.\n## 问询范围确认／多表命中先问\n\n- 问询**原文**里出现指代（\"这个\"\"上次那个\"\"它\"）或一句包含两个意图时，先复述账户、月份和产品线，等用户确认后再发 `lucy_query`。\n- 没有用户原文的推断问询（例如从历史日志或工具报错反推出来的需求）跳过复述，直接按已确认范围查数。\n- 当多个可见来源表都可能回答同一业务词时，优先向用户澄清选哪张表，再发 `lucy_query`／`lucy_explain_query`；用户无法即时确认时，按最贴近问题的来源直接查，并在答复里说明所用来源。\n- Proxy 对选表歧义采用「放行并披露」：单来源、或经语义层已声明 join 连通的同连接多来源（至多 4 个）直接放行；集外钉选或未连通的多来源同样放行，但 `answer_verifiability.sourceSelection` 会标注 `tolerated`——此时你**必须**在答复里如实告知所用来源，并说明该选表未经用户确认。\n- 仍会拦截（`source_ambiguity_gate`）：无法解析的引用、目录健康失败、跨连接多来源、来源数超过 4、ACL／行权限限制；以及请求里**没有任何带来源限定的引用**（如度量只写 `order_count`、没有 `source.` 前缀）而业务词命中多个来源时——此时改用 `source.measure` 形式钉选单一来源再重试。被拦后按返回的 `usableTargets` 改写为**单来源查询**重试；跨连接则按连接分别查。\n- 宿主 person＋attestation 确认仍可用于 WebUI；Agent 不得伪造宿主 confirm HTTP。\n- 支持／暂不支持的组合场景见 `docs/specs/lucy-20261116-source-ambiguity-mcp-escape-spec.md` §4.5。\n- 指代／双意图的复述仍约束模型行为。\n\n- Answer simple numeric questions directly first, usually as a compact table, then add brief caveats/provenance. Do not turn ordinary fact lookups into long audit reports.\n- For multi-metric, multi-period, or multi-scenario questions, build an answerability dependency matrix before querying: numerator, denominator, period/grain, batch/version, actual/forecast/budget scenario, source/measure, and governed business definition. Mark a subquestion unavailable when a required dependency is missing; do not substitute an approximation.\n- Budget requires an independent budget measure, source, or governed formula. Never substitute forecast, target, or prior actual for budget. If budget evidence is missing, deliver the answerable parts and state that budget variance is currently unavailable.\n- Calculate and label actual, forecast, and budget separately. Any cross-scenario composition must be labeled hybrid with the covered periods for each component; do not assume the current quarter is complete actual without evidence.\n- revenue/quantity or revenue/bandwidth is realized unit price and includes mix effects. Do not claim pure price, volume, or mix contribution without a governed decomposition formula and the required grain.\n- Distinguish no fact row, NULL/blank source field, and values inferred from cumulative deltas. Do not collapse all three states into `—`.\n- If a key data tool call fails, the final answer must say whether a retry succeeded, whether the failure affects the conclusion, and which values remain uncertain. Do not give numeric conclusions when no successful fact data was returned.\n- Fingerprint failures by tool, source, normalized reason, and relevant argument shape. Retry the same fingerprint at most once and only with an information-gaining correction; cycling among eq, =, and in is not a correction.\n- Per question, use at most 60 data-tool calls or 300 seconds of settled data-processing time (thinking time excluded), whichever comes first. Repeat the same input at most once, do not re-read a successful source, and retry only transient errors once. Protocol methods (question declaration and continuation) do not count toward this budget.\n- When a data tool returns `question_budget_exhausted`, stop looping, deliver the verified partial results, state the gaps, and do not retry.\n- Partial evidence still requires a final response. Give each subquestion an ok, no_data, unavailable, or partial status, plus period, batch/version, scenario, failure impact, and provenance.\n- When rows are missing, fields are NULL, a tool failed, or a value is inferred, qualify the answer with phrases such as 基于当前可查询数据 or 按累计差额推算; do not claim the data is complete or fully reconciled.\n- For `lucy_query`, use source-qualified semantic keys such as `source.measure`, `source.dimension`, and `source.segment`. Do not shorten them after an error; unqualified keys may be rejected by ACL before reaching the semantic layer.\n- In `lucy_query.measures`, use string semantic measure keys when the measure exists. Use `{expr,name}` objects only for ad hoc aggregate expressions.\n- In `lucy_query.dimensions` and `lucy_query.order_by`, use object entries such as `{field:\"source.field\"}`; do not use bare string arrays.\n- `lucy_query.filters` supports string filters and structured filters such as `{field:\"source.field\",op:\"contains\",value:\"<entity keyword>\"}`. Prefer semantic segments such as `source.segment` for common filters when available.\n- Some clients may serialize the whole `filters` value as JSON text; Lucy strictly restores that compatibility shape. Do not generate it deliberately. `orderBy` is accepted only as an alias for canonical `order_by`; conflicting aliases fail closed.\n- Interpret POC `DATE` / `DATETIME` values as Asia/Shanghai business dates when the visible source documentation says so.\n- Visible Scope below is captured at MCP initialize; call the visible catalog tool before routing if sources may have changed since this session started.\n\n## Visible Scope\n\nConnections: ars_00_c0, ars_00_c1, ars_00_c2, ars_00_c3, ars_00_c4, ars_00_c5, ars_00_c6, ars_00_c7, ars_00_c8\n\nSources:\n- ars_00_c0.ars_00.ars_00_source_000 -> ars_00.fact_000\n- ars_00_c1.ars_00.ars_00_source_001 -> ars_00.fact_001\n- ars_00_c2.ars_00.ars_00_source_002 -> ars_00.fact_002\n- ars_00_c3.ars_00.ars_00_source_003 -> ars_00.fact_003\n- ars_00_c4.ars_00.ars_00_source_004 -> ars_00.fact_004\n- ars_00_c5.ars_00.ars_00_source_005 -> ars_00.fact_005\n- ars_00_c6.ars_00.ars_00_source_006 -> ars_00.fact_006\n- ars_00_c7.ars_00.ars_00_source_007 -> ars_00.fact_007\n- ars_00_c8.ars_00.ars_00_source_008 -> ars_00.fact_008\n- ars_00_c0.ars_00.ars_00_source_009 -> ars_00.fact_009\n- ars_00_c1.ars_00.ars_00_source_010 -> ars_00.fact_010\n- ars_00_c2.ars_00.ars_00_source_011 -> ars_00.fact_011\n- ars_00_c3.ars_00.ars_00_source_012 -> ars_00.fact_012\n- ars_00_c4.ars_00.ars_00_source_013 -> ars_00.fact_013\n- ars_00_c5.ars_00.ars_00_source_014 -> ars_00.fact_014\n- ars_00_c6.ars_00.ars_00_source_015 -> ars_00.fact_015\n- ars_00_c7.ars_00.ars_00_source_016 -> ars_00.fact_016\n- ars_00_c8.ars_00.ars_00_source_017 -> ars_00.fact_017\n- ars_00_c0.ars_00.ars_00_source_018 -> ars_00.fact_018\n- ars_00_c1.ars_00.ars_00_source_019 -> ars_00.fact_019\n- ars_00_c2.ars_00.ars_00_source_020 -> ars_00.fact_020\n- ars_00_c3.ars_00.ars_00_source_021 -> ars_00.fact_021\n- ars_00_c4.ars_00.ars_00_source_022 -> ars_00.fact_022\n- ars_00_c5.ars_00.ars_00_source_023 -> ars_00.fact_023\n- ars_00_c6.ars_00.ars_00_source_024 -> ars_00.fact_024\n- ars_00_c7.ars_00.ars_00_source_025 -> ars_00.fact_025\n- ars_00_c8.ars_00.ars_00_source_026 -> ars_00.fact_026\n- ars_00_c0.ars_00.ars_00_source_027 -> ars_00.fact_027\n- ars_00_c1.ars_00.ars_00_source_028 -> ars_00.fact_028\n- ars_00_c2.ars_00.ars_00_source_029 -> ars_00.fact_029\n- ars_00_c3.ars_00.ars_00_source_030 -> ars_00.fact_030\n- ars_00_c4.ars_00.ars_00_source_031 -> ars_00.fact_031\n- ars_00_c5.ars_00.ars_00_source_032 -> ars_00.fact_032\n- ars_00_c6.ars_00.ars_00_source_033 -> ars_00.fact_033\n- ars_00_c7.ars_00.ars_00_source_034 -> ars_00.fact_034\n- ars_00_c8.ars_00.ars_00_source_035 -> ars_00.fact_035\n- ars_00_c0.ars_00.ars_00_source_036 -> ars_00.fact_036\n- ars_00_c1.ars_00.ars_00_source_037 -> ars_00.fact_037\n- ars_00_c2.ars_00.ars_00_source_038 -> ars_00.fact_038\n- ars_00_c3.ars_00.ars_00_source_039 -> ars_00.fact_039\n- ars_00_c4.ars_00.ars_00_source_040 -> ars_00.fact_040\n- ars_00_c5.ars_00.ars_00_source_041 -> ars_00.fact_041\n- ars_00_c6.ars_00.ars_00_source_042 -> ars_00.fact_042\n- ars_00_c7.ars_00.ars_00_source_043 -> ars_00.fact_043\n- ars_00_c8.ars_00.ars_00_source_044 -> ars_00.fact_044\n- ars_00_c0.ars_00.ars_00_source_045 -> ars_00.fact_045\n- ars_00_c1.ars_00.ars_00_source_046 -> ars_00.fact_046\n- ars_00_c2.ars_00.ars_00_source_047 -> ars_00.fact_047\n- ars_00_c3.ars_00.ars_00_source_048 -> ars_00.fact_048\n- ars_00_c4.ars_00.ars_00_source_049 -> ars_00.fact_049\n- ars_00_c5.ars_00.ars_00_source_050 -> ars_00.fact_050\n- ars_00_c6.ars_00.ars_00_source_051 -> ars_00.fact_051\n- ars_00_c7.ars_00.ars_00_source_052 -> ars_00.fact_052\n- ars_00_c8.ars_00.ars_00_source_053 -> ars_00.fact_053\n- ars_00_c0.ars_00.ars_00_source_054 -> ars_00.fact_054\n- ars_00_c1.ars_00.ars_00_source_055 -> ars_00.fact_055\n- ars_00_c2.ars_00.ars_00_source_056 -> ars_00.fact_056\n- ars_00_c3.ars_00.ars_00_source_057 -> ars_00.fact_057\n- ars_00_c4.ars_00.ars_00_source_058 -> ars_00.fact_058\n- ars_00_c5.ars_00.ars_00_source_059 -> ars_00.fact_059\n- ars_00_c6.ars_00.ars_00_source_060 -> ars_00.fact_060\n- ars_00_c7.ars_00.ars_00_source_061 -> ars_00.fact_061\n- ars_00_c8.ars_00.ars_00_source_062 -> ars_00.fact_062\n- ars_00_c0.ars_00.ars_00_source_063 -> ars_00.fact_063\n- ars_00_c1.ars_00.ars_00_source_064 -> ars_00.fact_064\n- ars_00_c2.ars_00.ars_00_source_065 -> ars_00.fact_065\n- ars_00_c3.ars_00.ars_00_source_066 -> ars_00.fact_066\n- ars_00_c4.ars_00.ars_00_source_067 -> ars_00.fact_067\n- ars_00_c5.ars_00.ars_00_source_068 -> ars_00.fact_068\n- ars_00_c6.ars_00.ars_00_source_069 -> ars_00.fact_069\n- ars_00_c7.ars_00.ars_00_source_070 -> ars_00.fact_070\n- ars_00_c8.ars_00.ars_00_source_071 -> ars_00.fact_071\n- ars_00_c0.ars_00.ars_00_source_072 -> ars_00.fact_072\n- ars_00_c1.ars_00.ars_00_source_073 -> ars_00.fact_073\n- ars_00_c2.ars_00.ars_00_source_074 -> ars_00.fact_074\n- ars_00_c3.ars_00.ars_00_source_075 -> ars_00.fact_075\n- ars_00_c4.ars_00.ars_00_source_076 -> ars_00.fact_076\n- ars_00_c5.ars_00.ars_00_source_077 -> ars_00.fact_077\n- ars_00_c6.ars_00.ars_00_source_078 -> ars_00.fact_078\n- ars_00_c7.ars_00.ars_00_source_079 -> ars_00.fact_079\n- ars_00_c8.ars_00.ars_00_source_080 -> ars_00.fact_080\n- ars_00_c0.ars_00.ars_00_source_081 -> ars_00.fact_081\n- ars_00_c1.ars_00.ars_00_source_082 -> ars_00.fact_082\n- ars_00_c2.ars_00.ars_00_source_083 -> ars_00.fact_083\n- ars_00_c3.ars_00.ars_00_source_084 -> ars_00.fact_084\n- ars_00_c4.ars_00.ars_00_source_085 -> ars_00.fact_085\n- ars_00_c5.ars_00.ars_00_source_086 -> ars_00.fact_086\n- ars_00_c6.ars_00.ars_00_source_087 -> ars_00.fact_087\n- ars_00_c7.ars_00.ars_00_source_088 -> ars_00.fact_088\n- ars_00_c8.ars_00.ars_00_source_089 -> ars_00.fact_089\n- ars_00_c0.ars_00.ars_00_source_090 -> ars_00.fact_090\n- ars_00_c1.ars_00.ars_00_source_091 -> ars_00.fact_091\n- ars_00_c2.ars_00.ars_00_source_092 -> ars_00.fact_092\n- ars_00_c3.ars_00.ars_00_source_093 -> ars_00.fact_093\n- ars_00_c4.ars_00.ars_00_source_094 -> ars_00.fact_094\n- ars_00_c5.ars_00.ars_00_source_095 -> ars_00.fact_095\n- ars_00_c6.ars_00.ars_00_source_096 -> ars_00.fact_096\n- ars_00_c7.ars_00.ars_00_source_097 -> ars_00.fact_097\n- ars_00_c8.ars_00.ars_00_source_098 -> ars_00.fact_098\n- ars_00_c0.ars_00.ars_00_source_099 -> ars_00.fact_099\n- ars_00_c1.ars_00.ars_00_source_100 -> ars_00.fact_100\n- ars_00_c2.ars_00.ars_00_source_101 -> ars_00.fact_101\n- ars_00_c3.ars_00.ars_00_source_102 -> ars_00.fact_102\n- ars_00_c4.ars_00.ars_00_source_103 -> ars_00.fact_103\n- ars_00_c5.ars_00.ars_00_source_104 -> ars_00.fact_104\n- ars_00_c6.ars_00.ars_00_source_105 -> ars_00.fact_105\n- ars_00_c7.ars_00.ars_00_source_106 -> ars_00.fact_106\n- ars_00_c8.ars_00.ars_00_source_107 -> ars_00.fact_107\n- ars_00_c0.ars_00.ars_00_source_108 -> ars_00.fact_108\n- ars_00_c1.ars_00.ars_00_source_109 -> ars_00.fact_109\n- ars_00_c2.ars_00.ars_00_source_110 -> ars_00.fact_110\n- ars_00_c3.ars_00.ars_00_source_111 -> ars_00.fact_111\n- ars_00_c4.ars_00.ars_00_source_112 -> ars_00.fact_112\n- ars_00_c5.ars_00.ars_00_source_113 -> ars_00.fact_113\n- ars_00_c6.ars_00.ars_00_source_114 -> ars_00.fact_114\n- ars_00_c7.ars_00.ars_00_source_115 -> ars_00.fact_115\n- ars_00_c8.ars_00.ars_00_source_116 -> ars_00.fact_116\n- ars_00_c0.ars_00.ars_00_source_117 -> ars_00.fact_117\n- ars_00_c1.ars_00.ars_00_source_118 -> ars_00.fact_118\n- ars_00_c2.ars_00.ars_00_source_119 -> ars_00.fact_119\n- ars_00_c3.ars_00.ars_00_source_120 -> ars_00.fact_120\n- ars_00_c4.ars_00.ars_00_source_121 -> ars_00.fact_121\n- ars_00_c5.ars_00.ars_00_source_122 -> ars_00.fact_122\n- ars_00_c6.ars_00.ars_00_source_123 -> ars_00.fact_123\n- ars_00_c7.ars_00.ars_00_source_124 -> ars_00.fact_124\n- ars_00_c8.ars_00.ars_00_source_125 -> ars_00.fact_125\n- ars_00_c0.ars_00.ars_00_source_126 -> ars_00.fact_126\n- ars_00_c1.ars_00.ars_00_source_127 -> ars_00.fact_127\n- ars_00_c2.ars_00.ars_00_source_128 -> ars_00.fact_128\n- ars_00_c3.ars_00.ars_00_source_129 -> ars_00.fact_129\n- ars_00_c4.ars_00.ars_00_source_130 -> ars_00.fact_130\n- ars_00_c5.ars_00.ars_00_source_131 -> ars_00.fact_131\n- ars_00_c6.ars_00.ars_00_source_132 -> ars_00.fact_132\n- ars_00_c7.ars_00.ars_00_source_133 -> ars_00.fact_133\n- ars_00_c8.ars_00.ars_00_source_134 -> ars_00.fact_134\n- ars_00_c0.ars_00.ars_00_source_135 -> ars_00.fact_135\n- ars_00_c1.ars_00.ars_00_source_136 -> ars_00.fact_136\n- ars_00_c2.ars_00.ars_00_source_137 -> ars_00.fact_137\n- ars_00_c3.ars_00.ars_00_source_138 -> ars_00.fact_138\n- ars_00_c4.ars_00.ars_00_source_139 -> ars_00.fact_139\n- ars_00_c5.ars_00.ars_00_source_140 -> ars_00.fact_140\n- ars_00_c6.ars_00.ars_00_source_141 -> ars_00.fact_141\n- ars_00_c7.ars_00.ars_00_source_142 -> ars_00.fact_142\n- ars_00_c8.ars_00.ars_00_source_143 -> ars_00.fact_143\n- ars_00_c0.ars_00.ars_00_source_144 -> ars_00.fact_144\n- ars_00_c1.ars_00.ars_00_source_145 -> ars_00.fact_145\n- ars_00_c2.ars_00.ars_00_source_146 -> ars_00.fact_146\n- ars_00_c3.ars_00.ars_00_source_147 -> ars_00.fact_147\n- ars_00_c4.ars_00.ars_00_source_148 -> ars_00.fact_148\n- ars_00_c5.ars_00.ars_00_source_149 -> ars_00.fact_149\n- ars_00_c6.ars_00.ars_00_source_150 -> ars_00.fact_150\n- ars_00_c7.ars_00.ars_00_source_151 -> ars_00.fact_151\n- ars_00_c8.ars_00.ars_00_source_152 -> ars_00.fact_152\n- ars_00_c0.ars_00.ars_00_source_153 -> ars_00.fact_153\n- ars_00_c1.ars_00.ars_00_source_154 -> ars_00.fact_154\n- ars_00_c2.ars_00.ars_00_source_155 -> ars_00.fact_155\n- ars_00_c3.ars_00.ars_00_source_156 -> ars_00.fact_156\n- ars_00_c4.ars_00.ars_00_source_157 -> ars_00.fact_157\n- ars_00_c5.ars_00.ars_00_source_158 -> ars_00.fact_158\n- ars_00_c6.ars_00.ars_00_source_159 -> ars_00.fact_159\n- ars_00_c7.ars_00.ars_00_source_160 -> ars_00.fact_160\n- ars_00_c8.ars_00.ars_00_source_161 -> ars_00.fact_161\n- ars_00_c0.ars_00.ars_00_source_162 -> ars_00.fact_162\n- ars_00_c1.ars_00.ars_00_source_163 -> ars_00.fact_163\n- ars_00_c2.ars_00.ars_00_source_164 -> ars_00.fact_164\n- ars_00_c3.ars_00.ars_00_source_165 -> ars_00.fact_165\n- ars_00_c4.ars_00.ars_00_source_166 -> ars_00.fact_166\n- ars_00_c5.ars_00.ars_00_source_167 -> ars_00.fact_167\n- ars_00_c6.ars_00.ars_00_source_168 -> ars_00.fact_168\n- ars_00_c7.ars_00.ars_00_source_169 -> ars_00.fact_169\n- ars_00_c8.ars_00.ars_00_source_170 -> ars_00.fact_170\n- ars_00_c0.ars_00.ars_00_source_171 -> ars_00.fact_171\n- ars_00_c1.ars_00.ars_00_source_172 -> ars_00.fact_172\n- ars_00_c2.ars_00.ars_00_source_173 -> ars_00.fact_173\n- ars_00_c3.ars_00.ars_00_source_174 -> ars_00.fact_174\n- ars_00_c4.ars_00.ars_00_source_175 -> ars_00.fact_175\n- ars_00_c5.ars_00.ars_00_source_176 -> ars_00.fact_176\n- ars_00_c6.ars_00.ars_00_source_177 -> ars_00.fact_177\n- ars_00_c7.ars_00.ars_00_source_178 -> ars_00.fact_178\n- ars_00_c8.ars_00.ars_00_source_179 -> ars_00.fact_179\n- ars_00_c0.ars_00.ars_00_source_180 -> ars_00.fact_180\n- ars_00_c1.ars_00.ars_00_source_181 -> ars_00.fact_181\n- ars_00_c2.ars_00.ars_00_source_182 -> ars_00.fact_182\n- ars_00_c3.ars_00.ars_00_source_183 -> ars_00.fact_183\n- ars_00_c4.ars_00.ars_00_source_184 -> ars_00.fact_184\n- ars_00_c5.ars_00.ars_00_source_185 -> ars_00.fact_185\n- ars_00_c6.ars_00.ars_00_source_186 -> ars_00.fact_186\n- ars_00_c7.ars_00.ars_00_source_187 -> ars_00.fact_187\n- ars_00_c8.ars_00.ars_00_source_188 -> ars_00.fact_188\n- ars_00_c0.ars_00.ars_00_source_189 -> ars_00.fact_189\n- ars_00_c1.ars_00.ars_00_source_190 -> ars_00.fact_190\n- ars_00_c2.ars_00.ars_00_source_191 -> ars_00.fact_191\n- ars_00_c3.ars_00.ars_00_source_192 -> ars_00.fact_192\n- ars_00_c4.ars_00.ars_00_source_193 -> ars_00.fact_193\n- ars_00_c5.ars_00.ars_00_source_194 -> ars_00.fact_194\n- ars_00_c6.ars_00.ars_00_source_195 -> ars_00.fact_195\n- ars_00_c7.ars_00.ars_00_source_196 -> ars_00.fact_196\n- ars_00_c8.ars_00.ars_00_source_197 -> ars_00.fact_197\n- ars_00_c0.ars_00.ars_00_source_198 -> ars_00.fact_198\n- ars_00_c1.ars_00.ars_00_source_199 -> ars_00.fact_199\n- ars_00_c2.ars_00.ars_00_source_200 -> ars_00.fact_200\n- ars_00_c3.ars_00.ars_00_source_201 -> ars_00.fact_201\n- ars_00_c4.ars_00.ars_00_source_202 -> ars_00.fact_202\n- ars_00_c5.ars_00.ars_00_source_203 -> ars_00.fact_203\n- ars_00_c6.ars_00.ars_00_source_204 -> ars_00.fact_204\n- ars_00_c7.ars_00.ars_00_source_205 -> ars_00.fact_205\n- ars_00_c8.ars_00.ars_00_source_206 -> ars_00.fact_206\n- ars_00_c0.ars_00.ars_00_source_207 -> ars_00.fact_207\n- ars_00_c1.ars_00.ars_00_source_208 -> ars_00.fact_208\n- ars_00_c2.ars_00.ars_00_source_209 -> ars_00.fact_209\n- ars_00_c3.ars_00.ars_00_source_210 -> ars_00.fact_210\n- ars_00_c4.ars_00.ars_00_source_211 -> ars_00.fact_211\n- ars_00_c5.ars_00.ars_00_source_212 -> ars_00.fact_212\n- ars_00_c6.ars_00.ars_00_source_213 -> ars_00.fact_213\n- ars_00_c7.ars_00.ars_00_source_214 -> ars_00.fact_214\n- ars_00_c8.ars_00.ars_00_source_215 -> ars_00.fact_215\n- ars_00_c0.ars_00.ars_00_source_216 -> ars_00.fact_216\n- ars_00_c1.ars_00.ars_00_source_217 -> ars_00.fact_217\n- ars_00_c2.ars_00.ars_00_source_218 -> ars_00.fact_218\n- ars_00_c3.ars_00.ars_00_source_219 -> ars_00.fact_219\n- ars_00_c4.ars_00.ars_00_source_220 -> ars_00.fact_220\n- ars_00_c5.ars_00.ars_00_source_221 -> ars_00.fact_221\n- ars_00_c6.ars_00.ars_00_source_222 -> ars_00.fact_222\n- ars_00_c7.ars_00.ars_00_source_223 -> ars_00.fact_223\n- ars_00_c8.ars_00.ars_00_source_224 -> ars_00.fact_224\n- ars_00_c0.ars_00.ars_00_source_225 -> ars_00.fact_225\n- ars_00_c1.ars_00.ars_00_source_226 -> ars_00.fact_226\n- ars_00_c2.ars_00.ars_00_source_227 -> ars_00.fact_227\n- ars_00_c3.ars_00.ars_00_source_228 -> ars_00.fact_228\n- ars_00_c4.ars_00.ars_00_source_229 -> ars_00.fact_229\n- ars_00_c5.ars_00.ars_00_source_230 -> ars_00.fact_230\n- ars_00_c6.ars_00.ars_00_source_231 -> ars_00.fact_231\n- ars_00_c7.ars_00.ars_00_source_232 -> ars_00.fact_232\n- ars_00_c8.ars_00.ars_00_source_233 -> ars_00.fact_233\n- ars_00_c0.ars_00.ars_00_source_234 -> ars_00.fact_234\n- ars_00_c1.ars_00.ars_00_source_235 -> ars_00.fact_235\n- ars_00_c2.ars_00.ars_00_source_236 -> ars_00.fact_236\n- ars_00_c3.ars_00.ars_00_source_237 -> ars_00.fact_237\n- ars_00_c4.ars_00.ars_00_source_238 -> ars_00.fact_238\n- ars_00_c5.ars_00.ars_00_source_239 -> ars_00.fact_239\n- ars_00_c6.ars_00.ars_00_source_240 -> ars_00.fact_240\n- ars_00_c7.ars_00.ars_00_source_241 -> ars_00.fact_241\n- ars_00_c8.ars_00.ars_00_source_242 -> ars_00.fact_242\n- ars_00_c0.ars_00.ars_00_source_243 -> ars_00.fact_243\n- ars_00_c1.ars_00.ars_00_source_244 -> ars_00.fact_244\n- ars_00_c2.ars_00.ars_00_source_245 -> ars_00.fact_245\n- ars_00_c3.ars_00.ars_00_source_246 -> ars_00.fact_246\n- ars_00_c4.ars_00.ars_00_source_247 -> ars_00.fact_247\n- ars_00_c5.ars_00.ars_00_source_248 -> ars_00.fact_248\n- ars_00_c6.ars_00.ars_00_source_249 -> ars_00.fact_249\n- ars_00_c7.ars_00.ars_00_source_250 -> ars_00.fact_250\n- ars_00_c8.ars_00.ars_00_source_251 -> ars_00.fact_251\n- ars_00_c0.ars_00.ars_00_source_252 -> ars_00.fact_252\n- ars_00_c1.ars_00.ars_00_source_253 -> ars_00.fact_253\n- ars_00_c2.ars_00.ars_00_source_254 -> ars_00.fact_254\n- ars_00_c3.ars_00.ars_00_source_255 -> ars_00.fact_255\n- ars_00_c4.ars_00.ars_00_source_256 -> ars_00.fact_256\n- ars_00_c5.ars_00.ars_00_source_257 -> ars_00.fact_257\n- ars_00_c6.ars_00.ars_00_source_258 -> ars_00.fact_258\n- ars_00_c7.ars_00.ars_00_source_259 -> ars_00.fact_259\n- ars_00_c8.ars_00.ars_00_source_260 -> ars_00.fact_260\n- ars_00_c0.ars_00.ars_00_source_261 -> ars_00.fact_261\n- ars_00_c1.ars_00.ars_00_source_262 -> ars_00.fact_262\n- ars_00_c2.ars_00.ars_00_source_263 -> ars_00.fact_263\n- ars_00_c3.ars_00.ars_00_source_264 -> ars_00.fact_264\n- ars_00_c4.ars_00.ars_00_source_265 -> ars_00.fact_265\n- ars_00_c5.ars_00.ars_00_source_266 -> ars_00.fact_266\n- ars_00_c6.ars_00.ars_00_source_267 -> ars_00.fact_267\n- ars_00_c7.ars_00.ars_00_source_268 -> ars_00.fact_268\n- ars_00_c8.ars_00.ars_00_source_269 -> ars_00.fact_269\n- ars_00_c0.ars_00.ars_00_source_270 -> ars_00.fact_270\n- ars_00_c1.ars_00.ars_00_source_271 -> ars_00.fact_271\n- ars_00_c2.ars_00.ars_00_source_272 -> ars_00.fact_272\n- ars_00_c3.ars_00.ars_00_source_273 -> ars_00.fact_273\n- ars_00_c4.ars_00.ars_00_source_274 -> ars_00.fact_274\n- ars_00_c5.ars_00.ars_00_source_275 -> ars_00.fact_275\n- ars_00_c6.ars_00.ars_00_source_276 -> ars_00.fact_276\n- ars_00_c7.ars_00.ars_00_source_277 -> ars_00.fact_277\n- ars_00_c8.ars_00.ars_00_source_278 -> ars_00.fact_278\n- ars_00_c0.ars_00.ars_00_source_279 -> ars_00.fact_279\n- ars_00_c1.ars_00.ars_00_source_280 -> ars_00.fact_280\n- ars_00_c2.ars_00.ars_00_source_281 -> ars_00.fact_281\n- ars_00_c3.ars_00.ars_00_source_282 -> ars_00.fact_282\n- ars_00_c4.ars_00.ars_00_source_283 -> ars_00.fact_283\n- ars_00_c5.ars_00.ars_00_source_284 -> ars_00.fact_284\n- ars_00_c6.ars_00.ars_00_source_285 -> ars_00.fact_285\n- ars_00_c7.ars_00.ars_00_source_286 -> ars_00.fact_286\n- ars_00_c8.ars_00.ars_00_source_287 -> ars_00.fact_287\n- ars_00_c0.ars_00.ars_00_source_288 -> ars_00.fact_288\n- ars_00_c1.ars_00.ars_00_source_289 -> ars_00.fact_289\n- ars_00_c2.ars_00.ars_00_source_290 -> ars_00.fact_290\n- ars_00_c3.ars_00.ars_00_source_291 -> ars_00.fact_291\n- ars_00_c4.ars_00.ars_00_source_292 -> ars_00.fact_292\n- ars_00_c5.ars_00.ars_00_source_293 -> ars_00.fact_293\n- ars_00_c6.ars_00.ars_00_source_294 -> ars_00.fact_294\n- ars_00_c7.ars_00.ars_00_source_295 -> ars_00.fact_295\n- ars_00_c8.ars_00.ars_00_source_296 -> ars_00.fact_296\n- ars_00_c0.ars_00.ars_00_source_297 -> ars_00.fact_297\n- ars_00_c1.ars_00.ars_00_source_298 -> ars_00.fact_298\n- ars_00_c2.ars_00.ars_00_source_299 -> ars_00.fact_299\n- ars_00_c3.ars_00.ars_00_source_300 -> ars_00.fact_300\n- ars_00_c4.ars_00.ars_00_source_301 -> ars_00.fact_301\n- ars_00_c5.ars_00.ars_00_source_302 -> ars_00.fact_302\n- ars_00_c6.ars_00.ars_00_source_303 -> ars_00.fact_303\n- ars_00_c7.ars_00.ars_00_source_304 -> ars_00.fact_304\n- ars_00_c8.ars_00.ars_00_source_305 -> ars_00.fact_305\n- ars_00_c0.ars_00.ars_00_source_306 -> ars_00.fact_306\n- ars_00_c1.ars_00.ars_00_source_307 -> ars_00.fact_307\n- ars_00_c2.ars_00.ars_00_source_308 -> ars_00.fact_308\n- ars_00_c3.ars_00.ars_00_source_309 -> ars_00.fact_309\n- ars_00_c4.ars_00.ars_00_source_310 -> ars_00.fact_310\n- ars_00_c5.ars_00.ars_00_source_311 -> ars_00.fact_311\n- ars_00_c6.ars_00.ars_00_source_312 -> ars_00.fact_312\n- ars_00_c7.ars_00.ars_00_source_313 -> ars_00.fact_313\n- ars_00_c8.ars_00.ars_00_source_314 -> ars_00.fact_314\n- ars_00_c0.ars_00.ars_00_source_315 -> ars_00.fact_315\n- ars_00_c1.ars_00.ars_00_source_316 -> ars_00.fact_316\n- ars_00_c2.ars_00.ars_00_source_317 -> ars_00.fact_317\n- ars_00_c3.ars_00.ars_00_source_318 -> ars_00.fact_318\n- ars_00_c4.ars_00.ars_00_source_319 -> ars_00.fact_319\n- ars_00_c5.ars_00.ars_00_source_320 -> ars_00.fact_320\n- ars_00_c6.ars_00.ars_00_source_321 -> ars_00.fact_321\n- ars_00_c7.ars_00.ars_00_source_322 -> ars_00.fact_322\n- ars_00_c8.ars_00.ars_00_source_323 -> ars_00.fact_323\n- ars_00_c0.ars_00.ars_00_source_324 -> ars_00.fact_324\n- ars_00_c1.ars_00.ars_00_source_325 -> ars_00.fact_325\n- ars_00_c2.ars_00.ars_00_source_326 -> ars_00.fact_326\n- ars_00_c3.ars_00.ars_00_source_327 -> ars_00.fact_327\n- ars_00_c4.ars_00.ars_00_source_328 -> ars_00.fact_328\n- ars_00_c5.ars_00.ars_00_source_329 -> ars_00.fact_329\n- ars_00_c6.ars_00.ars_00_source_330 -> ars_00.fact_330\n- ars_00_c7.ars_00.ars_00_source_331 -> ars_00.fact_331\n- ars_00_c8.ars_00.ars_00_source_332 -> ars_00.fact_332\n- ars_00_c0.ars_00.ars_00_source_333 -> ars_00.fact_333\n- ars_00_c1.ars_00.ars_00_source_334 -> ars_00.fact_334\n- ars_00_c2.ars_00.ars_00_source_335 -> ars_00.fact_335\n- ars_00_c3.ars_00.ars_00_source_336 -> ars_00.fact_336\n- ars_00_c4.ars_00.ars_00_source_337 -> ars_00.fact_337\n- ars_00_c5.ars_00.ars_00_source_338 -> ars_00.fact_338\n- ars_00_c6.ars_00.ars_00_source_339 -> ars_00.fact_339\n- ars_00_c7.ars_00.ars_00_source_340 -> ars_00.fact_340\n- ars_00_c8.ars_00.ars_00_source_341 -> ars_00.fact_341\n- ars_00_c0.ars_00.ars_00_source_342 -> ars_00.fact_342\n- ars_00_c1.ars_00.ars_00_source_343 -> ars_00.fact_343\n- ars_00_c2.ars_00.ars_00_source_344 -> ars_00.fact_344\n- ars_00_c3.ars_00.ars_00_source_345 -> ars_00.fact_345\n- ars_00_c4.ars_00.ars_00_source_346 -> ars_00.fact_346\n- ars_00_c5.ars_00.ars_00_source_347 -> ars_00.fact_347\n- ars_00_c6.ars_00.ars_00_source_348 -> ars_00.fact_348\n- ars_00_c7.ars_00.ars_00_source_349 -> ars_00.fact_349\n\n## Query Examples\n\n- Use the visible catalog and `lucy_read_source` to inspect the source before querying."
+        },
+        "jsonrpc": "2.0",
+        "id": 2
+      }
+    },
+    {
+      "label": "unrestricted-initialize-initialized",
+      "method": "notifications/initialized",
+      "status": 202
+    },
+    {
+      "label": "unrestricted-physical-four-rows",
+      "method": "tools/call",
+      "status": 200,
+      "ms": 4588.886291999999,
+      "body": {
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"answer_verifiability\":{\"schema_version\":\"1\",\"sources\":[{\"connectionId\":\"ars_00_c0\",\"schema\":\"ars_00\",\"sourceName\":\"ars_00_source_000\",\"table\":\"ars_00.fact_000\",\"display\":\"ars_00_c0.ars_00.ars_00_source_000\"}],\"caliber\":{\"measures\":[\"ars_00_source_000.row_count\"],\"dimensions\":[],\"segments\":[],\"orderBy\":[],\"userFilters\":[],\"systemConstraints\":[],\"caliberBinding\":{\"status\":\"none\"},\"omissions\":{}},\"cutoff\":{\"status\":\"not_checked\",\"note\":\"数据截止期未校验\"},\"carriers\":{\"structuredContent\":\"projected\"}},\"connectionId\":\"ars_00_c0\",\"dialect\":\"mysql\",\"headers\":[\"row_count\"],\"rows\":[[4]],\"totalRows\":1,\"sql\":\"SELECT COUNT(DISTINCT ars_00_source_000.id) AS row_count FROM ars_00.fact_000 AS ars_00_source_000 LIMIT 100\"}"
+            }
+          ],
+          "structuredContent": {
+            "answer_verifiability": {
+              "schema_version": "1",
+              "sources": [
+                {
+                  "connectionId": "ars_00_c0",
+                  "schema": "ars_00",
+                  "sourceName": "ars_00_source_000",
+                  "table": "ars_00.fact_000",
+                  "display": "ars_00_c0.ars_00.ars_00_source_000"
+                }
+              ],
+              "caliber": {
+                "measures": [
+                  "ars_00_source_000.row_count"
+                ],
+                "dimensions": [],
+                "segments": [],
+                "orderBy": [],
+                "userFilters": [],
+                "systemConstraints": [],
+                "caliberBinding": {
+                  "status": "none"
+                },
+                "omissions": {}
+              },
+              "cutoff": {
+                "status": "not_checked",
+                "note": "数据截止期未校验"
+              },
+              "carriers": {
+                "structuredContent": "projected"
+              }
+            },
+            "connectionId": "ars_00_c0",
+            "dialect": "mysql",
+            "headers": [
+              "row_count"
+            ],
+            "rows": [
+              [
+                4
+              ]
+            ],
+            "totalRows": 1,
+            "sql": "SELECT COUNT(DISTINCT ars_00_source_000.id) AS row_count FROM ars_00.fact_000 AS ars_00_source_000 LIMIT 100"
+          },
+          "_meta": {
+            "lucy": {
+              "contract": "lucy-r1-controlled-data-service",
+              "tool": "lucy_query",
+              "upstreamTool": "sl_query",
+              "sources": [
+                {
+                  "connectionId": "ars_00_c0",
+                  "schema": "ars_00",
+                  "sourceName": "ars_00_source_000",
+                  "physicalTable": "ars_00.fact_000",
+                  "extractionMethod": "field_ref",
+                  "confidence": "high"
+                }
+              ],
+              "guardrails": {
+                "rawSqlAllowed": false,
+                "writeOperationsAllowed": false,
+                "defaultLimit": 100,
+                "maxLimit": 1000,
+                "maxConcurrentQueries": 4,
+                "effectiveLimit": 100
+              },
+              "result": {
+                "rowCount": 1,
+                "columnCount": 1,
+                "truncated": false
+              },
+              "provenance": {
+                "connectionId": "ars_00_c0",
+                "sourceName": "ars_00_source_000",
+                "measures": [
+                  "ars_00_source_000.row_count"
+                ],
+                "dimensions": null,
+                "filters": null,
+                "segments": null,
+                "orderBy": null,
+                "sourceResolution": "acl_source_map",
+                "freshness": {
+                  "status": "not_checked",
+                  "tool": "lucy_freshness",
+                  "note": "Call lucy_freshness for metadata freshness before presenting freshness-sensitive answers."
+                },
+                "truncation": "unknown; upstream did not expose a truncated flag"
+              },
+              "answer_verifiability": {
+                "schema_version": "1",
+                "sources": [
+                  {
+                    "connectionId": "ars_00_c0",
+                    "schema": "ars_00",
+                    "sourceName": "ars_00_source_000",
+                    "table": "ars_00.fact_000",
+                    "display": "ars_00_c0.ars_00.ars_00_source_000"
+                  }
+                ],
+                "caliber": {
+                  "measures": [
+                    "ars_00_source_000.row_count"
+                  ],
+                  "dimensions": [],
+                  "segments": [],
+                  "orderBy": [],
+                  "userFilters": [],
+                  "systemConstraints": [],
+                  "caliberBinding": {
+                    "status": "none"
+                  },
+                  "omissions": {}
+                },
+                "cutoff": {
+                  "status": "not_checked",
+                  "note": "数据截止期未校验"
+                },
+                "carriers": {
+                  "structuredContent": "projected"
+                }
+              }
+            }
+          }
+        },
+        "jsonrpc": "2.0",
+        "id": 3
+      }
+    },
+    {
+      "label": "outside-source",
+      "method": "tools/call",
+      "status": 200,
+      "ms": 419.3125409999993,
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 4,
+        "result": {
+          "isError": true,
+          "content": [
+            {
+              "type": "text",
+              "text": "Access denied: table_forbidden:ars_00.fact_600 可用连接：ars_00_c0、ars_00_c1、ars_00_c2、ars_00_c3、ars_00_c4、ars_00_c5、ars_00_c6、ars_00_c7、ars_00_c8。 可用来源：ars_00_source_000、ars_00_source_001、ars_00_source_002、ars_00_source_003、ars_00_source_004、ars_00_source_005、ars_00_source_006、ars_00_source_007、ars_00_source_008、ars_00_source_009、ars_00_source_010、ars_00_source_011、ars_00_source_012、ars_00_source_013、ars_00_source_014、ars_00_source_015、ars_00_source_016、ars_00_source_017、ars_00_source_018、ars_00_source_019、ars_00_source_020、ars_00_source_021、ars_00_source_022、ars_00_source_023、ars_00_source_024、ars_00_source_025、ars_00_source_026、ars_00_source_027、ars_00_source_028、ars_00_source_029。 请改用当前角色已授权的来源：ars_00_source_000。"
+            }
+          ],
+          "data": {
+            "reason": "table_forbidden:ars_00.fact_600",
+            "failureDimension": "权限拒绝",
+            "connections": [
+              "ars_00_c0",
+              "ars_00_c1",
+              "ars_00_c2",
+              "ars_00_c3",
+              "ars_00_c4",
+              "ars_00_c5",
+              "ars_00_c6",
+              "ars_00_c7",
+              "ars_00_c8"
+            ],
+            "sources": [
+              "ars_00_source_000",
+              "ars_00_source_001",
+              "ars_00_source_002",
+              "ars_00_source_003",
+              "ars_00_source_004",
+              "ars_00_source_005",
+              "ars_00_source_006",
+              "ars_00_source_007",
+              "ars_00_source_008",
+              "ars_00_source_009",
+              "ars_00_source_010",
+              "ars_00_source_011",
+              "ars_00_source_012",
+              "ars_00_source_013",
+              "ars_00_source_014",
+              "ars_00_source_015",
+              "ars_00_source_016",
+              "ars_00_source_017",
+              "ars_00_source_018",
+              "ars_00_source_019",
+              "ars_00_source_020",
+              "ars_00_source_021",
+              "ars_00_source_022",
+              "ars_00_source_023",
+              "ars_00_source_024",
+              "ars_00_source_025",
+              "ars_00_source_026",
+              "ars_00_source_027",
+              "ars_00_source_028",
+              "ars_00_source_029"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "label": "auth-expired",
+      "method": "initialize",
+      "status": 401,
+      "ms": 4.803291000000172,
+      "body": {
+        "jsonrpc": "2.0",
+        "id": null,
+        "error": {
+          "code": -32001,
+          "message": "Unauthorized"
+        }
+      }
+    },
+    {
+      "label": "auth-disabled",
+      "method": "initialize",
+      "status": 403,
+      "ms": 1.8381250000020373,
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 6,
+        "error": {
+          "code": -32003,
+          "message": "Access denied: agent_disabled"
+        }
+      }
+    },
+    {
+      "label": "auth-revoked",
+      "method": "initialize",
+      "status": 401,
+      "ms": 3.068834000001516,
+      "body": {
+        "jsonrpc": "2.0",
+        "id": null,
+        "error": {
+          "code": -32001,
+          "message": "Unauthorized"
+        }
+      }
+    }
+  ],
+  "browserTimings": [
+    {
+      "kind": "roster-navigation",
+      "primaryReadyMs": 301.3999999910593,
+      "visible": "visible",
+      "focus": true
+    },
+    {
+      "kind": "roster-navigation",
+      "primaryReadyMs": 625,
+      "visible": "visible",
+      "focus": true
+    },
+    {
+      "kind": "single-drawer",
+      "id": "ars_00_a16",
+      "range": "7d",
+      "drawerReadyMs": 1358.5,
+      "visible": "visible",
+      "focus": true
+    },
+    {
+      "kind": "roster-navigation",
+      "primaryReadyMs": 229.30000001192093,
+      "visible": "visible",
+      "focus": true
+    },
+    {
+      "kind": "roster-navigation",
+      "primaryReadyMs": 231.29999999701977,
+      "visible": "visible",
+      "focus": true
+    },
+    {
+      "kind": "roster-navigation",
+      "primaryReadyMs": 146.20000000298023,
+      "visible": "visible",
+      "focus": true
+    }
+  ],
+  "failures": [],
+  "headed": true,
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "browser": "157.0.8103.79"
+}

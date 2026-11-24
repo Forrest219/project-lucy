@@ -1,0 +1,8 @@
+
+> project-lucy-eval@0.30.0 lint:spec-docs
+> node scripts/lint-spec-docs.mjs
+
+Spec/Plan doc lint passed (564 files scanned, 1035 baseline exemptions).
+
+STALE baseline entries (1) —— 这些条目已不再违规，可从基线移除：
+  docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md [metadata]

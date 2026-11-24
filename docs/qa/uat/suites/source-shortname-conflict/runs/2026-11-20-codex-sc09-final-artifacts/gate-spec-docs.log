@@ -1,0 +1,15 @@
+
+> project-lucy-eval@0.30.0 lint:spec-docs
+> node scripts/lint-spec-docs.mjs
+
+Spec/Plan doc lint passed (552 files scanned, 1035 baseline exemptions, 5 warnings on untracked files).
+
+WARN — 以下文件尚未被 git 跟踪（未 git add），形态违规不阻塞本工作树；一旦 git add 或提交即转为阻塞项：
+  docs/plans/lucy-20261120-page-dom-scale-assessment-plan.md [index] Plan 未被 docs/plans/README.md 索引登记
+  docs/plans/lucy-20261120-page-dom-scale-assessment-plan.md [plan-parts] Plan 缺少「开工前置」类小节
+  docs/plans/lucy-20261120-page-dom-scale-assessment-plan.md [plan-parts] Plan 缺少「验收」类小节
+  docs/plans/lucy-20261120-page-dom-scale-assessment-plan.md [plan-parts] Plan 缺少「完成定义」类小节
+  docs/plans/lucy-20261120-page-dom-scale-assessment-plan.md [metadata] Plan 头部元数据缺少「状态」「授权边界」或「验收」
+
+STALE baseline entries (1) —— 这些条目已不再违规，可从基线移除：
+  docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md [metadata]

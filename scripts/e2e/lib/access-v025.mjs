@@ -298,13 +298,12 @@ const SCENARIOS = Object.freeze({
   },
   "ROW25-V18": {
     group: "audit-and-fail-closed",
-    title: "上游强制谓词未证明",
-    expectation: "取数仍按 row_policy_upstream_unproven 拒绝；不得因预览或模板而放宽。",
-    refusal: { reasonCode: "row_policy_upstream_unproven", effect: "取数被拒绝" },
+    title: "行权限自动强制执行",
+    expectation: "默认配置下执行查询且只返回授权域；预览不放宽策略。",
     steps: [
-      "在强制谓词未被上游证明成立的状态下发起取数。",
-      "断言取数被拒绝，原因码 row_policy_upstream_unproven。",
-      "断言预览成功不改变该判定：预览或模板引用都不得放宽上游未证明的拒绝。"
+      "不设置人工证明变量，在受保护源上发起取数。",
+      "断言查询成功且结果行集等于授权域。",
+      "断言预览不改变策略，不需要修改部署环境。"
     ],
     localCoverage: ["webui/server/__tests__/mcp-proxy-row-policy-by01-by18.test.ts"]
   },

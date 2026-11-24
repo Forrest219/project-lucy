@@ -1,0 +1,8 @@
+{
+  "files": {
+    "scripts/uat/core-availability-1883-soak.py": "38a37d780aabb62d047e19484d9da97651fa233f5708bbcb04262733ac9095b4",
+    "scripts/uat/readyz-diagnostic-repro.py": "182c84359b2ca98f33c0e171e7bed00f8fdceb2f8af7ba4af4f11007e97eca2a",
+    "scripts/uat/verify-begin-zero-binding.py": "291e09aa6cc9789f3e77dcd4dac2761deb293d525befded16ccb271d6be84d96"
+  },
+  "imageId": "sha256:ae0eb26a73d9331f45e4276f9839c442f9c8ada0ff2701366c7c2b099b8f7a4f"
+}

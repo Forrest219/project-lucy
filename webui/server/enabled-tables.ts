@@ -51,10 +51,15 @@ export function enabledTablesBlock(indent: number, enabledTables: string[]): str
   return [`${pad}enabled_tables:`, ...enabledTables.map((table) => `${pad}  - ${table}`)];
 }
 
-export function enabledTableError(code: string, message: string): Error & { statusCode: number; code: string } {
-  const err = new Error(message) as Error & { statusCode: number; code: string };
+export function enabledTableError(
+  code: string,
+  message: string,
+  detail?: unknown
+): Error & { statusCode: number; code: string; detail?: unknown } {
+  const err = new Error(message) as Error & { statusCode: number; code: string; detail?: unknown };
   err.statusCode = code === "CONNECTION_NOT_FOUND" ? 404 : 400;
   err.code = code;
+  if (detail !== undefined) err.detail = detail;
   return err;
 }
 

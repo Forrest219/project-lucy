@@ -5,6 +5,7 @@ import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { redactAuditSummary } from "../security/redaction.js";
 import { changeTypeLabel } from "../../src/lib/configAuditLabels.js";
+import { stubAuditStatement } from "./helpers/audit-db-stub.js";
 
 const auditControl = vi.hoisted(() => ({
   revokedThrow: false,
@@ -41,10 +42,17 @@ vi.mock("../admin/audit.js", () => ({
             auditControl.revoked.some((row) => row.token_hash === hash) ? { hit: 1 } : undefined
         };
       }
-      if (sql.includes("FROM access_log")) {
-        return { get: () => ({ cnt: auditControl.calls7d }) };
+      // agentCallsLast7d only — do NOT blanket every FROM access_log query.
+      // A truthy { cnt } on SELECT user_id … LIMIT 1 makes scanFullOnce() loop
+      // forever, and VITEST awaitInitial then hangs app.ready() until timeout.
+      if (sql.includes("COUNT(*)") && sql.includes("FROM access_log")) {
+        return {
+          get: () => ({ cnt: auditControl.calls7d }),
+          all: () => [],
+          run: () => ({ lastInsertRowid: 1 })
+        };
       }
-      return { get: () => undefined, all: () => [], run: () => ({ lastInsertRowid: 1 }) };
+      return stubAuditStatement(sql);
     },
     exec: vi.fn(),
     pragma: vi.fn(),

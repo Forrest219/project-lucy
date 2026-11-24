@@ -1,0 +1,212 @@
+{
+  "base": "http://127.0.0.1:55176",
+  "startedAt": "2026-11-17T14:32:38.808Z",
+  "surfaces": [
+    {
+      "id": "audit-export-current",
+      "case": "UAT-BTN-05",
+      "label": "审计：导出",
+      "successShown": false,
+      "failureShown": false,
+      "toasts": [],
+      "verdict": "REAL",
+      "filename": "audit-turns-20261117-223239-000003.csv",
+      "size": 3382,
+      "sha256_16": "51ad3ffc62c106a7"
+    },
+    {
+      "id": "audit-export-pack",
+      "case": "UAT-BTN-06",
+      "label": "审计：导出审计证据包",
+      "successShown": false,
+      "failureShown": false,
+      "toasts": [],
+      "verdict": "REAL",
+      "filename": "audit-pack-20261117T143240Z-0c0230f9.zip",
+      "size": 33082,
+      "sha256_16": "ccac747ec7701af9"
+    },
+    {
+      "id": "reconciliation-export",
+      "case": "UAT-BTN-07",
+      "label": "审计对账：导出对账证据包",
+      "successShown": false,
+      "failureShown": false,
+      "toasts": [],
+      "verdict": "DOWNLOAD-FAILED",
+      "filename": "export.json",
+      "failure": "canceled"
+    },
+    {
+      "id": "config-audit-export",
+      "case": "UAT-BTN-08",
+      "label": "配置审计：导出 CSV",
+      "successShown": false,
+      "failureShown": false,
+      "toasts": [],
+      "verdict": "REAL",
+      "filename": "config-audit-20261117-223242.csv",
+      "size": 2819,
+      "sha256_16": "c5a4e028673be107"
+    },
+    {
+      "id": "publish-history-export",
+      "case": "UAT-BTN-09",
+      "label": "发布记录：导出 CSV",
+      "successShown": false,
+      "failureShown": false,
+      "toasts": [],
+      "verdict": "REAL",
+      "filename": "publish-history-20261117-223244.csv",
+      "size": 105,
+      "sha256_16": "9722c58a46515595"
+    },
+    {
+      "id": "wiki-download",
+      "case": "UAT-BTN-01",
+      "label": "Wiki：下载已保存版本",
+      "successShown": false,
+      "failureShown": false,
+      "toasts": [],
+      "verdict": "REAL",
+      "filename": "demo-superstore.md",
+      "size": 392,
+      "sha256_16": "9962c0f23b9eca07"
+    },
+    {
+      "id": "table-export-yaml",
+      "case": "UAT-BTN-02",
+      "label": "表编辑器：导出 YAML",
+      "successShown": false,
+      "failureShown": false,
+      "toasts": [],
+      "verdict": "REAL",
+      "filename": "demo-mysql-dataforai-superstore_orders.yaml",
+      "size": 5290,
+      "sha256_16": "bf17bd4019e2db2f"
+    },
+    {
+      "id": "eval-suite-download",
+      "case": "UAT-BTN-03",
+      "label": "评测用例：下载 Eval YAML",
+      "successShown": true,
+      "failureShown": false,
+      "toasts": [
+        "Eval YAML 已准备，可在本地 runner 中运行"
+      ],
+      "verdict": "REAL",
+      "filename": "demo_superstore-eval-suite.yaml",
+      "size": 6769,
+      "sha256_16": "1b218b47afa4c21a"
+    },
+    {
+      "id": "catalog-manifest-download",
+      "case": "UAT-BTN-04",
+      "label": "连接：下载 Manifest",
+      "successShown": true,
+      "failureShown": false,
+      "toasts": [
+        "Schema Manifest 已开始下载"
+      ],
+      "verdict": "REAL",
+      "filename": "dataforai.yaml",
+      "size": 7466,
+      "sha256_16": "0ec1ce02071177d4"
+    },
+    {
+      "id": "catalog-batch-package",
+      "case": "UAT-BTN-10",
+      "label": "目录：批量下载语义维护包",
+      "successShown": false,
+      "failureShown": false,
+      "toasts": [],
+      "verdict": "REAL",
+      "filename": "lucy-semantic-asset-exp_20261117_143320_900_7d264f0b.zip",
+      "size": 11587,
+      "sha256_16": "7849878e696627af"
+    },
+    {
+      "id": "catalog-batch-report-csv",
+      "case": null,
+      "label": "目录：批量校验后下载 CSV 报告",
+      "verdict": "NOT-RUN",
+      "reason": "需要先运行批量校验任务得到报告链接；该任务会占用校验队列，本轮不执行"
+    },
+    {
+      "id": "authoring-howto-download",
+      "case": null,
+      "label": "引导：下载编写说明",
+      "verdict": "NOT-RUN",
+      "reason": "引导流程已完成的实例不再渲染该入口；需要全新实例才能点到"
+    },
+    {
+      "id": "eval-run-artifact-json",
+      "case": null,
+      "label": "评测运行详情：下载 JSON",
+      "verdict": "NOT-RUN",
+      "reason": "Demo 实例没有评测运行记录，页面不可达"
+    },
+    {
+      "id": "eval-run-artifact-md",
+      "case": null,
+      "label": "评测运行详情：下载 MD",
+      "verdict": "NOT-RUN",
+      "reason": "Demo 实例没有评测运行记录，页面不可达"
+    },
+    {
+      "id": "restore-package-export",
+      "case": null,
+      "label": "发布记录：导出恢复包",
+      "verdict": "NOT-RUN",
+      "reason": "Demo 实例没有已发布版本，恢复抽屉不可达"
+    },
+    {
+      "id": "semantic-asset-export",
+      "case": null,
+      "label": "语义资产导出按钮（组件）",
+      "verdict": "NOT-RUN",
+      "reason": "组件已导出但没有任何页面挂载，用户没有入口"
+    }
+  ],
+  "save": [
+    {
+      "id": "UAT-BTN-S01",
+      "label": "新建 Token：真实签发成功",
+      "http": 200,
+      "runtimeAck": true,
+      "plaintextShown": true,
+      "unconfirmedWarningShown": false,
+      "verdict": "REAL"
+    },
+    {
+      "id": "UAT-BTN-S02",
+      "label": "新建 Token：同标签再次签发（真实 4xx）",
+      "http": 409,
+      "serverCode": "TOKEN_LABEL_TAKEN",
+      "successScreenShown": false,
+      "errorShown": true,
+      "toasts": [
+        "Token label 'uat-btn-probe-1794926001383' already exists for this agent"
+      ],
+      "verdict": "REAL"
+    }
+  ],
+  "r0": {
+    "login": 200,
+    "verdict": "PASS"
+  },
+  "cleanup": {
+    "revoked": true,
+    "http": 200,
+    "label": "uat-btn-probe-1794926001383"
+  },
+  "summary": {
+    "REAL": 11,
+    "DOWNLOAD-FAILED": 1,
+    "NOT-RUN": 6
+  },
+  "defects": [
+    "reconciliation-export:DOWNLOAD-FAILED"
+  ],
+  "finishedAt": "2026-11-17T14:33:24.260Z"
+}

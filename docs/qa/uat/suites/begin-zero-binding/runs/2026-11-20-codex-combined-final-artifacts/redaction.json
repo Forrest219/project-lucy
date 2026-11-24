@@ -1,0 +1,5 @@
+{
+  "authCredentials": "runner-generated isolated secrets already scrubbed; private directories destroyed",
+  "additionalContinuationCredentialsRedacted": 2,
+  "assertions": "raw success, reasons, scopes, counts and image hashes retained"
+}

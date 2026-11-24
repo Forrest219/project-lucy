@@ -1,0 +1,19 @@
+Reading additional input from stdin...
+2026-11-20T05:22:39.293597Z  WARN codex_core_plugins::loader: failed to parse plugin MCP server plugin=/Users/zhangxingchen/.codex/plugins/cache/kingsoft-cloud-bi/dataops-studio/0.2.10 server="Dataops_Control" path=/Users/zhangxingchen/.codex/plugins/cache/kingsoft-cloud-bi/dataops-studio/0.2.10/mcp.json error="unknown field `extensions`, expected `url` or `headers`"
+2026-11-20T05:22:39.336529Z  WARN codex_skills::interface: ignoring interface.icon_small: icon path with '..' must resolve under plugin assets/
+2026-11-20T05:22:39.336541Z  WARN codex_skills::interface: ignoring interface.icon_large: icon path with '..' must resolve under plugin assets/
+2026-11-20T05:22:39.629012Z  WARN codex_core_plugins::loader: configured non-curated plugin no longer exists in discovered marketplaces during cache refresh plugin="browser" marketplace="openai-bundled"
+2026-11-20T05:22:39.629023Z  WARN codex_core_plugins::loader: configured non-curated plugin no longer exists in discovered marketplaces during cache refresh plugin="chrome" marketplace="openai-bundled"
+2026-11-20T05:22:39.629024Z  WARN codex_core_plugins::loader: configured non-curated plugin no longer exists in discovered marketplaces during cache refresh plugin="codex-app-tools" marketplace="openai-bundled"
+2026-11-20T05:22:39.629026Z  WARN codex_core_plugins::loader: configured non-curated plugin no longer exists in discovered marketplaces during cache refresh plugin="computer-use" marketplace="openai-bundled"
+2026-11-20T05:22:39.695286Z  WARN codex_core_plugins::loader: configured non-curated plugin no longer exists in discovered marketplaces during cache refresh plugin="documents" marketplace="openai-primary-runtime"
+2026-11-20T05:22:39.695297Z  WARN codex_core_plugins::loader: configured non-curated plugin no longer exists in discovered marketplaces during cache refresh plugin="pdf" marketplace="openai-primary-runtime"
+2026-11-20T05:22:39.695299Z  WARN codex_core_plugins::loader: configured non-curated plugin no longer exists in discovered marketplaces during cache refresh plugin="presentations" marketplace="openai-primary-runtime"
+2026-11-20T05:22:39.695300Z  WARN codex_core_plugins::loader: configured non-curated plugin no longer exists in discovered marketplaces during cache refresh plugin="spreadsheets" marketplace="openai-primary-runtime"
+2026-11-20T05:22:39.695302Z  WARN codex_core_plugins::loader: configured non-curated plugin no longer exists in discovered marketplaces during cache refresh plugin="template-creator" marketplace="openai-primary-runtime"
+2026-11-20T05:22:39.695303Z  WARN codex_core_plugins::loader: configured non-curated plugin no longer exists in discovered marketplaces during cache refresh plugin="unified-computer-use" marketplace="openai-bundled"
+2026-11-20T05:22:39.695304Z  WARN codex_core_plugins::loader: configured non-curated plugin no longer exists in discovered marketplaces during cache refresh plugin="visualize" marketplace="openai-bundled"
+2026-11-20T05:22:39.708954Z  WARN codex_core_plugins::loader: failed to parse plugin MCP server plugin=/Users/zhangxingchen/.codex/plugins/cache/kingsoft-cloud-bi/dataops-studio/0.2.10 server="Dataops_Control" path=/Users/zhangxingchen/.codex/plugins/cache/kingsoft-cloud-bi/dataops-studio/0.2.10/mcp.json error="unknown field `extensions`, expected `url` or `headers`"
+2026-11-20T05:22:39.728546Z  WARN codex_skills::interface: ignoring interface.icon_small: icon path with '..' must resolve under plugin assets/
+2026-11-20T05:22:39.728559Z  WARN codex_skills::interface: ignoring interface.icon_large: icon path with '..' must resolve under plugin assets/
+

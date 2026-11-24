@@ -21,7 +21,7 @@ import {
   type BehaviorResult,
   type RawSample
 } from "../entry-performance.mts";
-import { agentsReady, catalogFilterDone, catalogReady, connectionsReady, type PerfExpected } from "../../tests/performance/entry-performance-predicates";
+import { agentsReady, catalogFilterDone, catalogReady, connectionsReady, rolesReady, type PerfExpected } from "../../tests/performance/entry-performance-predicates";
 import { FILTER_TRACE_NAMES, observationsInWindow } from "../../tests/performance/entry-performance-observations";
 import {
   assertSafeFixtureOutput,
@@ -418,5 +418,22 @@ describe("Spec 174 R6 — primary-ready and filter completion predicates", () =>
     expect(agentsReady(page("2"), EXPECTED)).toBe(true);
     expect(agentsReady(page("—"), EXPECTED)).toBe(false);
     expect(agentsReady(page("2", "disabled"), EXPECTED)).toBe(false);
+  });
+
+  it("REQ-030-034 roles primary-ready requires rows, fixture role ids and enabled filters", () => {
+    const exp: PerfExpected = { ...EXPECTED, roleIds: ["sales_analyst", "wiki_reader"] };
+    const page = (opts: { pending?: boolean; disabled?: boolean; missingRole?: boolean }) =>
+      dom(`
+        ${opts.pending ? '<div data-testid="async-region-pending"></div>' : ""}
+        <input aria-label="搜索 role" ${opts.disabled ? "disabled" : ""}>
+        <select aria-label="筛选角色范围" ${opts.disabled ? "disabled" : ""}></select>
+        <table data-testid="role-list-table">
+          <tr data-testid="role-row-sales_analyst"><td data-testid="role-row-index-sales_analyst"></td></tr>
+          ${opts.missingRole ? "" : '<tr data-testid="role-row-wiki_reader"></tr>'}
+        </table>`);
+    expect(rolesReady(page({}), exp)).toBe(true);
+    expect(rolesReady(page({ pending: true }), exp)).toBe(false);
+    expect(rolesReady(page({ disabled: true }), exp)).toBe(false);
+    expect(rolesReady(page({ missingRole: true }), exp)).toBe(false);
   });
 });

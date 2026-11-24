@@ -1,0 +1,75 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 194,
+  "body": {
+    "ok": true,
+    "data": {
+      "uploaded": true,
+      "record": {
+        "id": "up_20261120_050244_719",
+        "createdAt": "2026-11-20T05:02:44.719Z",
+        "connectionId": "hive-1",
+        "schema": "ods",
+        "assetKind": "schema_manifest",
+        "assetType": "schemaManifest",
+        "targetPath": "semantic-layer/hive-1/_schema/ods.yaml",
+        "originalFilename": "ods.yaml",
+        "sizeBytes": 321,
+        "sha256": "c0c9b3dea788df1e3b935171aaf7648d7bd5f10dbc5488069964a4f0673aa66b",
+        "tables": 2,
+        "overwritten": true,
+        "warnings": [
+          {
+            "code": "TARGET_EXISTS",
+            "message": "目标文件已存在：semantic-layer/hive-1/_schema/ods.yaml"
+          }
+        ],
+        "reloadRunId": "rel_20261120_050244_719"
+      },
+      "validation": {
+        "valid": true,
+        "connectionId": "hive-1",
+        "schema": "ods",
+        "assetKind": "schema_manifest",
+        "assetType": "schemaManifest",
+        "targetPath": "semantic-layer/hive-1/_schema/ods.yaml",
+        "originalFilename": "ods.yaml",
+        "sizeBytes": 321,
+        "sha256": "c0c9b3dea788df1e3b935171aaf7648d7bd5f10dbc5488069964a4f0673aa66b",
+        "errors": [],
+        "warnings": [
+          {
+            "code": "TARGET_EXISTS",
+            "message": "目标文件已存在：semantic-layer/hive-1/_schema/ods.yaml"
+          }
+        ],
+        "tableNames": [
+          "ods_city",
+          "ods_zebra"
+        ],
+        "tables": 2,
+        "sourceNameConflicts": [],
+        "exists": true
+      },
+      "reload": {
+        "id": "rel_20261120_050244_719",
+        "status": "success",
+        "startedAt": "2026-11-20T05:02:44.719Z",
+        "finishedAt": "2026-11-20T05:02:44.728Z",
+        "durationMs": 9,
+        "requestedConnectionId": "hive-1",
+        "requestedSchema": "ods",
+        "connections": 1,
+        "connectionIds": [
+          "hive-1"
+        ],
+        "configuredSchemas": 1,
+        "manifestSchemas": 1,
+        "tables": 2,
+        "enabledTables": 1,
+        "warnings": [],
+        "source": "static-yaml"
+      }
+    }
+  }
+}

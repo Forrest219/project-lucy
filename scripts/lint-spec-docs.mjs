@@ -14,7 +14,15 @@
  *   metadata    Spec 须有 文档类型·版本·状态；Plan 须有 状态·授权边界·验收
  *   filename    新 Spec / Plan 使用唯一文件名；模块 docs 数字流水号 Spec 已封板
  *   close-layer 新功能 Spec 必须有「闭口层级」，且层级只能是功能合同或发布取证
+ *   ds-index    设计系统章节（NN-*.md）必须被 webui/docs/design-system/README.md 链接
+ *   ds-meta     设计系统章节头部必须有「版本」「撰写日期」
+ *   ds-td-expiry 99-governance.md「当前临时决策」每条必须有「升级期限：YYYY-MM-DD」且未过期
+ *   ds-ref      Design System Compliance 小节引用的 design-system/*.md 必须存在
  *   stale-status 「未执行且不排期」「不可交付 UAT」不得裸写；作废标记必须紧贴该句，且不走基线豁免
+ *   interaction-contract 触发的 Spec 须有可解析的交互合同与元素清单，或一份有效豁免。文法见
+ *     docs/specs/lucy-20261107-ui-interaction-contract-gate-spec.md。grandfather 名单内的文件，
+ *     在没有标记行、且状态行不含「开发授权已获得」时直接通过
+ *   inventory-stage 产品线执行总账「跟进状态」须以阶段码｜开头；有主 Spec 链接时与 Spec「阶段」格一致（P1-73 v1.1）
  *
  * 存量违规冻结在 docs/governance/spec-plan-doc-baseline.json：**基线只减不增**。
  * 新增违规 → exit 1；基线里已不再违规的条目 → 报 stale（提示可从基线移除），不阻塞。
@@ -39,6 +47,7 @@ const PLAN_DIR = "docs/plans";
 const SPEC_INDEX = "docs/README.md";
 const PLAN_INDEX = "docs/plans/README.md";
 const BASELINE_FILE = "docs/governance/spec-plan-doc-baseline.json";
+const GRANDFATHER_FILE = "docs/governance/ui-interaction-contract-grandfather.json";
 
 const SPEC_FILENAME = /^lucy-(\d{8})-([a-z0-9]+(?:-[a-z0-9]+)*)-spec\.md$/;
 const PLAN_FILENAME = /^lucy-(\d{8})-([a-z0-9]+(?:-[a-z0-9]+)*)-plan\.md$/;
@@ -56,12 +65,72 @@ const STALE_STATUS_EXTRA = [
 const STALE_STATUS_PREFIX = /(?:不再写|不构成功能阻断|已作废的?)[「"\s]*$/;
 const STALE_STATUS_SUFFIX = /^(?:[」"'*\s。，、；：|（）()]|和|或|并|推出|的现在时|已就地标|已于同日|该句|该记法|这两句|这句|「[^」]{0,24}」)*(?:(?<!未)已?作废|不再写|不得当作现值|不构成功能阻断)/;
 
+const DS_DIR = "webui/docs/design-system";
+const DS_CHAPTER = /^\d{2}-.+\.md$/;
+const DS_GOVERNANCE = `${DS_DIR}/99-governance.md`;
+const DS_TD_DEADLINE = /升级期限[：:]\s*(\d{4}-\d{2}-\d{2})/;
+
 const DS_TEMPLATE_PARTS = [
   { re: /Referenced\s+Specs/i, label: "Referenced Specs" },
   { re: /What\s+This\s+Change\s+Follows/i, label: "What This Change Follows" },
   { re: /Exceptions/i, label: "Exceptions" },
   { re: /Follow-up\s+Needed/i, label: "Follow-up Needed" }
 ];
+
+/**
+ * 状态行英文状态词门禁（DEVELOPMENT.md「状态措辞用中文」；建议书 §3.4）。
+ * 词表唯一出处是 DEVELOPMENT.md 该节；本数组与其保持一致，lint:status-vocab 复用本实现。
+ * 匹配：先剔除版本段 /[vV]?\d[\w.]*-draft\b/，再大小写敏感＋词边界（两侧非 [A-Za-z]）。
+ */
+const STATUS_VOCAB_DENY = ["Implemented", "Approved for planning", "Superseded", "Draft", "Ready for Review"];
+const VERSION_DRAFT_SEGMENT = /[vV]?\d[\w.]*-draft\b/g;
+
+/** 解析前 60 行内的表格行，返回去空白后的单元格数组列表；非表格行跳过。 */
+function headerTableRows(text) {
+  const rows = [];
+  for (const line of text.split("\n").slice(0, 60)) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("|")) continue;
+    const parts = trimmed.split("|");
+    if (parts[0].trim() === "") parts.shift();
+    if (parts.length && parts[parts.length - 1].trim() === "") parts.pop();
+    rows.push(parts.map((cell) => cell.trim()));
+  }
+  return rows;
+}
+
+export function collectStatusVocabViolations(relPath, text) {
+  const violations = [];
+  let statusValue = null;
+  for (const cells of headerTableRows(text)) {
+    const head = (cells[0] ?? "").replace(/\*/g, "").trim();
+    if (head === "Status") {
+      violations.push({
+        file: relPath,
+        rule: "status-vocab",
+        message: "头部元数据表头须写「状态」，不写 `Status`（见 DEVELOPMENT.md「状态措辞用中文」）"
+      });
+      if (statusValue === null && cells.length > 1) statusValue = cells[1];
+    } else if (head === "状态" && statusValue === null) {
+      statusValue = cells[1] ?? "";
+    }
+  }
+  // 找不到「状态」行 → 跳过本规则，交给 metadata；绝不报缺状态行。
+  if (statusValue === null) return violations;
+  const scrubbed = statusValue.replace(VERSION_DRAFT_SEGMENT, "");
+  for (const term of STATUS_VOCAB_DENY) {
+    const re = new RegExp(`(?<![A-Za-z])${term.replace(/ /g, "\\s+")}(?![A-Za-z])`);
+    const match = re.exec(scrubbed);
+    if (match) {
+      violations.push({
+        file: relPath,
+        rule: "status-vocab",
+        message: `「状态」行含英文状态禁用词「${match[0]}」；改用中文状态词（见 DEVELOPMENT.md「状态措辞用中文」）`
+      });
+    }
+  }
+  return violations;
+}
 
 /**
  * Plan 必备小节。**按语义匹配，不规定确切措辞**——存量 Plan 的标题写法差异很大
@@ -362,7 +431,20 @@ export function collectDocViolations(relPath, text) {
     }
   }
 
+  if (dsHeading) {
+    const body = sectionBody(text, /Design System Compliance/i) ?? "";
+    const seen = new Set();
+    for (const m of body.matchAll(/design-system\/([A-Za-z0-9_.-]+\.md)/g)) {
+      if (seen.has(m[1])) continue;
+      seen.add(m[1]);
+      if (!existsSync(path.join(repoRoot, DS_DIR, m[1]))) {
+        violations.push({ file: relPath, rule: "ds-ref", message: `Design System Compliance 引用的章节不存在：design-system/${m[1]}` });
+      }
+    }
+  }
+
   violations.push(...collectStaleStatusViolations(relPath, text));
+  violations.push(...collectStatusVocabViolations(relPath, text));
 
   if (hs.some((h) => /Terminology Compliance/i.test(h.title))) {
     if (!/This feature follows/.test(text)) {
@@ -431,6 +513,44 @@ export function classifyViolations(violations, baselineEntries, trackedFiles = n
   };
 }
 
+/**
+ * 设计系统自身的仓库级检查（索引、头部、临时决策期限）。root 与 today 仅供测试注入。
+ */
+export function collectDesignSystemViolations(root = repoRoot, today = new Date().toISOString().slice(0, 10)) {
+  const violations = [];
+  const dsAbs = path.join(root, DS_DIR);
+  if (!existsSync(dsAbs)) return violations;
+  const readmeRel = `${DS_DIR}/README.md`;
+  const readmePath = path.join(root, readmeRel);
+  const readme = existsSync(readmePath) ? readFileSync(readmePath, "utf8") : "";
+  const chapters = readdirSync(dsAbs).filter((n) => DS_CHAPTER.test(n)).sort();
+  for (const name of chapters) {
+    const rel = `${DS_DIR}/${name}`;
+    if (!readme.includes(`\`${name}\``) && !readme.includes(`](${name})`)) {
+      violations.push({ file: rel, rule: "ds-index", message: `设计系统章节未被 ${readmeRel} 链接` });
+    }
+    const text = readFileSync(path.join(dsAbs, name), "utf8");
+    if (!headerHas(text, "版本") || !headerHas(text, "撰写日期")) {
+      violations.push({ file: rel, rule: "ds-meta", message: "设计系统章节头部缺少「版本」或「撰写日期」" });
+    }
+  }
+  const govPath = path.join(root, DS_GOVERNANCE);
+  if (existsSync(govPath)) {
+    const body = sectionBody(readFileSync(govPath, "utf8"), /当前临时决策/) ?? "";
+    for (const line of body.split("\n")) {
+      const id = /^\|\s*(TD-[\w-]+)\s*\|/.exec(line)?.[1];
+      if (!id) continue;
+      const deadline = DS_TD_DEADLINE.exec(line)?.[1];
+      if (!deadline) {
+        violations.push({ file: DS_GOVERNANCE, rule: "ds-td-expiry", message: `${id} 缺少「升级期限：YYYY-MM-DD」` });
+      } else if (deadline < today) {
+        violations.push({ file: DS_GOVERNANCE, rule: "ds-td-expiry", message: `${id} 升级期限 ${deadline} 已过期，须升格为正式章节、移除或经委托人延期` });
+      }
+    }
+  }
+  return violations;
+}
+
 /** 全量扫描：返回 { violations, blocking, stale, baseline, scanned }。 */
 export function scanRepo() {
   const specFiles = listMarkdown(SPEC_DIR);
@@ -440,6 +560,9 @@ export function scanRepo() {
   const planIndex = linkedBasenames(PLAN_INDEX);
 
   const violations = [];
+  const grandfatherFiles = loadGrandfatherFiles();
+  const funnelGrandfatherFiles = loadFunnelGrandfatherFiles();
+  const registeredRoutes = loadRegisteredRoutes();
   for (const relPath of webuiNumbered) {
     const filenameViolation = collectFilenameViolation(relPath);
     if (filenameViolation) violations.push(filenameViolation);
@@ -456,7 +579,15 @@ export function scanRepo() {
       });
     }
     violations.push(...collectDocViolations(relPath, text));
+    if (isSpec) {
+      const planRel = path.posix.join(PLAN_DIR, path.posix.basename(relPath).replace(/-spec\.md$/, "-plan.md"));
+      const planText = existsSync(path.join(repoRoot, planRel)) ? read(planRel) : null;
+      violations.push(...checkInteractionContract(relPath, text, planText, { grandfatherFiles, registeredRoutes }));
+      violations.push(...checkStatusFunnel(relPath, text, planText, { grandfatherFiles: funnelGrandfatherFiles }));
+    }
   }
+  violations.push(...checkInventoryStageMirror());
+  violations.push(...collectDesignSystemViolations());
   for (const relPath of STALE_STATUS_EXTRA) {
     if (!existsSync(path.join(repoRoot, relPath))) continue;
     violations.push(...collectStaleStatusViolations(relPath, read(relPath)));
@@ -510,8 +641,654 @@ export function formatReport(result) {
   return lines.join("\n");
 }
 
+const FW_COLON = "\uff1a";
+const FW_SEMI = "\uff1b";
+const FW_COMMA = "\u3001";
+const FW_BAR = "\uff5c";
+const ROUTE_TOKEN = /^\/[a-z][a-z0-9-]*(?:\/:[A-Za-z][A-Za-z0-9_-]*|\/[A-Za-z0-9_.:~*-]+)*$/;
+const UX_ID = /UX-[A-Z0-9]+(?:-[A-Z0-9]+)*-[0-9]+/;
+const MARKER_LINE = "交互合同适用";
+const AUTH_PHRASE = "开发授权已获得";
+const WAIVER_REASON = "不改变用户可见 WebUI 表面";
+const DIMENSION_PHRASE = "同一状态维度不得互相否定";
+const BENCHMARKS = new Set([
+  "/admin/tokens",
+  "/catalog",
+  "/skills",
+  "/connections/enabled-tables",
+  "/admin/agents"
+]);
+const NEW_MODE = /^新模式：webui\/docs\/design-system\/[^/]+\.md$/;
+const STATE_LABELS = ["首访", "空", "加载", "错误", "0 条", "成功", "部分"];
+const CONTRACT_LABELS = ["路由", "基准页", "一件事", "状态", "主动作", "决定信息", "术语", "台账", "状态维度"];
+const BROWSER_LABELS = ["路由", "视口", "状态", "证据"];
+const REVIEW_LABELS = [
+  "Q1 主任务能否从页头和主工作区开始，而不必先读 Spec",
+  "Q2 PageHeader 是否满足按钮规范 §3 第 8 条，其他 action group 是否各自最多一个 primary，并且与「不做」不冲突",
+  "Q3 空、错误、0 条是否在面板内写明原因；不适用是否写了原因",
+  "Q4 决定信息是否足够；截断或隐藏时能否看见原因",
+  "Q5 控件是否与基准页同一套；新模式是否指向已存在的设计系统章节",
+  "Q6 用户可见术语是否已登记，或已写在本 Spec 的 Terminology Compliance"
+];
+const VIEWPORTS = new Set(["1920\u00d71080", "1440\u00d7900"]);
+
+function stripFences(text) {
+  return text.replace(/```[\s\S]*?```/g, "").replace(/~~~[\s\S]*?~~~/g, "");
+}
+
+function statusCell(text) {
+  if (!text) return "";
+  const head = text.split("\n").slice(0, 60).join("\n");
+  const match = head.match(/^\|\s*\*{0,2}状态\*{0,2}\s*\|([^|\n]*)/m);
+  return match ? match[1] : "";
+}
+
+function h2s(text) {
+  const found = [];
+  const re = /^##[ \t]+(.+?)[ \t]*$/gm;
+  for (const match of text.matchAll(re)) {
+    const lineEnd = text.indexOf("\n", match.index);
+    found.push({
+      title: match[1].trim(),
+      index: match.index,
+      bodyStart: lineEnd === -1 ? text.length : lineEnd + 1
+    });
+  }
+  return found;
+}
+
+function sectionLines(text, headings, title) {
+  const index = headings.findIndex((heading) => heading.title === title);
+  if (index < 0) return null;
+  const end = headings[index + 1]?.index ?? text.length;
+  return text.slice(headings[index].bodyStart, end).split("\n").map((line) => line.trim()).filter(Boolean);
+}
+
+function violation(specRel, message) {
+  return [{ file: specRel, rule: "interaction-contract", message }];
+}
+
+function parseLabeledLines(lines, labels) {
+  if (lines.length !== labels.length) return { error: `非空行应有 ${labels.length} 行，实际 ${lines.length} 行` };
+  const fields = {};
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (!line.startsWith("- ")) return { error: `第 ${i + 1} 行不是「- 」开头` };
+    const body = line.slice(2);
+    const colon = body.indexOf(FW_COLON);
+    if (colon < 0) return { error: `第 ${i + 1} 行缺少全角冒号` };
+    const label = body.slice(0, colon).trim();
+    const value = body.slice(colon + 1).trim();
+    if (label !== labels[i]) return { error: `第 ${i + 1} 行标签应为「${labels[i]}」，实际是「${label}」` };
+    if (!value) return { error: `「${label}」的值为空` };
+    fields[label] = value;
+  }
+  return { fields };
+}
+
+export function loadRegisteredRoutes() {
+  const routes = new Set();
+  const app = read("webui/src/app/App.tsx");
+  for (const match of app.matchAll(/\bpath="([^"]+)"/g)) routes.add(match[1]);
+  const nav = read("webui/src/app/navigation.ts");
+  for (const match of nav.matchAll(/\bto:\s*"([^"]+)"/g)) routes.add(match[1]);
+  return routes;
+}
+
+function loadGrandfatherFiles() {
+  if (!existsSync(path.join(repoRoot, GRANDFATHER_FILE))) return [];
+  const parsed = JSON.parse(read(GRANDFATHER_FILE));
+  if (!Array.isArray(parsed.files)) {
+    throw new Error(`${GRANDFATHER_FILE} 缺少 files 数组`);
+  }
+  return parsed.files;
+}
+
+const FUNNEL_CODES = new Set(["S1", "S2", "S3", "S4", "S5", "X_DEF", "X_SUP", "X_REL"]);
+const FUNNEL_MARKER_LINE = "状态漏斗门禁：纳入检查";
+const FUNNEL_UNCLOSED_PHRASES = [
+  "≠功能合同收口",
+  "≠完整功能合同",
+  "≠功能已收口",
+  "功能合同尚未收口",
+  "功能合同待终稿复核",
+  "未收口",
+  "尚未收口",
+  "实现进行中"
+];
+/** D8b：X_REL＝发布取证已收口；状态行不得仍写在途短语。 */
+const FUNNEL_X_REL_OPEN_PHRASES = [
+  "实现进行中",
+  "终稿未确权",
+  "未获开发授权",
+  "开发未授权",
+  "评审前不开发",
+  "Wave 0"
+];
+const FUNNEL_SHIP_ALIAS = /可上线|UAT[ 　]+PASS|测试台PASS/g;
+const FUNNEL_STAGE_COLON = /阶段[:：]/;
+const FUNNEL_GRANDFATHER_FILE = "docs/governance/spec-status-funnel-grandfather.json";
+
+function loadFunnelGrandfatherFiles() {
+  if (!existsSync(path.join(repoRoot, FUNNEL_GRANDFATHER_FILE))) return [];
+  const parsed = JSON.parse(read(FUNNEL_GRANDFATHER_FILE));
+  if (!Array.isArray(parsed.files)) {
+    throw new Error(`${FUNNEL_GRANDFATHER_FILE} 缺少 files 数组`);
+  }
+  return parsed.files;
+}
+
+/** 单元格去空白与全部 `*`（Spec §4 文法）。 */
+function funnelStripCell(value) {
+  return (value ?? "").replace(/[\s*]/g, "");
+}
+
+/** 前 60 行元数据表中某字段名（去 `*`）的全部行；返回单元格数组列表。 */
+function funnelFieldRows(text, field) {
+  return headerTableRows(text).filter((cells) => (cells[0] ?? "").replace(/\*/g, "").trim() === field);
+}
+
+/** 「闭口层级」小节的「层级：」值（解析不出返回 ""）。 */
+function funnelCloseLayer(text) {
+  const body = sectionBody(text, /闭口层级$/) ?? "";
+  for (const line of body.split("\n")) {
+    const parsed = parseCloseLayerField(line);
+    if (parsed && parsed.name === "层级" && parsed.value !== "") return parsed.value;
+  }
+  return "";
+}
+
+/**
+ * D5(2)：状态行取首个「阶段:」/「阶段：」之后的连续 token，命中 {可上线, UAT PASS, 测试台PASS} → true；
+ * 命中处为「≠」-前缀（否定式，中间可夹空白）→ 放行。无「阶段:」→ false。
+ */
+function funnelStatusClaimsAlias(status) {
+  const colon = FUNNEL_STAGE_COLON.exec(status);
+  if (!colon) return false;
+  const rest = status.slice(colon.index + colon[0].length);
+  FUNNEL_SHIP_ALIAS.lastIndex = 0;
+  for (const match of rest.matchAll(FUNNEL_SHIP_ALIAS)) {
+    let before = match.index - 1;
+    while (before >= 0 && /[\s　]/.test(rest[before])) before -= 1;
+    if (before >= 0 && rest[before] === "≠") continue;
+    return true;
+  }
+  return false;
+}
+
+/** D7：Plan「状态」去首尾空白与前导 `*` 后，须以 阶段:<CODE>／<CODE>｜／<CODE>。 开头。 */
+function funnelPlanMirrors(planStatusCell, code) {
+  const stripped = (planStatusCell ?? "").trim().replace(/^\*+/, "");
+  const colonRe = new RegExp(`^阶段[:：]${code}(?=[｜|。\\s]|$)`);
+  const barRe = new RegExp(`^${code}[｜|。]`);
+  return colonRe.test(stripped) || barRe.test(stripped);
+}
+
+/**
+ * 开发台状态漏斗门禁。文法与伪代码见 docs/specs/lucy-20261122-spec-status-funnel-gate-spec.md §4／§5。
+ * grandfather 跳过第一支：名单内、无授权口令、无标记行 → 直接通过。
+ */
+export function checkStatusFunnel(specRel, specText, planText, options = {}) {
+  const grandfathered = (options.grandfatherFiles ?? []).includes(specRel);
+  const status = statusCell(specText);
+  const marked = stripFences(specText).split("\n").some((line) => line.trim() === FUNNEL_MARKER_LINE);
+  const authorized = status.includes(AUTH_PHRASE);
+  if (grandfathered && !marked && !authorized) return [];
+  const fail = (message) => [{ file: specRel, rule: "status-funnel", message }];
+
+  // D3：恰好一行「阶段」；单元格去空白与全部 `*` 后整格等于 CODE（D5(1) 散文／空格／可上线冒充由此必失败）。
+  const stageRows = funnelFieldRows(specText, "阶段");
+  if (stageRows.length !== 1) {
+    return fail("Spec 须恰好一行「阶段」元数据（去空白与 `*` 后整格等于阶段码；见 DEVELOPMENT.md「开发台漏斗阶段码」）");
+  }
+  const code = funnelStripCell(stageRows[0][1]);
+  if (!FUNNEL_CODES.has(code)) {
+    return fail(`「阶段」单元格「${funnelStripCell(stageRows[0][1]) || "（空）"}」不是合法阶段码；须整格等于 S1／S2／S3／S4／S5／X_DEF／X_SUP／X_REL`);
+  }
+
+  // D8：发布取证与功能合同共用 S1–S4；收口终态＝X_REL；禁止 S5。
+  if (funnelCloseLayer(specText) === "发布取证" && code === "S5") {
+    return fail("「闭口层级」为发布取证时，「阶段」不得为 S5；收口用 X_REL，实施期用 S1–S4（D8）");
+  }
+
+  // D4：S5 与「未收口」显式短语表矛盾。
+  if (code === "S5") {
+    const squashed = status.replace(/\s+/g, "");
+    const hit = FUNNEL_UNCLOSED_PHRASES.find((phrase) => squashed.includes(phrase));
+    if (hit) return fail(`阶段＝S5 时「状态」行不得含未收口短语「${hit}」（D4）`);
+  }
+
+  // D8b：X_REL 与在途短语矛盾（防把未收口发布取证标成终态）。
+  if (code === "X_REL") {
+    const squashed = status.replace(/\s+/g, "");
+    const hit = FUNNEL_X_REL_OPEN_PHRASES.find((phrase) => squashed.includes(phrase.replace(/\s+/g, "")));
+    if (hit) return fail(`阶段＝X_REL 时「状态」行不得含在途短语「${hit}」（D8b）`);
+  }
+
+  // D4：S1／S2 不得含授权口令。
+  if ((code === "S1" || code === "S2") && authorized) {
+    return fail(`阶段＝${code} 时「状态」行不得含「${AUTH_PHRASE}」（D4）`);
+  }
+
+  // D5(2)：状态行首个「阶段:」后连续 token 不得把 可上线／UAT PASS／测试台PASS 当作阶段码；≠-前缀放行。
+  if (funnelStatusClaimsAlias(status)) {
+    return fail("「状态」行首个「阶段:」之后不得把 可上线／UAT PASS／测试台PASS 当作阶段码；可写「≠ 可上线」否定式（D5）");
+  }
+
+  // D6：「收口范围」仅 S5。
+  const scopeRows = funnelFieldRows(specText, "收口范围");
+  if (scopeRows.length > 0 && code !== "S5") {
+    return fail("「收口范围」行仅允许阶段＝S5 时出现（D6）");
+  }
+  if (code === "S5" && scopeRows.some((cells) => cells.length !== 2 || cells[1].trim() === "")) {
+    return fail("「收口范围」标签须非空、单行、无 `|`（§4.2）");
+  }
+
+  // D7：配对 Plan 状态行镜像前缀。
+  if (planText != null && !funnelPlanMirrors(statusCell(planText), code)) {
+    return fail(`配对 Plan「状态」行未镜像 Spec 阶段码 ${code}；须以 阶段:<CODE>／<CODE>｜／<CODE>。 开头（D7）`);
+  }
+
+  return [];
+}
+
+const INVENTORY_STAGE_FILES = [
+  "docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md"
+];
+const INVENTORY_ID_RE = /^P(?:0-[A-Z]|[012]-\d+)$/;
+const INVENTORY_STAGE_PREFIX = /^(S[1-5]|X_DEF|X_SUP|X_REL)[｜|]/;
+
+/** 总账「跟进状态」单元格的阶段码前缀；无前缀返回 null。 */
+export function inventoryStagePrefix(statusCellText) {
+  const stripped = (statusCellText ?? "").trim().replace(/^\*+/, "").replace(/\*+$/, "").trim();
+  const match = INVENTORY_STAGE_PREFIX.exec(stripped);
+  return match ? match[1] : null;
+}
+
+/**
+ * 从总账 Spec／Plan 列提取主 Spec 相对路径（docs/specs/…）。
+ * 优先链接文案为「Spec」／「主 Spec」的 docs/specs 或 ../specs 目标；否则取首个 lucy-*-spec.md。
+ * 忽略「前序」类旁链与 webui/docs 流水号 Spec（不在本规则强制面）。
+ */
+export function inventoryPrimarySpecRels(linksCell) {
+  const links = [];
+  for (const match of (linksCell ?? "").matchAll(/\[([^\]]*)\]\(([^)]+)\)/g)) {
+    const label = match[1].trim();
+    let target = match[2].trim().split("#")[0];
+    if (!/-spec\.md$/i.test(target)) continue;
+    if (target.startsWith("../specs/")) target = `docs/specs/${path.posix.basename(target)}`;
+    else if (target.startsWith("docs/specs/")) target = target.replace(/^\.\//, "");
+    else if (!target.includes("/")) target = `docs/specs/${target}`;
+    else continue; // webui/docs 等旁路不进本规则
+    if (!target.startsWith("docs/specs/")) continue;
+    links.push({ label, rel: target });
+  }
+  const primary = links.filter((item) => /^(主\s*)?Spec$/i.test(item.label) || /^Spec\b/i.test(item.label));
+  if (primary.length) return [...new Set(primary.map((item) => item.rel))];
+  // 无「Spec」锚时：不把「前序／P1-xx」旁链当成主 Spec（例如 P1-50 只挂前序 P1-45）
+  const fallback = links.filter((item) => {
+    if (!/^lucy-.+-spec\.md$/i.test(path.posix.basename(item.rel))) return false;
+    if (/前序|关联|错题|closure|测试台/i.test(item.label)) return false;
+    if (/^P[012](?:-\d+|-[A-Z])\b/.test(item.label)) return false;
+    return true;
+  });
+  return [...new Set(fallback.map((item) => item.rel))];
+}
+
+function inventoryTableRows(text) {
+  const lines = text.split("\n");
+  let started = false;
+  const rows = [];
+  for (const line of lines) {
+    if (!started) {
+      if (line.startsWith("| 清单 ID")) started = true;
+      continue;
+    }
+    if (line.startsWith("#")) break;
+    if (!line.trimStart().startsWith("|")) continue;
+    const parts = line.trim().split("|");
+    if (parts[0].trim() === "") parts.shift();
+    if (parts.length && parts[parts.length - 1].trim() === "") parts.pop();
+    const cells = parts.map((cell) => cell.trim());
+    if (cells.length < 8) continue;
+    if (cells[0].startsWith("---") || cells[0] === "清单 ID") continue;
+    if (!INVENTORY_ID_RE.test(cells[0])) continue;
+    rows.push({ id: cells[0], status: cells[6], links: cells[7] ?? "" });
+  }
+  return rows;
+}
+
+/**
+ * P1-73 v1.1：执行总账跟进状态 ↔ Spec「阶段」一致性。
+ * 总账行须以 CODE｜开头；有主 Spec 时 Spec 须有可解析阶段格且等于该 CODE。
+ */
+export function checkInventoryStageMirror(options = {}) {
+  const files = options.inventoryFiles ?? INVENTORY_STAGE_FILES;
+  const readText = options.readText ?? ((rel) => read(rel));
+  const exists = options.exists ?? ((rel) => existsSync(path.join(repoRoot, rel)));
+  const violations = [];
+  for (const invRel of files) {
+    if (!exists(invRel)) {
+      violations.push({ file: invRel, rule: "inventory-stage", message: "执行总账文件不存在" });
+      continue;
+    }
+    const rows = inventoryTableRows(readText(invRel));
+    if (rows.length === 0) {
+      violations.push({ file: invRel, rule: "inventory-stage", message: "未解析到清单表行（须含「| 清单 ID」表头与 P*- 行）" });
+      continue;
+    }
+    for (const row of rows) {
+      const code = inventoryStagePrefix(row.status);
+      if (!code) {
+        violations.push({
+          file: invRel,
+          rule: "inventory-stage",
+          message: `${row.id}「跟进状态」须以阶段码｜开头（S1–S5／X_DEF／X_SUP／X_REL）`
+        });
+        continue;
+      }
+      if (!FUNNEL_CODES.has(code)) {
+        violations.push({
+          file: invRel,
+          rule: "inventory-stage",
+          message: `${row.id} 阶段前缀「${code}」不是合法阶段码`
+        });
+        continue;
+      }
+      const specs = inventoryPrimarySpecRels(row.links);
+      for (const specRel of specs) {
+        if (!exists(specRel)) {
+          violations.push({
+            file: invRel,
+            rule: "inventory-stage",
+            message: `${row.id} 主 Spec 缺失：${specRel}`
+          });
+          continue;
+        }
+        const stageRows = funnelFieldRows(readText(specRel), "阶段");
+        if (stageRows.length !== 1) {
+          violations.push({
+            file: invRel,
+            rule: "inventory-stage",
+            message: `${row.id} 配对 Spec ${path.posix.basename(specRel)} 须恰好一行「阶段」元数据（与总账 ${code} 对齐）`
+          });
+          continue;
+        }
+        const specCode = funnelStripCell(stageRows[0][1]);
+        if (specCode !== code) {
+          violations.push({
+            file: invRel,
+            rule: "inventory-stage",
+            message: `${row.id} 总账阶段 ${code} ≠ Spec ${path.posix.basename(specRel)} 阶段 ${specCode || "（空）"}`
+          });
+        }
+      }
+    }
+  }
+  return violations;
+}
+
+function locate(rel, options) {
+  if (options.files && Object.prototype.hasOwnProperty.call(options.files, rel)) {
+    return { kind: "file", text: options.files[rel] };
+  }
+  if (options.directories && options.directories.has(rel)) return { kind: "dir" };
+  const abs = path.join(repoRoot, rel);
+  if (!existsSync(abs)) return { kind: "missing" };
+  const stat = statSync(abs);
+  if (stat.isDirectory()) return { kind: "dir" };
+  if (!stat.isFile()) return { kind: "missing" };
+  return { kind: "file", text: readFileSync(abs, "utf8") };
+}
+
+function routeTokenIsLegal(token, routes) {
+  if (routes.has(token)) return true;
+  const prefix = "新路由：";
+  if (token.startsWith(prefix)) {
+    const routePath = token.slice(prefix.length);
+    return ROUTE_TOKEN.test(routePath) && !routes.has(routePath);
+  }
+  return false;
+}
+
+function parseState(value) {
+  const parts = value.split(FW_SEMI);
+  if (parts.length !== STATE_LABELS.length) {
+    return { error: `状态应有 ${STATE_LABELS.length} 段，实际 ${parts.length} 段` };
+  }
+  const values = {};
+  for (let i = 0; i < STATE_LABELS.length; i += 1) {
+    const prefix = `${STATE_LABELS[i]}${FW_COLON}`;
+    if (!parts[i].startsWith(prefix)) return { error: `状态第 ${i + 1} 段应为「${STATE_LABELS[i]}」` };
+    const rest = parts[i].slice(prefix.length).trim();
+    if (!rest) return { error: `状态「${STATE_LABELS[i]}」为空` };
+    if (rest.startsWith(`不适用${FW_COLON}`) && rest.slice(`不适用${FW_COLON}`.length).trim() === "") {
+      return { error: `状态「${STATE_LABELS[i]}」的不适用缺少原因` };
+    }
+    values[STATE_LABELS[i]] = rest;
+  }
+  return { values };
+}
+
+function parseVerdict(value) {
+  if (value === "未评" || value === "通过") return { verdict: value };
+  if (value.startsWith("不通过")) {
+    const rest = value.slice("不通过".length);
+    const marker = `原因${FW_COLON}`;
+    const index = rest.indexOf(marker);
+    if (index < 0 || rest.slice(0, index).trim() !== "" || rest.slice(index + marker.length).trim() === "") {
+      return { error: "「不通过」同一行要有「原因：」和非空原因" };
+    }
+    return { verdict: "不通过" };
+  }
+  return { error: `评审取值无法识别：${value}` };
+}
+
+function evidenceProblem(rel, options) {
+  if (rel.includes("..") || rel.startsWith("/") || rel.startsWith("\\")) return "路径越界";
+  const found = locate(rel, options);
+  if (found.kind === "dir") return "证据路径是目录";
+  if (rel === "docs/README.md" || !(rel.startsWith("docs/reviews/") || rel.startsWith("docs/ui-ux-feedback/")) || !rel.endsWith(".md")) {
+    return "证据路径不在允许范围内";
+  }
+  if (found.kind !== "file") return "证据文件不存在";
+  return null;
+}
+
+function inventoryPaths(routeValue) {
+  return routeValue.split(FW_COMMA).map((token) => token.trim()).filter(Boolean).map((token) => (
+    token.startsWith("新路由：") ? token.slice("新路由：".length) : token
+  ));
+}
+
+/**
+ * 交互合同门禁。文法与 docs/specs/lucy-20261107-ui-interaction-contract-gate-spec.md §4、§6 一致。
+ * grandfather 跳过是第一支：不解析豁免，也不解析合同。
+ */
+export function checkInteractionContract(specRel, specText, planText, options = {}) {
+  const body = stripFences(specText);
+  const marked = body.split("\n").some((line) => line.trim() === MARKER_LINE);
+  const authorized = statusCell(specText).includes(AUTH_PHRASE);
+  const grandfathered = (options.grandfatherFiles ?? []).includes(specRel);
+  if (grandfathered && !marked && !authorized) return [];
+
+  const headings = h2s(body);
+  const count = (title) => headings.filter((heading) => heading.title === title).length;
+  const waiverCount = count("交互合同豁免");
+  const contractCount = count("交互合同");
+  const reviewCount = count("交互评审");
+  const inventoryCount = count("元素清单");
+  for (const [title, total] of [["交互合同豁免", waiverCount], ["交互合同", contractCount], ["交互评审", reviewCount], ["元素清单", inventoryCount]]) {
+    if (total > 1) return violation(specRel, `二级标题「${title}」超过一个`);
+  }
+  if (waiverCount > 0 && contractCount > 0) return violation(specRel, "交互合同豁免与交互合同不能并存");
+
+  const planHeadings = planText == null ? null : h2s(stripFences(planText));
+  const planStatus = statusCell(planText);
+
+  if (waiverCount === 1) {
+    const lines = sectionLines(body, headings, "交互合同豁免");
+    const parsed = parseLabeledLines(lines, ["原因", "不改变"]);
+    if (parsed.error) return violation(specRel, `交互合同豁免${parsed.error}`);
+    if (!parsed.fields["原因"].includes(WAIVER_REASON)) {
+      return violation(specRel, "豁免原因必须含「不改变用户可见 WebUI 表面」");
+    }
+    if (reviewCount !== 0) return violation(specRel, "有效豁免不能再有「交互评审」");
+    if (inventoryCount !== 0) return violation(specRel, "有效豁免不能再有「元素清单」");
+    if (planHeadings == null) return violation(specRel, "豁免 Spec 缺少配对 Plan");
+    const browserCount = planHeadings.filter((heading) => heading.title === "浏览器验证").length;
+    if (browserCount !== 1) return violation(specRel, "配对 Plan 必须恰好有一个「浏览器验证」");
+    const browserLines = sectionLines(stripFences(planText), planHeadings, "浏览器验证");
+    const first = browserLines[0] ?? "";
+    if (!first.startsWith(`不适用${FW_COLON}`) || first.slice(`不适用${FW_COLON}`.length).trim() === "") {
+      return violation(specRel, "豁免 Plan 的浏览器验证第一条须为「不适用：」加非空说明");
+    }
+    return [];
+  }
+
+  let triggered = marked || body.includes("webui/src/");
+  if (!triggered) {
+    for (const match of body.matchAll(/`([^`]+)`/g)) {
+      if (ROUTE_TOKEN.test(match[1])) {
+        triggered = true;
+        break;
+      }
+    }
+  }
+  if (!triggered) return [];
+
+  if (contractCount !== 1) return violation(specRel, "触发的 Spec 必须恰好有一个「交互合同」");
+  if (inventoryCount !== 1) return violation(specRel, "触发的 Spec 必须恰好有一个「元素清单」");
+  const contractIndex = headings.findIndex((heading) => heading.title === "交互合同");
+  if (headings[contractIndex + 1]?.title !== "元素清单") {
+    return violation(specRel, "「交互合同」的下一个二级标题必须是「元素清单」");
+  }
+  const inventoryIndex = contractIndex + 1;
+  if (headings[inventoryIndex + 1]?.title !== "交互评审") {
+    return violation(specRel, "「元素清单」的下一个二级标题必须是「交互评审」");
+  }
+
+  const contractParsed = parseLabeledLines(sectionLines(body, headings, "交互合同"), CONTRACT_LABELS);
+  if (contractParsed.error) return violation(specRel, `交互合同${contractParsed.error}`);
+  const fields = contractParsed.fields;
+  const tokens = fields["路由"].split(FW_COMMA).map((token) => token.trim()).filter(Boolean);
+  if (tokens.length === 0) return violation(specRel, "交互合同路由为空");
+  const routes = options.registeredRoutes ?? loadRegisteredRoutes();
+  for (const token of tokens) {
+    if (!routeTokenIsLegal(token, routes)) return violation(specRel, `路由不合法：${token}`);
+  }
+  if (!BENCHMARKS.has(fields["基准页"])) {
+    if (!NEW_MODE.test(fields["基准页"])) return violation(specRel, `基准页不合法：${fields["基准页"]}`);
+    const modePath = fields["基准页"].slice("新模式：".length);
+    if (locate(modePath, options).kind !== "file") return violation(specRel, `新模式文件不存在：${modePath}`);
+  }
+  const state = parseState(fields["状态"]);
+  if (state.error) return violation(specRel, state.error);
+  if (!fields["主动作"].includes("primary") || !fields["主动作"].includes("不做")) {
+    return violation(specRel, "主动作必须同时含 primary 与「不做」");
+  }
+  if (!fields["术语"].includes("已登记") && !fields["术语"].includes("本条新增")) {
+    return violation(specRel, "术语必须含「已登记」或「本条新增」");
+  }
+  if (fields["台账"] !== "无新台账" && !UX_ID.test(fields["台账"])) {
+    return violation(specRel, "台账必须是「无新台账」，或含合法 UX 编号");
+  }
+  if (!fields["状态维度"].includes(DIMENSION_PHRASE)) {
+    return violation(specRel, "状态维度必须含「同一状态维度不得互相否定」");
+  }
+
+  const rows = sectionLines(body, headings, "元素清单");
+  if (!rows || rows.length === 0) return violation(specRel, "元素清单至少要有一行");
+  const paths = inventoryPaths(fields["路由"]);
+  const pathSet = new Set(paths);
+  const seen = new Map(paths.map((routePath) => [routePath, new Map()]));
+  const ids = [];
+  for (let i = 0; i < rows.length; i += 1) {
+    const line = rows[i];
+    if (!line.startsWith("- ")) return violation(specRel, `元素清单第 ${i + 1} 行不是「- 」开头`);
+    const parts = line.slice(2).split(FW_BAR).map((part) => part.trim());
+    if (parts.length !== 5 || parts.some((part) => part === "")) {
+      return violation(specRel, `元素清单第 ${i + 1} 行必须是五段全角竖线`);
+    }
+    const expectedId = `E${i + 1}`;
+    if (parts[0] !== expectedId) return violation(specRel, `元素清单编号应从 E1 连续递增，第 ${i + 1} 行是 ${parts[0]}`);
+    if (parts.some((part) => /class=|DOM|[0-9]+px/.test(part))) {
+      return violation(specRel, `元素清单第 ${i + 1} 行含 class=、DOM 或像素`);
+    }
+    const [, routePath, element] = parts;
+    if (!pathSet.has(routePath)) return violation(specRel, `元素清单路由不在合同里：${routePath}`);
+    const elements = seen.get(routePath);
+    if (elements.has(element)) return violation(specRel, `同一路径的元素重复：${routePath}／${element}`);
+    elements.set(element, true);
+    ids.push(expectedId);
+  }
+  const required = STATE_LABELS.filter((label) => !state.values[label].startsWith(`不适用${FW_COLON}`));
+  required.push("主动作", "决定信息");
+  for (const routePath of paths) {
+    const elements = seen.get(routePath);
+    for (const element of required) {
+      if (!elements.has(element)) return violation(specRel, `元素清单缺少：${routePath}／${element}`);
+    }
+  }
+
+  const reviewParsed = parseLabeledLines(sectionLines(body, headings, "交互评审"), REVIEW_LABELS);
+  if (reviewParsed.error) return violation(specRel, `交互评审${reviewParsed.error}`);
+  for (const label of REVIEW_LABELS) {
+    const verdict = parseVerdict(reviewParsed.fields[label]);
+    if (verdict.error) return violation(specRel, verdict.error);
+    if (authorized && verdict.verdict !== "通过") {
+      return violation(specRel, "状态行含「开发授权已获得」时，六问必须全是「通过」");
+    }
+  }
+
+  if (planHeadings == null) return violation(specRel, "触发的 Spec 缺少配对 Plan");
+  const browserCount = planHeadings.filter((heading) => heading.title === "浏览器验证").length;
+  if (browserCount !== 1) return violation(specRel, "配对 Plan 必须恰好有一个「浏览器验证」");
+  const browserParsed = parseLabeledLines(sectionLines(stripFences(planText), planHeadings, "浏览器验证"), BROWSER_LABELS);
+  if (browserParsed.error) return violation(specRel, `浏览器验证${browserParsed.error}`);
+  const browser = browserParsed.fields;
+  if (browser["路由"] !== fields["路由"]) return violation(specRel, "浏览器验证的路由必须与交互合同的路由整串相同");
+  if (!VIEWPORTS.has(browser["视口"])) return violation(specRel, `视口不合法：${browser["视口"]}`);
+  const expectedIds = ids.join(FW_COMMA);
+  if (browser["状态"] !== expectedIds) return violation(specRel, `浏览器验证的状态必须恰好是 ${expectedIds}`);
+  if (browser["证据"] === "未执行") {
+    if (planStatus.includes("浏览器验证已完成")) {
+      return violation(specRel, "Plan 状态已写浏览器验证已完成，证据却仍是未执行");
+    }
+    return [];
+  }
+  const pathError = evidenceProblem(browser["证据"], options);
+  if (pathError) return violation(specRel, pathError);
+  const evidenceText = locate(browser["证据"], options).text;
+  if (!evidenceText.includes(fields["路由"]) || !evidenceText.includes(browser["视口"])) {
+    return violation(specRel, "证据正文必须含合同路由值和视口");
+  }
+  const counts = new Map();
+  for (const match of evidenceText.matchAll(/E([1-9][0-9]*)：(通过|失败)/g)) {
+    const id = `E${match[1]}`;
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  for (const id of ids) {
+    if (counts.get(id) !== 1) return violation(specRel, `证据里 ${id} 的结果不是恰好一条`);
+  }
+  for (const id of counts.keys()) {
+    if (!ids.includes(id)) return violation(specRel, `证据出现清单外编号 ${id}`);
+  }
+  return [];
+}
+
 function main() {
+  const ruleArg = process.argv.find((arg) => arg.startsWith("--rule="));
   const result = scanRepo();
+  if (ruleArg) {
+    // 导出入口（如 lint:status-vocab / lint:status-funnel）：只裁决单条规则，
+    // 与全量 lint:spec-docs 共用同一 scanRepo 实现，禁止第二份词表／判定拷贝。
+    const rule = ruleArg.slice("--rule=".length);
+    const blocking = result.blocking.filter((v) => v.rule === rule);
+    const warnings = result.warnings.filter((v) => v.rule === rule);
+    console.log(formatReport({ ...result, blocking, warnings }));
+    process.exit(blocking.length ? 1 : 0);
+  }
   console.log(formatReport(result));
   process.exit(result.blocking.length ? 1 : 0);
 }

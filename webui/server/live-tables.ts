@@ -10,6 +10,8 @@
  * not distinguish "schema missing" from "schema not visible" is always reported
  * as `SCHEMA_NOT_VISIBLE`, so the UI never claims a table was deleted.
  */
+import { catalogTablesSql, CATALOG_SCAN_TIMEOUT_MS, CATALOG_TABLE_NAME_LIMIT, splitCatalogDatabase } from "./catalog-database";
+import { runCatalogShow } from "./catalog-show";
 import { readConnections } from "./project";
 import { KtxCliError, runSql, type SqlResult } from "./ktx";
 import { assertSchemaIdent } from "./schema-structure";
@@ -70,14 +72,12 @@ export const LIVE_TABLES_MANUAL_TTL_MS = 10 * 60 * 1000;
 /** Automatic reads are cached for one polling interval (Spec 190 §6.4). */
 export const LIVE_TABLES_AUTOMATIC_TTL_MS = 60 * 60 * 1000;
 
-const MYSQL_TABLE_LIST_SQL = `
-SELECT t.table_name, t.table_type, COALESCE(t.table_comment, ''), COUNT(c.column_name) AS column_count
-FROM information_schema.tables t
-LEFT JOIN information_schema.columns c
-  ON c.table_schema = t.table_schema AND c.table_name = t.table_name
-WHERE t.table_schema = '__SCHEMA__' AND t.table_type = 'BASE TABLE'
-GROUP BY t.table_name, t.table_type, t.table_comment
-ORDER BY t.table_name
+/** Names only. Column rows are read later, and only for tables the user checks. */
+const MYSQL_TABLE_NAME_SQL = `
+SELECT table_name, table_type, COALESCE(table_comment, '')
+FROM information_schema.tables
+WHERE table_schema = '__SCHEMA__' AND table_type = 'BASE TABLE'
+ORDER BY table_name
 `.trim().replace(/\s+/g, " ");
 
 const POSTGRES_TABLE_LIST_SQL = `
@@ -97,7 +97,7 @@ export function supportsTableList(protocol: CatalogProtocol | "unknown"): boolea
 }
 
 function tableListSql(protocol: "mysql" | "postgres", schema: string): string {
-  const template = protocol === "postgres" ? POSTGRES_TABLE_LIST_SQL : MYSQL_TABLE_LIST_SQL;
+  const template = protocol === "postgres" ? POSTGRES_TABLE_LIST_SQL : MYSQL_TABLE_NAME_SQL;
   // `schema` already passed `assertSchemaIdent` (identifier whitelist), so the
   // literal below can never carry a quote, comment or statement separator.
   return template.replace("__SCHEMA__", schema);
@@ -218,6 +218,7 @@ export type LiveTableProvider = {
 export type SqlLiveTableProviderDeps = {
   readConnectionsImpl?: typeof readConnections;
   runSqlImpl?: typeof runSql;
+  runCatalogShowImpl?: typeof runCatalogShow;
   now?: () => number;
 };
 
@@ -234,6 +235,18 @@ function rawRowCount(json: unknown): number {
   if (!json || typeof json !== "object") return 0;
   const rows = (json as { rows?: unknown }).rows;
   return Array.isArray(rows) ? rows.length : 0;
+}
+
+function parseShowTableNames(json: unknown): string[] {
+  if (!json || typeof json !== "object") return [];
+  const rows = (json as { rows?: unknown }).rows;
+  if (!Array.isArray(rows)) return [];
+  const names: string[] = [];
+  for (const row of rows) {
+    const table = Array.isArray(row) ? String(row[0] ?? "").trim() : "";
+    if (table) names.push(table);
+  }
+  return names;
 }
 
 function parseTableRows(json: unknown): LiveTableEntry[] {
@@ -260,6 +273,27 @@ function parseTableRows(json: unknown): LiveTableEntry[] {
   return out;
 }
 
+function parseMysqlNameRows(json: unknown): LiveTableEntry[] {
+  if (!json || typeof json !== "object") return [];
+  const rows = (json as { rows?: unknown }).rows;
+  if (!Array.isArray(rows)) return [];
+  const out: LiveTableEntry[] = [];
+  for (const row of rows) {
+    if (!Array.isArray(row) || row.length < 3) continue;
+    const table = String(row[0] ?? "").trim();
+    if (!table) continue;
+    const rawType = String(row[1] ?? "").trim().toUpperCase();
+    const comment = String(row[2] ?? "").trim();
+    out.push({
+      table,
+      tableType: rawType === "VIEW" ? "VIEW" : "BASE TABLE",
+      columnCount: 0,
+      ...(comment ? { tableComment: comment } : {})
+    });
+  }
+  return out;
+}
+
 /**
  * Production provider — path B of Spec 190 §6.2: one read-only aggregate query
  * per Schema, executed through the KTX credential channel. No AI, no enrichment.
@@ -269,6 +303,7 @@ export function createSqlLiveTableProvider(
 ): LiveTableProvider {
   const readConnectionsImpl = deps.readConnectionsImpl ?? readConnections;
   const runSqlImpl = deps.runSqlImpl ?? runSql;
+  const runCatalogShowImpl = deps.runCatalogShowImpl ?? runCatalogShow;
   const now = deps.now ?? Date.now;
 
   return {
@@ -305,13 +340,31 @@ export function createSqlLiveTableProvider(
         };
       }
       const protocol = wireProtocol as "mysql" | "postgres";
+      const catalog = protocol === "mysql" ? splitCatalogDatabase(conn.database) : null;
+      // External catalogs list names with SHOW on the direct adapter. KTX 0.16.0
+      // rejects SHOW, and this cluster has no catalog information_schema.
+      // Column counts stay 0: one name query must not turn into a column scan.
+      let listSql: string;
+      try {
+        listSql = catalog
+          ? catalogTablesSql(catalog.catalog, schema)
+          : tableListSql(protocol, schema);
+      } catch {
+        return {
+          status: "error",
+          tables: [],
+          fetchedAt,
+          reason: "QUERY_FAILED",
+          wireProtocol: protocol
+        };
+      }
       let result: SqlResult;
       try {
-        result = await runSqlImpl(
+        result = await (catalog ? runCatalogShowImpl : runSqlImpl)(
           projectRoot,
           connectionId,
-          tableListSql(protocol, schema),
-          { maxRows: TABLE_LIST_MAX_ROWS, timeoutMs: 30_000 }
+          listSql,
+          { maxRows: catalog ? CATALOG_TABLE_NAME_LIMIT : TABLE_LIST_MAX_ROWS, timeoutMs: CATALOG_SCAN_TIMEOUT_MS }
         );
       } catch (err) {
         if (err instanceof KtxCliError) {
@@ -353,11 +406,20 @@ export function createSqlLiveTableProvider(
           wireProtocol: protocol
         };
       }
-      const tables = parseTableRows(result.json);
+      const tables = catalog
+        ? parseShowTableNames(result.json).map((table) => ({
+            table,
+            tableType: "BASE TABLE" as const,
+            columnCount: 0
+          }))
+        : protocol === "mysql"
+          ? parseMysqlNameRows(result.json)
+          : parseTableRows(result.json);
       // A full page may be truncated — fail loudly instead of returning a partial
       // list. The ceiling is measured on the raw row count, so a truncated page
       // is caught even when some of its rows are malformed.
-      if (rawRowCount(result.json) >= TABLE_LIST_MAX_ROWS) {
+      const nameLimit = catalog ? CATALOG_TABLE_NAME_LIMIT : TABLE_LIST_MAX_ROWS;
+      if (rawRowCount(result.json) >= nameLimit) {
         return {
           status: "error",
           tables: [],

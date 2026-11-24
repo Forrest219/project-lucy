@@ -1,0 +1,31 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 6,
+  "body": {
+    "ok": true,
+    "data": {
+      "valid": true,
+      "connectionId": "hive-1",
+      "schema": "weather",
+      "assetKind": "schema_manifest",
+      "assetType": "schemaManifest",
+      "targetPath": "semantic-layer/hive-1/_schema/weather.yaml",
+      "originalFilename": "weather.yaml",
+      "sizeBytes": 195,
+      "sha256": "7d05e40a040a27d9b902191ab3ae30073ff9ecc9f7c5e56c51a9df8e35da725d",
+      "errors": [],
+      "warnings": [
+        {
+          "code": "TARGET_EXISTS",
+          "message": "目标文件已存在：semantic-layer/hive-1/_schema/weather.yaml"
+        }
+      ],
+      "tableNames": [
+        "city"
+      ],
+      "tables": 1,
+      "sourceNameConflicts": [],
+      "exists": true
+    }
+  }
+}

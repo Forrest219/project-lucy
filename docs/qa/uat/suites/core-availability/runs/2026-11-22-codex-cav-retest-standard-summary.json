@@ -1,0 +1,130 @@
+{
+  "images": {
+    "appImageId": "sha256:8669d3b2c765013ab67e3ad726e04c445f3d86201fa629c39d08d0925d4b1adf",
+    "mysqlImageId": "sha256:24989179f58856db763f418010c1169fecc944e3ec1ea7e921572d83eb070f70",
+    "gitSha": "8e3e3f24ccc09cf08fda1dcb043471194e87d58e",
+    "gitDirty": false
+  },
+  "observedSeconds": 120.0,
+  "integrity": "VALID",
+  "verdict": "CALIBRATION PASS",
+  "cases": {
+    "UAT-CAV-STD-01": {
+      "verdict": "PASS",
+      "findings": []
+    },
+    "UAT-CAV-STD-02": {
+      "verdict": "PASS",
+      "findings": []
+    },
+    "UAT-CAV-STD-03": {
+      "verdict": "PASS",
+      "findings": []
+    },
+    "UAT-CAV-STD-04": {
+      "verdict": "PASS",
+      "findings": []
+    },
+    "UAT-CAV-STD-05": {
+      "verdict": "PASS",
+      "findings": []
+    }
+  },
+  "lanes": {
+    "probe:/api/livez": {
+      "planned": 120,
+      "terminal": 120,
+      "missed": 0,
+      "naturalSucceeded": 120,
+      "censoredSucceeded": 0,
+      "failed": 0
+    },
+    "probe:/api/readyz": {
+      "planned": 120,
+      "terminal": 120,
+      "missed": 0,
+      "naturalSucceeded": 120,
+      "censoredSucceeded": 0,
+      "failed": 0
+    },
+    "probe:/api/health": {
+      "planned": 120,
+      "terminal": 120,
+      "missed": 0,
+      "naturalSucceeded": 120,
+      "censoredSucceeded": 0,
+      "failed": 0
+    },
+    "http": {
+      "planned": 120,
+      "terminal": 120,
+      "missed": 0,
+      "naturalSucceeded": 120,
+      "censoredSucceeded": 0,
+      "failed": 0
+    },
+    "mcp": {
+      "planned": 24,
+      "terminal": 24,
+      "missed": 0,
+      "naturalSucceeded": 15,
+      "censoredSucceeded": 1,
+      "failed": 8
+    },
+    "audit-progress": {
+      "planned": 24,
+      "terminal": 24,
+      "missed": 0,
+      "naturalSucceeded": 24,
+      "censoredSucceeded": 0,
+      "failed": 0
+    },
+    "mutation": {
+      "planned": 2,
+      "terminal": 2,
+      "missed": 0,
+      "naturalSucceeded": 2,
+      "censoredSucceeded": 0,
+      "failed": 0
+    },
+    "gateway-readyz": {
+      "planned": 120,
+      "terminal": 120,
+      "missed": 0,
+      "naturalSucceeded": 120,
+      "censoredSucceeded": 0,
+      "failed": 0
+    }
+  },
+  "gatewayForwarding": {
+    "gateway-readyz:forwarded": 120,
+    "http:forwarded": 120,
+    "mcp:forwarded": 24
+  },
+  "reloadContractRecoveries": 8,
+  "unexpectedFailures": 0,
+  "performanceBudget": {
+    "livezP99Ms": 399.45637499999975,
+    "livezMaxMs": 400.0663749999944,
+    "readyzP99Ms": 338.265583000009,
+    "gatewayReadyzP99Ms": 400.2284160000045
+  },
+  "auditEligibleRows": 23057,
+  "cleanupComplete": true,
+  "evidenceManifestSha256": "5736a8ab1afc1973abe124459570ea930ca2893d8fd0a04e27dc06bf4d2fcb55",
+  "replay": [
+    {
+      "tool": "checkout",
+      "exitCode": 0,
+      "verdict": "CALIBRATION PASS",
+      "allDecisionFieldsMatch": true
+    },
+    {
+      "tool": "frozen snapshot",
+      "exitCode": 0,
+      "verdict": "CALIBRATION PASS",
+      "allDecisionFieldsMatch": true
+    }
+  ],
+  "changedGatewayReceiptExitCode": 2
+}

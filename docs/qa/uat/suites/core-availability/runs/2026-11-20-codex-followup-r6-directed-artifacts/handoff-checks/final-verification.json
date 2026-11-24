@@ -1,0 +1,35 @@
+{
+  "at": "2026-11-20T13:28:59.008489+00:00",
+  "frozenArchiveFilesVerified": 23,
+  "localLinksChecked": 28,
+  "localLinkFailures": [],
+  "candidateUnchanged": true,
+  "gates": [
+    {
+      "name": "spec-docs",
+      "exitCode": 0
+    },
+    {
+      "name": "spec",
+      "exitCode": 0
+    },
+    {
+      "name": "terminology",
+      "exitCode": 0
+    },
+    {
+      "name": "ia-boundary",
+      "exitCode": 0
+    },
+    {
+      "name": "e2e-ledger",
+      "exitCode": 0
+    },
+    {
+      "name": "diff",
+      "exitCode": 0
+    }
+  ],
+  "noNewExemptions": true,
+  "nextBatchNotExecuted": true
+}

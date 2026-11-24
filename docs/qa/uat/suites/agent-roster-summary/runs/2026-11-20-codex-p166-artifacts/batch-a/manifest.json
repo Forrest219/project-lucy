@@ -1,0 +1,17 @@
+{
+  "recordedAt": "2026-11-20T15:19:50.324317+08:00",
+  "scope": "P1-66 v0.3 F66-A BA-01..07",
+  "result": "PASS WITH GAP",
+  "nativeSevenCases": "PASS",
+  "pureMcp": "Bearer only; physical row oracle 4; forbidden source and expired/disabled/revoked denied; Gate-Off retained",
+  "oldUiNewBackend": "PASS",
+  "newUiOld025": "UI PASS; direct complete API cold timeout retained",
+  "originalV02Matrix": "FAIL retained; not completed",
+  "runtimeChanges": "summary projection and on-demand ID; drawer query preservation fixed",
+  "commitTests": 148,
+  "legacyApiTests": 47,
+  "typeErrors": 0,
+  "resources": "cleanup.json",
+  "noPushOrRelease": true,
+  "logNormalization": "Trailing blank lines trimmed in exported txt logs; original raw process logs remain in temporary inbox."
+}

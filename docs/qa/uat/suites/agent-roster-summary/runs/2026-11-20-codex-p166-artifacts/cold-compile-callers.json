@@ -1,0 +1,135 @@
+{
+  "samples": 3065,
+  "topCallers": [
+    [
+      "(runtime / GC / idle)",
+      2423
+    ],
+    [
+      "loadPhysicalColumnsWithProvenance file:///app/webui/server/proxy/row-policy-catalog.ts:1",
+      437
+    ],
+    [
+      "buildSourceMapFromDisk file:///app/webui/server/proxy/acl.ts:1",
+      42
+    ],
+    [
+      "readAccessYaml file:///app/webui/server/admin/agents.ts:1",
+      40
+    ],
+    [
+      "parseAccessConfigText file:///app/webui/server/proxy/identity.ts:1 <- readAccessSnapshot file:///app/webui/server/admin/permission-display.ts:1",
+      22
+    ],
+    [
+      "normalizeSourceRef file:///app/webui/server/source-name-registry.ts:1 <- normalizeRef file:///app/webui/server/proxy/acl.ts:1 <- selectorMatches file:///app/webui/server/proxy/acl.ts:1 <-  file:///app/webui/server/proxy/acl.ts:1",
+      9
+    ],
+    [
+      "loadContentPaths file:///app/webui/server/paths.ts:1 <- loadOverlayWithProvenance file:///app/webui/server/proxy/row-policy-catalog.ts:1 <- buildCachedCatalog file:///app/webui/server/proxy/row-policy-catalog.ts:1",
+      7
+    ],
+    [
+      "currentScopeContext file:///app/webui/server/display-generation.ts:1 <- getDisplaySnapshot file:///app/webui/server/display-snapshot.ts:1",
+      5
+    ],
+    [
+      " file:///app/webui/server/config-digest.ts:1 <- stableJson file:///app/webui/server/config-digest.ts:1 <- stableJson file:///app/webui/server/config-digest.ts:1 <-  file:///app/webui/server/config-digest.ts:1",
+      5
+    ],
+    [
+      " file:///app/webui/server/proxy/acl.ts:1 <- compileRole file:///app/webui/server/proxy/acl.ts:1 <- resolveEffectivePermissions file:///app/webui/server/proxy/acl.ts:1",
+      4
+    ],
+    [
+      "probeExecutionRuntime file:///app/webui/server/admin/mcp-runtime.ts:1 <-  file:///app/webui/server/admin/mcp-runtime.ts:1",
+      3
+    ],
+    [
+      "walkSemanticLayer file:///app/webui/server/display-snapshot.ts:1 <- walkSemanticLayer file:///app/webui/server/display-snapshot.ts:1",
+      3
+    ],
+    [
+      "selectorMatches file:///app/webui/server/proxy/acl.ts:1 <-  file:///app/webui/server/proxy/acl.ts:1 <- compileRole file:///app/webui/server/proxy/acl.ts:1 <- resolveEffectivePermissions file:///app/webui/server/proxy/acl.ts:1",
+      3
+    ],
+    [
+      "stableJson file:///app/webui/server/config-digest.ts:1 <-  file:///app/webui/server/config-digest.ts:1 <- stableJson file:///app/webui/server/config-digest.ts:1 <- stableJson file:///app/webui/server/proxy/acl.ts:1",
+      3
+    ],
+    [
+      "loadOverlayWithProvenance file:///app/webui/server/proxy/row-policy-catalog.ts:1",
+      3
+    ],
+    [
+      "resolveServerCatalogCapability file:///app/webui/server/proxy/row-policy-catalog.ts:1 <- loadSourceFieldCatalogWithProvenance file:///app/webui/server/proxy/row-policy-catalog.ts:1 <- compileScopedRowGrant file:///app/webui/server/proxy/row-policy.ts:1",
+      3
+    ],
+    [
+      "currentScopeContext file:///app/webui/server/display-generation.ts:1 <- commitGuards file:///app/webui/server/display-snapshot.ts:1 <- runMetadataPass file:///app/webui/server/display-snapshot.ts:1",
+      2
+    ],
+    [
+      "write file:///app/webui/server/security/store.ts:1 <- hitRateBucket file:///app/webui/server/security/store.ts:7 <- hitBuckets file:///app/webui/server/auth/rate-limit.ts:1",
+      2
+    ],
+    [
+      "readProject file:///app/webui/server/project.ts:1",
+      2
+    ],
+    [
+      "stableJson file:///app/webui/server/config-digest.ts:1 <- stableJson file:///app/webui/server/config-digest.ts:1 <-  file:///app/webui/server/config-digest.ts:1 <- stableJson file:///app/webui/server/config-digest.ts:1",
+      2
+    ]
+  ],
+  "topLeaves": [
+    [
+      "(idle) ",
+      2270
+    ],
+    [
+      "(garbage collector) ",
+      105
+    ],
+    [
+      "next file:///app/webui/node_modules/yaml/dist/parse/parser.js",
+      97
+    ],
+    [
+      "foldLines file:///app/webui/node_modules/yaml/dist/compose/resolve-flow-scalar.js",
+      42
+    ],
+    [
+      "parseDocument file:///app/webui/node_modules/yaml/dist/parse/lexer.js",
+      39
+    ],
+    [
+      "parseNext file:///app/webui/node_modules/yaml/dist/parse/lexer.js",
+      28
+    ],
+    [
+      "step file:///app/webui/node_modules/yaml/dist/parse/parser.js",
+      24
+    ],
+    [
+      "parse file:///app/webui/node_modules/yaml/dist/parse/parser.js",
+      21
+    ],
+    [
+      "blockMap file:///app/webui/node_modules/yaml/dist/parse/parser.js",
+      19
+    ],
+    [
+      "NodeBase file:///app/webui/node_modules/yaml/dist/nodes/Node.js",
+      18
+    ],
+    [
+      "lex file:///app/webui/node_modules/yaml/dist/parse/lexer.js",
+      16
+    ],
+    [
+      "composeScalar file:///app/webui/node_modules/yaml/dist/compose/compose-scalar.js",
+      15
+    ]
+  ]
+}

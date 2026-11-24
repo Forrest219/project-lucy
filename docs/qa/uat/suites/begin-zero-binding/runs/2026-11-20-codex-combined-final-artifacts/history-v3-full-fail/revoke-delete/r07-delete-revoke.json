@@ -1,0 +1,22 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 1197.206,
+  "body": {
+    "ok": true,
+    "data": {
+      "id": "idx_20261120_044425_872_beb77518",
+      "force": false,
+      "startedAt": "2026-11-20T04:44:24.695Z",
+      "finishedAt": "2026-11-20T04:44:25.866Z",
+      "reindex": {
+        "ok": true,
+        "exitCode": 0,
+        "stdout": "reindex\tscopes=2\tscanned=13\tupdated=0\tdeleted=0\tembeddings=-\tduration_ms=69\n",
+        "stderr": "Project: /data/lucy\nEmbeddings: not configured — indexing lexical only\nsl/lucy-ops\tscanned=12\tupdated=0\tdeleted=0\tembeddings=-\tduration_ms=59\nsl/uat-mysql\tscanned=1\tupdated=0\tdeleted=0\tembeddings=-\tduration_ms=2\n"
+      },
+      "pendingDigest": "60fea59fb6674489bd10d4e15cb9a0e36839a1845c9642e1861275a76bab6910",
+      "baselineState": "ready",
+      "baselineGeneration": 2
+    }
+  }
+}

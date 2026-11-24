@@ -1,0 +1,265 @@
+
+ RUN  v4.1.9 /Users/zhangxingchen/Projects/project-lucy/inbox/row-policy-automatic-enforcement/baseline/webui
+
+ ❯ server/__tests__/empty-result-next-step-proxy.test.ts (21 tests | 18 failed) 1927ms
+     × SC-09／SC-10 空结果带 next_step，三处一致且上游取值不变 990ms
+     × SC-11 非空结果无 next_step；P0-4 可核对块与业务字段共存 49ms
+     × SC-12 text 不是 JSON 对象 → 018 不注入；skipped_reason 不被 AV 抹掉 51ms
+     × C2：SSE 成功查数缺 originalEnvelopeWire → isError／assemble_failed，无成功块 42ms
+     × SC-18 JSON：200 + isError:true + rows:[] 不发且不调 allowedToolNames 54ms
+     × SC-18 SSE：200 + isError:true + rows:[] 不发且不调 allowedToolNames 39ms
+     × SC-19 上游 text 已带 next_step 键时不覆盖（可与 P0-4 块共存） 40ms
+     × SC-20 有数据／非 lucy_query 时不触发可见性裁决（计数） 42ms
+     × SC-22 无 structuredContent 时 text＋meta 仍注入 37ms
+     × SC-23 structured 已有 next_step、text 无 → 018 整单跳过；P0-4 仍可投影 38ms
+     × SC-24 rows=[] 且截断 → repair 与 next_step 并存 41ms
+     × SC-25 overflow：018 跳过 next_step；P0-4 保留字面量并加可核对块 36ms
+     × SC-25 precision：018 跳过 next_step；P0-4 保留字面量并加可核对块 40ms
+     × SC-25 underflow：018 跳过 next_step；P0-4 保留字面量并加可核对块 37ms
+     × SC-30 JSON／SSE：HTTP 500 + JSON-RPC result + rows:[] → 无 next_step 且不调 allowedToolNames 38ms
+     × SC-14 审计行数不被污染，载荷无 rows/totalRows/columns/headers 键 40ms
+     × N7 用户 filters 去值摘要进入 next_step.query，不含原始值 47ms
+     × SC-13(b) 018 注入成功后 AV 键冲突失败 → _meta 仍含 next_step 52ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 18 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-09／SC-10 空结果带 next_step，三处一致且上游取值不变
+AssertionError: {"jsonrpc":"2.0","id":"sc-09-begin","result":{"isError":true,"content":[{"type":"text","text":"当前未启用问询上报，可直接按现有权限查询。"}],"data":{"reason":"begin_not_available","trace":"trace_08d52b4e-1811-4bee-9e3c-83c6a92c77ae"}}}: expected true not to be true // Object.is equality
+ ❯ withProxyCall server/__tests__/empty-result-next-step-proxy.test.ts:315:72
+    313|       expect(beginRes.status).toBe(200);
+    314|       const beginBody = (await beginRes.json()) as { result?: { isErro…
+    315|       expect(beginBody.result?.isError, JSON.stringify(beginBody)).not…
+       |                                                                        ^
+    316|     }
+    317|
+ ❯ server/__tests__/empty-result-next-step-proxy.test.ts:378:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/18]⎯
+
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-11 非空结果无 next_step；P0-4 可核对块与业务字段共存
+AssertionError: {"jsonrpc":"2.0","id":"sc-11-begin","result":{"isError":true,"content":[{"type":"text","text":"当前未启用问询上报，可直接按现有权限查询。"}],"data":{"reason":"begin_not_available","trace":"trace_074b0619-3670-441f-a15e-7ad568bc23ae"}}}: expected true not to be true // Object.is equality
+ ❯ withProxyCall server/__tests__/empty-result-next-step-proxy.test.ts:315:72
+    313|       expect(beginRes.status).toBe(200);
+    314|       const beginBody = (await beginRes.json()) as { result?: { isErro…
+    315|       expect(beginBody.result?.isError, JSON.stringify(beginBody)).not…
+       |                                                                        ^
+    316|     }
+    317|
+ ❯ server/__tests__/empty-result-next-step-proxy.test.ts:402:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/18]⎯
+
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-12 text 不是 JSON 对象 → 018 不注入；skipped_reason 不被 AV 抹掉
+AssertionError: {"jsonrpc":"2.0","id":"sc-12-begin","result":{"isError":true,"content":[{"type":"text","text":"当前未启用问询上报，可直接按现有权限查询。"}],"data":{"reason":"begin_not_available","trace":"trace_c2a4ca83-f6da-4681-92dd-291f4ff33ee7"}}}: expected true not to be true // Object.is equality
+ ❯ withProxyCall server/__tests__/empty-result-next-step-proxy.test.ts:315:72
+    313|       expect(beginRes.status).toBe(200);
+    314|       const beginBody = (await beginRes.json()) as { result?: { isErro…
+    315|       expect(beginBody.result?.isError, JSON.stringify(beginBody)).not…
+       |                                                                        ^
+    316|     }
+    317|
+ ❯ server/__tests__/empty-result-next-step-proxy.test.ts:426:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/18]⎯
+
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > C2：SSE 成功查数缺 originalEnvelopeWire → isError／assemble_failed，无成功块
+AssertionError: {"jsonrpc":"2.0","id":"c2-missing-wire-begin","result":{"isError":true,"content":[{"type":"text","text":"当前未启用问询上报，可直接按现有权限查询。"}],"data":{"reason":"begin_not_available","trace":"trace_cfaa97da-73d3-4b6e-9cd7-0bcb22e4d2a0"}}}: expected true not to be true // Object.is equality
+ ❯ withProxyCall server/__tests__/empty-result-next-step-proxy.test.ts:315:72
+    313|       expect(beginRes.status).toBe(200);
+    314|       const beginBody = (await beginRes.json()) as { result?: { isErro…
+    315|       expect(beginBody.result?.isError, JSON.stringify(beginBody)).not…
+       |                                                                        ^
+    316|     }
+    317|
+ ❯ server/__tests__/empty-result-next-step-proxy.test.ts:447:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/18]⎯
+
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-18 JSON：200 + isError:true + rows:[] 不发且不调 allowedToolNames
+AssertionError: {"jsonrpc":"2.0","id":"sc-18-json-begin","result":{"isError":true,"content":[{"type":"text","text":"当前未启用问询上报，可直接按现有权限查询。"}],"data":{"reason":"begin_not_available","trace":"trace_6f229fc5-00c7-43d2-a6f3-ffdb21dce3c6"}}}: expected true not to be true // Object.is equality
+ ❯ withProxyCall server/__tests__/empty-result-next-step-proxy.test.ts:315:72
+    313|       expect(beginRes.status).toBe(200);
+    314|       const beginBody = (await beginRes.json()) as { result?: { isErro…
+    315|       expect(beginBody.result?.isError, JSON.stringify(beginBody)).not…
+       |                                                                        ^
+    316|     }
+    317|
+ ❯ server/__tests__/empty-result-next-step-proxy.test.ts:472:42
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/18]⎯
+
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-18 SSE：200 + isError:true + rows:[] 不发且不调 allowedToolNames
+AssertionError: {"jsonrpc":"2.0","id":"sc-18-sse-begin","result":{"isError":true,"content":[{"type":"text","text":"当前未启用问询上报，可直接按现有权限查询。"}],"data":{"reason":"begin_not_available","trace":"trace_e4bf1c80-c1e6-431f-a50c-6a30c2df5659"}}}: expected true not to be true // Object.is equality
+ ❯ withProxyCall server/__tests__/empty-result-next-step-proxy.test.ts:315:72
+    313|       expect(beginRes.status).toBe(200);
+    314|       const beginBody = (await beginRes.json()) as { result?: { isErro…
+    315|       expect(beginBody.result?.isError, JSON.stringify(beginBody)).not…
+       |                                                                        ^
+    316|     }
+    317|
+ ❯ server/__tests__/empty-result-next-step-proxy.test.ts:484:42
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/18]⎯
+
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-19 上游 text 已带 next_step 键时不覆盖（可与 P0-4 块共存）
+AssertionError: {"jsonrpc":"2.0","id":"sc-19-begin","result":{"isError":true,"content":[{"type":"text","text":"当前未启用问询上报，可直接按现有权限查询。"}],"data":{"reason":"begin_not_available","trace":"trace_d170d75a-9971-42a3-9ee0-941cb6c9bc71"}}}: expected true not to be true // Object.is equality
+ ❯ withProxyCall server/__tests__/empty-result-next-step-proxy.test.ts:315:72
+    313|       expect(beginRes.status).toBe(200);
+    314|       const beginBody = (await beginRes.json()) as { result?: { isErro…
+    315|       expect(beginBody.result?.isError, JSON.stringify(beginBody)).not…
+       |                                                                        ^
+    316|     }
+    317|
+ ❯ server/__tests__/empty-result-next-step-proxy.test.ts:502:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/18]⎯
+
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-20 有数据／非 lucy_query 时不触发可见性裁决（计数）
+AssertionError: {"jsonrpc":"2.0","id":"sc-20-a-begin","result":{"isError":true,"content":[{"type":"text","text":"当前未启用问询上报，可直接按现有权限查询。"}],"data":{"reason":"begin_not_available","trace":"trace_d7f01f70-a447-4fdf-af6b-ec2ac414dd37"}}}: expected true not to be true // Object.is equality
+ ❯ withProxyCall server/__tests__/empty-result-next-step-proxy.test.ts:315:72
+    313|       expect(beginRes.status).toBe(200);
+    314|       const beginBody = (await beginRes.json()) as { result?: { isErro…
+    315|       expect(beginBody.result?.isError, JSON.stringify(beginBody)).not…
+       |                                                                        ^
+    316|     }
+    317|
+ ❯ server/__tests__/empty-result-next-step-proxy.test.ts:517:22
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/18]⎯
+
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-22 无 structuredContent 时 text＋meta 仍注入
+AssertionError: {"jsonrpc":"2.0","id":"sc-22-begin","result":{"isError":true,"content":[{"type":"text","text":"当前未启用问询上报，可直接按现有权限查询。"}],"data":{"reason":"begin_not_available","trace":"trace_8cb8c1ba-c9ac-4c3a-8297-4d1a7aa7da6f"}}}: expected true not to be true // Object.is equality
+ ❯ withProxyCall server/__tests__/empty-result-next-step-proxy.test.ts:315:72
+    313|       expect(beginRes.status).toBe(200);
+    314|       const beginBody = (await beginRes.json()) as { result?: { isErro…
+    315|       expect(beginBody.result?.isError, JSON.stringify(beginBody)).not…
+       |                                                                        ^
+    316|     }
+    317|
+ ❯ server/__tests__/empty-result-next-step-proxy.test.ts:542:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/18]⎯
+
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-23 structured 已有 next_step、text 无 → 018 整单跳过；P0-4 仍可投影
+AssertionError: {"jsonrpc":"2.0","id":"sc-23-begin","result":{"isError":true,"content":[{"type":"text","text":"当前未启用问询上报，可直接按现有权限查询。"}],"data":{"reason":"begin_not_available","trace":"trace_9bcc7f78-38ab-4ebf-9e21-7894c0dd3826"}}}: expected true not to be true // Object.is equality
+ ❯ withProxyCall server/__tests__/empty-result-next-step-proxy.test.ts:315:72
+    313|       expect(beginRes.status).toBe(200);
+    314|       const beginBody = (await beginRes.json()) as { result?: { isErro…
+    315|       expect(beginBody.result?.isError, JSON.stringify(beginBody)).not…
+       |                                                                        ^
+    316|     }
+    317|
+ ❯ server/__tests__/empty-result-next-step-proxy.test.ts:556:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/18]⎯
+
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-24 rows=[] 且截断 → repair 与 next_step 并存
+AssertionError: {"jsonrpc":"2.0","id":"sc-24-begin","result":{"isError":true,"content":[{"type":"text","text":"当前未启用问询上报，可直接按现有权限查询。"}],"data":{"reason":"begin_not_available","trace":"trace_dc56a0fd-4c2d-48f9-879d-d685209b1250"}}}: expected true not to be true // Object.is equality
+ ❯ withProxyCall server/__tests__/empty-result-next-step-proxy.test.ts:315:72
+    313|       expect(beginRes.status).toBe(200);
+    314|       const beginBody = (await beginRes.json()) as { result?: { isErro…
+    315|       expect(beginBody.result?.isError, JSON.stringify(beginBody)).not…
+       |                                                                        ^
+    316|     }
+    317|
+ ❯ server/__tests__/empty-result-next-step-proxy.test.ts:575:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/18]⎯
+
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-25 overflow：018 跳过 next_step；P0-4 保留字面量并加可核对块
+AssertionError: {"jsonrpc":"2.0","id":"sc-25-overflow-1795186985895-begin","result":{"isError":true,"content":[{"type":"text","text":"当前未启用问询上报，可直接按现有权限查询。"}],"data":{"reason":"begin_not_available","trace":"trace_e4b7e2ed-590b-488d-a7b6-6ae0d5fb9366"}}}: expected true not to be true // Object.is equality
+ ❯ withProxyCall server/__tests__/empty-result-next-step-proxy.test.ts:315:72
+    313|       expect(beginRes.status).toBe(200);
+    314|       const beginBody = (await beginRes.json()) as { result?: { isErro…
+    315|       expect(beginBody.result?.isError, JSON.stringify(beginBody)).not…
+       |                                                                        ^
+    316|     }
+    317|
+ ❯ server/__tests__/empty-result-next-step-proxy.test.ts:593:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/18]⎯
+
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-25 precision：018 跳过 next_step；P0-4 保留字面量并加可核对块
+AssertionError: {"jsonrpc":"2.0","id":"sc-25-precision-1795186985932-begin","result":{"isError":true,"content":[{"type":"text","text":"当前未启用问询上报，可直接按现有权限查询。"}],"data":{"reason":"begin_not_available","trace":"trace_1ec10ac7-bc48-4610-babf-3aec9bd3f1af"}}}: expected true not to be true // Object.is equality
+ ❯ withProxyCall server/__tests__/empty-result-next-step-proxy.test.ts:315:72
+    313|       expect(beginRes.status).toBe(200);
+    314|       const beginBody = (await beginRes.json()) as { result?: { isErro…
+    315|       expect(beginBody.result?.isError, JSON.stringify(beginBody)).not…
+       |                                                                        ^
+    316|     }
+    317|
+ ❯ server/__tests__/empty-result-next-step-proxy.test.ts:593:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/18]⎯
+
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-25 underflow：018 跳过 next_step；P0-4 保留字面量并加可核对块
+AssertionError: {"jsonrpc":"2.0","id":"sc-25-underflow-1795186985972-begin","result":{"isError":true,"content":[{"type":"text","text":"当前未启用问询上报，可直接按现有权限查询。"}],"data":{"reason":"begin_not_available","trace":"trace_f208cccd-5528-4ae0-b388-65f832259d90"}}}: expected true not to be true // Object.is equality
+ ❯ withProxyCall server/__tests__/empty-result-next-step-proxy.test.ts:315:72
+    313|       expect(beginRes.status).toBe(200);
+    314|       const beginBody = (await beginRes.json()) as { result?: { isErro…
+    315|       expect(beginBody.result?.isError, JSON.stringify(beginBody)).not…
+       |                                                                        ^
+    316|     }
+    317|
+ ❯ server/__tests__/empty-result-next-step-proxy.test.ts:593:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/18]⎯
+
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-30 JSON／SSE：HTTP 500 + JSON-RPC result + rows:[] → 无 next_step 且不调 allowedToolNames
+AssertionError: {"jsonrpc":"2.0","id":"sc-30-json-begin","result":{"isError":true,"content":[{"type":"text","text":"当前未启用问询上报，可直接按现有权限查询。"}],"data":{"reason":"begin_not_available","trace":"trace_ed543d11-683d-492d-824a-9c61e190f291"}}}: expected true not to be true // Object.is equality
+ ❯ withProxyCall server/__tests__/empty-result-next-step-proxy.test.ts:315:72
+    313|       expect(beginRes.status).toBe(200);
+    314|       const beginBody = (await beginRes.json()) as { result?: { isErro…
+    315|       expect(beginBody.result?.isError, JSON.stringify(beginBody)).not…
+       |                                                                        ^
+    316|     }
+    317|
+ ❯ server/__tests__/empty-result-next-step-proxy.test.ts:615:44
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/18]⎯
+
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-14 审计行数不被污染，载荷无 rows/totalRows/columns/headers 键
+AssertionError: {"jsonrpc":"2.0","id":"sc-14-begin","result":{"isError":true,"content":[{"type":"text","text":"当前未启用问询上报，可直接按现有权限查询。"}],"data":{"reason":"begin_not_available","trace":"trace_2e36822f-6ff7-41a9-81b0-2b7f973d815a"}}}: expected true not to be true // Object.is equality
+ ❯ withProxyCall server/__tests__/empty-result-next-step-proxy.test.ts:315:72
+    313|       expect(beginRes.status).toBe(200);
+    314|       const beginBody = (await beginRes.json()) as { result?: { isErro…
+    315|       expect(beginBody.result?.isError, JSON.stringify(beginBody)).not…
+       |                                                                        ^
+    316|     }
+    317|
+ ❯ server/__tests__/empty-result-next-step-proxy.test.ts:630:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/18]⎯
+
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > N7 用户 filters 去值摘要进入 next_step.query，不含原始值
+AssertionError: {"jsonrpc":"2.0","id":"n7-begin","result":{"isError":true,"content":[{"type":"text","text":"当前未启用问询上报，可直接按现有权限查询。"}],"data":{"reason":"begin_not_available","trace":"trace_d4b8fb58-3bba-467a-86ee-79b646c6c679"}}}: expected true not to be true // Object.is equality
+ ❯ withProxyCall server/__tests__/empty-result-next-step-proxy.test.ts:315:72
+    313|       expect(beginRes.status).toBe(200);
+    314|       const beginBody = (await beginRes.json()) as { result?: { isErro…
+    315|       expect(beginBody.result?.isError, JSON.stringify(beginBody)).not…
+       |                                                                        ^
+    316|     }
+    317|
+ ❯ server/__tests__/empty-result-next-step-proxy.test.ts:715:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/18]⎯
+
+ FAIL  server/__tests__/empty-result-next-step-proxy.test.ts > empty-result next_step proxy > SC-13(b) 018 注入成功后 AV 键冲突失败 → _meta 仍含 next_step
+AssertionError: {"jsonrpc":"2.0","id":"sc-13b-begin","result":{"isError":true,"content":[{"type":"text","text":"当前未启用问询上报，可直接按现有权限查询。"}],"data":{"reason":"begin_not_available","trace":"trace_c5939986-6a0f-428e-b3a2-602e123fa80e"}}}: expected true not to be true // Object.is equality
+ ❯ withProxyCall server/__tests__/empty-result-next-step-proxy.test.ts:315:72
+    313|       expect(beginRes.status).toBe(200);
+    314|       const beginBody = (await beginRes.json()) as { result?: { isErro…
+    315|       expect(beginBody.result?.isError, JSON.stringify(beginBody)).not…
+       |                                                                        ^
+    316|     }
+    317|
+ ❯ server/__tests__/empty-result-next-step-proxy.test.ts:747:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/18]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  18 failed | 3 passed (21)
+   Start at  23:03:04
+   Duration  2.16s (transform 811ms, setup 104ms, import 62ms, tests 1.93s, environment 0ms)
+

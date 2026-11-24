@@ -1,0 +1,623 @@
+[
+  {
+    "name": "diag-0-lucy_catalog",
+    "tool": "lucy_catalog",
+    "who": "a",
+    "session": "diag-0",
+    "ok": true,
+    "elapsedMs": 39.037,
+    "rpcId": 1
+  },
+  {
+    "name": "diag-0-lucy_read_source",
+    "tool": "lucy_read_source",
+    "who": "a",
+    "session": "diag-0",
+    "ok": true,
+    "elapsedMs": 62.787,
+    "rpcId": 2
+  },
+  {
+    "name": "diag-0-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "diag-0",
+    "ok": true,
+    "elapsedMs": 2347.138,
+    "rpcId": 3
+  },
+  {
+    "name": "diag-1-lucy_catalog",
+    "tool": "lucy_catalog",
+    "who": "a",
+    "session": "diag-1",
+    "ok": true,
+    "elapsedMs": 53.512,
+    "rpcId": 4
+  },
+  {
+    "name": "diag-1-lucy_read_source",
+    "tool": "lucy_read_source",
+    "who": "a",
+    "session": "diag-1",
+    "ok": true,
+    "elapsedMs": 46.125,
+    "rpcId": 5
+  },
+  {
+    "name": "diag-1-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "diag-1",
+    "ok": true,
+    "elapsedMs": 703.272,
+    "rpcId": 6
+  },
+  {
+    "name": "diag-2-lucy_catalog",
+    "tool": "lucy_catalog",
+    "who": "a",
+    "session": "diag-2",
+    "ok": true,
+    "elapsedMs": 12.198,
+    "rpcId": 7
+  },
+  {
+    "name": "diag-2-lucy_read_source",
+    "tool": "lucy_read_source",
+    "who": "a",
+    "session": "diag-2",
+    "ok": true,
+    "elapsedMs": 16.615,
+    "rpcId": 8
+  },
+  {
+    "name": "diag-2-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "diag-2",
+    "ok": true,
+    "elapsedMs": 576.214,
+    "rpcId": 9
+  },
+  {
+    "name": "diag-3-lucy_catalog",
+    "tool": "lucy_catalog",
+    "who": "a",
+    "session": "diag-3",
+    "ok": true,
+    "elapsedMs": 16.555,
+    "rpcId": 10
+  },
+  {
+    "name": "diag-3-lucy_read_source",
+    "tool": "lucy_read_source",
+    "who": "a",
+    "session": "diag-3",
+    "ok": true,
+    "elapsedMs": 22.176,
+    "rpcId": 11
+  },
+  {
+    "name": "diag-3-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "diag-3",
+    "ok": true,
+    "elapsedMs": 853.118,
+    "rpcId": 12
+  },
+  {
+    "name": "diag-4-lucy_catalog",
+    "tool": "lucy_catalog",
+    "who": "a",
+    "session": "diag-4",
+    "ok": true,
+    "elapsedMs": 11.648,
+    "rpcId": 13
+  },
+  {
+    "name": "diag-4-lucy_read_source",
+    "tool": "lucy_read_source",
+    "who": "a",
+    "session": "diag-4",
+    "ok": true,
+    "elapsedMs": 18.538,
+    "rpcId": 14
+  },
+  {
+    "name": "diag-4-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "diag-4",
+    "ok": true,
+    "elapsedMs": 670.891,
+    "rpcId": 15
+  },
+  {
+    "name": "diag-5-lucy_catalog",
+    "tool": "lucy_catalog",
+    "who": "a",
+    "session": "diag-5",
+    "ok": true,
+    "elapsedMs": 21.406,
+    "rpcId": 16
+  },
+  {
+    "name": "diag-5-lucy_read_source",
+    "tool": "lucy_read_source",
+    "who": "a",
+    "session": "diag-5",
+    "ok": true,
+    "elapsedMs": 34.478,
+    "rpcId": 17
+  },
+  {
+    "name": "diag-5-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "diag-5",
+    "ok": true,
+    "elapsedMs": 1333.568,
+    "rpcId": 18
+  },
+  {
+    "name": "diag-6-lucy_catalog",
+    "tool": "lucy_catalog",
+    "who": "a",
+    "session": "diag-6",
+    "ok": true,
+    "elapsedMs": 33.376,
+    "rpcId": 19
+  },
+  {
+    "name": "diag-6-lucy_read_source",
+    "tool": "lucy_read_source",
+    "who": "a",
+    "session": "diag-6",
+    "ok": true,
+    "elapsedMs": 75.71,
+    "rpcId": 20
+  },
+  {
+    "name": "diag-6-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "diag-6",
+    "ok": true,
+    "elapsedMs": 880.215,
+    "rpcId": 21
+  },
+  {
+    "name": "diag-7-lucy_catalog",
+    "tool": "lucy_catalog",
+    "who": "a",
+    "session": "diag-7",
+    "ok": true,
+    "elapsedMs": 35.231,
+    "rpcId": 22
+  },
+  {
+    "name": "diag-7-lucy_read_source",
+    "tool": "lucy_read_source",
+    "who": "a",
+    "session": "diag-7",
+    "ok": true,
+    "elapsedMs": 19.437,
+    "rpcId": 23
+  },
+  {
+    "name": "diag-7-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "diag-7",
+    "ok": true,
+    "elapsedMs": 1003.14,
+    "rpcId": 24
+  },
+  {
+    "name": "diag-8-lucy_catalog",
+    "tool": "lucy_catalog",
+    "who": "a",
+    "session": "diag-8",
+    "ok": true,
+    "elapsedMs": 18.696,
+    "rpcId": 25
+  },
+  {
+    "name": "diag-8-lucy_read_source",
+    "tool": "lucy_read_source",
+    "who": "a",
+    "session": "diag-8",
+    "ok": true,
+    "elapsedMs": 25.41,
+    "rpcId": 26
+  },
+  {
+    "name": "diag-8-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "diag-8",
+    "ok": true,
+    "elapsedMs": 610.568,
+    "rpcId": 27
+  },
+  {
+    "name": "diag-9-lucy_catalog",
+    "tool": "lucy_catalog",
+    "who": "a",
+    "session": "diag-9",
+    "ok": true,
+    "elapsedMs": 12.077,
+    "rpcId": 28
+  },
+  {
+    "name": "diag-9-lucy_read_source",
+    "tool": "lucy_read_source",
+    "who": "a",
+    "session": "diag-9",
+    "ok": true,
+    "elapsedMs": 32.47,
+    "rpcId": 29
+  },
+  {
+    "name": "diag-9-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "diag-9",
+    "ok": true,
+    "elapsedMs": 613.543,
+    "rpcId": 30
+  },
+  {
+    "name": "diag-10-lucy_catalog",
+    "tool": "lucy_catalog",
+    "who": "a",
+    "session": "diag-10",
+    "ok": true,
+    "elapsedMs": 11.865,
+    "rpcId": 31
+  },
+  {
+    "name": "diag-10-lucy_read_source",
+    "tool": "lucy_read_source",
+    "who": "a",
+    "session": "diag-10",
+    "ok": true,
+    "elapsedMs": 19.179,
+    "rpcId": 32
+  },
+  {
+    "name": "diag-10-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "diag-10",
+    "ok": true,
+    "elapsedMs": 504.514,
+    "rpcId": 33
+  },
+  {
+    "name": "diag-11-lucy_catalog",
+    "tool": "lucy_catalog",
+    "who": "a",
+    "session": "diag-11",
+    "ok": true,
+    "elapsedMs": 12.701,
+    "rpcId": 34
+  },
+  {
+    "name": "diag-11-lucy_read_source",
+    "tool": "lucy_read_source",
+    "who": "a",
+    "session": "diag-11",
+    "ok": true,
+    "elapsedMs": 15.339,
+    "rpcId": 35
+  },
+  {
+    "name": "diag-11-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "diag-11",
+    "ok": true,
+    "elapsedMs": 671.268,
+    "rpcId": 36
+  },
+  {
+    "name": "diag-12-lucy_catalog",
+    "tool": "lucy_catalog",
+    "who": "a",
+    "session": "diag-12",
+    "ok": true,
+    "elapsedMs": 32.839,
+    "rpcId": 37
+  },
+  {
+    "name": "diag-12-lucy_read_source",
+    "tool": "lucy_read_source",
+    "who": "a",
+    "session": "diag-12",
+    "ok": true,
+    "elapsedMs": 29.487,
+    "rpcId": 38
+  },
+  {
+    "name": "diag-12-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "diag-12",
+    "ok": true,
+    "elapsedMs": 819.645,
+    "rpcId": 39
+  },
+  {
+    "name": "diag-13-lucy_catalog",
+    "tool": "lucy_catalog",
+    "who": "a",
+    "session": "diag-13",
+    "ok": true,
+    "elapsedMs": 28.963,
+    "rpcId": 40
+  },
+  {
+    "name": "diag-13-lucy_read_source",
+    "tool": "lucy_read_source",
+    "who": "a",
+    "session": "diag-13",
+    "ok": true,
+    "elapsedMs": 23.657,
+    "rpcId": 41
+  },
+  {
+    "name": "diag-13-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "diag-13",
+    "ok": true,
+    "elapsedMs": 621.753,
+    "rpcId": 42
+  },
+  {
+    "name": "diag-14-lucy_catalog",
+    "tool": "lucy_catalog",
+    "who": "a",
+    "session": "diag-14",
+    "ok": true,
+    "elapsedMs": 12.422,
+    "rpcId": 43
+  },
+  {
+    "name": "diag-14-lucy_read_source",
+    "tool": "lucy_read_source",
+    "who": "a",
+    "session": "diag-14",
+    "ok": true,
+    "elapsedMs": 15.051,
+    "rpcId": 44
+  },
+  {
+    "name": "diag-14-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "diag-14",
+    "ok": true,
+    "elapsedMs": 586.443,
+    "rpcId": 45
+  },
+  {
+    "name": "diag-15-lucy_catalog",
+    "tool": "lucy_catalog",
+    "who": "a",
+    "session": "diag-15",
+    "ok": true,
+    "elapsedMs": 14.461,
+    "rpcId": 46
+  },
+  {
+    "name": "diag-15-lucy_read_source",
+    "tool": "lucy_read_source",
+    "who": "a",
+    "session": "diag-15",
+    "ok": true,
+    "elapsedMs": 14.726,
+    "rpcId": 47
+  },
+  {
+    "name": "diag-15-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "diag-15",
+    "ok": true,
+    "elapsedMs": 507.133,
+    "rpcId": 48
+  },
+  {
+    "name": "diag-16-lucy_catalog",
+    "tool": "lucy_catalog",
+    "who": "a",
+    "session": "diag-16",
+    "ok": true,
+    "elapsedMs": 11.681,
+    "rpcId": 49
+  },
+  {
+    "name": "diag-16-lucy_read_source",
+    "tool": "lucy_read_source",
+    "who": "a",
+    "session": "diag-16",
+    "ok": true,
+    "elapsedMs": 10.372,
+    "rpcId": 50
+  },
+  {
+    "name": "diag-16-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "diag-16",
+    "ok": true,
+    "elapsedMs": 567.559,
+    "rpcId": 51
+  },
+  {
+    "name": "diag-17-lucy_catalog",
+    "tool": "lucy_catalog",
+    "who": "a",
+    "session": "diag-17",
+    "ok": true,
+    "elapsedMs": 13.706,
+    "rpcId": 52
+  },
+  {
+    "name": "diag-17-lucy_read_source",
+    "tool": "lucy_read_source",
+    "who": "a",
+    "session": "diag-17",
+    "ok": true,
+    "elapsedMs": 16.458,
+    "rpcId": 53
+  },
+  {
+    "name": "diag-17-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "diag-17",
+    "ok": true,
+    "elapsedMs": 559.764,
+    "rpcId": 54
+  },
+  {
+    "name": "diag-18-lucy_catalog",
+    "tool": "lucy_catalog",
+    "who": "a",
+    "session": "diag-18",
+    "ok": true,
+    "elapsedMs": 12.461,
+    "rpcId": 55
+  },
+  {
+    "name": "diag-18-lucy_read_source",
+    "tool": "lucy_read_source",
+    "who": "a",
+    "session": "diag-18",
+    "ok": true,
+    "elapsedMs": 14.236,
+    "rpcId": 56
+  },
+  {
+    "name": "diag-18-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "diag-18",
+    "ok": true,
+    "elapsedMs": 680.988,
+    "rpcId": 57
+  },
+  {
+    "name": "diag-19-lucy_catalog",
+    "tool": "lucy_catalog",
+    "who": "a",
+    "session": "diag-19",
+    "ok": true,
+    "elapsedMs": 17.772,
+    "rpcId": 58
+  },
+  {
+    "name": "diag-19-lucy_read_source",
+    "tool": "lucy_read_source",
+    "who": "a",
+    "session": "diag-19",
+    "ok": true,
+    "elapsedMs": 30.416,
+    "rpcId": 59
+  },
+  {
+    "name": "diag-19-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "diag-19",
+    "ok": true,
+    "elapsedMs": 844.111,
+    "rpcId": 60
+  },
+  {
+    "name": "diag-20-lucy_catalog",
+    "tool": "lucy_catalog",
+    "who": "a",
+    "session": "diag-20",
+    "ok": true,
+    "elapsedMs": 26.813,
+    "rpcId": 61
+  },
+  {
+    "name": "diag-20-lucy_read_source",
+    "tool": "lucy_read_source",
+    "who": "a",
+    "session": "diag-20",
+    "ok": true,
+    "elapsedMs": 39.218,
+    "rpcId": 62
+  },
+  {
+    "name": "diag-20-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "diag-20",
+    "ok": true,
+    "elapsedMs": 622.163,
+    "rpcId": 63
+  },
+  {
+    "name": "diag-21-lucy_catalog",
+    "tool": "lucy_catalog",
+    "who": "a",
+    "session": "diag-21",
+    "ok": true,
+    "elapsedMs": 15.932,
+    "rpcId": 64
+  },
+  {
+    "name": "diag-21-lucy_read_source",
+    "tool": "lucy_read_source",
+    "who": "a",
+    "session": "diag-21",
+    "ok": true,
+    "elapsedMs": 21.999,
+    "rpcId": 65
+  },
+  {
+    "name": "diag-21-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "diag-21",
+    "ok": true,
+    "elapsedMs": 667.212,
+    "rpcId": 66
+  },
+  {
+    "name": "diag-22-lucy_catalog",
+    "tool": "lucy_catalog",
+    "who": "a",
+    "session": "diag-22",
+    "ok": true,
+    "elapsedMs": 12.552,
+    "rpcId": 67
+  },
+  {
+    "name": "diag-22-lucy_read_source",
+    "tool": "lucy_read_source",
+    "who": "a",
+    "session": "diag-22",
+    "ok": true,
+    "elapsedMs": 18.505,
+    "rpcId": 68
+  },
+  {
+    "name": "diag-22-query",
+    "tool": "lucy_query",
+    "who": "a",
+    "session": "diag-22",
+    "ok": false,
+    "elapsedMs": 60.534,
+    "rpcId": 69
+  }
+]

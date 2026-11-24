@@ -622,4 +622,17 @@ test("entrypoint supervises a KTX MCP daemon for reload", async () => {
   assert.match(source, /supervise_ktx\(\)/);
   assert.match(source, /wait -n /);
   assert.match(source, /KTX_RELOAD_REQUEST_FILE/);
+  assert.match(source, /KTX_SUPERVISOR_SELF_PID="\$\{BASHPID:-\$\$\}"/);
+});
+
+test("supervisor pid published from a command substitution stays alive", () => {
+  const result = spawnSync("bash", ["-c", `
+    set -euo pipefail
+    KTX_SUPERVISOR_SELF_PID="\${BASHPID:-\$\$}"
+    eval "$(awk '/^ktx_supervisor_pid\\(\\) \\{/,/^}/' "$1")"
+    published="$(printf '%s' "$(ktx_supervisor_pid)")"
+    test "$published" = "$KTX_SUPERVISOR_SELF_PID"
+    kill -0 "$published"
+  `, "bash", entrypoint], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
 });

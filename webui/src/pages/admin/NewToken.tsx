@@ -8,7 +8,7 @@ import { queryKeys } from "../../lib/queryKeys";
 import type { Agent, CreateTokenResponse, McpEndpointInfo } from "../../lib/types";
 import { buildCodexMcpToml, buildMcpConfig } from "../../lib/mcpEndpoint";
 import { PageHeader } from "../../components/PageHeader";
-import { adminAgentsQueryOptions, projectQueryOptions } from "../../lib/displayQueryOptions";
+import { adminAgentsIdentityQueryOptions, projectQueryOptions } from "../../lib/displayQueryOptions";
 
 type ClientId = "hermes" | "claude-code" | "codex" | "generic";
 
@@ -45,6 +45,16 @@ function EndpointFallbackNotice({ endpointInfo }: { endpointInfo?: McpEndpointIn
       <span className="notranslate" translate="no">Agent</span> 可达的对外{" "}
       <span className="notranslate" translate="no">MCP</span> <span className="notranslate" translate="no">Endpoint</span>
       （须与宿主发布端口或反向代理 URL 一致）。
+    </div>
+  );
+}
+
+/** Spec 14 §0.3 — the token is ready to use only when the runtime acknowledged the write. */
+function TokenRuntimeNotice({ runtimeAck }: { runtimeAck: boolean | undefined }) {
+  if (runtimeAck === true) return null;
+  return (
+    <div className="pl-error" role="alert" data-testid="token-runtime-unconfirmed">
+      <span className="notranslate" translate="no">Token</span> 已写入，但运行态策略未确认生效，此 <span className="notranslate" translate="no">Token</span> 暂时可能无法使用。请先查看策略降级提示或稍后重新核验，再交给使用者。
     </div>
   );
 }
@@ -113,7 +123,7 @@ export function NewToken() {
   const targetUserId = routeUserId || selectedUserId;
 
   const agentsQuery = useQuery({
-    ...adminAgentsQueryOptions<{ agents: Agent[] }>(),
+    ...adminAgentsIdentityQueryOptions(),
     enabled: !routeUserId
   });
   const agents = agentsQuery.data?.agents ?? [];
@@ -226,6 +236,7 @@ export function NewToken() {
           }
         />
 
+        <TokenRuntimeNotice runtimeAck={generatedToken.runtimeAck} />
         <div className="pl-card grid gap-3">
           <TokenPlaintext token={generatedToken.token} copied={copied} onCopy={handleCopyToken} />
           <div className="text-xs text-fg-muted">
@@ -337,6 +348,7 @@ export function NewToken() {
             </>
           }
         />
+        <TokenRuntimeNotice runtimeAck={generatedToken.runtimeAck} />
         <div className="pl-card grid gap-3">
           <TokenPlaintext token={generatedToken.token} copied={copied} onCopy={handleCopyToken} />
           <div className="pl-error" data-testid="mcp-endpoint-diagnostic">

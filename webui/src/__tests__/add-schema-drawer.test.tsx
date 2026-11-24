@@ -612,8 +612,24 @@ describe("AddSchemaDrawer", () => {
     const calls: string[] = [];
     stubFetch({
       "POST /api/connections/mysql-aliyun/schemas": schemaWriteResponse("finance_mart"),
-      "POST /api/connections/mysql-aliyun/schema-structure": () => {
-        calls.push("structure");
+      "POST /api/connections/mysql-aliyun/schema-structure": (body) => {
+        const tables = (body as { tables?: string[] } | undefined)?.tables;
+        calls.push(tables?.[0] ? `structure:${tables[0]}` : "structure");
+        if (!tables?.length) {
+          return new Response(JSON.stringify({
+            ok: true,
+            data: {
+              schema: "finance_mart",
+              readable: true,
+              yaml: "tables:\n  orders: {}\n",
+              tableCount: 1,
+              columnCount: 0,
+              namesOnly: true,
+              mapped: { number: 0, string: 0, time: 0 },
+              downgraded: []
+            }
+          }));
+        }
         return new Response(JSON.stringify({
           ok: true,
           data: {
@@ -622,6 +638,7 @@ describe("AddSchemaDrawer", () => {
             yaml: "tables:\n  orders:\n    columns:\n      - name: id\n        type: number\n",
             tableCount: 1,
             columnCount: 1,
+            namesOnly: false,
             mapped: { number: 1, string: 0, time: 0 },
             downgraded: []
           }
@@ -690,12 +707,14 @@ describe("AddSchemaDrawer", () => {
     renderDrawer(makeConn());
     await confirmAddedSchema("finance_mart");
     fireEvent.click(screen.getByTestId("add-schema-read-structure"));
+    expect(await screen.findByTestId("add-schema-table-picker")).toHaveTextContent("读到 1 张表");
+    fireEvent.click(screen.getByRole("button", { name: "读取选中的 1 张表字段" }));
     await waitFor(() => {
       expect(screen.getByTestId("location")).toHaveTextContent(
         "/connections/enabled-tables?connection=mysql-aliyun&schema=finance_mart"
       );
     });
-    expect(calls).toEqual(["structure", "validate", "upload"]);
+    expect(calls).toEqual(["structure", "structure:orders", "validate", "upload"]);
     const enabledWrites = vi.mocked(global.fetch).mock.calls.filter((call) =>
       String(call[0]).includes("enabled-tables")
     );
@@ -707,19 +726,37 @@ describe("AddSchemaDrawer", () => {
     const calls: string[] = [];
     stubFetch({
       "POST /api/connections/mysql-aliyun/schemas": schemaWriteResponse("finance_mart"),
-      "POST /api/connections/mysql-aliyun/schema-structure": () =>
-        new Response(JSON.stringify({
+      "POST /api/connections/mysql-aliyun/schema-structure": (body) => {
+        const tables = (body as { tables?: string[] } | undefined)?.tables;
+        if (!tables?.length) {
+          return new Response(JSON.stringify({
+            ok: true,
+            data: {
+              schema: "finance_mart",
+              readable: true,
+              yaml: "tables:\n  orders: {}\n",
+              tableCount: 1,
+              columnCount: 0,
+              namesOnly: true,
+              mapped: { number: 0, string: 0, time: 0 },
+              downgraded: []
+            }
+          }));
+        }
+        return new Response(JSON.stringify({
           ok: true,
           data: {
             schema: "finance_mart",
-            readable: true,
-            yaml: "tables: {}\n",
+            readable: false,
+            yaml: "tables:\n  orders:\n    columns:\n      - name: payload\n        type: string\n",
             tableCount: 1,
             columnCount: 1,
+            namesOnly: false,
             mapped: { number: 0, string: 1, time: 0 },
             downgraded: [{ table: "orders", column: "payload", rawType: "geometry" }]
           }
-        })),
+        }));
+      },
       "POST /api/catalog/assets/validate": () => {
         calls.push("validate");
         return new Response(JSON.stringify({ ok: false, error: { code: "STOP", message: "stop" } }), { status: 400 });
@@ -728,6 +765,7 @@ describe("AddSchemaDrawer", () => {
     renderDrawer(makeConn());
     await confirmAddedSchema("finance_mart");
     fireEvent.click(screen.getByTestId("add-schema-read-structure"));
+    fireEvent.click(await screen.findByRole("button", { name: "读取选中的 1 张表字段" }));
     const preview = await screen.findByTestId("add-schema-downgrade-preview");
     expect(preview).toHaveTextContent("读取到 1 张表、1 个字段");
     expect(preview).toHaveTextContent("orders.payload");
@@ -814,21 +852,28 @@ describe("SchemaStructurePrep refreshExisting", () => {
             }
           })
         ),
-      "POST /api/connections/mysql-aliyun/schema-structure": () =>
-        new Response(
+      "POST /api/connections/mysql-aliyun/schema-structure": (body) => {
+        const tables = (body as { tables?: string[] } | undefined)?.tables;
+        const name = tables?.[0];
+        const yaml = name
+          ? `tables:\n  ${name}:\n    table: dataforai.${name}\n    columns:\n      - name: name\n        type: string\n`
+          : "tables:\n  orders: {}\n  people: {}\n  extra: {}\n";
+        return new Response(
           JSON.stringify({
             ok: true,
             data: {
               schema: "dataforai",
               readable: true,
-              yaml: "tables:\n  orders:\n    table: dataforai.orders\n    columns:\n      - name: id\n        type: string\n  people:\n    table: dataforai.people\n    columns:\n      - name: name\n        type: string\n  extra:\n    table: dataforai.extra\n    columns:\n      - name: note\n        type: string\n",
-              tableCount: 3,
-              columnCount: 3,
-              mapped: { number: 0, string: 3, time: 0 },
+              yaml,
+              tableCount: name ? 1 : 3,
+              columnCount: name ? 1 : 0,
+              namesOnly: !name,
+              mapped: { number: 0, string: name ? 1 : 0, time: 0 },
               downgraded: []
             }
           })
-        ),
+        );
+      },
       "POST /api/catalog/assets/validate": () =>
         new Response(
           JSON.stringify({

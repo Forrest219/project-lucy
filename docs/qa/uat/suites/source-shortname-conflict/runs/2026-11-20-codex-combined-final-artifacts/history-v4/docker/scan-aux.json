@@ -1,0 +1,21 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 1160,
+  "body": {
+    "ok": true,
+    "data": {
+      "schema": "aux",
+      "readable": true,
+      "yaml": "tables:\n  aux_City:\n    table: aux.City\n    columns:\n      - name: id\n        type: number\n        nullable: false\n        pk: true\n",
+      "tableCount": 1,
+      "columnCount": 1,
+      "namesOnly": false,
+      "mapped": {
+        "number": 1,
+        "string": 0,
+        "time": 0
+      },
+      "downgraded": []
+    }
+  }
+}

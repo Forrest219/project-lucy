@@ -330,6 +330,8 @@ export interface CreateRecoveryJournalInput {
     originalContent?: string | null;
   }>;
   now?: () => number;
+  /** Internal, synchronous owner binding BEFORE the first persisted WAL is visible. */
+  onBeforePersist?: (journal: RecoveryJournal) => void;
 }
 
 /**
@@ -382,6 +384,10 @@ export async function createRecoveryJournal(
     recoveryRequired: false
   };
 
+  const binding: unknown = input.onBeforePersist?.(journal);
+  if (binding && typeof (binding as { then?: unknown }).then === "function") {
+    throw new Error("Recovery journal owner binding must be synchronous");
+  }
   await writeRecoveryJournal(projectRoot, journal);
   return journal;
 }
@@ -1000,15 +1006,24 @@ export async function semanticRecoveryReadBlock(
   projectRoot: string,
   hints: readonly string[]
 ): Promise<SemanticRecoveryReadBlock | null> {
+  return (await semanticRecoveryReadState(projectRoot, hints)).block;
+}
+
+/** Private admission detail; the original guard remains fail closed by default. */
+export async function semanticRecoveryReadState(
+  projectRoot: string,
+  hints: readonly string[]
+): Promise<{ block: SemanticRecoveryReadBlock | null; journals: RecoveryJournal[] }> {
   if (semanticRecoveryAdmissionLatched) {
     return {
+      journals: [], block: {
       code: "semantic_recovery_unreadable",
       message: "语义恢复日志无法落成待修复状态，涉及资产的读取和查询已关闭。"
-    };
+    } };
   }
   const journals = await listOpenRecoveryJournals(projectRoot);
   const blocking = journals.filter((journal) => journalBlocksSemanticAccess(journal));
-  if (blocking.length === 0) return null;
+  if (blocking.length === 0) return { block: null, journals: [] };
 
   const labels: string[] = [];
   for (const journal of blocking) {
@@ -1016,9 +1031,10 @@ export async function semanticRecoveryReadBlock(
       const named = entryLabels(entry);
       if (named.length === 0) {
         return {
+          journals: blocking, block: {
           code: "semantic_recovery_required",
           message: "存在无法命名的未决语义恢复，本次读取无法判定是否涉及该资产，已关闭。"
-        };
+        } };
       }
       labels.push(...named);
     }
@@ -1026,17 +1042,21 @@ export async function semanticRecoveryReadBlock(
 
   if (hints.length === 0) {
     return {
+      journals: blocking, block: {
       code: "semantic_recovery_required",
       message: "存在未决语义恢复，且本次读取没有指明资产，已关闭。"
-    };
+    } };
   }
 
   const hit = hints.some((hint) => labels.some((label) => hintHitsLabel(hint, label)));
-  if (!hit) return null;
+  if (!hit) return { block: null, journals: [] };
   return {
+    journals: blocking.filter((journal) => journal.entries.some((entry) =>
+      entryLabels(entry).some((label) => hints.some((hint) => hintHitsLabel(hint, label)))
+    )), block: {
     code: "semantic_recovery_required",
     message: "该语义资产仍有未决恢复日志，恢复核验完成前不能读取或查询。"
-  };
+  } };
 }
 
 /** Whether the target file exists (diagnostics). */

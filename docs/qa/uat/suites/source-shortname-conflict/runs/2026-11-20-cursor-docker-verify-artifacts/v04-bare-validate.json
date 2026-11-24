@@ -1,0 +1,56 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 5,
+  "body": {
+    "ok": true,
+    "data": {
+      "valid": false,
+      "connectionId": "hive-1",
+      "schema": "ods",
+      "assetKind": "schema_manifest",
+      "assetType": "schemaManifest",
+      "targetPath": "semantic-layer/hive-1/_schema/ods.yaml",
+      "originalFilename": "ods.yaml",
+      "sizeBytes": 87,
+      "sha256": "fbb928febe989dfc603f1378061aa4d2abf5fd11a24fbe7e3382da44228bc835",
+      "errors": [
+        {
+          "code": "DUPLICATE_SOURCE_NAME",
+          "message": "短名「city」在最终集合中冲突（物理表：ods.city、weather.city）。请重新扫描该 Schema，或将冲突短名改为「ods_city」后再上传。"
+        }
+      ],
+      "warnings": [
+        {
+          "code": "TARGET_EXISTS",
+          "message": "目标文件已存在：semantic-layer/hive-1/_schema/ods.yaml"
+        }
+      ],
+      "tableNames": [
+        "city"
+      ],
+      "tables": 1,
+      "sourceNameConflicts": [
+        {
+          "sourceName": "city",
+          "entries": [
+            {
+              "targetPath": "hive-1/_schema/ods.yaml",
+              "schema": "ods",
+              "physicalTable": "ods.city",
+              "sourceName": "city"
+            },
+            {
+              "targetPath": "hive-1/_schema/weather.yaml",
+              "schema": "weather",
+              "physicalTable": "weather.city",
+              "sourceName": "city"
+            }
+          ],
+          "involvesCandidate": true,
+          "suggestedSourceName": "ods_city"
+        }
+      ],
+      "exists": true
+    }
+  }
+}

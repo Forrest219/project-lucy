@@ -1,0 +1,1651 @@
+{
+  "startedAt": "2026-11-20T07:07:51.642Z",
+  "cases": [
+    {
+      "name": "14-native-original-api-contract",
+      "status": "PASS",
+      "ms": 6292.645,
+      "visible": "visible",
+      "focus": true
+    },
+    {
+      "name": "02-detail-identity-and-window",
+      "status": "FAIL",
+      "error": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:\n\n  assert(page.url().includes('range=30d'))\n",
+      "ms": 2474.345083
+    },
+    {
+      "name": "03-pending-switch-cancel",
+      "status": "PASS",
+      "ms": 3755.1587500000005,
+      "visible": "visible",
+      "focus": true
+    },
+    {
+      "name": "04-real-detail-tcp-fault-retry",
+      "status": "PASS",
+      "ms": 3622.4361660000013,
+      "visible": "visible",
+      "focus": true
+    },
+    {
+      "name": "05-real-statistics-tcp-fault-retry",
+      "status": "PASS",
+      "ms": 3839.7344999999987,
+      "visible": "visible",
+      "focus": true
+    },
+    {
+      "name": "06-pure-mcp-positive-and-negative",
+      "status": "FAIL",
+      "error": "AssertionError [ERR_ASSERTION]: {\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"isError\":true,\"content\":[{\"type\":\"text\",\"text\":\"Access denied: row_policy_upstream_unproven 可用连接：ars_00_c0、ars_00_c1、ars_00_c2、ars_00_c3、ars_00_c4、ars_00_c5、ars_00_c6、ars_00_c7、ars_00_c8。 可用来源：ars_00_source_000、ars_00_source_001、ars_00_source_002、ars_00_source_003、ars_00_source_004、ars_00_source_005、ars_00_source_006、ars_00_source_007、ars_00_source_008、ars_00_source_009、ars_00_source_010、ars_00_source_011、ars_00_source_012、ars_00_source_013、ars_00_source_014、ars_00_source_015、ars_00_source_016、ars_00_source_017、ars_00_source_018、ars_00_source_019、ars_00_source_020、ars_00_source_021、ars_00_source_022、ars_00_source_023、ars_00_source_024、ars_00_source_025、ars_00_source_026、ars_00_source_027、ars_00_source_028、ars_00_source_029。 请改用当前角色已授权的来源：ars_00_source_000。\"}],\"data\":{\"reason\":\"row_policy_upstream_unproven\",\"failureDimension\":\"权限拒绝\",\"connections\":[\"ars_00_c0\",\"ars_00_c1\",\"ars_00_c2\",\"ars_00_c3\",\"ars_00_c4\",\"ars_00_c5\",\"ars_00_c6\",\"ars_00_c7\",\"ars_00_c8\"],\"sources\":[\"ars_00_source_000\",\"ars_00_source_001\",\"ars_00_source_002\",\"ars_00_source_003\",\"ars_00_source_004\",\"ars_00_source_005\",\"ars_00_source_006\",\"ars_00_source_007\",\"ars_00_source_008\",\"ars_00_source_009\",\"ars_00_source_010\",\"ars_00_source_011\",\"ars_00_source_012\",\"ars_00_source_013\",\"ars_00_source_014\",\"ars_00_source_015\",\"ars_00_source_016\",\"ars_00_source_017\",\"ars_00_source_018\",\"ars_00_source_019\",\"ars_00_source_020\",\"ars_00_source_021\",\"ars_00_source_022\",\"ars_00_source_023\",\"ars_00_source_024\",\"ars_00_source_025\",\"ars_00_source_026\",\"ars_00_source_027\",\"ars_00_source_028\",\"ars_00_source_029\"]}}}",
+      "ms": 458.71741699999984
+    },
+    {
+      "name": "12-independent-detail-loading-and-retry",
+      "status": "PASS",
+      "ms": 12738.214292,
+      "visible": "visible",
+      "focus": true
+    }
+  ],
+  "api": [
+    {
+      "phase": "setup",
+      "path": "/api/auth/login",
+      "method": "POST",
+      "status": 200,
+      "ms": 54.327042000000006
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents?range=7d",
+      "method": "GET",
+      "status": 200,
+      "ms": 2548.990209
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents/ars_00_a16?range=7d",
+      "method": "GET",
+      "status": 200,
+      "ms": 710.0852500000005
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents?range=14d",
+      "method": "GET",
+      "status": 200,
+      "ms": 550.0368330000001
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents/ars_00_a16?range=14d",
+      "method": "GET",
+      "status": 200,
+      "ms": 753.3368330000003
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents?range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 632.6269579999998
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents/ars_00_a16?range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 658.9487500000005
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 46.40558299999975
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/admin/agents",
+      "method": "GET",
+      "status": 200,
+      "ms": 5.5541250000005675
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/react-dom-DUKFG4MT.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 12.56854199999998
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/apiClient-iXEeuihv.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 13.094250000000102
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/dist-B1out86J.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 13.481499999999869
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/jsx-runtime-bzQ4Vb5N.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 15.967082999999548
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/index-D_x1W2EE.css",
+      "method": "GET",
+      "status": 200,
+      "ms": 15.997292000000016
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/index-CFZAxKLR.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 17.658957999999984
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/useMutation-BOtWALCM.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 9.64208299999973
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/AsyncRegion-Bvmaq1-J.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 8.926542000000154
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/AgentList-CPVhUexo.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 10.83587499999976
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/RowMoreMenu-XL1ITUUb.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 10.476582999999664
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/lucyAdminRole-C_AWNFA0.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 10.166666999999507
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/AgentRoleField-BY2hRlA-.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 10.352582999999868
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/DisplayRefreshNotice-ChK6KYp7.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 16.883334000000104
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/MetricCard-DX_2n4eO.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 18.608416999999463
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/PageHeader-HPgECmoi.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 18.711874999999964
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/PolicyDegradeBanner-B0KwOIXd.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 18.1020410000001
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/AccessWriteRecoveryPanel-Cke_F10J.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 18.36175000000003
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/LucyAdminRoleWarning-DucoRXzb.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 19.13929199999984
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/auth/status",
+      "method": "GET",
+      "status": 200,
+      "ms": 6.514083000000028
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 200,
+      "ms": 8.076584000000366
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/mcpEndpoint-_ZVROJDX.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 13.063750000000255
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/opsEvidence-BosoCzj_.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 11.316375000000335
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/objectDetail-vpVjl8QX.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 11.806292000000212
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/branding",
+      "method": "GET",
+      "status": 200,
+      "ms": 5.352375000000393
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 78.1499160000003
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/policy-runtime",
+      "method": "GET",
+      "status": 200,
+      "ms": 6.180208000000675
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 509.18166699999983
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/ui-usage/page-view",
+      "method": "POST",
+      "status": 403,
+      "ms": 327.5147500000003
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/admin/agents",
+      "method": "GET",
+      "status": 304,
+      "ms": 333.57329200000004
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/auth/status",
+      "method": "GET",
+      "status": 200,
+      "ms": 2.886790999999903
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 4.165957999999591
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/branding",
+      "method": "GET",
+      "status": 200,
+      "ms": 2.8468339999999444
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 56.38208300000042
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/policy-runtime",
+      "method": "GET",
+      "status": 200,
+      "ms": 2.040334000000257
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 59.11250000000018
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 3.2159999999994398
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/ui-usage/page-view",
+      "method": "POST",
+      "status": 403,
+      "ms": 208.98683299999993
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 308.1642089999996
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 407.04533300000094
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 793.2850000000008
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 488.0435000000007
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/assets/DecisionReasonCell-CZvh7OY1.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 739.8872089999995
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/assets/ObjectDetailDrawer-CUItlwjS.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 740.8855829999993
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents/ars_00_a16?range=7d",
+      "method": "GET",
+      "status": 200,
+      "ms": 862.5372499999994
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 3.851375000000189
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/admin/agents",
+      "method": "GET",
+      "status": 304,
+      "ms": 3.5079160000004777
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/auth/status",
+      "method": "GET",
+      "status": 200,
+      "ms": 2.4516249999996944
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 2.7731669999993755
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/branding",
+      "method": "GET",
+      "status": 200,
+      "ms": 3.311249999998836
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 55.19824999999946
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/admin/policy-runtime",
+      "method": "GET",
+      "status": 200,
+      "ms": 2.4112919999988662
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 60.49150000000009
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 2.4424999999991996
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/admin/ui-usage/page-view",
+      "method": "POST",
+      "status": 403,
+      "ms": 1.361417000000074
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 4.691041000000041
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 120.07054100000096
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/admin/agents/ars_00_a01?range=7d",
+      "method": "GET",
+      "status": 200,
+      "ms": 228.60649999999987
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/admin/agents",
+      "method": "GET",
+      "status": 304,
+      "ms": 10.601833000000624
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/auth/status",
+      "method": "GET",
+      "status": 200,
+      "ms": 3.5146660000009433
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 3.0987919999988662
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/branding",
+      "method": "GET",
+      "status": 200,
+      "ms": 4.031208000000333
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 117.8581669999985
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/admin/policy-runtime",
+      "method": "GET",
+      "status": 200,
+      "ms": 2.9990840000009484
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 699.48675
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/admin/ui-usage/page-view",
+      "method": "POST",
+      "status": 403,
+      "ms": 536.3819579999999
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 582.173084
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/admin/agents/ars_00_a16?range=7d",
+      "method": "GET",
+      "status": 200,
+      "ms": 830.7051659999997
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 4.252207999998063
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/admin/agents",
+      "method": "GET",
+      "status": 304,
+      "ms": 4.3472079999992275
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/auth/status",
+      "method": "GET",
+      "status": 200,
+      "ms": 5.490333000001556
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 4.579874999999447
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/branding",
+      "method": "GET",
+      "status": 200,
+      "ms": 5.366874999999709
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 60.73362500000076
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/policy-runtime",
+      "method": "GET",
+      "status": 200,
+      "ms": 2.614957999998296
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/ui-usage/page-view",
+      "method": "POST",
+      "status": 403,
+      "ms": 2.3652919999985897
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 4.291249999998399
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/agents/ars_00_a16?range=7d",
+      "method": "GET",
+      "status": 200,
+      "ms": 970.1296250000014
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 2.825042000000394
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "method": "GET",
+      "status": 200,
+      "ms": 54.648207999998704
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "method": "GET",
+      "status": 200,
+      "ms": 501.0709999999999
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/admin/agents/ars_00_a17",
+      "method": "GET",
+      "status": 200,
+      "ms": 3.459791999997833
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/assets/DiffViewer-B8_e5uoj.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 9.149499999999534
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/assets/AgentDetail-CG2uRx-D.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 10.13774999999805
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/assets/clsx-CjueKrWZ.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 12.389374999998836
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/assets/AuthorizationSummarySection-bh3k5hox.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 12.473999999998341
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/assets/clipboard-3Q-Fr8yd.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 12.134333000001789
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/assets/RenewTokenDialog-0Wpmjtw0.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 12.608791000002384
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/auth/status",
+      "method": "GET",
+      "status": 200,
+      "ms": 4.805041999999958
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 2.744290999999066
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/assets/rolePermissionDraft-BSOKsZOL.js",
+      "method": "GET",
+      "status": 200,
+      "ms": 8.523000000001048
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/branding",
+      "method": "GET",
+      "status": 200,
+      "ms": 3.014082999998209
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/ui-usage/page-view",
+      "method": "POST",
+      "status": 403,
+      "ms": 2.7890000000006694
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/agents/ars_00_a17",
+      "method": "GET",
+      "status": 200,
+      "ms": 3721.390374999999
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/policy-runtime",
+      "method": "GET",
+      "status": 200,
+      "ms": 7.824125000002823
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/admin/agents/ars_00_a17",
+      "method": "GET",
+      "status": 304,
+      "ms": 4.433791999999812
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/auth/status",
+      "method": "GET",
+      "status": 200,
+      "ms": 5.592124999999214
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/favicon.ico",
+      "method": "GET",
+      "status": 304,
+      "ms": 5.653542000000016
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/branding",
+      "method": "GET",
+      "status": 200,
+      "ms": 19.26429199999984
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/ui-usage/page-view",
+      "method": "POST",
+      "status": 403,
+      "ms": 1.6436670000002778
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "method": "GET",
+      "status": 200,
+      "ms": 5774.667959000002
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/agents/ars_00_a17",
+      "method": "GET",
+      "status": 200,
+      "ms": 797.1869999999981
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/policy-runtime",
+      "method": "GET",
+      "status": 200,
+      "ms": 2.0192080000051646
+    }
+  ],
+  "gateway": [
+    {
+      "phase": "setup",
+      "path": "/api/auth/login",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents?range=7d",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents/ars_00_a16?range=7d",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents?range=14d",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents/ars_00_a16?range=14d",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents?range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents/ars_00_a16?range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/admin/agents",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/index-CFZAxKLR.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/jsx-runtime-bzQ4Vb5N.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/react-dom-DUKFG4MT.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/dist-B1out86J.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/index-D_x1W2EE.css",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/apiClient-iXEeuihv.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/AgentList-CPVhUexo.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/useMutation-BOtWALCM.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/RowMoreMenu-XL1ITUUb.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/AgentRoleField-BY2hRlA-.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/lucyAdminRole-C_AWNFA0.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/AsyncRegion-Bvmaq1-J.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/DisplayRefreshNotice-ChK6KYp7.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/MetricCard-DX_2n4eO.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/PageHeader-HPgECmoi.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/PolicyDegradeBanner-B0KwOIXd.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/AccessWriteRecoveryPanel-Cke_F10J.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/LucyAdminRoleWarning-DucoRXzb.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/mcpEndpoint-_ZVROJDX.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/objectDetail-vpVjl8QX.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/assets/opsEvidence-BosoCzj_.js",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/auth/status",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/branding",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/policy-runtime",
+      "event": "request"
+    },
+    {
+      "phase": "14-native-original-api-contract",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/admin/agents",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/ui-usage/page-view",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/auth/status",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/branding",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/policy-runtime",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=7d",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents/statistics?range=7d",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents/statistics?range=7d",
+      "event": "client-aborted"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=7d",
+      "event": "client-aborted"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=7d",
+      "event": "upstream-failure",
+      "code": "ECONNRESET",
+      "port": 59166
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents/statistics?range=7d",
+      "event": "upstream-failure",
+      "code": "ECONNRESET",
+      "port": 59166
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/assets/ObjectDetailDrawer-CUItlwjS.js",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/assets/DecisionReasonCell-CZvh7OY1.js",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/ui-usage/page-view",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/api/admin/agents/ars_00_a16?range=7d",
+      "event": "request"
+    },
+    {
+      "phase": "02-detail-identity-and-window",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/admin/agents",
+      "event": "request"
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/auth/status",
+      "event": "request"
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/branding",
+      "event": "request"
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/admin/policy-runtime",
+      "event": "request"
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/admin/ui-usage/page-view",
+      "event": "request"
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/admin/agents/ars_00_a00?range=7d",
+      "event": "request"
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/admin/agents/ars_00_a00?range=7d",
+      "event": "client-aborted"
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/api/admin/agents/ars_00_a01?range=7d",
+      "event": "request"
+    },
+    {
+      "phase": "03-pending-switch-cancel",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/admin/agents",
+      "event": "request"
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/auth/status",
+      "event": "request"
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/branding",
+      "event": "request"
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/admin/policy-runtime",
+      "event": "request"
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/admin/ui-usage/page-view",
+      "event": "request"
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/admin/agents/ars_00_a16?range=7d",
+      "event": "request"
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/admin/agents/ars_00_a16?range=7d",
+      "event": "upstream-failure",
+      "code": "ECONNREFUSED",
+      "port": 50759
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/admin/agents/ars_00_a16?range=7d",
+      "event": "request"
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/admin/agents/ars_00_a16?range=7d",
+      "event": "upstream-failure",
+      "code": "ECONNREFUSED",
+      "port": 50759
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/api/admin/agents/ars_00_a16?range=7d",
+      "event": "request"
+    },
+    {
+      "phase": "04-real-detail-tcp-fault-retry",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/admin/agents",
+      "event": "request"
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/auth/status",
+      "event": "request"
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/branding",
+      "event": "request"
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/policy-runtime",
+      "event": "request"
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "event": "upstream-failure",
+      "code": "ECONNREFUSED",
+      "port": 50759
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/ui-usage/page-view",
+      "event": "request"
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/agents/statistics?range=30d",
+      "event": "upstream-failure",
+      "code": "ECONNREFUSED",
+      "port": 50759
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/agents/ars_00_a16?range=7d",
+      "event": "request"
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/agents?view=roster&projection=summary&range=30d",
+      "event": "request"
+    },
+    {
+      "phase": "05-real-statistics-tcp-fault-retry",
+      "path": "/api/admin/agents/statistics?range=30d&refresh=true",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/admin/agents/ars_00_a17",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/assets/AgentDetail-CG2uRx-D.js",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/assets/DiffViewer-B8_e5uoj.js",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/assets/clsx-CjueKrWZ.js",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/assets/AuthorizationSummarySection-bh3k5hox.js",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/assets/RenewTokenDialog-0Wpmjtw0.js",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/assets/clipboard-3Q-Fr8yd.js",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/assets/rolePermissionDraft-BSOKsZOL.js",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/auth/status",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/branding",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/agents/ars_00_a17",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/ui-usage/page-view",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/policy-runtime",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/admin/agents/ars_00_a17",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "event": "client-aborted"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "event": "upstream-failure",
+      "code": "ECONNRESET",
+      "port": 59166
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/auth/status",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/favicon.ico",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/branding",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/agents/ars_00_a17",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/roles?includeTemplates=false",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/agents/ars_00_a17",
+      "event": "upstream-failure",
+      "code": "ECONNREFUSED",
+      "port": 50759
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/ui-usage/page-view",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/agents/ars_00_a17",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/agents/ars_00_a17",
+      "event": "upstream-failure",
+      "code": "ECONNREFUSED",
+      "port": 50759
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/agents/ars_00_a17",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/agents/ars_00_a17",
+      "event": "upstream-failure",
+      "code": "ECONNREFUSED",
+      "port": 50759
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/agents/ars_00_a17",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/agents/ars_00_a17",
+      "event": "upstream-failure",
+      "code": "ECONNREFUSED",
+      "port": 50759
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/agents/ars_00_a17",
+      "event": "request"
+    },
+    {
+      "phase": "12-independent-detail-loading-and-retry",
+      "path": "/api/admin/policy-runtime",
+      "event": "request"
+    }
+  ],
+  "rpc": [
+    {
+      "label": "initialize",
+      "method": "initialize",
+      "status": 200,
+      "ms": 131.3513329999987,
+      "body": {
+        "result": {
+          "protocolVersion": "2024-11-05",
+          "capabilities": {
+            "tools": {
+              "listChanged": true
+            }
+          },
+          "serverInfo": {
+            "name": "ktx",
+            "version": "0.16.0"
+          },
+          "instructions": "# Lucy Data QA Runtime Instructions\n\n- Use the Lucy MCP Proxy tool surface only; do not invent data when a data tool fails.\n- Call the visible catalog tool before choosing a connection or source unless the route is already explicit in the user request.\n- Only use connections and sources listed in this session's visible scope.\n- If a query needs data, call `lucy_query` or `lucy_read_source`; do not answer from wiki-only context when data retrieval failed.\n- For simple factual questions, use the shortest verified path: catalog/source confirmation -> `lucy_query` -> answer. Do not call `entity_details` or `lucy_explain_query` before `lucy_query` unless the user asks for entity metadata or permission/guardrail diagnostics.\n- A successful `lucy_query` that returns zero fact rows carries a structured `next_step` inside the result JSON (and in `_meta.lucy.next_step`). Read it before retrying: it names the source, the filters you used, and the controlled next calls (`lucy_read_source`, `lucy_freshness`) to verify grain, period and filters. Do not substitute an approximation for the empty result.\n- When a successful `lucy_query` tool result includes `answer_verifiability`, you MUST surface its source identity, caliber highlights, and data-cutoff disclosure in the user-visible answer (cite or restate the block).\n- Do not hide, omit, or strip `answer_verifiability`. Treat cutoff.status `not_checked` as honest disclosure that the business data cutoff was not verified—never invent a checked cutoff.\n- Having the block in the tool result does not by itself mean the host UI rendered it; you still must include the verifiability points in your reply to the user.\n## 问询范围确认／多表命中先问\n\n- 问询**原文**里出现指代（\"这个\"\"上次那个\"\"它\"）或一句包含两个意图时，先复述账户、月份和产品线，等用户确认后再发 `lucy_query`。\n- 没有用户原文的推断问询（例如从历史日志或工具报错反推出来的需求）跳过复述，直接按已确认范围查数。\n- 当多个可见来源表都可能回答同一业务词时，优先向用户澄清选哪张表，再发 `lucy_query`／`lucy_explain_query`；用户无法即时确认时，按最贴近问题的来源直接查，并在答复里说明所用来源。\n- Proxy 对选表歧义采用「放行并披露」：单来源、或经语义层已声明 join 连通的同连接多来源（至多 4 个）直接放行；集外钉选或未连通的多来源同样放行，但 `answer_verifiability.sourceSelection` 会标注 `tolerated`——此时你**必须**在答复里如实告知所用来源，并说明该选表未经用户确认。\n- 仍会拦截（`source_ambiguity_gate`）：无法解析的引用、目录健康失败、跨连接多来源、来源数超过 4、ACL／行权限限制；以及请求里**没有任何带来源限定的引用**（如度量只写 `order_count`、没有 `source.` 前缀）而业务词命中多个来源时——此时改用 `source.measure` 形式钉选单一来源再重试。被拦后按返回的 `usableTargets` 改写为**单来源查询**重试；跨连接则按连接分别查。\n- 宿主 person＋attestation 确认仍可用于 WebUI；Agent 不得伪造宿主 confirm HTTP。\n- 支持／暂不支持的组合场景见 `docs/specs/lucy-20261116-source-ambiguity-mcp-escape-spec.md` §4.5。\n- 指代／双意图的复述仍约束模型行为。\n\n- Answer simple numeric questions directly first, usually as a compact table, then add brief caveats/provenance. Do not turn ordinary fact lookups into long audit reports.\n- For multi-metric, multi-period, or multi-scenario questions, build an answerability dependency matrix before querying: numerator, denominator, period/grain, batch/version, actual/forecast/budget scenario, source/measure, and governed business definition. Mark a subquestion unavailable when a required dependency is missing; do not substitute an approximation.\n- Budget requires an independent budget measure, source, or governed formula. Never substitute forecast, target, or prior actual for budget. If budget evidence is missing, deliver the answerable parts and state that budget variance is currently unavailable.\n- Calculate and label actual, forecast, and budget separately. Any cross-scenario composition must be labeled hybrid with the covered periods for each component; do not assume the current quarter is complete actual without evidence.\n- revenue/quantity or revenue/bandwidth is realized unit price and includes mix effects. Do not claim pure price, volume, or mix contribution without a governed decomposition formula and the required grain.\n- Distinguish no fact row, NULL/blank source field, and values inferred from cumulative deltas. Do not collapse all three states into `—`.\n- If a key data tool call fails, the final answer must say whether a retry succeeded, whether the failure affects the conclusion, and which values remain uncertain. Do not give numeric conclusions when no successful fact data was returned.\n- Fingerprint failures by tool, source, normalized reason, and relevant argument shape. Retry the same fingerprint at most once and only with an information-gaining correction; cycling among eq, =, and in is not a correction.\n- Per question, use at most 60 data-tool calls or 300 seconds of settled data-processing time (thinking time excluded), whichever comes first. Repeat the same input at most once, do not re-read a successful source, and retry only transient errors once. Protocol methods (question declaration and continuation) do not count toward this budget.\n- When a data tool returns `question_budget_exhausted`, stop looping, deliver the verified partial results, state the gaps, and do not retry.\n- Partial evidence still requires a final response. Give each subquestion an ok, no_data, unavailable, or partial status, plus period, batch/version, scenario, failure impact, and provenance.\n- When rows are missing, fields are NULL, a tool failed, or a value is inferred, qualify the answer with phrases such as 基于当前可查询数据 or 按累计差额推算; do not claim the data is complete or fully reconciled.\n- For `lucy_query`, use source-qualified semantic keys such as `source.measure`, `source.dimension`, and `source.segment`. Do not shorten them after an error; unqualified keys may be rejected by ACL before reaching the semantic layer.\n- In `lucy_query.measures`, use string semantic measure keys when the measure exists. Use `{expr,name}` objects only for ad hoc aggregate expressions.\n- In `lucy_query.dimensions` and `lucy_query.order_by`, use object entries such as `{field:\"source.field\"}`; do not use bare string arrays.\n- `lucy_query.filters` supports string filters and structured filters such as `{field:\"source.field\",op:\"contains\",value:\"<entity keyword>\"}`. Prefer semantic segments such as `source.segment` for common filters when available.\n- Some clients may serialize the whole `filters` value as JSON text; Lucy strictly restores that compatibility shape. Do not generate it deliberately. `orderBy` is accepted only as an alias for canonical `order_by`; conflicting aliases fail closed.\n- Interpret POC `DATE` / `DATETIME` values as Asia/Shanghai business dates when the visible source documentation says so.\n- Visible Scope below is captured at MCP initialize; call the visible catalog tool before routing if sources may have changed since this session started.\n\n## Visible Scope\n\nConnections: ars_00_c0, ars_00_c1, ars_00_c2, ars_00_c3, ars_00_c4, ars_00_c5, ars_00_c6, ars_00_c7, ars_00_c8\n\nSources:\n- ars_00_c0.ars_00.ars_00_source_000 -> ars_00.fact_000\n- ars_00_c1.ars_00.ars_00_source_001 -> ars_00.fact_001\n- ars_00_c2.ars_00.ars_00_source_002 -> ars_00.fact_002\n- ars_00_c3.ars_00.ars_00_source_003 -> ars_00.fact_003\n- ars_00_c4.ars_00.ars_00_source_004 -> ars_00.fact_004\n- ars_00_c5.ars_00.ars_00_source_005 -> ars_00.fact_005\n- ars_00_c6.ars_00.ars_00_source_006 -> ars_00.fact_006\n- ars_00_c7.ars_00.ars_00_source_007 -> ars_00.fact_007\n- ars_00_c8.ars_00.ars_00_source_008 -> ars_00.fact_008\n- ars_00_c0.ars_00.ars_00_source_009 -> ars_00.fact_009\n- ars_00_c1.ars_00.ars_00_source_010 -> ars_00.fact_010\n- ars_00_c2.ars_00.ars_00_source_011 -> ars_00.fact_011\n- ars_00_c3.ars_00.ars_00_source_012 -> ars_00.fact_012\n- ars_00_c4.ars_00.ars_00_source_013 -> ars_00.fact_013\n- ars_00_c5.ars_00.ars_00_source_014 -> ars_00.fact_014\n- ars_00_c6.ars_00.ars_00_source_015 -> ars_00.fact_015\n- ars_00_c7.ars_00.ars_00_source_016 -> ars_00.fact_016\n- ars_00_c8.ars_00.ars_00_source_017 -> ars_00.fact_017\n- ars_00_c0.ars_00.ars_00_source_018 -> ars_00.fact_018\n- ars_00_c1.ars_00.ars_00_source_019 -> ars_00.fact_019\n- ars_00_c2.ars_00.ars_00_source_020 -> ars_00.fact_020\n- ars_00_c3.ars_00.ars_00_source_021 -> ars_00.fact_021\n- ars_00_c4.ars_00.ars_00_source_022 -> ars_00.fact_022\n- ars_00_c5.ars_00.ars_00_source_023 -> ars_00.fact_023\n- ars_00_c6.ars_00.ars_00_source_024 -> ars_00.fact_024\n- ars_00_c7.ars_00.ars_00_source_025 -> ars_00.fact_025\n- ars_00_c8.ars_00.ars_00_source_026 -> ars_00.fact_026\n- ars_00_c0.ars_00.ars_00_source_027 -> ars_00.fact_027\n- ars_00_c1.ars_00.ars_00_source_028 -> ars_00.fact_028\n- ars_00_c2.ars_00.ars_00_source_029 -> ars_00.fact_029\n\n## Query Examples\n\n- Use the visible catalog and `lucy_read_source` to inspect the source before querying."
+        },
+        "jsonrpc": "2.0",
+        "id": 1
+      }
+    },
+    {
+      "label": "initialize-initialized",
+      "method": "notifications/initialized",
+      "status": 202
+    },
+    {
+      "label": "role-or-and-constraints",
+      "method": "tools/call",
+      "status": 200,
+      "ms": 311.54041700000016,
+      "body": {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "result": {
+          "isError": true,
+          "content": [
+            {
+              "type": "text",
+              "text": "Access denied: row_policy_upstream_unproven 可用连接：ars_00_c0、ars_00_c1、ars_00_c2、ars_00_c3、ars_00_c4、ars_00_c5、ars_00_c6、ars_00_c7、ars_00_c8。 可用来源：ars_00_source_000、ars_00_source_001、ars_00_source_002、ars_00_source_003、ars_00_source_004、ars_00_source_005、ars_00_source_006、ars_00_source_007、ars_00_source_008、ars_00_source_009、ars_00_source_010、ars_00_source_011、ars_00_source_012、ars_00_source_013、ars_00_source_014、ars_00_source_015、ars_00_source_016、ars_00_source_017、ars_00_source_018、ars_00_source_019、ars_00_source_020、ars_00_source_021、ars_00_source_022、ars_00_source_023、ars_00_source_024、ars_00_source_025、ars_00_source_026、ars_00_source_027、ars_00_source_028、ars_00_source_029。 请改用当前角色已授权的来源：ars_00_source_000。"
+            }
+          ],
+          "data": {
+            "reason": "row_policy_upstream_unproven",
+            "failureDimension": "权限拒绝",
+            "connections": [
+              "ars_00_c0",
+              "ars_00_c1",
+              "ars_00_c2",
+              "ars_00_c3",
+              "ars_00_c4",
+              "ars_00_c5",
+              "ars_00_c6",
+              "ars_00_c7",
+              "ars_00_c8"
+            ],
+            "sources": [
+              "ars_00_source_000",
+              "ars_00_source_001",
+              "ars_00_source_002",
+              "ars_00_source_003",
+              "ars_00_source_004",
+              "ars_00_source_005",
+              "ars_00_source_006",
+              "ars_00_source_007",
+              "ars_00_source_008",
+              "ars_00_source_009",
+              "ars_00_source_010",
+              "ars_00_source_011",
+              "ars_00_source_012",
+              "ars_00_source_013",
+              "ars_00_source_014",
+              "ars_00_source_015",
+              "ars_00_source_016",
+              "ars_00_source_017",
+              "ars_00_source_018",
+              "ars_00_source_019",
+              "ars_00_source_020",
+              "ars_00_source_021",
+              "ars_00_source_022",
+              "ars_00_source_023",
+              "ars_00_source_024",
+              "ars_00_source_025",
+              "ars_00_source_026",
+              "ars_00_source_027",
+              "ars_00_source_028",
+              "ars_00_source_029"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "failures": [
+    "02-detail-identity-and-window",
+    "06-pure-mcp-positive-and-negative"
+  ],
+  "headed": true,
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "browser": "157.0.8103.79"
+}

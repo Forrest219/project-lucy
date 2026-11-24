@@ -10,6 +10,7 @@
 | 重点 | 同一次已确认变更不重复触发缓存失效；普通 overlay 修改不牵连 Agent 权限展示 |
 | 范围 | Lucy 单进程内的展示快照、文件对账、显示写屏障与刷新状态提示 |
 | 上游契约 | [Spec 174](../../webui/docs/174-webui-entry-performance-spec.md) §3.2 / §4.2 / §7 / §8 |
+| 后续边界修订指针 | 2026-11-24：[P1-75 §2.5 与附录 A](lucy-20261123-interactive-read-resilience-spec.md#25-全页面无-503-合同v14-扩容设计定稿)（v1.4 设计定稿，开发未授权）拟将「不返回未经验证的权限展示」收紧为：仅宽限外的**只读展示**可返回带降级标记的 200，保存、dryRun、权限预览、撤权后读取与运行时授权仍 fresh 核验；`503 DISPLAY_SNAPSHOT_BUSY` 不再是页面读取的合格结果（改为 `stale`／`pending` 200）。本条已收口合同不改；P1-75 扩容的开发授权并实现前，运行行为以本条原文为准。 |
 | 实施计划 | [WO-20261030](../../webui/docs/plans/wo-20261030-display-snapshot-invalidation-isolation.md) |
 
 ## 闭口层级

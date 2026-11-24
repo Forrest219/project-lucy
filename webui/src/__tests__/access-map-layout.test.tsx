@@ -284,7 +284,7 @@ describe("访问关系图几何语言（geometry Spec §5）", () => {
 
     const dormant = layout.links.find((link) => link.edge.id === "e|conn:c|table:t2");
     expect(dormant).toBeUndefined();
-    expect(layout.idleStubs.length).toBeGreaterThan(0);
+    expect(layout.idleAggregates.length).toBeGreaterThan(0);
 
     const review = layout.links.find((link) => link.edge.id === "e|conn:c|table:t3");
     expect(review?.band?.kind).toBe("review");

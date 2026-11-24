@@ -23,8 +23,20 @@ import { syncContentToProjectRoot } from "./content-mirror";
 import { resolveContentPaths } from "./paths";
 import { readProject } from "./project";
 import { registerDisplayTouchedPath, scopeContextFor, scopesForPath, withDisplayWriteBarrier } from "./display-generation";
-import { withPublishCoordinator } from "./publish-coordinator.js";
+import { withPublishCoordinator, currentProcessPublishHolder, registerPublishWriteStage } from "./publish-coordinator.js";
+import type { RecoveryJournal } from "./semantic-recovery-journal.js";
 import { SEMANTIC_BATCH_LIMITS } from "./semantic-limits.js";
+import {
+  allocateSourceNames,
+  findSourceNameConflicts,
+  flattenRegistryEntries,
+  normalizeSourceRef,
+  physicalTableBareName,
+  readConnectionSourceManifests,
+  SourceNameRegistryError,
+  type SourceManifestEntry,
+  type SourceNameConflict
+} from "./source-name-registry";
 
 const MAX_BYTES = SEMANTIC_BATCH_LIMITS.maxSingleYamlBytes;
 const MAX_RECORDS = 50;
@@ -54,7 +66,8 @@ export type CatalogAssetErrorCode =
   | "OVERLAY_FIELD_IN_MANIFEST"
   | "MANIFEST_SHAPE_IN_OVERLAY"
   | "PATH_NOT_ALLOWED"
-  | "ASSET_NOT_FOUND";
+  | "ASSET_NOT_FOUND"
+  | "DUPLICATE_SOURCE_NAME";
 
 export type CatalogAssetError = {
   code: CatalogAssetErrorCode;
@@ -65,12 +78,27 @@ export type CatalogAssetWarningCode =
   | "EMPTY_MANIFEST"
   | "TARGET_EXISTS"
   | "TABLE_SCHEMA_MISMATCH"
-  | "UNKNOWN_MANIFEST_SHAPE";
+  | "UNKNOWN_MANIFEST_SHAPE"
+  | "PREEXISTING_SOURCE_NAME_CONFLICT";
 
 export type CatalogAssetWarning = {
   code: CatalogAssetWarningCode;
   message: string;
   table?: string;
+};
+
+export type CatalogAssetSourceNameConflictEntry = {
+  targetPath: string;
+  schema: string;
+  physicalTable: string;
+  sourceName: string;
+};
+
+export type CatalogAssetSourceNameConflict = {
+  sourceName: string;
+  entries: CatalogAssetSourceNameConflictEntry[];
+  involvesCandidate: boolean;
+  suggestedSourceName?: string;
 };
 
 export type CatalogAssetValidateRequest = {
@@ -97,6 +125,7 @@ export type CatalogAssetValidateResponse = {
   tableNames: string[];
   warnings: CatalogAssetWarning[];
   errors: CatalogAssetError[];
+  sourceNameConflicts: CatalogAssetSourceNameConflict[];
 };
 
 export type CatalogAssetUploadRequest = CatalogAssetValidateRequest & {
@@ -553,6 +582,7 @@ function buildBaseValidation(
   | "warnings"
   | "tableNames"
   | "tables"
+  | "sourceNameConflicts"
 > {
   const sanitized = sanitizeFilename(request.filename);
   if (!sanitized || !hasYamlExtension(sanitized)) {
@@ -583,8 +613,117 @@ function buildBaseValidation(
     errors,
     warnings,
     tableNames: [],
-    tables: 0
+    tables: 0,
+    sourceNameConflicts: []
   };
+}
+
+function formatPhysicalList(entries: SourceManifestEntry[]): string {
+  return entries.map((e) => e.physicalTable).join("、");
+}
+
+function entryInvolvesCandidateSchema(
+  entry: SourceManifestEntry,
+  candidateSchema: string
+): boolean {
+  return normalizeSourceRef(entry.schema) === normalizeSourceRef(candidateSchema);
+}
+
+function buildSourceNameConflictPayload(
+  conflict: SourceNameConflict,
+  candidateSchema: string,
+  suggestedSourceName?: string
+): CatalogAssetSourceNameConflict {
+  const involvesCandidate = conflict.entries.some((e) =>
+    entryInvolvesCandidateSchema(e, candidateSchema)
+  );
+  const payload: CatalogAssetSourceNameConflict = {
+    sourceName: conflict.sourceName,
+    entries: conflict.entries.map((e) => ({
+      targetPath: e.targetPath,
+      schema: e.schema,
+      physicalTable: e.physicalTable,
+      sourceName: e.sourceName
+    })),
+    involvesCandidate
+  };
+  if (involvesCandidate && suggestedSourceName !== undefined) {
+    payload.suggestedSourceName = suggestedSourceName;
+  }
+  return payload;
+}
+
+function suggestSourceNameForConflict(
+  schema: string,
+  conflict: SourceNameConflict,
+  allocationRegistry: Awaited<ReturnType<typeof readConnectionSourceManifests>>
+): string | undefined {
+  const candidateEntry = conflict.entries.find((e) => entryInvolvesCandidateSchema(e, schema));
+  if (!candidateEntry) return undefined;
+  const bare = physicalTableBareName(candidateEntry.physicalTable);
+  if (!bare) return undefined;
+  return allocateSourceNames(schema, [bare], allocationRegistry).get(bare);
+}
+
+async function appendSourceNameUniquenessChecks(
+  projectRoot: string,
+  request: CatalogAssetValidateRequest,
+  errors: CatalogAssetError[],
+  warnings: CatalogAssetWarning[]
+): Promise<CatalogAssetSourceNameConflict[]> {
+  let finalRegistry: Awaited<ReturnType<typeof readConnectionSourceManifests>>;
+  let allocationRegistry: Awaited<ReturnType<typeof readConnectionSourceManifests>>;
+  try {
+    finalRegistry = await readConnectionSourceManifests(projectRoot, request.connectionId, {
+      schema: request.schema,
+      content: request.content
+    });
+    // Suggestions allocate against disk (target kept for D2 retention; reserved excludes it).
+    allocationRegistry = await readConnectionSourceManifests(projectRoot, request.connectionId);
+  } catch (error) {
+    if (error instanceof SourceNameRegistryError) {
+      errors.push({
+        code: "INVALID_MANIFEST",
+        message: error.message
+      });
+      return [];
+    }
+    throw error;
+  }
+
+  const conflicts = findSourceNameConflicts(flattenRegistryEntries(finalRegistry));
+  const sourceNameConflicts: CatalogAssetSourceNameConflict[] = [];
+
+  for (const conflict of conflicts) {
+    const involvesCandidate = conflict.entries.some((e) =>
+      entryInvolvesCandidateSchema(e, request.schema)
+    );
+    const suggested = involvesCandidate
+      ? suggestSourceNameForConflict(request.schema, conflict, allocationRegistry)
+      : undefined;
+    sourceNameConflicts.push(
+      buildSourceNameConflictPayload(conflict, request.schema, suggested)
+    );
+
+    const physicals = formatPhysicalList(conflict.entries);
+    if (involvesCandidate) {
+      const suggestionText =
+        suggested !== undefined
+          ? `请重新扫描该 Schema，或将冲突短名改为「${suggested}」后再上传。`
+          : "请重新扫描该 Schema 或改用唯一短名后再上传。";
+      errors.push({
+        code: "DUPLICATE_SOURCE_NAME",
+        message: `短名「${conflict.sourceName}」在最终集合中冲突（物理表：${physicals}）。${suggestionText}`
+      });
+    } else {
+      warnings.push({
+        code: "PREEXISTING_SOURCE_NAME_CONFLICT",
+        message: `连接内已有与本次候选无关的短名冲突「${conflict.sourceName}」（物理表：${physicals}）。可继续上传能减少旧冲突的修复，但运行时 Source Map 在全部消除前仍不可用。`
+      });
+    }
+  }
+
+  return sourceNameConflicts;
 }
 
 export async function validateCatalogAsset(
@@ -635,7 +774,8 @@ export async function validateCatalogAsset(
       valid: false,
       exists: false,
       tables: 0,
-      tableNames: []
+      tableNames: [],
+      sourceNameConflicts: []
     };
   }
 
@@ -648,7 +788,8 @@ export async function validateCatalogAsset(
       valid: false,
       exists: false,
       tables: 0,
-      tableNames: []
+      tableNames: [],
+      sourceNameConflicts: []
     };
   }
 
@@ -660,7 +801,8 @@ export async function validateCatalogAsset(
       valid: false,
       exists: false,
       tables: 0,
-      tableNames: []
+      tableNames: [],
+      sourceNameConflicts: []
     };
   }
 
@@ -671,13 +813,21 @@ export async function validateCatalogAsset(
     });
   }
 
+  const sourceNameConflicts = await appendSourceNameUniquenessChecks(
+    projectRoot,
+    request,
+    errors,
+    warnings
+  );
+
   return {
     ...base,
     valid: errors.length === 0,
     exists: safety.exists,
     tables: parsed.tables.length,
     tableNames: parsed.tables,
-    warnings: [...warnings, ...parsed.warnings]
+    warnings: [...warnings, ...parsed.warnings],
+    sourceNameConflicts
   };
 }
 
@@ -823,11 +973,10 @@ export type UploadCatalogAssetResult = {
   reload: CatalogReloadRun;
 };
 
-export async function uploadCatalogAsset(
-  projectRoot: string,
+function rejectInvalidOrUnconfirmedOverwrite(
+  validation: CatalogAssetValidateResponse,
   request: CatalogAssetUploadRequest
-): Promise<UploadCatalogAssetResult> {
-  const validation = await validateCatalogAsset(projectRoot, request);
+): void {
   if (!validation.valid) {
     const first = validation.errors[0];
     throw new CatalogAssetValidationError(
@@ -840,26 +989,44 @@ export async function uploadCatalogAsset(
   if (validation.exists && request.confirmOverwrite !== true) {
     throw new CatalogAssetOverwriteRequiredError(validation);
   }
+}
 
-  // Recompute the safe target abs path (validate already did this, but we
-  // re-resolve in case of a TOCTOU race with another writer).
-  const targetRel = validation.targetPath;
-  const errors: CatalogAssetError[] = [];
-  const safety = await assertSafeTarget(projectRoot, targetRel, errors, { createParent: true });
-  if (!safety) {
-    throw new CatalogAssetValidationError(
-      "PATH_NOT_ALLOWED",
-      "目标路径在写入前被检测为不安全",
-      validation,
-      403
-    );
+export async function uploadCatalogAsset(
+  projectRoot: string,
+  request: CatalogAssetUploadRequest
+): Promise<UploadCatalogAssetResult> {
+  // Early validate is feedback only (D7). Authoritative checks run inside the lock.
+  const early = await validateCatalogAsset(projectRoot, request);
+  rejectInvalidOrUnconfirmedOverwrite(early, request);
+
+  if (__test.beforePublishLock) {
+    await __test.beforePublishLock(request);
   }
 
   // Lucy v0.25 (L25-11 D4) — the manifest upload shares the publish window with the
   // single-table save, the batch import, the manual reindex and the access.yaml writers.
   return withPublishCoordinator(
     "manifest_upload",
-    () => writeCatalogAssetIntoWindow(projectRoot, request, validation, safety),
+    async () => {
+      const validation = await validateCatalogAsset(projectRoot, request);
+      rejectInvalidOrUnconfirmedOverwrite(validation, request);
+
+      const targetRel = validation.targetPath;
+      const errors: CatalogAssetError[] = [];
+      const safety = await assertSafeTarget(projectRoot, targetRel, errors, {
+        createParent: true
+      });
+      if (!safety) {
+        throw new CatalogAssetValidationError(
+          "PATH_NOT_ALLOWED",
+          "目标路径在写入前被检测为不安全",
+          validation,
+          403
+        );
+      }
+
+      return writeCatalogAssetIntoWindow(projectRoot, request, validation, safety);
+    },
     { projectRoot }
   );
 }
@@ -871,10 +1038,10 @@ async function writeCatalogAssetIntoWindow(
   safety: { safeParentAbs: string; targetAbs: string }
 ): Promise<UploadCatalogAssetResult> {
   const targetRel = validation.targetPath;
-  const { openPromotingContentRelease, closeContentBatch, failContentBatch } = await import(
+  const { openPromotingContentRelease, closeContentBatch, updateReleaseRecord } = await import(
     "./semantic-assets.js"
   );
-  const { createRecoveryJournal, markRecoveryJournalFilesSaved } = await import(
+  const { createRecoveryJournal, markRecoveryJournalFilesSaved, readRecoveryJournal, markRecoveryJournalBlocked, latchSemanticRecoveryAdmission } = await import(
     "./semantic-recovery-journal.js"
   );
   const { readOrCreateSemanticInstanceId } = await import("./semantic-release-snapshots.js");
@@ -894,131 +1061,165 @@ async function writeCatalogAssetIntoWindow(
       }
     ]
   });
-  const journal = await createRecoveryJournal(projectRoot, {
-    releaseId: opened.releaseId,
-    operationId: opened.releaseId,
-    actor: "local-admin",
-    instanceId: await readOrCreateSemanticInstanceId(projectRoot),
-    targets: [
-      {
-        targetPath: targetRel,
-        identity: {
-          connectionId: request.connectionId,
-          schema: request.schema,
-          table: request.schema
-        },
-        newContent: request.content
-      }
-    ]
-  });
-
-  // Atomic write: temp file in the same directory, then rename.
-  const tempName = `.${randomUUID()}.upload.tmp`;
-  const tempAbs = path.join(safety.safeParentAbs, tempName);
-  await writeFile(tempAbs, request.content, "utf8");
-  // Ensure the temp file is not a symlink that snuck in.
+  let journal: RecoveryJournal | undefined;
+  let stage: ReturnType<typeof registerPublishWriteStage> | undefined;
+  let filesSaved = false;
   try {
-    const tempLstat = await lstat(tempAbs);
-    if (tempLstat.isSymbolicLink()) {
+    journal = await createRecoveryJournal(projectRoot, {
+      releaseId: opened.releaseId,
+      operationId: opened.releaseId,
+      actor: "local-admin",
+      instanceId: await readOrCreateSemanticInstanceId(projectRoot),
+      onBeforePersist: (constructed) => {
+        journal = constructed;
+        stage = registerPublishWriteStage(currentProcessPublishHolder()!, { projectRoot, journal: constructed });
+      },
+      targets: [
+        {
+          targetPath: targetRel,
+          identity: {
+            connectionId: request.connectionId,
+            schema: request.schema,
+            table: request.schema
+          },
+          newContent: request.content
+        }
+      ]
+    });
+
+    // Atomic write: temp file in the same directory, then rename.
+    const tempName = `.${randomUUID()}.upload.tmp`;
+    const tempAbs = path.join(safety.safeParentAbs, tempName);
+    await writeFile(tempAbs, request.content, "utf8");
+    // Ensure the temp file is not a symlink that snuck in.
+    try {
+      const tempLstat = await lstat(tempAbs);
+      if (tempLstat.isSymbolicLink()) {
+        throw new CatalogAssetValidationError(
+          "PATH_NOT_ALLOWED",
+          "临时文件被替换为符号链接",
+          validation,
+          403
+        );
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        // already moved
+      } else {
+        throw error;
+      }
+    }
+    // Spec 174 §3.2 — the rename bypasses safeWrite; barrier it explicitly (tmp file is ignored).
+    // Spec 195 §4 — the scope comes from the target path itself: a Manifest feeds D and P.
+    const contentPaths = await resolveContentPaths(projectRoot);
+    const scopeContext = scopeContextFor(projectRoot, contentPaths.semanticLayer);
+    const targetScopes = scopesForPath(safety.targetAbs, scopeContext);
+    await withDisplayWriteBarrier(targetScopes, async () => {
+      registerDisplayTouchedPath(safety.targetAbs, targetScopes);
+      await rename(tempAbs, safety.targetAbs);
+    });
+
+    // A2: the ktx daemon/CLI still read the project-root sibling view. Push the
+    // just-written manifest (and any other content-root drift) there so query
+    // execution sees the same state the catalog now reads. Per-file failures
+    // are counted; a hard failure here must not silently continue.
+    const mirror = await syncContentToProjectRoot(projectRoot, await resolveContentPaths(projectRoot));
+    if (mirror.failed > 0) {
       throw new CatalogAssetValidationError(
         "PATH_NOT_ALLOWED",
-        "临时文件被替换为符号链接",
+        `内容根到 ktx 兄弟视图的同步有 ${mirror.failed} 个文件失败`,
         validation,
         403
       );
     }
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      // already moved
-    } else {
-      throw error;
+
+
+    // P1-70: a zero mirror failure count does not prove the actual bytes.
+    const expectedDigest = createHash("sha256").update(request.content, "utf8").digest("hex");
+    const mirrorAbs = path.resolve(projectRoot, targetRel);
+    const [targetBytes, mirrorBytes, mirrorInfo] = await Promise.all([
+      readFile(safety.targetAbs), readFile(mirrorAbs), lstat(mirrorAbs)
+    ]);
+    if (mirrorInfo.isSymbolicLink() || [targetBytes, mirrorBytes].some((bytes) =>
+      createHash("sha256").update(bytes).digest("hex") !== expectedDigest)) {
+      throw new Error("Manifest write or runtime mirror digest could not be verified");
     }
-  }
-  // Spec 174 §3.2 — the rename bypasses safeWrite; barrier it explicitly (tmp file is ignored).
-  // Spec 195 §4 — the scope comes from the target path itself: a Manifest feeds D and P.
-  const contentPaths = await resolveContentPaths(projectRoot);
-  const scopeContext = scopeContextFor(projectRoot, contentPaths.semanticLayer);
-  const targetScopes = scopesForPath(safety.targetAbs, scopeContext);
-  await withDisplayWriteBarrier(targetScopes, async () => {
-    registerDisplayTouchedPath(safety.targetAbs, targetScopes);
-    await rename(tempAbs, safety.targetAbs);
-  });
+    const marked = await markRecoveryJournalFilesSaved(projectRoot, journal.journalId);
+    const persisted = await readRecoveryJournal(projectRoot, journal.journalId);
+    if (!marked || marked.journalId !== journal.journalId || marked.phase !== "files_saved"
+      || !persisted || persisted.phase !== "files_saved" || persisted.status !== "open"
+      || persisted.recoveryRequired) throw new Error("Manifest files-saved journal was not persisted");
+    if (!stage) throw new Error("Manifest owner stage is missing");
+    filesSaved = true;
+    stage.filesSaved(); // Actual write/mirror stage ends BEFORE catalog/audit/reload.
 
-  // A2: the ktx daemon/CLI still read the project-root sibling view. Push the
-  // just-written manifest (and any other content-root drift) there so query
-  // execution sees the same state the catalog now reads. Per-file failures
-  // are counted; a hard failure here must not silently continue.
-  const mirror = await syncContentToProjectRoot(projectRoot, await resolveContentPaths(projectRoot));
-  if (mirror.failed > 0) {
-    throw new CatalogAssetValidationError(
-      "PATH_NOT_ALLOWED",
-      `内容根到 ktx 兄弟视图的同步有 ${mirror.failed} 个文件失败`,
-      validation,
-      403
-    );
-  }
+    // Audit record (no YAML content).
+    const createdAt = new Date();
+    const id = `up_${formatTimestamp(createdAt)}`;
+    const record: CatalogAssetUploadRecord = {
+      id,
+      createdAt: createdAt.toISOString(),
+      connectionId: validation.connectionId,
+      schema: validation.schema,
+      assetKind: validation.assetKind,
+      assetType: validation.assetType,
+      targetPath: targetRel,
+      originalFilename: validation.originalFilename,
+      sizeBytes: validation.sizeBytes,
+      sha256: validation.sha256,
+      tables: validation.tables,
+      overwritten: validation.exists,
+      warnings: validation.warnings
+    };
 
-  // Audit record (no YAML content).
-  const createdAt = new Date();
-  const id = `up_${formatTimestamp(createdAt)}`;
-  const record: CatalogAssetUploadRecord = {
-    id,
-    createdAt: createdAt.toISOString(),
-    connectionId: validation.connectionId,
-    schema: validation.schema,
-    assetKind: validation.assetKind,
-    assetType: validation.assetType,
-    targetPath: targetRel,
-    originalFilename: validation.originalFilename,
-    sizeBytes: validation.sizeBytes,
-    sha256: validation.sha256,
-    tables: validation.tables,
-    overwritten: validation.exists,
-    warnings: validation.warnings
-  };
-
-  // Static catalog reload so the rest of the UI sees the new manifest.
-  const reload = await reloadCatalog(projectRoot, {
-    connectionId: validation.connectionId,
-    schema: validation.schema
-  });
-  const finalRecord: CatalogAssetUploadRecord = {
-    ...record,
-    reloadRunId: reload.id
-  };
-  await appendRecord(projectRoot, finalRecord);
-  await markRecoveryJournalFilesSaved(projectRoot, journal.journalId);
-  // L25-15 — the batch has to reach a terminal state inside the publish
-  // window. A record left at `promoting` blocks every later content write.
-  try {
+    // Static catalog reload so the rest of the UI sees the new manifest.
+    const reload = await reloadCatalog(projectRoot, {
+      connectionId: validation.connectionId,
+      schema: validation.schema
+    });
+    const finalRecord: CatalogAssetUploadRecord = {
+      ...record,
+      reloadRunId: reload.id
+    };
+    await appendRecord(projectRoot, finalRecord);
+    // L25-15 — the batch has to reach a terminal state inside the publish
+    // window. A record left at `promoting` blocks every later content write.
     await closeContentBatch(projectRoot, {
-      releaseId: opened.releaseId,
-      attemptId: opened.attemptId,
-      actor: "local-admin",
-      journalId: journal.journalId,
-      changeType: "manifest_upload_terminal",
-      source: "catalog_asset_upload_api",
-      targetId: targetRel,
-      operation: "upload_terminal",
-      newSummary: {
-        connectionId: validation.connectionId,
-        schema: validation.schema,
-        tableCount: validation.tables
-      }
-    });
+        releaseId: opened.releaseId,
+        attemptId: opened.attemptId,
+        actor: "local-admin",
+        journalId: journal.journalId,
+        changeType: "manifest_upload_terminal",
+        source: "catalog_asset_upload_api",
+        targetId: targetRel,
+        operation: "upload_terminal",
+        newSummary: {
+          connectionId: validation.connectionId,
+          schema: validation.schema,
+          tableCount: validation.tables
+        }
+      });
+
+    return {
+      uploaded: true,
+      record: finalRecord,
+      validation,
+      reload
+    };
   } catch (error) {
-    await failContentBatch(projectRoot, {
-      releaseId: opened.releaseId,
-      journalId: journal.journalId
-    });
+    if (!filesSaved && journal) {
+      // Unknown/partial bytes remain closed; never promote a timer to success.
+      await markRecoveryJournalBlocked(projectRoot, journal.journalId, "manifest_write_failed")
+        .catch(() => { latchSemanticRecoveryAdmission(); });
+    }
+    await updateReleaseRecord(projectRoot, opened.releaseId, {
+      status: "promote_failed", activationStatus: "unconfirmed", recoveryRequired: !filesSaved
+    }).catch(() => undefined);
+    // Every awaited write/repair above is terminal. Readers never retire this owner.
+    if (!filesSaved) stage?.failed();
     throw error;
   }
-  return {
-    uploaded: true,
-    record: finalRecord,
-    validation,
-    reload
-  };
+
 }
 
 // Surface internal helpers for tests; do not export from any user-facing
@@ -1030,5 +1231,7 @@ export const __test = {
   formatTimestamp,
   MAX_BYTES,
   MAX_RECORDS,
-  SIDECAR_REL
+  SIDECAR_REL,
+  /** Test-only barrier between early validate and publish-lock acquisition (SC-04). */
+  beforePublishLock: null as null | ((request: CatalogAssetUploadRequest) => Promise<void>)
 };

@@ -1,0 +1,26 @@
+{
+  "startedAt": "2026-11-20T04:24:02.727371+00:00",
+  "scope": "F62 export under stuck diagnostics; F63 actual 10-second MySQL operation plus TERM; not whole-suite PASS",
+  "batch2": {
+    "statuses": {
+      "200": 11,
+      "429": 1
+    },
+    "maxMs": 72.828,
+    "diagnosticsStillStale": true,
+    "meaning": "actual audit_export adapter executed; does not cancel/recover diagnostic file I/O; no global-capacity conformance claim"
+  },
+  "batch3": {
+    "actualMysqlSleepObserved": true,
+    "query": {
+      "success": false,
+      "error": "Remote end closed connection without response"
+    },
+    "exited": true,
+    "exitElapsedS": 0.685,
+    "exitCode": 143,
+    "diagnosticFaultPresentDuringTerm": true,
+    "meaning": "single real in-flight query/TERM case; not 100-race or all recovery conformance"
+  },
+  "finishedAt": "2026-11-20T04:24:37.053235+00:00"
+}

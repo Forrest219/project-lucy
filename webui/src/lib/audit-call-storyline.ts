@@ -13,7 +13,8 @@ export type CallStoryAccessGrade =
   | "unclassified";
 
 export type CallStoryInput = {
-  tool: string;
+  /** Missing on auth_failure list rows merged into GET /api/admin/audit. */
+  tool?: string | null;
   accessGrade?: CallStoryAccessGrade | null;
   tables?: string[] | null;
   argsSummary?: Record<string, unknown> | null;
@@ -40,37 +41,44 @@ const CONNECT_TOOLS = new Set([
   "prompts/list"
 ]);
 
-export function isConnectGradeTool(tool: string): boolean {
-  return CONNECT_TOOLS.has(tool);
+function normalizeTool(tool: string | null | undefined): string {
+  return typeof tool === "string" ? tool : "";
 }
 
-export function inferAccessGrade(tool: string): CallStoryAccessGrade {
-  if (CONNECT_TOOLS.has(tool)) return "connect";
-  if (tool === "lucy_begin_question") return "ask";
-  if (tool === "lucy_query") return "query";
+export function isConnectGradeTool(tool: string | null | undefined): boolean {
+  return CONNECT_TOOLS.has(normalizeTool(tool));
+}
+
+export function inferAccessGrade(tool: string | null | undefined): CallStoryAccessGrade {
+  const name = normalizeTool(tool);
+  if (!name) return "unclassified";
+  if (CONNECT_TOOLS.has(name)) return "connect";
+  if (name === "lucy_begin_question") return "ask";
+  if (name === "lucy_query") return "query";
   if (
-    tool === "lucy_catalog" ||
-    tool === "lucy_read_source" ||
-    tool === "connection_list" ||
-    tool.startsWith("wiki_")
+    name === "lucy_catalog" ||
+    name === "lucy_read_source" ||
+    name === "connection_list" ||
+    name.startsWith("wiki_")
   ) {
     return "browse";
   }
-  if (tool.startsWith("lucy_ops") || tool.includes("ops_")) return "control";
+  if (name.startsWith("lucy_ops") || name.includes("ops_")) return "control";
   return "unclassified";
 }
 
-export function actionLabel(tool: string, grade?: CallStoryAccessGrade | null): string {
-  if (CONNECT_TOOLS.has(tool)) return "连接握手";
-  if (tool === "lucy_begin_question") return "问询登记";
-  if (tool === "lucy_query") return "查数";
-  if (tool === "lucy_catalog") return "浏览目录";
-  if (tool === "lucy_read_source") return "读取语义源";
-  if (tool.startsWith("wiki_")) return "浏览 Wiki";
+export function actionLabel(tool: string | null | undefined, grade?: CallStoryAccessGrade | null): string {
+  const name = normalizeTool(tool);
+  if (CONNECT_TOOLS.has(name)) return "连接握手";
+  if (name === "lucy_begin_question") return "问询登记";
+  if (name === "lucy_query") return "查数";
+  if (name === "lucy_catalog") return "浏览目录";
+  if (name === "lucy_read_source") return "读取语义源";
+  if (name.startsWith("wiki_")) return "浏览 Wiki";
   if (grade === "browse") return "浏览";
   if (grade === "prepare") return "准备";
   if (grade === "control") return "运维操作";
-  return tool || "未分级动作";
+  return name || "未分级动作";
 }
 
 function asStringArray(value: unknown): string[] {
@@ -111,13 +119,14 @@ export function dimensionNames(args?: Record<string, unknown> | null): string[] 
 }
 
 export function intentFromArgs(
-  tool: string,
+  tool: string | null | undefined,
   argsSummary?: Record<string, unknown> | null,
   tables?: string[] | null
 ): string {
+  const name = normalizeTool(tool);
   const tablePart = tables?.filter(Boolean).join("、") || "";
 
-  if (tool === "lucy_begin_question") {
+  if (name === "lucy_begin_question") {
     const intent =
       (typeof argsSummary?.intentSummary === "string" && argsSummary.intentSummary) ||
       (typeof argsSummary?.question === "string" && argsSummary.question) ||
@@ -128,7 +137,7 @@ export function intentFromArgs(
     return "登记本轮问询";
   }
 
-  if (tool === "lucy_query") {
+  if (name === "lucy_query") {
     const source =
       (typeof argsSummary?.source === "string" && argsSummary.source) ||
       tablePart ||
@@ -142,7 +151,7 @@ export function intentFromArgs(
     return bits.length ? bits.join(" · ") : tablePart || "—";
   }
 
-  if (CONNECT_TOOLS.has(tool)) return "MCP 会话握手";
+  if (CONNECT_TOOLS.has(name)) return "MCP 会话握手";
   if (tablePart) return tablePart;
   return "—";
 }
@@ -208,7 +217,7 @@ export function resultSummary(input: CallStoryInput): string {
 
 export function stepHint(prev: CallStoryInput | null | undefined, curr: CallStoryInput): string {
   if (!prev) return "—";
-  if (prev.tool !== "lucy_query" || curr.tool !== "lucy_query") return "—";
+  if (normalizeTool(prev.tool) !== "lucy_query" || normalizeTool(curr.tool) !== "lucy_query") return "—";
 
   const prevTables = (prev.tables ?? []).join("|");
   const currTables = (curr.tables ?? []).join("|");

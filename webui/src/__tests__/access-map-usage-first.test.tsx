@@ -6,7 +6,8 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import {
-  IDLE_GRANT_PX,
+  GHOST_MAX,
+  GHOST_MIN,
   layoutAccessMap,
   selectAccessMapCanvasNodes
 } from "../components/admin/AccessMapCanvas";
@@ -136,10 +137,9 @@ const mockResponse = {
 };
 
 describe("usage-first layout SC-01–05／08／11／21", () => {
-  it("SC-01 — IDLE_GRANT_PX ∈[2,4] 并锁定稿值 3", () => {
-    expect(IDLE_GRANT_PX).toBe(3);
-    expect(IDLE_GRANT_PX).toBeGreaterThanOrEqual(2);
-    expect(IDLE_GRANT_PX).toBeLessThanOrEqual(4);
+  it("SC-01 — 幽灵带示意厚度区间锁定稿值 [6,40]（桑基还原 D0＝C 取代 IDLE_GRANT_PX＝3）", () => {
+    expect(GHOST_MIN).toBe(6);
+    expect(GHOST_MAX).toBe(40);
   });
 
   it("SC-02／05／19 — 闲置表不进 canvas；柱高不随纯 grant 升高", () => {
@@ -196,12 +196,14 @@ describe("usage-first layout SC-01–05／08／11／21", () => {
     expect(heights[0]).toBeCloseTo(layout.unitPx, 5);
   });
 
-  it("SC-11 — 闲置 stub fill=none；不改变 pillarHeight", () => {
+  it("SC-11 — 闲置授权走幽灵层与聚合节点；不改变 pillarHeight", () => {
     const layout = layoutAccessMap(heFixture.nodes, heFixture.edges);
-    expect(layout.idleStubs.length).toBeGreaterThan(0);
+    expect(layout.idleAggregates.length).toBeGreaterThan(0);
     const conn = layout.nodes.find((item) => item.node.id === "conn:demo-mysql");
     expect(conn!.height).toBeCloseTo(layout.unitPx, 1);
-    expect(layout.idleStubs[0]!.height).toBe(IDLE_GRANT_PX);
+    const ghost = layout.links.filter((link) => link.layer === "ghost");
+    expect(ghost.length).toBeGreaterThan(0);
+    expect(ghost.every((link) => link.width >= GHOST_MIN && link.width <= GHOST_MAX)).toBe(true);
   });
 
   it("SC-21 — 同列 accessPaths 较大者排更先；排序不含 grantPaths", () => {
@@ -216,15 +218,66 @@ describe("usage-first layout SC-01–05／08／11／21", () => {
       .sort((a, b) => a.y - b.y);
     expect(agentCol[0]!.node.id).toBe("agent:b");
   });
+
+  // 空桑基修复 Spec SC-05–SC-07
+  it("SC-05 — 仅 dormant 且两端在画布：有幽灵带；unitPx 不被 grant 撑高", () => {
+    const nodes = [
+      makeNode("agent:a", "agent", "A", 0, 10, 0),
+      makeNode("role:r", "role", "R", 1, 10, 0),
+      makeNode("conn:c", "connection", "C", 2, 10, 0),
+      makeNode("table:t", "table", "T", 3, 10, 0)
+    ];
+    const edges = [
+      makeEdge("agent:a", "role:r", 10, 0),
+      makeEdge("role:r", "conn:c", 10, 0),
+      makeEdge("conn:c", "table:t", 10, 0)
+    ];
+    const layout = layoutAccessMap(nodes, edges);
+    const ghost = layout.links.filter((link) => link.layer === "ghost");
+    expect(ghost.length).toBeGreaterThanOrEqual(2);
+    expect(ghost.every((link) => link.width >= GHOST_MIN && link.width <= GHOST_MAX)).toBe(true);
+    // 闲置表不单独进列，而是并入聚合节点 → 不出现到原表的带
+    expect(layout.nodes.some((item) => item.node.id === "table:t")).toBe(false);
+    expect(layout.nodes.some((item) => item.node.id === "idle-agg:conn:c")).toBe(true);
+    expect(ghost.every((link) => link.edge.target !== "table:t")).toBe(true);
+    // 刻度仍按 usage（此处无 usage）封顶，不得被 grant=10 放大
+    expect(layout.unitPx).toBeLessThanOrEqual(24);
+    const agent = layout.nodes.find((item) => item.node.id === "agent:a");
+    expect(agent!.height).toBe(0);
+    expect(agent!.ghostHeight).toBeGreaterThanOrEqual(GHOST_MIN);
+  });
+
+  it("SC-06 — 有 usage 时厚度仍=accessPaths×unitPx；骨干不替代", () => {
+    const nodes = [
+      makeNode("agent:a", "agent", "A", 0, 10, 2),
+      makeNode("role:r", "role", "R", 1, 10, 2),
+      makeNode("conn:c", "connection", "C", 2, 10, 2),
+      makeNode("table:t", "table", "T", 3, 2, 2),
+      makeNode("table:idle", "table", "idle", 3, 8, 0)
+    ];
+    const edges = [
+      makeEdge("agent:a", "role:r", 10, 2),
+      makeEdge("role:r", "conn:c", 10, 2),
+      makeEdge("conn:c", "table:t", 2, 2),
+      makeEdge("conn:c", "table:idle", 8, 0)
+    ];
+    const layout = layoutAccessMap(nodes, edges);
+    const usage = layout.links.find(
+      (link) => link.layer !== "ghost" && link.edge.id === "e|conn:c|table:t"
+    );
+    expect(usage!.width).toBeCloseTo(2 * layout.unitPx, 5);
+    expect(layout.nodes.some((item) => item.node.id === "table:idle")).toBe(false);
+  });
 });
 
 describe("usage-first legend SC-06／07／15／17", () => {
-  it("图例四项：访问路径宽度＋闲置空心；无授权路径宽度／深色内核；无僵尸授权", () => {
+  it("图例四项：访问路径宽度＋闲置／骨干；无授权路径宽度／深色内核；无僵尸授权", () => {
     render(<AccessMapLegend />);
     const legend = screen.getByTestId("access-map-legend");
     expect(legend.children.length).toBe(4);
     expect(legend.textContent).toContain("流带宽度 = 访问路径数");
-    expect(legend.textContent).toContain("闲置授权");
+    expect(legend.textContent).toMatch(/闲置/);
+    expect(legend.textContent).toMatch(/虚线轮廓/);
     expect(legend.textContent).not.toContain("授权路径数");
     expect(legend.textContent).not.toContain("深色内核");
     expect(legend.textContent).not.toContain("僵尸授权");

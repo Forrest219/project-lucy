@@ -173,5 +173,5 @@ GROUP BY table_schema;
 ## 8. 审阅时请看的边界
 
 - 客户现场按一套 Lucy 理解。尚未用进程启动时间和 OpenClaw 地址做交叉确认；只有重启后报错不变时才需要查是不是打到了另一套。
-- `default_init_catalog` 依赖 SelectDB / Doris 版本能力。客户版本未在本次材料里确认，所以必须先做第 7.2 节的三条验证。
+- `default_init_catalog` 依赖 SelectDB / Doris 版本能力。2026-10-20 本稿撰写时客户版本未确认；其后会话备忘登记客户升级／扩容后为 **Doris 2.0.14**（当代主线参照 4.x，现网以 2.0.14 为准），见 [数据架构调研分析 §1.1](2026-11-13-data-architecture-survey-analysis.md)。能力验证仍须先做第 7.2 节的三条，不得用 4.x 文档直接代替。
 - 本文不提出产品改动方案。若审阅后要让 Lucy 原生识别 Catalog，需要另开 Spec。

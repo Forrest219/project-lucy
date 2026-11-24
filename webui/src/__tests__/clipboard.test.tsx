@@ -33,17 +33,37 @@ function setExecCommand(impl: ((command: string) => boolean) | undefined): void 
   Object.defineProperty(document, "execCommand", { configurable: true, value: impl });
 }
 
-/** Capture whatever the helper handed to `execCommand("copy")`. */
+/**
+ * Capture the state Chromium would copy FROM at the moment `execCommand("copy")`
+ * runs. `execCommand` returns `true` even when nothing is selected, so the stub
+ * must observe the selection itself instead of trusting its own return value.
+ */
 function stubExecCommand(returns: boolean) {
   const calls: string[] = [];
   let copiedText: string | null = null;
+  let selectedText: string | null = null;
+  let textareaFocused = false;
+  let hostRole: string | null = null;
   setExecCommand((command: string) => {
     calls.push(command);
     const textarea = document.querySelector("textarea");
     copiedText = textarea ? (textarea as HTMLTextAreaElement).value : null;
+    if (textarea) {
+      const field = textarea as HTMLTextAreaElement;
+      textareaFocused = document.activeElement === field;
+      hostRole = field.parentElement?.getAttribute("role") ?? null;
+      selectedText = field.value.slice(field.selectionStart, field.selectionEnd);
+    }
     return returns;
   });
-  return { calls, getCopiedText: () => copiedText };
+  return {
+    calls,
+    getCopiedText: () => copiedText,
+    /** What a real browser would put on the clipboard. */
+    getSelectedText: () => selectedText,
+    wasTextareaFocused: () => textareaFocused,
+    getHostRole: () => hostRole
+  };
 }
 
 afterEach(() => {
@@ -85,6 +105,33 @@ describe("copyTextToClipboard", () => {
     expect(result).toEqual({ ok: true });
     expect(fallback.calls).toContain("copy");
     expect(fallback.getCopiedText()).toBe("fallback payload");
+    // A real browser copies the *selection*, not the textarea value: an empty
+    // selection still makes `execCommand` return true (the 2026-11-17 fake success).
+    expect(fallback.wasTextareaFocused()).toBe(true);
+    expect(fallback.getSelectedText()).toBe("fallback payload");
+  });
+
+  it("selects the full payload for multi-line text", async () => {
+    setClipboard(undefined);
+    const fallback = stubExecCommand(true);
+    const payload = "第一行\n第二行\n" + "x".repeat(3000);
+
+    const result = await copyTextToClipboard(payload);
+
+    expect(result).toEqual({ ok: true });
+    expect(fallback.getSelectedText()).toBe(payload);
+  });
+
+  it("does not report success when the helper textarea cannot be selected", async () => {
+    setClipboard(undefined);
+    const fallback = stubExecCommand(true);
+    const focus = vi.spyOn(HTMLElement.prototype, "focus").mockImplementation(() => undefined);
+
+    const result = await copyTextToClipboard("cannot focus");
+
+    focus.mockRestore();
+    expect(result).toEqual({ ok: false, reason: "exec-command-rejected" });
+    expect(fallback.calls).not.toContain("copy");
   });
 
   it("falls back to execCommand when the native write is rejected", async () => {
@@ -161,6 +208,37 @@ describe("copyTextToClipboard", () => {
     expect(selection?.getRangeAt(0).startContainer).toBe(anchor);
 
     anchor.remove();
+  });
+
+  it("returns focus to the element that was focused before copying", async () => {
+    setClipboard(undefined);
+    stubExecCommand(true);
+    const button = document.createElement("button");
+    document.body.appendChild(button);
+    button.focus();
+
+    await copyTextToClipboard("keep focus");
+
+    expect(document.activeElement).toBe(button);
+    button.remove();
+  });
+
+  it("keeps the helper textarea inside an open dialog so a focus trap does not steal focus", async () => {
+    setClipboard(undefined);
+    const fallback = stubExecCommand(true);
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "dialog");
+    const button = document.createElement("button");
+    dialog.appendChild(button);
+    document.body.appendChild(dialog);
+    button.focus();
+
+    await copyTextToClipboard("inside dialog");
+
+    expect(fallback.getHostRole()).toBe("dialog");
+    expect(fallback.getSelectedText()).toBe("inside dialog");
+    expect(dialog.querySelectorAll("textarea")).toHaveLength(0);
+    dialog.remove();
   });
 });
 

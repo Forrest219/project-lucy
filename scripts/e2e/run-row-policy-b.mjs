@@ -142,7 +142,7 @@ function writePhasePlan(runDir, phase, runJson) {
     commands,
     restartRequired: true,
     restartReason:
-      "Lucy reads LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN from process.env. After setForcedPredicateProven, restart the same runDir instance (run-management / run-security start Lucy from run.instance.env)."
+      "Legacy-flag compatibility environments; both execute automatic row policies. Separate processes isolate fixture env."
   };
   writeFileSync(path.join(dir, "plan.json"), `${JSON.stringify(plan, null, 2)}\n`);
   return plan;
@@ -226,7 +226,7 @@ export async function runRowPolicyB(options = {}) {
       writePhaseEvidence(runDir, "on", { phase: "on", proven: "1", rows: onRows, executed: false });
     }
   } finally {
-    // Never leave proven=1 on the run instance (customer sign-off decoupling).
+    // Restore the default compatibility-test environment.
     try {
       setForcedPredicateProven(runDir, false);
     } catch {
@@ -277,7 +277,7 @@ function printReport(report) {
     process.stdout.write(`  # Gate-Off (proven=0). Runner already wrote instance.env; re-run with --execute or:\n`);
     process.stdout.write(`  ${report.followOn.off.management}\n`);
     process.stdout.write(`  ${report.followOn.off.security}\n`);
-    process.stdout.write(`  # Gate-On (setForcedPredicateProven then same-volume restart):\n`);
+    process.stdout.write(`  # Legacy-flag compatibility environment (automatic row enforcement):\n`);
     process.stdout.write(`  ${report.followOn.on.management}\n`);
     process.stdout.write(`  ${report.followOn.on.security}\n`);
     process.stdout.write("  # Then: node scripts/e2e/run-row-policy-b.mjs --run <run.json> --execute\n");

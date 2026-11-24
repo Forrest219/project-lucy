@@ -12,6 +12,7 @@
 
 ```text
 docs/qa/
+  uat/                               ← 可反复复现的客户场景 UAT 项目（用例／fixtures／跑次）
   e2e-sop.md                         ← E2E SOP 总指引（先读）
   suite-webui-browser.md             ← 分表 E2E-WEBUI
   suite-semantic-onboard-mcp-eval.md ← 分表 E2E-ONBOARD-EVAL（含 KSC / Spider2 §14）
@@ -28,6 +29,7 @@ docs/qa/
 
 | 文档 | 角色 |
 |---|---|
+| [`uat/README.md`](uat/README.md) | **测试台 SOT（UAT）**：客户场景复现用例／fixtures／跑次；入口 [`uat/INDEX.md`](uat/INDEX.md)。三台勾连与基准线追评见 [`../governance/e2e-ledger.md`](../governance/e2e-ledger.md)；规则见 DEVELOPMENT「端到端三台账」 |
 | [`audit-trust-and-admin-investigation-acceptance.md`](audit-trust-and-admin-investigation-acceptance.md) | **未执行**：审计可信度与管理员调查 EA-01–36，Claude 举证、Codex 独立评审；不替代已有客户发布门禁 |
 | [`e2e-sop.md`](e2e-sop.md) | **总指引**：§0 定义主干与分支可各自独立运行。测试集总表、选用决策、共同约定。产品轨是唯一主线 `J25-01` 加六类旁线；Docker 或 ARM 即可证明产品能力。镜像轨（amd64、Kubernetes、受保护 runner、发布 readiness）不进入产品完成分母 |
 | [`smoke-test-design-upgrade-spec.md`](smoke-test-design-upgrade-spec.md) | **Fast / Full Smoke 自动化测试任务设计升级规范** |

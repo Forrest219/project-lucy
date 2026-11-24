@@ -1,0 +1,13 @@
+{
+  "rawFiles": 188,
+  "archiveBytes": 3977132,
+  "allRawHashesVerified": true,
+  "runtimeOverlayHashesVerified": 9,
+  "privateCredentialsIncluded": false,
+  "originalRunnerSummaryRetained": true,
+  "naturalCutoff": "user-stop.json, not cleanup time",
+  "postStopSamples": "retained in raw archive; not counted as natural load; one inflight query censored",
+  "cpuCoverage": "first ~35 minutes only; observer-profile-stopped marker documents termination",
+  "postSoakFifoControl": "NOT RUN, user ended test at about 1h",
+  "finalAuditValidity": "GAP: independent full read-only join/quick_check exceeded 60s; no closure claim"
+}

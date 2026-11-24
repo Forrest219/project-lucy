@@ -28,6 +28,10 @@ node -e '
       if (!body.ok) throw new Error("health envelope not ok");
       const rt = body.data?.ktxRuntime;
       if (rt && rt.ready === false) throw new Error("ktxRuntime not ready");
+      // P1-81: an instance that declared itself stuck (probes were green while business reads failed)
+      // must report unhealthy so the supervisor/operator sees it.
+      const heal = body.data?.selfHeal;
+      if (heal && heal.phase === "unhealthy") throw new Error("instance stuck: self-heal reported unhealthy");
     })
     .then(() => process.exit(0), (err) => {
       console.error(err.message);

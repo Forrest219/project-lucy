@@ -1,0 +1,8 @@
+{
+  "baselineDiagnostics": 50,
+  "afterDiagnostics": 49,
+  "introduced": [],
+  "removed": [
+    "src/__tests__/catalog-asset-upload.test.tsx(58,3): error TS2322: Type '{ valid: boolean; connectionId: string; schema: string; assetKind: CatalogAssetKind; assetType: CatalogAssetType; ... 9 more ...; sourceNameConflicts?: CatalogAssetSourceNameConflict[] | undefined; }' is not assignable to type 'CatalogAssetValidateResponse'."
+  ]
+}

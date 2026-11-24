@@ -1,7 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import { stringify, parse } from "yaml";
+import { parse } from "yaml";
+import { stringifySafe } from "../yaml-safe";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { auditedWriteFile } from "./config-audit-write.js";
 import { withDisplayWriteBarrier } from "../display-generation.js";
@@ -510,7 +511,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
       const newUsers = [...config.users];
       newUsers[userIndex] = updatedUser;
       const newConfig: YamlAccessConfig = { ...config, users: newUsers };
-      const content = stringify(newConfig, { lineWidth: 0 });
+      const content = stringifySafe(newConfig, { lineWidth: 0 });
       // Spec 174 §3.2 — display barrier spans write + runtime commit.
       const runtime = await withDisplayWriteBarrier(["P"], async () => {
         await auditedWriteFile(projectRoot, ACCESS_YAML_REL, content, {
@@ -628,7 +629,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
       const newUsers = [...config.users];
       newUsers[userIndex] = updatedUser;
       const newConfig: YamlAccessConfig = { ...config, users: newUsers };
-      const content = stringify(newConfig, { lineWidth: 0 });
+      const content = stringifySafe(newConfig, { lineWidth: 0 });
       // Spec 174 §3.2 — display barrier spans write + runtime commit.
       const runtime = await withDisplayWriteBarrier(["P"], async () => {
         await auditedWriteFile(projectRoot, ACCESS_YAML_REL, content, {
@@ -828,7 +829,7 @@ export function registerTokenRoutes(app: FastifyInstance) {
       const newUsers = [...config.users];
       newUsers[userIndex] = updatedUser;
       const newConfig: YamlAccessConfig = { ...config, users: newUsers };
-      const content = stringify(newConfig, { lineWidth: 0 });
+      const content = stringifySafe(newConfig, { lineWidth: 0 });
 
       try {
         const runtime = await withDisplayWriteBarrier(["P"], async () => {

@@ -70,6 +70,7 @@ function makeValidateResponse(overrides: Partial<CatalogAssetValidateResponse> =
     tableNames: ["customers"],
     warnings: [],
     errors: [],
+    sourceNameConflicts: [],
     ...overrides
   };
 }

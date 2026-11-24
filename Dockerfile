@@ -22,7 +22,7 @@ FROM --platform=$TARGETPLATFORM node:22-bookworm-slim
 ARG KTX_VERSION=0.16.0
 # Lucy product version (customer-facing). Independent of bundled KTX.
 # Keep in sync with repo-root VERSION; customer image tags use this, not KTX.
-ARG LUCY_VERSION=0.25.0
+ARG LUCY_VERSION=0.30.0
 # TARGETARCH is exposed so future architecture-specific steps (e.g. fetching a
 # KTX binary release) can branch on it without changing the rest of the file.
 ARG TARGETARCH=amd64
@@ -110,7 +110,9 @@ COPY package.json package-lock.json ./
 RUN sh /tmp/docker-build-mirrors.sh npm ci --include=dev
 
 COPY webui/package.json webui/package-lock.json ./webui/
-RUN sh /tmp/docker-build-mirrors.sh npm --prefix /app/webui ci --include=dev
+# NODE_ENV=production can omit optional native bindings (e.g. @tailwindcss/oxide-*).
+# Keep --include=optional so vite build finds the platform oxide package.
+RUN sh /tmp/docker-build-mirrors.sh npm --prefix /app/webui ci --include=dev --include=optional
 
 COPY . .
 

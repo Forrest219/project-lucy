@@ -1,0 +1,50 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 44.086,
+  "body": {
+    "ok": true,
+    "data": {
+      "written": true,
+      "revokedAt": "2026-11-20T04:43:56.210Z",
+      "policyVersion": "c7034ce63d51324829a5051b8082d5fd92f06c96687d57ddf4e60b0d1e98021d",
+      "policyRuntimeAck": true,
+      "runtimeAck": true,
+      "gate": {
+        "traceId": "gate-8795c6b2-a130-43df-89ac-ca270ab1cbc5",
+        "targetKind": "token",
+        "targetId": "uat_zb_revoked:isolated-revoked",
+        "decision": "warn",
+        "tierSummary": {
+          "P0": {
+            "count": 0,
+            "reasons": []
+          },
+          "P1": {
+            "count": 0,
+            "reasons": []
+          },
+          "P2": {
+            "count": 1,
+            "reasons": [
+              "STALE_TOKEN_CLEANUP: Stale or unused token being cleaned up"
+            ]
+          }
+        },
+        "findings": [
+          {
+            "tier": "P2",
+            "code": "STALE_TOKEN_CLEANUP",
+            "message": "Stale or unused token being cleaned up"
+          }
+        ],
+        "evidenceRefs": [
+          {
+            "kind": "role_diff_hash",
+            "ref": "439eb9426e8ed6c0c45bf315c28cffdd",
+            "relation": "observed"
+          }
+        ]
+      }
+    }
+  }
+}

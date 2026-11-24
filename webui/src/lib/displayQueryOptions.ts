@@ -1,18 +1,30 @@
 import { useSyncExternalStore } from "react";
 import type { QueryFunctionContext } from "@tanstack/react-query";
 import {
-  ApiError,
   apiGet,
+  ApiError,
   displayFactsPending,
   hasPendingDisplayWrite,
+  isRetryableDisplayReadError,
   isWriteStaleResponseError,
   subscribeDisplayWrites,
+  userFacingApiErrorMessage,
   waitForDisplayWritesSettled,
   type DisplayReadScope
 } from "./apiClient";
+import { normalizeAgentRoster } from "./agentRosterSummary";
 import { queryKeys } from "./queryKeys";
 import type { AgentStatsRange } from "./agentStatsRange";
-import type { CatalogReloadsResponse, McpRuntimeStatus, ProjectInfo, SourcesResponse } from "./types";
+import type {
+  Agent,
+  AgentRosterRead,
+  AgentsRosterResponse,
+  AgentsStatisticsResponse,
+  CatalogReloadsResponse,
+  McpRuntimeStatus,
+  ProjectInfo,
+  SourcesResponse
+} from "./types";
 
 /** Spec 174 §4.2 — shared freshness for the project / sources display reads. */
 export const DISPLAY_STALE_TIME_MS = 30_000;
@@ -25,15 +37,35 @@ export const DISPLAY_GC_TIME_MS = 300_000;
  * payload). Auth-epoch staleness and aborts are not retried.
  */
 const MAX_DISPLAY_READ_ATTEMPTS = 3;
+const displayReadJourneys = new WeakMap<AbortSignal, number>();
 
 async function displayRead<T>(path: string, scope: DisplayReadScope, signal: AbortSignal | undefined): Promise<T> {
-  for (let attempt = 1; ; attempt += 1) {
-    if (hasPendingDisplayWrite(scope)) await waitForDisplayWritesSettled(scope, signal);
-    try {
-      return await apiGet<T>(path, { signal, displayRead: scope });
-    } catch (error) {
-      if (!isWriteStaleResponseError(error) || signal?.aborted || attempt >= MAX_DISPLAY_READ_ATTEMPTS) throw error;
+  const started = signal ? displayReadJourneys.get(signal) ?? Date.now() : Date.now();
+  if (signal) displayReadJourneys.set(signal, started);
+  const remaining = Math.min(10000, 15000 - (Date.now() - started));
+  const timeout = () => new ApiError({ code: "DISPLAY_READ_TIMEOUT", message: "页面数据读取超时，请重试。" });
+  if (remaining <= 0) throw timeout();
+  const controller = new AbortController();
+  const abort = () => controller.abort(signal?.reason);
+  signal?.addEventListener("abort", abort, { once: true });
+  if (signal?.aborted) abort();
+  let timedOut = false;
+  const timer = setTimeout(() => { timedOut = true; controller.abort(); }, remaining);
+  try {
+    for (let attempt = 1; ; attempt += 1) {
+      if (hasPendingDisplayWrite(scope)) await waitForDisplayWritesSettled(scope, controller.signal);
+      try {
+        return await apiGet<T>(path, { signal: controller.signal, displayRead: scope });
+      } catch (error) {
+        if (!isWriteStaleResponseError(error) || controller.signal.aborted || attempt >= MAX_DISPLAY_READ_ATTEMPTS) throw error;
+      }
     }
+  } catch (error) {
+    if (timedOut) throw timeout();
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", abort);
   }
 }
 
@@ -42,12 +74,28 @@ export function useDisplayFactsPending(scope: DisplayReadScope): boolean {
   return useSyncExternalStore(subscribeDisplayWrites, () => displayFactsPending(scope));
 }
 
-/** Read-only retry: at most once, only for the retryable busy envelope, honouring Retry-After: 1. */
-function retryBusyOnce(failureCount: number, error: unknown): boolean {
-  return failureCount < 1 && error instanceof ApiError && error.code === "DISPLAY_SNAPSHOT_BUSY";
+/** P1-58 — extra automatic read retry + backoff must stay within this budget. */
+export const DISPLAY_READ_RETRY_BUDGET_MS = 5000;
+
+/** At most one automatic retry for DISPLAY_SNAPSHOT_BUSY or HTML gateway faults. */
+function retryDisplayReadOnce(failureCount: number, error: unknown): boolean {
+  return failureCount < 1 && isRetryableDisplayReadError(error);
 }
 
-const displayRetry = { retry: retryBusyOnce, retryDelay: 1000 };
+function retryDisplayReadDelay(_failureCount: number, error: unknown): number {
+  const retryAfter =
+    typeof (error as { retryAfterSeconds?: unknown })?.retryAfterSeconds === "number"
+      ? (error as { retryAfterSeconds: number }).retryAfterSeconds * 1000
+      : 1000;
+  const jitter = Math.floor(Math.random() * 250);
+  return Math.min(retryAfter + jitter, DISPLAY_READ_RETRY_BUDGET_MS);
+}
+
+const displayRetry = { retry: retryDisplayReadOnce, retryDelay: retryDisplayReadDelay };
+
+export function formatListLoadError(error: unknown): string {
+  return userFacingApiErrorMessage(error);
+}
 
 export function projectQueryOptions() {
   return {
@@ -85,12 +133,115 @@ export function catalogReloadsQueryOptions() {
   };
 }
 
-/** Agent list carries dynamic audit statistics: keep staleTime 0 (only server-side permission caching). */
+/** Legacy full list (compatibility); Agent UI uses roster + statistics partitions. */
 export function adminAgentsQueryOptions<T>(range?: AgentStatsRange) {
   const path = range ? `/api/admin/agents?range=${range}` : "/api/admin/agents";
   return {
     queryKey: range ? [...queryKeys.adminAgents, range] : queryKeys.adminAgents,
     queryFn: ({ signal }: QueryFunctionContext) => displayRead<T>(path, "agents", signal),
+    ...displayRetry
+  };
+}
+
+/** P1-58 — verified roster without audit statistics. */
+export function adminAgentsRosterQueryOptions() {
+  return {
+    queryKey: [...queryKeys.adminAgents, "roster"] as const,
+    queryFn: ({ signal }: QueryFunctionContext) =>
+      displayRead<AgentsRosterResponse>("/api/admin/agents?view=roster", "agents", signal),
+    ...displayRetry
+  };
+}
+
+const rosterReadJourneys = new WeakMap<AbortSignal,{startedAt:number}>();
+async function boundedRosterRead<T>(path:string, signal?:AbortSignal, deadline?:number):Promise<T> {
+  let journey=signal?rosterReadJourneys.get(signal):undefined;
+  if(!journey) {journey={startedAt:Date.now()};if(signal) rosterReadJourneys.set(signal,journey);}
+  const remaining=Math.min(15000-(Date.now()-journey.startedAt),deadline===undefined?Infinity:deadline-Date.now());
+  const timeoutError=()=>new ApiError({code:"ROSTER_READ_TIMEOUT",message:"页面数据读取超时，请重试。"});
+  if(remaining<=0) throw timeoutError();
+  const controller=new AbortController();
+  const abort=()=>controller.abort(signal?.reason);
+  signal?.addEventListener("abort",abort,{once:true});
+  if(signal?.aborted) abort();
+  let timedOut=false;
+  const timer=setTimeout(()=>{timedOut=true;controller.abort();},Math.min(10000,remaining));
+  try{return await displayRead<T>(path,"agents",controller.signal);}
+  catch(error){if(timedOut) throw timeoutError();throw error;}
+  finally{clearTimeout(timer);signal?.removeEventListener("abort",abort);}
+}
+
+/** Explicit P1-66 projection; range also preserves ignored-parameter legacy full responses. */
+export function adminAgentsSummaryQueryOptions(range: AgentStatsRange, deadline?:()=>number|undefined) {
+  return {queryKey:[...queryKeys.adminAgents,"roster","summary","v1",range] as const,
+    queryFn:async ({signal}:QueryFunctionContext)=>normalizeAgentRoster(
+      await boundedRosterRead<unknown>(`/api/admin/agents?view=roster&projection=summary&range=${range}`,signal,deadline?.()),range),...displayRetry};
+}
+/**
+ * P1-75 增量 F：只需 Agent 身份（id／名称／启用／Role）的页面（下拉、过滤、引导）用摘要投影，
+ * 不再拉含 tokens／约束／完整权限的整份名册。
+ */
+export type AgentIdentity = Pick<Agent, "id" | "name" | "enabled" | "role" | "roles"> & { legacyWildcard: boolean };
+export function adminAgentsIdentityQueryOptions() {
+  return {queryKey:[...queryKeys.adminAgents,"roster","summary","v1","identity"] as const,
+    queryFn:async ({signal}:QueryFunctionContext)=>{
+      const raw=await boundedRosterRead<{agents?:Array<Agent&{legacyWildcard?:boolean}>}>("/api/admin/agents?view=roster&projection=summary",signal);
+      // 只取身份字段：即使旧服务忽略 projection 返回整份，也不把 tokens／约束带进缓存。
+      const agents: AgentIdentity[]=(Array.isArray(raw?.agents)?raw.agents:[]).map(a=>({
+        id:a.id,name:a.name,enabled:a.enabled,role:a.role,roles:a.roles,
+        legacyWildcard:typeof a.legacyWildcard==="boolean"?a.legacyWildcard:Boolean(a.allow?.tables?.includes("*")||a.allow?.tools?.includes("*"))
+      }));
+      return {agents};
+    },...displayRetry};
+}
+export function adminAgentDrawerQueryOptions(id:string) {
+  const validate=(data:{agent:Agent;version:string})=>{
+    if(!data || data.agent?.id!==id || !Array.isArray(data.agent.tokens) || typeof data.version!=="string")
+      throw new ApiError({code:"INVALID_AGENT_RESPONSE",message:"Agent 详情数据不完整，请重试。"});
+    return data;
+  };
+  return {queryKey:[...queryKeys.adminAgents,"detail",id,"7d"] as const,
+    queryFn:async ({signal}:QueryFunctionContext)=> {
+      const data=await boundedRosterRead<{agent:Agent;version:string}>(`/api/admin/agents/${encodeURIComponent(id)}?range=7d`,signal);
+      return validate(data);
+    },
+    // React Query select validates cached data too, including accidental DTO pollution.
+    select:validate,
+    ...displayRetry};
+}
+export function adminAgentsCompatibleStatisticsQueryOptions(range:AgentStatsRange, legacy:boolean, refresh=false, deadline?:()=>number|undefined, roster?:AgentRosterRead) {
+  const base=adminAgentsStatisticsQueryOptions(range,refresh);
+  return {...base,queryKey:[...base.queryKey,legacy?"legacy-roster":"summary-v1",roster?.version??null,roster?.meta?.snapshotVersion??null,...(legacy?[roster?.legacyReadContext??null]:[])],queryFn:async (ctx:QueryFunctionContext)=>{
+    try {return await boundedRosterRead<AgentsStatisticsResponse>(`/api/admin/agents/statistics?range=${range}${refresh?"&refresh=true":""}`,ctx.signal,deadline?.());} catch(error) {
+      if(legacy && error instanceof ApiError && error.httpStatus===404 && ["NOT_FOUND","AGENT_NOT_FOUND"].includes(error.code)) return null;
+      throw error;
+    }
+  }};
+}
+
+/** P1-58 — dynamic statistics; server may reuse completed results for ≤5s unless refresh=true. */
+export function adminAgentsStatisticsQueryOptions(range: AgentStatsRange, refresh = false) {
+  const params = new URLSearchParams({ range });
+  if (refresh) params.set("refresh", "true");
+  return {
+    queryKey: [...queryKeys.adminAgents, "statistics", range] as const,
+    queryFn: ({ signal }: QueryFunctionContext) =>
+      displayRead<AgentsStatisticsResponse>(`/api/admin/agents/statistics?${params.toString()}`, "agents", signal),
+    ...displayRetry
+  };
+}
+
+export function adminRolesQueryOptions<T>(params?: { includeTemplates?: boolean }) {
+  const includeTemplates = params?.includeTemplates ?? true;
+  const path = includeTemplates ? "/api/admin/roles" : "/api/admin/roles?includeTemplates=false";
+  const queryKey = includeTemplates
+    ? (["admin", "roles"] as const)
+    : (["admin", "roles", { includeTemplates: false }] as const);
+  return {
+    queryKey,
+    queryFn: ({ signal }: QueryFunctionContext) => displayRead<T>(path, "sources", signal),
+    staleTime: DISPLAY_STALE_TIME_MS,
+    gcTime: DISPLAY_GC_TIME_MS,
     ...displayRetry
   };
 }

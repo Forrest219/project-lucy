@@ -22,7 +22,7 @@ import type {
   SourceSummary,
   SourcesResponse
 } from "../lib/types";
-import { adminAgentsQueryOptions } from "../lib/displayQueryOptions";
+import { adminAgentDrawerQueryOptions, formatListLoadError } from "../lib/displayQueryOptions";
 
 type AgentsResponse = { agents: Agent[]; version?: string };
 
@@ -218,16 +218,14 @@ function TableDetailBody({ target }: { target: TableTarget }) {
 type AgentTarget = Extract<NonNullable<ReturnType<typeof parseObjectDetailSearch>>, { kind: "agent" }>;
 
 function AgentDetailBody({ target }: { target: AgentTarget }) {
-  const agentsQuery = useQuery({
-    ...adminAgentsQueryOptions<AgentsResponse>()
-  });
-  const match: Agent | undefined = (agentsQuery.data?.agents ?? []).find(
-    (agent: Agent) => agent.id === target.agentId
-  );
-  if (agentsQuery.isLoading) {
-    return <p className="pl-notice">加载中…</p>;
-  }
-  if (!match) {
+  const detailQuery = useQuery({...adminAgentDrawerQueryOptions(target.agentId)});
+  const match = detailQuery.data?.agent?.id===target.agentId ? detailQuery.data.agent : undefined;
+  if (detailQuery.isLoading) return <p className="pl-notice">加载中…</p>;
+  const notFound = detailQuery.error && (detailQuery.error as {code?:string;httpStatus?:number}).code==="AGENT_NOT_FOUND"
+    && (detailQuery.error as {httpStatus?:number}).httpStatus===404;
+  if(detailQuery.error && !notFound) return <div className="pl-drawer-error" role="alert" data-testid="object-detail-agent-error">
+    <p className="notranslate" translate="no">{formatListLoadError(detailQuery.error)}</p><button type="button" className="pl-btn pl-btn--secondary" onClick={()=>void detailQuery.refetch()}>重试</button></div>;
+  if (notFound || !match) {
     return (
       <div className="pl-drawer-error" data-testid="object-detail-agent-not-found">
         <strong>{AGENT_NOT_FOUND_TITLE}</strong>
@@ -547,9 +545,9 @@ function AuditEventDetailBody({
   return (
     <div className="grid gap-3" data-testid="object-detail-audit-body">
       <DetailRow label="时间" value={new Date(entry.ts).toLocaleString("zh-CN")} />
-      <DetailRow label="用户" value={entry.userId} notranslate />
-      <DetailRow label="工具" value={entry.tool} notranslate />
-      <DetailRow label="状态" value={entry.outcome} />
+      <DetailRow label="用户" value={entry.userId ?? ""} notranslate />
+      <DetailRow label="工具" value={entry.tool ?? ""} notranslate />
+      <DetailRow label="状态" value={entry.outcome ?? ""} />
       <div className="grid grid-cols-[120px_minmax(0,1fr)] items-baseline gap-3">
         <span className="text-xs font-semibold tracking-wider text-fg-muted uppercase">裁决原因</span>
         <DecisionReasonCell code={entry.decisionReason} />

@@ -1,0 +1,16 @@
+{
+  "at": "2026-11-20T13:27:21.433330+00:00",
+  "readOnly": true,
+  "ownedPrefix": "lucy-core1883-",
+  "ownedRemaining": {
+    "containers": [],
+    "networks": [],
+    "volumes": []
+  },
+  "demo": {
+    "compose-lucy-1": "running",
+    "compose-demo-db-1": "running"
+  },
+  "complete": true,
+  "scope": "Current inventory plus per-run exact-name cleanup receipts; unrelated stopped resources not changed"
+}

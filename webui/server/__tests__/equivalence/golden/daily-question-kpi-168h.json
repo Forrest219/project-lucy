@@ -1,0 +1,149 @@
+{
+  "realQuestions": {
+    "metricId": "real-questions",
+    "state": "ok",
+    "value": 264,
+    "asOf": "2026-11-15T12:00:00.000Z",
+    "windowStart": "2026-11-08T12:00:00.000Z",
+    "windowEnd": "2026-11-15T12:00:00.000Z"
+  },
+  "unreportedQuerySessions": {
+    "metricId": "unreported-query-sessions",
+    "state": "ok",
+    "value": 42,
+    "asOf": "2026-11-15T12:00:00.000Z",
+    "windowStart": "2026-11-08T12:00:00.000Z",
+    "windowEnd": "2026-11-15T12:00:00.000Z"
+  },
+  "connectOnlySessions": {
+    "metricId": "connect-only-sessions",
+    "state": "ok",
+    "value": 25,
+    "asOf": "2026-11-15T12:00:00.000Z",
+    "windowStart": "2026-11-08T12:00:00.000Z",
+    "windowEnd": "2026-11-15T12:00:00.000Z"
+  },
+  "browseWithoutAskSessions": {
+    "metricId": "browse-without-ask-sessions",
+    "state": "ok",
+    "value": 25,
+    "asOf": "2026-11-15T12:00:00.000Z",
+    "windowStart": "2026-11-08T12:00:00.000Z",
+    "windowEnd": "2026-11-15T12:00:00.000Z"
+  },
+  "excludedSessions": {
+    "metricId": "excluded-sessions",
+    "state": "ok",
+    "value": 0,
+    "asOf": "2026-11-15T12:00:00.000Z",
+    "windowStart": "2026-11-08T12:00:00.000Z",
+    "windowEnd": "2026-11-15T12:00:00.000Z"
+  },
+  "unassignedQueryCalls": {
+    "metricId": "unassigned-query-calls",
+    "state": "ok",
+    "value": 237,
+    "asOf": "2026-11-15T12:00:00.000Z",
+    "windowStart": "2026-11-08T12:00:00.000Z",
+    "windowEnd": "2026-11-15T12:00:00.000Z"
+  },
+  "queryCalls": {
+    "metricId": "query-calls",
+    "state": "ok",
+    "value": 1368,
+    "asOf": "2026-11-15T12:00:00.000Z",
+    "windowStart": "2026-11-08T12:00:00.000Z",
+    "windowEnd": "2026-11-15T12:00:00.000Z"
+  },
+  "unlinkedQueryCalls": {
+    "metricId": "unlinked-query-calls",
+    "state": "ok",
+    "value": 843,
+    "asOf": "2026-11-15T12:00:00.000Z",
+    "windowStart": "2026-11-08T12:00:00.000Z",
+    "windowEnd": "2026-11-15T12:00:00.000Z"
+  },
+  "queriesPerQuestion": {
+    "metricId": "queries-per-question",
+    "state": "ok",
+    "value": 1.9,
+    "asOf": "2026-11-15T12:00:00.000Z",
+    "windowStart": "2026-11-08T12:00:00.000Z",
+    "windowEnd": "2026-11-15T12:00:00.000Z"
+  },
+  "questionActiveAgents": {
+    "metricId": "question-active-agents",
+    "state": "ok",
+    "value": 9,
+    "asOf": "2026-11-15T12:00:00.000Z",
+    "windowStart": "2026-11-08T12:00:00.000Z",
+    "windowEnd": "2026-11-15T12:00:00.000Z"
+  },
+  "dailyQuestions": [
+    {
+      "date": "2026-11-08",
+      "partialDay": true,
+      "realQuestions": 0,
+      "unreportedQuerySessions": 5,
+      "connectOnlySessions": 0,
+      "browseWithoutAskSessions": 0
+    },
+    {
+      "date": "2026-11-09",
+      "partialDay": false,
+      "realQuestions": 4,
+      "unreportedQuerySessions": 24,
+      "connectOnlySessions": 0,
+      "browseWithoutAskSessions": 0
+    },
+    {
+      "date": "2026-11-10",
+      "partialDay": false,
+      "realQuestions": 43,
+      "unreportedQuerySessions": 5,
+      "connectOnlySessions": 1,
+      "browseWithoutAskSessions": 0
+    },
+    {
+      "date": "2026-11-11",
+      "partialDay": false,
+      "realQuestions": 47,
+      "unreportedQuerySessions": 5,
+      "connectOnlySessions": 8,
+      "browseWithoutAskSessions": 4
+    },
+    {
+      "date": "2026-11-12",
+      "partialDay": false,
+      "realQuestions": 51,
+      "unreportedQuerySessions": 1,
+      "connectOnlySessions": 6,
+      "browseWithoutAskSessions": 7
+    },
+    {
+      "date": "2026-11-13",
+      "partialDay": false,
+      "realQuestions": 39,
+      "unreportedQuerySessions": 0,
+      "connectOnlySessions": 4,
+      "browseWithoutAskSessions": 6
+    },
+    {
+      "date": "2026-11-14",
+      "partialDay": false,
+      "realQuestions": 42,
+      "unreportedQuerySessions": 2,
+      "connectOnlySessions": 4,
+      "browseWithoutAskSessions": 4
+    },
+    {
+      "date": "2026-11-15",
+      "partialDay": true,
+      "realQuestions": 38,
+      "unreportedQuerySessions": 0,
+      "connectOnlySessions": 2,
+      "browseWithoutAskSessions": 4
+    }
+  ],
+  "skippedBadTimestamp": 26
+}

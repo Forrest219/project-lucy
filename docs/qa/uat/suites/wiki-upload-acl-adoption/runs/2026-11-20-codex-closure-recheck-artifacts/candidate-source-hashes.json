@@ -1,0 +1,22 @@
+{
+  "webui/src/pages/WikiEditor.tsx": {
+    "runtimeSHA256": "bbdca31a9b775f5b25168f5eef4b3533c182f752c8639d7ec195ef3780d2c41a",
+    "workspaceSHA256": "bbdca31a9b775f5b25168f5eef4b3533c182f752c8639d7ec195ef3780d2c41a",
+    "matches": true
+  },
+  "webui/src/components/WikiUploadPreflight.tsx": {
+    "runtimeSHA256": "94dbdfc27c89ed4ba27caa21157bf34bdc58d94b324b54e2e50d1563080b9d4d",
+    "workspaceSHA256": "94dbdfc27c89ed4ba27caa21157bf34bdc58d94b324b54e2e50d1563080b9d4d",
+    "matches": true
+  },
+  "webui/src/lib/wikiAccess.ts": {
+    "runtimeSHA256": "686a2c75fa5d2f0b34dcbbc2a6ff92d9e694ab69aa7276ad60c6cd53ca7420c2",
+    "workspaceSHA256": "686a2c75fa5d2f0b34dcbbc2a6ff92d9e694ab69aa7276ad60c6cd53ca7420c2",
+    "matches": true
+  },
+  "webui/server/wiki.ts": {
+    "runtimeSHA256": "2051fe64d7d64e7a00e823cefb675b6263fd88e02f73d862b8a7b2f05169847f",
+    "workspaceSHA256": "2051fe64d7d64e7a00e823cefb675b6263fd88e02f73d862b8a7b2f05169847f",
+    "matches": true
+  }
+}

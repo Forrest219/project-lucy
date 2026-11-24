@@ -261,36 +261,53 @@ describe("admin governance observability", () => {
     db.exec("DROP TABLE access_log_sources");
     db.exec("DROP TABLE access_log");
 
-    const app = buildServer();
-    await app.ready();
-    const res = await app.inject({ method: "GET", url: "/api/admin/governance/overview?hours=168" });
-    expect(res.statusCode).toBe(200);
-    const payload = JSON.parse(res.payload).data;
-    const usage = payload.usageOverview;
+    // Dropping the audit tables makes scanFullOnce throw "no such table: access_log".
+    // In production that error is caught and logged; in VITEST the first scan runs
+    // synchronously inside onReady and would propagate.  Pause the maintainer so
+    // buildServer() / app.ready() can complete without the broken tables causing a
+    // startup failure, while keeping every assertion on metricsState="unavailable"
+    // intact (the governance endpoint itself reads the same dropped tables).
+    const prevMaintainer = process.env.LUCY_INFERRED_MAINTAINER;
+    process.env.LUCY_INFERRED_MAINTAINER = "off";
+    let app: Awaited<ReturnType<typeof buildServer>> | undefined;
+    try {
+      app = buildServer();
+      await app.ready();
+      const res = await app.inject({ method: "GET", url: "/api/admin/governance/overview?hours=168" });
+      expect(res.statusCode).toBe(200);
+      const payload = JSON.parse(res.payload).data;
+      const usage = payload.usageOverview;
 
-    expect(usage.metricsState).toBe("unavailable");
-    expect(usage.calls).toBeNull();
-    expect(usage.denied).toBeNull();
-    expect(usage.p95LatencyMs).toBeNull();
-    expect(usage.avgLatencyMs).toBeNull();
-    expect(usage.activeAgentCount).toBeNull();
-    expect(usage.activeTokenCount).toBeNull();
-    expect(usage.activeTableCount).toBeNull();
-    expect(usage.agentActiveRate).toBeNull();
-    expect(usage.tokenActiveRate).toBeNull();
+      expect(usage.metricsState).toBe("unavailable");
+      expect(usage.calls).toBeNull();
+      expect(usage.denied).toBeNull();
+      expect(usage.p95LatencyMs).toBeNull();
+      expect(usage.avgLatencyMs).toBeNull();
+      expect(usage.activeAgentCount).toBeNull();
+      expect(usage.activeTokenCount).toBeNull();
+      expect(usage.activeTableCount).toBeNull();
+      expect(usage.agentActiveRate).toBeNull();
+      expect(usage.tokenActiveRate).toBeNull();
 
-    // The compatibility cards payload must not fabricate zeros either.
-    const cards = payload.cards;
-    expect(cards.calls).toBeNull();
-    expect(cards.denied).toBeNull();
-    expect(cards.errors).toBeNull();
-    expect(cards.p95LatencyMs).toBeNull();
-    expect(cards.avgLatencyMs).toBeNull();
-    expect(cards.activeAgentCount).toBeNull();
-    expect(cards.activeTokenCount).toBeNull();
-    expect(cards.highDenialAgentCount).toBeNull();
-    expect(cards.staleTokenCount).toBeNull();
-    await app.close();
+      // The compatibility cards payload must not fabricate zeros either.
+      const cards = payload.cards;
+      expect(cards.calls).toBeNull();
+      expect(cards.denied).toBeNull();
+      expect(cards.errors).toBeNull();
+      expect(cards.p95LatencyMs).toBeNull();
+      expect(cards.avgLatencyMs).toBeNull();
+      expect(cards.activeAgentCount).toBeNull();
+      expect(cards.activeTokenCount).toBeNull();
+      expect(cards.highDenialAgentCount).toBeNull();
+      expect(cards.staleTokenCount).toBeNull();
+    } finally {
+      await app?.close();
+      if (prevMaintainer === undefined) {
+        delete process.env.LUCY_INFERRED_MAINTAINER;
+      } else {
+        process.env.LUCY_INFERRED_MAINTAINER = prevMaintainer;
+      }
+    }
   });
 
   it("falls back to access_log.tables when access_log_sources has no rows", async () => {

@@ -1,0 +1,122 @@
+{
+  "at": "2026-11-22T10:41:45.122Z",
+  "stage": "a10000",
+  "target": 10000,
+  "offset": 5000,
+  "design": "20 fixed credentials across two agents; 10 independent sequential seed lanes; successful read-only tools/call",
+  "intervalMs": 500,
+  "lanes": 10,
+  "healthChecks": 9,
+  "laneObservations": [
+    {
+      "lane": 0,
+      "calls": 500,
+      "minStartIntervalMs": 503.61362499999814
+    },
+    {
+      "lane": 1,
+      "calls": 500,
+      "minStartIntervalMs": 504.66599999999744
+    },
+    {
+      "lane": 2,
+      "calls": 500,
+      "minStartIntervalMs": 504.44062499998836
+    },
+    {
+      "lane": 3,
+      "calls": 500,
+      "minStartIntervalMs": 504.14125000001513
+    },
+    {
+      "lane": 4,
+      "calls": 500,
+      "minStartIntervalMs": 504.95416599998134
+    },
+    {
+      "lane": 5,
+      "calls": 500,
+      "minStartIntervalMs": 503.54033300001174
+    },
+    {
+      "lane": 6,
+      "calls": 500,
+      "minStartIntervalMs": 503.86029199999757
+    },
+    {
+      "lane": 7,
+      "calls": 500,
+      "minStartIntervalMs": 503.7169580000045
+    },
+    {
+      "lane": 8,
+      "calls": 500,
+      "minStartIntervalMs": 504.3324999999895
+    },
+    {
+      "lane": 9,
+      "calls": 500,
+      "minStartIntervalMs": 503.8234580000062
+    }
+  ],
+  "tools": {
+    "connection_list": 3750,
+    "lucy_catalog": 1250
+  },
+  "successful": 5000,
+  "byUser": {
+    "demo_agent": 2500,
+    "demo_ops": 2500
+  },
+  "errors": [],
+  "before": {
+    "at": "2026-11-22T10:41:45.200Z",
+    "all": 5000,
+    "toolRows": 5000,
+    "ok": 5000,
+    "protocol": 0,
+    "byUser": {
+      "demo_agent": {
+        "total": 2500,
+        "ok": 2500
+      },
+      "demo_ops": {
+        "total": 2500,
+        "ok": 2500
+      }
+    },
+    "recent7d": 5000,
+    "recent30d": 5000,
+    "tokens": 202,
+    "inventorySha256": "85ce921c42a2c5ac085469ca0014843cdb0deb05b2840bd38f750e1822a9a3f9"
+  },
+  "sessionClose": {
+    "200": 20
+  },
+  "settledCounts": [
+    10000,
+    10000
+  ],
+  "after": {
+    "at": "2026-11-22T10:46:05.444Z",
+    "all": 10000,
+    "toolRows": 10000,
+    "ok": 10000,
+    "protocol": 0,
+    "byUser": {
+      "demo_agent": {
+        "total": 5000,
+        "ok": 5000
+      },
+      "demo_ops": {
+        "total": 5000,
+        "ok": 5000
+      }
+    },
+    "recent7d": 10000,
+    "recent30d": 10000,
+    "tokens": 202,
+    "inventorySha256": "85ce921c42a2c5ac085469ca0014843cdb0deb05b2840bd38f750e1822a9a3f9"
+  },
+  "completed": "2026-11-22T10:46:05.471Z"
+}

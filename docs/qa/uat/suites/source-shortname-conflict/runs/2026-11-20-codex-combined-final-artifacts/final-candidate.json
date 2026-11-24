@@ -1,0 +1,17 @@
+{
+  "image": "sha256:30ec4ae032db81201f35f78a8c1b56592ada53d5577862b1d6e7879db25fec3a",
+  "tag": "project-lucy:p160-p164-final-v5",
+  "parent": "sha256:0d190b3747ff67e033279c7e5d373903f0e331dcd14143603d8dce60a24dbb2e",
+  "buildRevision": "77e2ad8425ae0e7a2918803e497da10636b14e5a-dirty",
+  "gitDirty": true,
+  "sourceChangesFromParent": [
+    "webui/server/__tests__/wiki-upload-access.test.ts",
+    "webui/src/__tests__/wiki-access-components.test.tsx",
+    "webui/src/__tests__/wiki.test.tsx",
+    "webui/src/components/WikiUploadPreflight.tsx",
+    "webui/src/lib/wikiAccess.ts",
+    "webui/src/pages/WikiEditor.tsx"
+  ],
+  "change": "align six inherited Wiki files to already committed 77e2ad84 baseline; rebuild front bundle and typecheck",
+  "runtimeProvenance": "38 independent inputs matched in v5-source-check.json; committed baseline aligned; full product source delta recorded separately"
+}

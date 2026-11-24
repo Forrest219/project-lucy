@@ -17,7 +17,9 @@ REST over HTTP，仅 `127.0.0.1`。所有响应为 JSON，遵循统一 envelope�
 > 禁止在 `ok:false` 时回退渲染空/假数据（历史 bug 教训）。
 
 错误码：`PROJECT_NOT_FOUND` `SOURCE_NOT_FOUND` `WIKI_NOT_FOUND` `FORBIDDEN_PATH`
-`VALIDATION_FAILED` `KTX_CLI_ERROR` `YAML_PARSE_ERROR` `BAD_REQUEST` `INTERNAL`。
+`VALIDATION_FAILED` `KTX_CLI_ERROR` `YAML_PARSE_ERROR` `BAD_REQUEST` `INTERNAL`
+`WORKLOAD_CAPACITY_BUSY`（HTTP 429，`Retry-After: 1`；重任务容量繁忙，用户提示「任务较多，请稍后重试。」；无副作用，显式重试）。
+`SERVICE_DRAINING`（HTTP 503；整实例关停排空中拒绝新业务请求；用户提示「服务正在停止接收新请求，请在服务恢复后重试。」；**不**返回固定 `Retry-After`；写请求不得自动重放；恢复后显式重试。探针 `/api/livez`／`/api/readyz`／`/api/health` 不走此业务准入：`DRAINING` 时 `readyz` 503，监听仍在则 `livez` 200，`health` 保持原诊断语义）。
 
 ## 2. 端点总览
 
@@ -25,6 +27,8 @@ REST over HTTP，仅 `127.0.0.1`。所有响应为 JSON，遵循统一 envelope�
 
 ```text
 GET  /api/health
+GET  /api/livez                                   # K8s liveness：进程存活（恒 200；无鉴权）
+GET  /api/readyz                                  # K8s readiness：WebUI＋MCP 就绪（未就绪 503；无鉴权）
 GET  /api/openapi.json                            # 公开可读 Admin OpenAPI（无密钥；仅 GET）
 GET  /api/project
 GET  /api/sources
@@ -174,6 +178,7 @@ GET    /api/semantic-assets/plans/:validationId
 GET    /api/publish-workbench/evidence
 
 GET    /api/admin/agents
+GET    /api/admin/agents/statistics
 POST   /api/admin/agents
 GET    /api/admin/agents/:userId
 PATCH  /api/admin/agents/:userId
@@ -182,6 +187,7 @@ GET    /api/admin/agents/:userId/effective-permissions
 POST   /api/admin/agents/:userId/tokens
 POST   /api/admin/agents/:userId/tokens/:label/renew
 DELETE /api/admin/agents/:userId/tokens/:label
+GET    /api/admin/access-write-status/:operationId
 GET    /api/admin/roles
 GET    /api/admin/roles/:roleId
 POST   /api/admin/roles/_preview
@@ -190,6 +196,7 @@ POST   /api/admin/roles/:roleId/copy
 GET    /api/admin/config-audit
 GET    /api/admin/config-audit/export.csv
 GET    /api/admin/audit
+GET    /api/admin/audit/status
 GET    /api/admin/audit/sources
 GET    /api/admin/audit/:id/sources
 GET    /api/admin/audit/export
@@ -248,6 +255,36 @@ POST /mcp                                      # MCP proxy, port 7879
 ```
 
 ## 3. 端点细节
+
+### 探针：`GET /api/livez` / `GET /api/readyz` / `GET /api/health`
+
+三者均无鉴权，供进程／编排探针与运维观测：
+
+| 路径 | 语义 | 成功 | 未就绪 |
+| --- | --- | --- | --- |
+| `GET /api/livez` | 进程存活（liveness） | 恒 `{ "ok": true }`／200 | 无（进程在即应答） |
+| `GET /api/readyz` | 服务可接流量（readiness；含 MCP listen 对齐，见 P1-46；P1-63 `DRAINING` 亦 503） | `{ "ok": true, "data": …, "diagnostics": … }`／200 | `{ "ok": false, "reason": "warming_up"\|"draining", "data": …, "diagnostics": … }`／503 |
+| `GET /api/health` | 诊断快照（依赖、event-loop 等；**不是** K8s readiness 合同） | `{ "ok": true, "data": …, "diagnostics": … }`／200 | 见依赖降级字段；主路径仍可能 200 |
+
+P1-61：三个探针的请求处理路径**不**触发文件／SQLite／子进程／网络诊断读取；`data` 来自后台周期采集的内存快照（`/api/health` 的 `eventLoop` 仍为进程内直方图，纯内存）。后台至多每 10 秒启动一轮采集、单在途、5 秒真实截止；响应**不**等待采集中的 Promise。
+
+`diagnostics` 是 `data` 的**兄弟字段**（不改变 `data` 既有含义与字段），形状：
+
+```jsonc
+{
+  "observedAt": "2026-11-19T12:00:00.000Z", // 最近一次**完整成功**采集的 UTC 墙钟；尚无成功采集时为 null
+  "ageMs": 1234,                              // 相对该次成功采集的单调时钟年龄（毫秒）；尚无成功采集时为 null
+  "freshness": "fresh"                        // "unknown" | "fresh" | "stale"
+}
+```
+
+| `freshness` | 含义 |
+| --- | --- |
+| `unknown` | 进程尚无完整成功采集；`observedAt`／`ageMs` 均为 `null`；不得据此伪造 `data.status=ok` |
+| `fresh` | 最近成功采集仍在 30 秒内，且之后无失败／超时／配置代次作废 |
+| `stale` | 首次失败／超时即立即陈旧（保留原 `observedAt`，不用请求时间冒充）；或距最近成功采集超过 30 秒；或 project／配置代次已切换。下一轮完整成功采集后才恢复 `fresh` |
+
+`data.status`（`ok`／`degraded`）仍只表示**采集时点**的依赖汇总语义；**不**因 `diagnostics.freshness` 为 `unknown`／`stale` 而单独改写。诊断快照**不得**用于鉴权、吊销宽限或 fail-closed 旁路。
 
 ### `GET /api/openapi.json`
 公开可读的 Admin OpenAPI 文档（无登录、无密钥；**仅 GET**）。机器可读枚举登录、Agent／Role／Token 开通相关 operation（含 per-operation `dryRun` 语义）。响应为 OpenAPI JSON 文档本体，**不**包在统一 envelope 里。契约与验收见 [`docs/specs/lucy-20261103-admin-api-agent-discoverability-spec.md`](../../docs/specs/lucy-20261103-admin-api-agent-discoverability-spec.md)。
@@ -486,7 +523,7 @@ Wiki Markdown 版本记录与 Table YAML 版本记录对齐：保留最近 5 个
 
 `GET /api/connections` 返回 `ConnectionInfo[]`，字段见 `04-data-model.md`。
 
-`POST /api/connections`（Spec 124 Phase A）新建连接配置：默认 `dryRun:true`；确认写入时创建 `.ktx/secrets/<id>-password`（0600，拒绝覆盖），并在 `ktx.yaml` 追加 `connections.<id>`（`password` 仅 `file:` 引用）与 `setup.database_connection_ids`。写入后执行 `ktx connection test`；失败则回滚 yaml 与 secret。响应与审计 diff **永不包含明文密码**。通用 `fs-safe` 对 `.ktx/secrets/**` 仍 DENY；仅专用写通道可创建约定文件名。本 Phase **无 UI**。
+`POST /api/connections`（Spec 124 Phase A）新建连接配置：默认 `dryRun:true`；确认写入时创建 `.ktx/secrets/<id>-password`（0600，拒绝覆盖），并在 `ktx.yaml` 追加 `connections.<id>`（`password` 仅 `file:` 引用）与 `setup.database_connection_ids`。写入后执行 `ktx connection test`；失败则回滚 yaml 与 secret。响应与审计 diff **永不包含明文密码**。通用 `fs-safe` 对 `.ktx/secrets/**` 仍 DENY；仅专用写通道可创建约定文件名。确认写入成功响应含三层 ack（`policyRuntimeAck`／`catalogRuntimeAck`／`executionRuntimeAck`）；**P1-64**：`runtimeAck`＝`policyRuntimeAck` 别名，Source Map 编译失败时二者为 `false` 并附 `policyRuntimeIssues`（口径同启用表保存）。
 
 `POST /api/connections/:connId/remove`（Spec 127）删除连接配置：默认 `dryRun:true`；确认写入时删除 `connections.<id>` 并从 `setup.database_connection_ids` prune。可选 `deleteSecret`（仅约定 `.ktx/secrets/<id>-password`）与 `deleteAssets`（`semantic-layer/<id>/` 下 YAML）。**不**改 `access.yaml`、**不**删 Wiki、**不**触碰物理库。响应与审计 diff 脱敏。
 
@@ -554,8 +591,22 @@ dryRun 响应：
 `dryRun:false` 写 `ktx.yaml` 并记录 `config_change_log`：
 
 ```jsonc
-{ "ok": true, "data": { "written": true, "auditId": 1, "oldEnabledTables": [], "newEnabledTables": ["dataforai.superstore_orders"], "warnings": [] }}
+{ "ok": true, "data": {
+  "written": true,
+  "auditId": 1,
+  "oldEnabledTables": [],
+  "newEnabledTables": ["dataforai.superstore_orders"],
+  "warnings": [],
+  "policyVersion": "...",
+  "policyRuntimeAck": true,
+  "runtimeAck": true,
+  "policyRuntimeIssues": [],
+  "catalogRuntimeAck": true,
+  "executionRuntimeAck": true
+}}
 ```
+
+**P1-64／REQ-030-085（保存 ack）：** `runtimeAck` 是 `policyRuntimeAck` 的兼容别名。只要 `PolicyRuntimeStatus.issues` 含 `source_map_compile_failed:*`，二者均为 `false`，且 `policyRuntimeIssues` 复用现有 issue 对象（可按 `reason` 去重展示）。`written=true`／HTTP 200 与磁盘不回滚语义不变；`catalogRuntimeAck`／`executionRuntimeAck` 仍按各自事实返回。WebUI 成功反馈须以 `runtimeAck===true` 为准（Spec 14 §0.3）。
 
 错误码：`CONNECTION_NOT_FOUND` `INVALID_ENABLED_TABLE` `DUPLICATE_ENABLED_TABLE` `TABLE_NOT_SCANNED`。
 
@@ -571,7 +622,15 @@ dryRun 响应：
 
 `POST /api/catalog/assets/validate` 校验待上传 Schema Manifest。请求使用规范字段 `assetKind: "schema_manifest"`；兼容旧客户端 `assetType: "schemaManifest"`。其他 asset kind 必须走对应语义资产入口，不能混用。
 
-`POST /api/catalog/assets/upload` 在校验通过后写入 `semantic-layer/<connection>/_schema/<schema>.yaml`，目标路径由系统根据 connection/schema 计算，不接受客户端任意路径。
+**P1-64／REQ-030-085（同连接短名唯一性）：** validate 以「候选内容替换目标文件、其他文件不变」的最终文件集合判重（与 ACL `(connectionId, normalize(sourceName))` 同口径）。响应新增：
+
+- `sourceNameConflicts[]`：每项含归一化 `sourceName`、冲突条目（`targetPath`／`schema`／`physicalTable`／`sourceName`）、`involvesCandidate`；候选冲突可含 `suggestedSourceName`。无冲突时为 `[]`。
+- 错误码 `DUPLICATE_SOURCE_NAME`：候选引入或保留的冲突；`valid=false`。
+- 警告码 `PREEXISTING_SOURCE_NAME_CONFLICT`：与本候选无关的既有冲突，不阻断能减少旧冲突的合法修复上传；候选自身仍冲突时不得借此放行。
+
+目录列举或任一既有 Manifest 读取／解析失败须 fail-closed（不得当成无冲突）。
+
+`POST /api/catalog/assets/upload` 在校验通过后写入 `semantic-layer/<connection>/_schema/<schema>.yaml`，目标路径由系统根据 connection/schema 计算，不接受客户端任意路径。正式写入必须在现有 `withPublishCoordinator` 发布锁内**重新 validate** 并使用锁内结果；候选冲突返回 HTTP 400／`DUPLICATE_SOURCE_NAME`，目标文件与发布记录不得前进。
 
 容量契约（2026-10-30 修订）：上述 Manifest 校验、上传接口与 `POST /api/semantic-assets/validate` 的 HTTP 请求体上限为 32 MiB；单 YAML 文件上限为 8 MiB，按 UTF-8 字节数计算。超出请求体上限返回 HTTP 413、`FST_ERR_CTP_BODY_TOO_LARGE` 及中文说明；目录 Manifest 文件超限返回既有 `FILE_TOO_LARGE` 校验错误。上传、导出与维护包导入统一引用 `server/semantic-limits.ts`，包总量及数量上限不变。只传引用的发布、批量校验等接口维持默认 HTTP 上限。
 
@@ -804,7 +863,10 @@ Field Questions：
 
 Agent 列表与详情：
 
-- `GET /api/admin/agents?range=7d|14d|30d`：窗口统计写入 `summary.range` 与每条 `stats.windowStart/windowEnd`。省略 `range` 时 API 仍为近 7 天；WebUI Agent 列表默认 `range=30d`，页头可切换 7 / 14 / 30 天。旧 `range=90d` 当作 30 天。兼容字段 `*Last7d` 表示**当前选中窗口**的计数，不是永远 7 天。
+- `GET /api/admin/agents?range=7d|14d|30d`：默认完整列表（兼容既有调用方）。窗口统计写入 `summary.range` 与每条 `stats.windowStart/windowEnd`。省略 `range` 时 API 仍为近 7 天；WebUI Agent 列表默认 `range=30d`，页头可切换 7 / 14 / 30 天。旧 `range=90d` 当作 30 天。兼容字段 `*Last7d` 表示**当前选中窗口**的计数，不是永远 7 天。
+- `GET /api/admin/agents?view=roster`（P1-58）：保持旧完整名册表示，含身份、角色、`tokens[]`、完整 `effectivePermissions`、`version`/`meta.snapshotVersion`，不读取审计统计。
+- `GET /api/admin/agents?view=roster&projection=summary`（P1-66）：显式摘要白名单。身份、角色、配置时间、`legacyWildcard`、响应时刻的 `credentialSummary`、同槽编译结果的 `permissionSummary` 与警告；不含 `tokens[]`、`effectivePermissions`、`allow`、`constraints`、`stats`。`meta.projection=summary`、`projectionVersion=1`，与 statistics 共用原快照版本，严格匹配后 join；统计不可覆盖当前凭据计数。可带 range 兼容忽略新参数的旧端，新端摘要不读审计窗口。空、重复、未知 projection 或未配 roster 返回 400 `BAD_REQUEST`。默认与旧 roster、单对象、effective-permissions 和写入合同保持。名称抽屉只读 `/:userId?range=7d`；编辑继续完整 fresh 读取。
+- `GET /api/admin/agents/statistics?range=7d|14d|30d&refresh=true|false`（P1-58）：独立统计分区，返回 `agents[].stats`、`summary` 与 `meta.statisticsAsOf`（统计时间）。已完成结果可在读取完成后 5 秒内复用（`meta.cache=hit`）；`refresh=true` 绕过已完成缓存（`meta.cache=bypass`）。失败时指标为 `null`/`unavailable`，不造零。路由注册在 `/:userId` 之前。
 - `GET /api/admin/agents/:userId?range=7d|14d|30d`
 - `GET /api/admin/agents/:userId/effective-permissions`
 
@@ -843,6 +905,12 @@ Token：
 - `POST /api/admin/agents/:userId/tokens/:label/renew` 只更新 `expires_at`（审计 `token_renew`）；响应不含明文；已撤销不可续。
 - `DELETE /api/admin/agents/:userId/tokens/:label` 先写 `revoked_tokens`，再更新 yaml。
 
+Access write status（P1-59，只读）：
+
+- `GET /api/admin/access-write-status/:operationId` 按客户端 `operationId` 查询 Role／Agent 保存终态；需登录，仅原提交账号 UID 或 owner 可读。
+- 响应 `data.outcome` 为 `committed`｜`not_committed`｜`unknown`；返回历史提交绑定的对象版本与配置摘要，不返回 Token／完整 YAML，也不用当前文件冒充本次成功。
+- 无持久记录、intent 仍 `pending`、回执不完整或审计不可达时均为 `unknown`。
+
 Roles：
 
 - `GET /api/admin/roles?includeTemplates=true` 返回 yaml role 与内置模板合并后的列表、工具、连接、展开 source 数与 warnings；返回项含 `source: "yaml" | "template"`，id 冲突时 yaml role 优先。`includeTemplates=false` 时只返回 yaml role。
@@ -856,6 +924,7 @@ Audit：
 - `GET /api/admin/config-audit`
 - `GET /api/admin/config-audit/export.csv`
 - `GET /api/admin/audit`
+- `GET /api/admin/audit/status`：只读诊断。返回服务审计 SQLite 连接的 `foreign_keys`／`foreign_key_children`／`foreign_key_violations`，以及 `writeHealth`（含 `pendingWrites` 等），供 UAT／运维确认写入已排空与 FK 实际开启；不改库。
 - `GET /api/admin/audit/sources`
 - `GET /api/admin/audit/:id/sources`
 - `GET /api/admin/audit/export`
@@ -947,6 +1016,22 @@ Lucy v0.25 / P0-4 §3.4：表以**完整身份** `连接.Schema.表` 标识。�
 ```
 
 `GET /api/admin/audit` 查询 MCP access log；支持按 user、tool、outcome、时间范围、tableSearch、sessionId、turnId、platform 过滤。默认不包含协议类工具调用；传 `includeProtocol=true` 可包含 `tools/list`、`initialize`、`notifications/initialized`。
+
+### 运维步骤（P1-68）
+
+权威契约见 [运维步骤账 Spec](../../docs/specs/lucy-20261120-ops-step-journal-spec.md) §3.4。
+
+- `GET /api/admin/ops-steps?opId=&op=&step=&state=`：沿用已登录管理员鉴权，只读。返回当前进程读模型：`inFlight`（进行中）、`history`（已结束，超过 2000 行或 1 小时截断并给出原因）及写健康（`stdoutWriteFailed`、`stdoutDroppedCount`、`fileWritable`、`fileDroppedCount`、`formatDroppedCount`、`historyResidual`）。四个查询参数均为精确匹配筛选，同时作用于 `inFlight` 与 `history`。
+
+测试挡板（Spec D11）：仅当 `LUCY_OPS_STEP_UAT=1` 时注册，否则路由不存在（404）。只用于 UAT 托住步骤与注入故障，不得替代真实业务操作；挡板忙时返回 `409 OPS_STEP_UAT_BUSY`。
+
+- `POST /api/admin/ops-step-uat/reset`：重置步骤账与挡板状态。
+- `POST /api/admin/ops-step-uat/diagnostic` `{ steps, holdMs, lifecycle? }`：按已登记诊断步骤（`read_project`／`read_ktx_yaml`／`read_catalog_reloads`／`read_reload_state`／`probe_execution`）启动一次可托住的诊断，`holdMs` 0–3,700,000，`lifecycle` 为 `production`（默认）或 `isolated`；返回 `202`。
+- `POST /api/admin/ops-step-uat/sync-section` `{ holdMs? }`：先返回 `202 { opId }`，随后进入 `uat_sync_section` 同步段占住事件循环，`holdMs` 0–10,000（默认 10,000）。
+- `POST /api/admin/ops-step-uat/background` `{ enabled }`：暂停或恢复后台诊断采集；暂停时等待在途采集结束后返回。
+- `POST /api/admin/ops-step-uat/stdout-failure` `{ mode: "error" | "short" }`：为下一条步骤行注入一次标准输出写错误或短写。
+- `POST /api/admin/ops-step-uat/read-failure` `{ mode: "error" | "delay", delayMs? }`：登记一次管理读故障并返回 `token`；带 `GET /api/admin/ops-steps?uatFault=<token>` 读取时生效，`delay` 的 `delayMs` 为 1–10,000。
+- `POST /api/admin/ops-step-uat/console-probe`：写一条普通 console 日志，用于验证普通日志不受步骤行抑制影响。
 
 ## Lucy v0.25 新增端点
 

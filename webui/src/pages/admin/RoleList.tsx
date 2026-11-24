@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { apiGet } from "../../lib/apiClient";
+import { adminRolesQueryOptions, formatListLoadError } from "../../lib/displayQueryOptions";
 import type { Role } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
 import { MetricCard } from "../../components/MetricCard";
@@ -170,9 +170,8 @@ export function RoleList() {
   const [tableFilter, setTableFilter] = useState("");
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["admin", "roles"],
-    queryFn: () => apiGet<RolesResponse>("/api/admin/roles")
+  const { data, isLoading, error, refetch } = useQuery({
+    ...adminRolesQueryOptions<RolesResponse>()
   });
 
   const roles = data?.roles ?? [];
@@ -247,7 +246,24 @@ export function RoleList() {
   );
 
   if (isLoading) return <div className="pl-notice">加载中…</div>;
-  if (error) return <div className="pl-notice">加载失败：{(error as Error).message}</div>;
+  if (error) {
+    return (
+      <div className="pl-page-stack">
+        <PageHeader title="角色权限" description="管理角色、连接授权与工具边界。" />
+        <div className="pl-async-region pl-async-region--error" role="alert" data-testid="role-list-load-error">
+          <p className="pl-error">角色列表加载失败：{formatListLoadError(error)}</p>
+          <button
+            type="button"
+            className="pl-btn pl-btn--secondary pl-btn--xs"
+            onClick={() => void refetch()}
+            data-testid="role-list-load-retry"
+          >
+            重试
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   function handleDelete(role: Role) {
     navigate(`/admin/roles/${encodeURIComponent(role.id)}?mode=delete`);

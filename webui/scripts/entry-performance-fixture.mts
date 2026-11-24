@@ -13,6 +13,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { stringify } from "yaml";
 
+/** Synthetic MCP Bearer for RPB-M1–M3 (fixture-only; not a production secret). */
+export const PERF_MCP_BEARER_PLAIN = "lucy-perf-fixture-mcp-bearer-v1";
+export function perfMcpBearerHash(plain = PERF_MCP_BEARER_PLAIN): string {
+  return `sha256:${createHash("sha256").update(plain).digest("hex")}`;
+}
+
 export const FIXTURE_OWNER_MARKER = ".lucy-entry-perf-owner";
 export const FIXTURE_SEED = 161;
 export const FIXTURE_SHAPE = {
@@ -54,6 +60,8 @@ export type FixtureManifest = {
     stubConfig: string;
     stubLog: string;
     loginSecret: string;
+    /** Plaintext Bearer for fixture MCP agent `perf_wiki` (RPB-M*). */
+    mcpBearerSecret: string;
   };
 };
 
@@ -93,7 +101,8 @@ function isInside(child: string, parent: string): boolean {
 }
 
 /**
- * Output guard: fixtures may only live under `<checkout>/inbox/webui-entry-perf/`
+ * Output guard: fixtures may only live under
+ * `<checkout>/inbox/webui-entry-perf/` or `<checkout>/inbox/perf-baselines/`
  * (or the OS temp dir for unit tests) and never inside real config trees.
  */
 export function assertSafeFixtureOutput(outDir: string, checkoutRoot = scriptCheckoutRoot()): string {
@@ -101,10 +110,11 @@ export function assertSafeFixtureOutput(outDir: string, checkoutRoot = scriptChe
   const root = realish(checkoutRoot);
   const allowedRoots = [
     path.join(root, "inbox", "webui-entry-perf"),
+    path.join(root, "inbox", "perf-baselines"),
     realish(os.tmpdir())
   ];
   if (!allowedRoots.some((allowed) => isInside(target, allowed) && target !== allowed)) {
-    throw new Error(`[entry-perf-guard] fixture output must live under inbox/webui-entry-perf/<run-id>: ${target}`);
+    throw new Error(`[entry-perf-guard] fixture output must live under inbox/webui-entry-perf|perf-baselines/<run-id>: ${target}`);
   }
   const forbidden = [
     path.join(root, "ktx.yaml"),
@@ -339,12 +349,13 @@ function accessConfig(rng: () => number, conns: string[], tables: GeneratedTable
     { id: "perf_disabled", enabled: false, roles: ["catalog_pair"] }
   ];
   const agents: FixtureAgent[] = plan.map((entry, index) => {
+    const tokenHash = entry.id === "perf_wiki" ? perfMcpBearerHash() : fakeTokenHash(rng);
     const yaml: Record<string, unknown> = {
       id: entry.id,
       name: `Perf Agent ${index + 1}`,
       enabled: entry.enabled,
       note: "Synthetic Spec 174 performance fixture agent",
-      tokens: [{ hash: fakeTokenHash(rng), label: `perf-token-${index + 1}`, created: "2026-10-01" }]
+      tokens: [{ hash: tokenHash, label: `perf-token-${index + 1}`, created: "2026-10-01" }]
     };
     if (entry.legacyRole) yaml.role = entry.legacyRole;
     else if (entry.roles.length > 0) yaml.roles = entry.roles;
@@ -593,6 +604,9 @@ export async function generatePerformanceFixture(options: GenerateOptions): Prom
   await writeText(accessPath, access.yaml);
 
   const loginSecret = path.join(outDir, "secrets", "login-password");
+  const mcpBearerSecret = path.join(outDir, "secrets", "mcp-bearer");
+  await writeText(mcpBearerSecret, `${PERF_MCP_BEARER_PLAIN}\n`);
+  await chmod(mcpBearerSecret, 0o600);
   const adminsPath = path.join(outDir, "auth", "admins.yaml");
   if (options.withAdmins !== false) {
     const password = `perf-${createHash("sha256").update(`${seed}:${anchorIso}:login`).digest("hex").slice(0, 20)}`;
@@ -640,7 +654,7 @@ export async function generatePerformanceFixture(options: GenerateOptions): Prom
     auditEventCount: options.withAudit === false ? 0 : events.length,
     roles: access.roles,
     agents: access.agents.map(({ yaml: _yaml, ...agent }) => agent),
-    paths: { projectRoot, contentRoot, accessPath, adminsPath, auditDb, stubBin, stubConfig, stubLog, loginSecret }
+    paths: { projectRoot, contentRoot, accessPath, adminsPath, auditDb, stubBin, stubConfig, stubLog, loginSecret, mcpBearerSecret }
   };
   await writeText(path.join(outDir, "fixture-manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
   return manifest;

@@ -50,7 +50,7 @@
 - [ ] H2 kind 全新安装自动化（`scripts/k8s-fresh-install-gate.sh`）
 - [ ] H3 N-1 升级 gate（load 旧镜像 tar → upgrade → 验收）
 - [ ] H4 回滚 gate（故意坏 tag → `helm rollback` → 验收）
-- [ ] 更新 `docs/runbooks/customer-delivery-preflight-checklist.md` H2–H6 为硬门禁
+- [x] ~~更新 `customer-delivery-preflight-checklist.md` H2–H6~~ → **作废**该清单；门禁以 `customer-amd64-image-build-checklist.md` + gates 脚本为准；经验进 `docs/lessons/`（2026-11-13）
 - [ ] `docs/governance/release-ci.md` 增加 `npm run gate:k8s-static` 到 release 路径
 
 ### P1 — 镜像与打包

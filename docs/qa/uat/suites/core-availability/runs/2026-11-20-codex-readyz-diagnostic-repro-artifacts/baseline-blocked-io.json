@@ -1,0 +1,18 @@
+{
+  "time": 1795148348.8899016,
+  "file": {
+    "kind": "fifo",
+    "inode": 584067
+  },
+  "processes": [
+    {
+      "pid": "359",
+      "blockedThreads": [
+        {
+          "tid": "370",
+          "wchan": "pipe_read"
+        }
+      ]
+    }
+  ]
+}

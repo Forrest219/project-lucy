@@ -1,0 +1,182 @@
+{
+  "$comment": "复制入口登记表（P1-40 / UAT-SUITE-COPY-FAKE-SUCCESS）。每个调用 copyTextToClipboard／copyTextWithToast 的生产源文件必须登记 callSites 与 surfaces；新增、删除或搬动复制调用点时同步改本表并补 UAT-COPY 用例。coverage: click＝UAT 探针在真实浏览器里点过并核对剪贴板，且必须有稳定子用例编号 case（UAT-COPY-02a…），该编号须写在 cases.md；helper-only＝只靠共享 helper 合同（UAT-COPY-01）覆盖，须写明未点击的原因。",
+  "files": {
+    "src/pages/admin/VersionInfo.tsx": {
+      "callSites": 1,
+      "surfaces": [
+        {
+          "id": "version-sha",
+          "label": "版本信息：复制构建提交",
+          "route": "/admin/version",
+          "coverage": "click",
+          "case": "UAT-COPY-02a"
+        }
+      ]
+    },
+    "src/pages/admin/NewToken.tsx": {
+      "callSites": 2,
+      "surfaces": [
+        {
+          "id": "new-token-plaintext",
+          "label": "新建 Token：复制 Token 明文",
+          "route": "/admin/agents/:id/tokens/new",
+          "coverage": "click",
+          "case": "UAT-COPY-02b"
+        },
+        {
+          "id": "new-token-snippet",
+          "label": "新建 Token：复制当前配置",
+          "route": "/admin/agents/:id/tokens/new",
+          "coverage": "click",
+          "case": "UAT-COPY-02c"
+        }
+      ]
+    },
+    "src/pages/admin/AgentDetail.tsx": {
+      "callSites": 1,
+      "surfaces": [
+        {
+          "id": "agent-token-hash",
+          "label": "Agent 详情：复制 Token hash",
+          "route": "/admin/agents/:id",
+          "coverage": "click",
+          "case": "UAT-COPY-02d"
+        }
+      ]
+    },
+    "src/pages/admin/Audit.tsx": {
+      "callSites": 2,
+      "surfaces": [
+        {
+          "id": "audit-copyable-id",
+          "label": "审计：复制事件／问询 ID（CopyableId）",
+          "route": "/admin/audit",
+          "coverage": "click",
+          "case": "UAT-COPY-02i"
+        },
+        {
+          "id": "audit-table-list",
+          "label": "审计：复制触达表清单",
+          "route": "/admin/audit",
+          "coverage": "click",
+          "case": "UAT-COPY-02j"
+        }
+      ]
+    },
+    "src/pages/admin/AuditReconciliation.tsx": {
+      "callSites": 1,
+      "surfaces": [
+        {
+          "id": "reconciliation-ranking",
+          "label": "审计对账：复制表排行全文",
+          "route": "/admin/audit-reconciliation",
+          "coverage": "click",
+          "case": "UAT-COPY-02e"
+        }
+      ]
+    },
+    "src/pages/admin/RowPolicyView.tsx": {
+      "callSites": 1,
+      "surfaces": [
+        {
+          "id": "row-policy-table-identity",
+          "label": "行级策略：复制表身份",
+          "route": "/admin/row-policies",
+          "coverage": "helper-only",
+          "reason": "需要已配置行策略的表行"
+        }
+      ]
+    },
+    "src/pages/connections/ConnectionOverview.tsx": {
+      "callSites": 1,
+      "surfaces": [
+        {
+          "id": "connection-overview-path",
+          "label": "连接概览：复制路径（缺失 Manifest 提示）",
+          "route": "/connections",
+          "coverage": "helper-only",
+          "reason": "仅在存在缺失 Manifest 警告时出现"
+        }
+      ]
+    },
+    "src/pages/connections/TableWhitelist.tsx": {
+      "callSites": 1,
+      "surfaces": [
+        {
+          "id": "whitelist-manifest-path",
+          "label": "启用表：复制 Manifest 路径",
+          "route": "/connections/enabled-tables",
+          "coverage": "helper-only",
+          "reason": "仅在空态提示出现"
+        }
+      ]
+    },
+    "src/components/connections/ConnectionTestResultPanel.tsx": {
+      "callSites": 1,
+      "surfaces": [
+        {
+          "id": "connection-test-command",
+          "label": "连接测试：复制命令",
+          "route": "/connections/test",
+          "coverage": "click",
+          "case": "UAT-COPY-02g"
+        },
+        {
+          "id": "connection-test-log",
+          "label": "连接测试：复制 Log",
+          "route": "/connections/test",
+          "coverage": "click",
+          "case": "UAT-COPY-02h"
+        }
+      ]
+    },
+    "src/pages/Onboarding.tsx": {
+      "callSites": 1,
+      "surfaces": [
+        {
+          "id": "onboarding-mcp-config",
+          "label": "接入向导／概览：复制 MCP 配置",
+          "route": "/overview",
+          "coverage": "click",
+          "case": "UAT-COPY-02f"
+        }
+      ]
+    },
+    "src/components/onboarding/Step6ConnectAgent.tsx": {
+      "callSites": 1,
+      "surfaces": [
+        {
+          "id": "step6-copy",
+          "label": "接入向导第 6 步：复制提示／Token／配置",
+          "route": "/onboarding",
+          "coverage": "helper-only",
+          "reason": "已完成接入的实例 /onboarding 跳转到概览，向导步骤不可达"
+        }
+      ]
+    },
+    "src/components/onboarding/AuthoringHowTo.tsx": {
+      "callSites": 1,
+      "surfaces": [
+        {
+          "id": "authoring-howto",
+          "label": "接入向导：复制撰写说明",
+          "route": "/onboarding",
+          "coverage": "helper-only",
+          "reason": "已完成接入的实例向导步骤不可达"
+        }
+      ]
+    },
+    "src/components/audit-trust/CredentialPrincipalCell.tsx": {
+      "callSites": 1,
+      "surfaces": [
+        {
+          "id": "credential-principal-user-id",
+          "label": "审计信任列：复制用户 ID（仅失败时提示）",
+          "route": "/admin/audit",
+          "coverage": "helper-only",
+          "reason": "无审计行；该控件无成功态，失败才提示"
+        }
+      ]
+    }
+  }
+}

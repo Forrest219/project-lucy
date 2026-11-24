@@ -1,0 +1,20 @@
+[
+  {
+    "scope_key": "bq:uat_zb_a|sha256:6c5e4324b5bf:r11-budget-L0",
+    "started_at": 1795150450270,
+    "origin_started_at": 1795150450270,
+    "calls": 1,
+    "continuations": 0,
+    "attempts": 1,
+    "peak_concurrency": 1,
+    "current_concurrency": 0,
+    "updated_at": 1795150452479,
+    "busy_ms": 2156.195376,
+    "round": 0,
+    "turn_id": null,
+    "window_id": 0,
+    "pending_token": null,
+    "presented_token": null,
+    "archived_busy_json": "{}"
+  }
+]

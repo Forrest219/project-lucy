@@ -1,0 +1,229 @@
+{
+  "opId": "ops_6230c45f64b71ad273dab12e0426bc35",
+  "http": 200,
+  "historyTruncated": true,
+  "truncationReasons": [
+    "row_limit"
+  ],
+  "history": [
+    {
+      "key": "current:2135",
+      "op": "diagnostic_collect",
+      "opId": "ops_6230c45f64b71ad273dab12e0426bc35",
+      "step": "read_reload_state",
+      "phase": "leave",
+      "ts": "2026-11-22T10:29:57.280Z",
+      "elapsedMs": 4,
+      "result": "ok",
+      "reasonCode": "",
+      "state": "ended",
+      "enteredAt": "2026-11-22T10:29:57.276Z",
+      "durationMs": 4.119417000001704
+    }
+  ],
+  "inFlight": [],
+  "file": [
+    {
+      "ts": "2026-11-22T10:29:32.261Z",
+      "op": "diagnostic_collect",
+      "op_id": "ops_6230c45f64b71ad273dab12e0426bc35",
+      "step": "read_project",
+      "phase": "enter",
+      "elapsed_ms": 0,
+      "result": "running",
+      "reason_code": ""
+    },
+    {
+      "ts": "2026-11-22T10:29:32.261Z",
+      "op": "diagnostic_collect",
+      "op_id": "ops_6230c45f64b71ad273dab12e0426bc35",
+      "step": "read_ktx_yaml",
+      "phase": "enter",
+      "elapsed_ms": 0,
+      "result": "running",
+      "reason_code": ""
+    },
+    {
+      "ts": "2026-11-22T10:29:32.261Z",
+      "op": "diagnostic_collect",
+      "op_id": "ops_6230c45f64b71ad273dab12e0426bc35",
+      "step": "read_catalog_reloads",
+      "phase": "enter",
+      "elapsed_ms": 0,
+      "result": "running",
+      "reason_code": ""
+    },
+    {
+      "ts": "2026-11-22T10:29:32.262Z",
+      "op": "diagnostic_collect",
+      "op_id": "ops_6230c45f64b71ad273dab12e0426bc35",
+      "step": "probe_execution",
+      "phase": "enter",
+      "elapsed_ms": 0,
+      "result": "running",
+      "reason_code": ""
+    },
+    {
+      "ts": "2026-11-22T10:29:32.262Z",
+      "op": "diagnostic_collect",
+      "op_id": "ops_6230c45f64b71ad273dab12e0426bc35",
+      "step": "probe_execution",
+      "phase": "leave",
+      "elapsed_ms": 0,
+      "result": "ok",
+      "reason_code": ""
+    },
+    {
+      "ts": "2026-11-22T10:29:32.269Z",
+      "op": "diagnostic_collect",
+      "op_id": "ops_6230c45f64b71ad273dab12e0426bc35",
+      "step": "read_project",
+      "phase": "leave",
+      "elapsed_ms": 8,
+      "result": "ok",
+      "reason_code": ""
+    },
+    {
+      "ts": "2026-11-22T10:29:32.270Z",
+      "op": "diagnostic_collect",
+      "op_id": "ops_6230c45f64b71ad273dab12e0426bc35",
+      "step": "read_catalog_reloads",
+      "phase": "leave",
+      "elapsed_ms": 8,
+      "result": "ok",
+      "reason_code": ""
+    },
+    {
+      "ts": "2026-11-22T10:29:57.276Z",
+      "op": "diagnostic_collect",
+      "op_id": "ops_6230c45f64b71ad273dab12e0426bc35",
+      "step": "read_ktx_yaml",
+      "phase": "leave",
+      "elapsed_ms": 0,
+      "result": "ok",
+      "reason_code": ""
+    },
+    {
+      "ts": "2026-11-22T10:29:57.276Z",
+      "op": "diagnostic_collect",
+      "op_id": "ops_6230c45f64b71ad273dab12e0426bc35",
+      "step": "read_reload_state",
+      "phase": "enter",
+      "elapsed_ms": 0,
+      "result": "running",
+      "reason_code": ""
+    },
+    {
+      "ts": "2026-11-22T10:29:57.280Z",
+      "op": "diagnostic_collect",
+      "op_id": "ops_6230c45f64b71ad273dab12e0426bc35",
+      "step": "read_reload_state",
+      "phase": "leave",
+      "elapsed_ms": 4,
+      "result": "ok",
+      "reason_code": ""
+    }
+  ],
+  "stdout": [
+    {
+      "ts": "2026-11-22T10:29:32.261Z",
+      "op": "diagnostic_collect",
+      "op_id": "ops_6230c45f64b71ad273dab12e0426bc35",
+      "step": "read_project",
+      "phase": "enter",
+      "elapsed_ms": 0,
+      "result": "running",
+      "reason_code": ""
+    },
+    {
+      "ts": "2026-11-22T10:29:32.261Z",
+      "op": "diagnostic_collect",
+      "op_id": "ops_6230c45f64b71ad273dab12e0426bc35",
+      "step": "read_ktx_yaml",
+      "phase": "enter",
+      "elapsed_ms": 0,
+      "result": "running",
+      "reason_code": ""
+    },
+    {
+      "ts": "2026-11-22T10:29:32.261Z",
+      "op": "diagnostic_collect",
+      "op_id": "ops_6230c45f64b71ad273dab12e0426bc35",
+      "step": "read_catalog_reloads",
+      "phase": "enter",
+      "elapsed_ms": 0,
+      "result": "running",
+      "reason_code": ""
+    },
+    {
+      "ts": "2026-11-22T10:29:32.262Z",
+      "op": "diagnostic_collect",
+      "op_id": "ops_6230c45f64b71ad273dab12e0426bc35",
+      "step": "probe_execution",
+      "phase": "enter",
+      "elapsed_ms": 0,
+      "result": "running",
+      "reason_code": ""
+    },
+    {
+      "ts": "2026-11-22T10:29:32.262Z",
+      "op": "diagnostic_collect",
+      "op_id": "ops_6230c45f64b71ad273dab12e0426bc35",
+      "step": "probe_execution",
+      "phase": "leave",
+      "elapsed_ms": 0,
+      "result": "ok",
+      "reason_code": ""
+    },
+    {
+      "ts": "2026-11-22T10:29:32.269Z",
+      "op": "diagnostic_collect",
+      "op_id": "ops_6230c45f64b71ad273dab12e0426bc35",
+      "step": "read_project",
+      "phase": "leave",
+      "elapsed_ms": 8,
+      "result": "ok",
+      "reason_code": ""
+    },
+    {
+      "ts": "2026-11-22T10:29:32.270Z",
+      "op": "diagnostic_collect",
+      "op_id": "ops_6230c45f64b71ad273dab12e0426bc35",
+      "step": "read_catalog_reloads",
+      "phase": "leave",
+      "elapsed_ms": 8,
+      "result": "ok",
+      "reason_code": ""
+    },
+    {
+      "ts": "2026-11-22T10:29:57.276Z",
+      "op": "diagnostic_collect",
+      "op_id": "ops_6230c45f64b71ad273dab12e0426bc35",
+      "step": "read_ktx_yaml",
+      "phase": "leave",
+      "elapsed_ms": 0,
+      "result": "ok",
+      "reason_code": ""
+    },
+    {
+      "ts": "2026-11-22T10:29:57.276Z",
+      "op": "diagnostic_collect",
+      "op_id": "ops_6230c45f64b71ad273dab12e0426bc35",
+      "step": "read_reload_state",
+      "phase": "enter",
+      "elapsed_ms": 0,
+      "result": "running",
+      "reason_code": ""
+    },
+    {
+      "ts": "2026-11-22T10:29:57.280Z",
+      "op": "diagnostic_collect",
+      "op_id": "ops_6230c45f64b71ad273dab12e0426bc35",
+      "step": "read_reload_state",
+      "phase": "leave",
+      "elapsed_ms": 4,
+      "result": "ok",
+      "reason_code": ""
+    }
+  ]
+}

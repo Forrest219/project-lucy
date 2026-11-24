@@ -697,10 +697,19 @@ export function AccessMap() {
           response.meta.access.state === "ok" &&
           response.meta.echo?.enteringAllowCallCount === 0 ? (
             <div className="pl-notice" data-testid="access-map-empty-access">
-              <p className="text-sm">
-                当前问询种类为「{accessMapInquiryKindLabel(inquiryKindValue)}」、访问等级为「
-                {accessMapAccessGradeLabel(accessGradeValue)}」时，没有进入访问路径的允许调用；授权骨架仍按当前授权显示。可调整筛选后再看。
-              </p>
+              {(response.meta.access.unconfirmedCalls ?? 0) > 0 ? (
+                <p className="text-sm">
+                  窗口内另有 {response.meta.access.unconfirmedCalls} 次调用因问询关联未确认，未计入本图（口径：已确认关联）；授权骨架仍按当前授权显示。{" "}
+                  <Link to="/admin/audit" className="underline">
+                    对照访问日志
+                  </Link>
+                </p>
+              ) : (
+                <p className="text-sm">
+                  当前问询种类为「{accessMapInquiryKindLabel(inquiryKindValue)}」、访问等级为「
+                  {accessMapAccessGradeLabel(accessGradeValue)}」时，没有进入访问路径的允许调用；授权骨架仍按当前授权显示。可调整筛选后再看。
+                </p>
+              )}
             </div>
           ) : null}
 

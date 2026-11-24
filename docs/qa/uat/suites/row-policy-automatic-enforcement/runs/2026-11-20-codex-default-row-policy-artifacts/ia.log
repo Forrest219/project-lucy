@@ -1,0 +1,5 @@
+
+> webui@1.0.0 lint:ia-boundary
+> node scripts/lint-ia-boundary.mjs
+
+IA boundary lint passed.

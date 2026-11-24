@@ -4,13 +4,10 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetAdminsCache } from "../auth/admins-store.js";
 import { resetSessionSecretCache } from "../auth/session.js";
+import { createEmptyAuditDbStub } from "./helpers/audit-db-stub.js";
 
 vi.mock("../admin/audit.js", () => ({
-  getAuditDb: vi.fn(() => ({
-    prepare: vi.fn(() => ({ get: vi.fn(), all: vi.fn(() => []), run: vi.fn() })),
-    exec: vi.fn(),
-    pragma: vi.fn()
-  })),
+  getAuditDb: vi.fn(() => createEmptyAuditDbStub()),
   recordConfigChange: vi.fn(async () => 1),
   updateConfigChangeStatus: vi.fn(async () => undefined),
   registerAgentAuditRoutes: vi.fn(),

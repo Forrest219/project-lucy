@@ -1,0 +1,22 @@
+{
+  "webui/server/proxy/mcp-proxy.ts": {
+    "candidateSha256": "b8c10b294ad41e88c71376caf6dac77de35cddea6bd1ee72c70789f4d7d02d57",
+    "reviewedHeadSha256": "b8c10b294ad41e88c71376caf6dac77de35cddea6bd1ee72c70789f4d7d02d57",
+    "matchesReviewedHead": true
+  },
+  "webui/server/proxy/caliber-binding-registry.ts": {
+    "candidateSha256": "7ae3fe42e536df8fc26bc45ad3135498eb429769a5375a2f452e47f998bee9bc",
+    "reviewedHeadSha256": "7ae3fe42e536df8fc26bc45ad3135498eb429769a5375a2f452e47f998bee9bc",
+    "matchesReviewedHead": true
+  },
+  "webui/server/proxy/caliber-binding-session.ts": {
+    "candidateSha256": "b20986b5e2617af11a05bdc24b61f959544fd8cf0833281ab129f2cde1546b12",
+    "reviewedHeadSha256": "b20986b5e2617af11a05bdc24b61f959544fd8cf0833281ab129f2cde1546b12",
+    "matchesReviewedHead": true
+  },
+  "webui/server/proxy/caliber-binding.ts": {
+    "candidateSha256": "4ab92acb162f1165203c94536f88a4d7fff926edf431adbc6b2f3d7c213ade2b",
+    "reviewedHeadSha256": "4ab92acb162f1165203c94536f88a4d7fff926edf431adbc6b2f3d7c213ade2b",
+    "matchesReviewedHead": true
+  }
+}

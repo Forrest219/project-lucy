@@ -14,12 +14,12 @@
 
 | 字段 | 当前值 | 来源 |
 | --- | --- | --- |
-| 产品版本（`VERSION`） | 0.25.0 | `VERSION` |
-| 产品版本标签 | 0.25.0 | `webui/src/lib/lucyVersion.ts` FALLBACK |
-| Helm `appVersion` | 0.25.0 | `deploy/k8s/helm/lucy/Chart.yaml` `appVersion` |
+| 产品版本（`VERSION`） | 0.30.0 | `VERSION` |
+| 产品版本标签 | 0.30.0 | `webui/src/lib/lucyVersion.ts` FALLBACK |
+| Helm `appVersion` | 0.30.0 | `deploy/k8s/helm/lucy/Chart.yaml` `appVersion` |
 | 捆绑 KTX 版本 | 0.16.0 | `Dockerfile` `LUCY_BUNDLED_KTX_VERSION` |
-| 上次手册审计 | 2026-11-05 | 人工维护；下次审计由治理 PR 触发 |
-| 版本号规则 | `0.25.x`（同一版本线按数值递增，见 `docs/governance/version-matrix.md` §1.1） | `docs/governance/version-matrix.md` |
+| 上次手册审计 | 2026-11-09 | 人工维护；下次审计由治理 PR 触发 |
+| 版本号规则 | `0.30.x`（同一版本线按数值递增，见 `docs/governance/version-matrix.md` §1.1） | `docs/governance/version-matrix.md` |
 
 > **不要**手改本表。改完事实源后跑 `npm run lint:handbook-baseline`；脚本会因更新而失败时，按报错提示同步本表，再跑一次。
 
@@ -27,30 +27,32 @@
 
 2026-10-24 产品版本先从 `2.0.0` 更正为 `0.2.0`，随后因 `0.2.0 < 0.17.0` 再次更正为 `0.20.0`。该次更正后的客户标签是 `v0.20.0`，捆绑 KTX 为 `0.16.0`，当时 Helm Chart 包版本为 `0.2.7`。
 
-2026-11-01 起，本开发线产品版本为 **`0.25.0`**。界面标签为 `0.25.0`（不带 `v` 前缀）。捆绑 KTX 仍为 `0.16.0`。Helm Chart 包版本仍为 `0.2.8`（`appVersion` 为 `0.25.0`）。annotated tag `v0.25.0` 已落地；上一 tagged 版本为 `v0.20.0`。证据与交付边界见 `docs/releases/v0.25.0.json`（本版无客户交付包／`productionReady`）。
+2026-11-01 起产品版本曾对齐为 `0.25.0`（分支 `lucy-v0.25`）。annotated tag `v0.25.0` 已落地；证据与交付边界见 `docs/releases/v0.25.0.json`（该版无客户交付包／`productionReady`）。`lucy-v0.25` / `v0.25.0` 现在只接 hotfix。
 
-**更正原因**：`2.0.0` 是与 Helm Chart 版本线容易混淆的错误切线；`0.2.0` 又错误地低于历史 `0.17.0`。`0.20.0` 恢复当前 `0.x` 版本线的数值顺序：`0.20.0 > 0.17.0 > 0.2.0`。`v2.0.0` 是已废止的历史切线，不作为当前版本线的承接基准。
+2026-11-07 起，本开发线产品版本为 **`0.30.0`**（分支 `lucy-v0.30`）。界面标签为 `0.30.0`（不带 `v` 前缀）。捆绑 KTX 仍为 `0.16.0`。Helm Chart 包版本为 `0.2.9`（`appVersion` 为 `0.30.0`；存活探针 `/api/livez`，启动与就绪探针 `/api/readyz`）。`v0.30.0` 尚未打 tag；上一已 tag 产品版本为 `v0.25.0`。
+
+**更正原因**：`2.0.0` 是与 Helm Chart 版本线容易混淆的错误切线；`0.2.0` 又错误地低于历史 `0.17.0`。`0.20.0` 恢复当时 `0.x` 版本线的数值顺序：`0.20.0 > 0.17.0 > 0.2.0`。`v2.0.0` 是已废止的历史切线，不作为当前版本线的承接基准。现行顺序是 `0.30.0 > 0.25.0 > 0.20.0 > 0.17.0 > 0.2.0`。
 
 **版本号规则**（详见 `docs/governance/version-matrix.md`）：产品版本按产品线确定，部署制品各自编号，互不推导。
 
 | 身份 | 何时改变 | 当前 |
 | --- | --- | --- |
-| 产品版本（`VERSION`） | 产品线换代 | `0.25.0`（分支 `lucy-v0.25`） |
-| Helm Chart 包版本 | 安装行为变化 | `0.2.8`。这次产品版本对齐没有升包版本 |
+| 产品版本（`VERSION`） | 产品线换代 | `0.30.0`（分支 `lucy-v0.30`） |
+| Helm Chart 包版本 | 安装行为变化 | `0.2.9`。探针改挂 `/api/livez` 与 `/api/readyz`；产品版本仍是 `0.30.0` |
 | 捆绑 KTX | 运行时升级 | `0.16.0` |
-| 客户镜像 tag / 交付包修订号 | 真正构建或交付时才有 | `0.25.0` 还没有。形式是 `customer-amd64-<产品版本>-<日期>-<提交>` |
-| 补丁段 | 矩阵另定 hotfix 规则之前保持 `0` | `0.25.1` 暂不启用 |
+| 客户镜像 tag / 交付包修订号 | 真正构建或交付时才有 | `0.30.0` 还没有。形式是 `customer-amd64-<产品版本>-<日期>-<提交>` |
+| 补丁段 | 矩阵另定 hotfix 规则之前保持 `0` | `0.30.1` 暂不启用 |
 
 > **同一产品版本线必须按数值递增。** 不得通过降低版本号表示最新发布。构建提交用于识别具体构建及其与 `main` 的关系，是对产品版本的补充，不能用来允许版本号倒退。
 
-**客户镜像 tag 形式**：`customer-amd64-0.25.0-YYYYMMDD-<gitSha>`。
+**客户镜像 tag 形式**：`customer-amd64-0.30.0-YYYYMMDD-<gitSha>`。
 
 登录后，侧栏左下角只保留一个账户入口；点击可查看完整账户信息、打开「系统手册」或「退出登录」。开放模式或未登录时仍可直接打开系统手册。产品版本、构建提交和随包 KTX 版本常驻在「系统设置 / 版本信息」（`/admin/version`）。产品版本显示为纯数字 `X.Y.Z`，不带 `v` 前缀。构建提交的可见文本是前 12 位；复制内容或 `/api/health` 的 `gitSha` 才是完整 40 位。这不是产品版本，也不能在 Helm 或 `LUCY_VERSION` 里手改；构建时没有写入则显示 `unknown`。工作区脏状态不在客户可见页面展示。对照客户正在跑的 `main` 提交时看这一页的构建提交，而不是只看产品版本号。
 
 本次版本更正**不**涉及的事项：
 
 - `webui/package.json` 的 `version`（npm 包版本）保持 `1.0.0`，与包无关。
-- Helm Chart `version` 在那次更正时是 `0.2.7`；图表包版本与 `appVersion` 分开。当前 Chart 包版本是 `0.2.8`。
+- Helm Chart `version` 在那次更正时是 `0.2.7`；图表包版本与 `appVersion` 分开。当前 Chart 包版本是 `0.2.9`。
 - `@kaelio/ktx` 仍为 `0.16.0`；本次未升级运行时。
 - 已发布的 `v2.0.0`、`v0.2.0` 标签与 GitHub Release 均作为历史事实保留，不删除、不移动。
 
@@ -203,6 +205,7 @@ KTX CLI / MCP daemon
 | 运行状态 | 系统概览 | `/overview` | 确认系统可用，处理当前待办。 |
 | 运行状态 | 调用监控 | `/ops/calls` | 准实时查看 MCP 工具调用量、成败与请求时效。 |
 | 运行状态 | 使用概况 | `/admin/usage` | 查看 Agent、Token、数据表的活跃率，以及 WebUI 页面访问情况。 |
+| 运行状态 | 运维步骤 | `/admin/ops-steps` | 按操作号查看进行中、已结束的运维步骤及写入降级。 |
 | 数据接入 | 连接概览 | `/connections` | 管理数据库连接、`Schema` 与 `Schema Manifest`，并查看连通性和本地目录同步状态。 |
 | 数据接入 | 启用表范围 | `/connections/enabled-tables` | 配置各连接进入语义层的表范围，并审阅保存前变更。 |
 | 业务上下文 | 语义资产 | `/catalog` | 管理表、字段、指标、分群与关联等结构化语义资产。 |
@@ -385,7 +388,7 @@ curl -s -X POST http://127.0.0.1:5174/api/catalog/reload \
 
 #### 调用监控（/ops/calls）
 
-入口：`/ops/calls`。运行状态分组下，与 `/overview`（系统概览）和 `/admin/usage`（使用概况）并列；侧栏位置见 [1.5 WebUI 入口速查](#webui-entry-map)。
+入口：`/ops/calls`。运行状态分组下，与 `/overview`（系统概览）、`/admin/usage`（使用概况）和 `/admin/ops-steps`（运维步骤）并列；侧栏位置见 [1.5 WebUI 入口速查](#webui-entry-map)。
 
 调用监控回答「MCP 工具调用现在是否健康、是否变慢、是否被拒绝」：六张 KPI 卡片（调用量（24h）、成功率、错误率、拒绝率、P95 耗时、慢请求数（>30s）），加工具调用排行（Top 10）与最近失败与拒绝短表。**只读观测页**：不修改 ACL、不写日志、不调 KTX、不接告警通道。
 
@@ -475,6 +478,8 @@ curl -s -X POST http://127.0.0.1:5174/api/catalog/reload \
 2. 排行榜百分比的分母是**该榜自身合计**，不是全量调用量。
 3. 界面使用视图里的「页面访问」是 `WebUI` 打开次数，与 `Agent` 的业务问询是两套数。
 4. 少数日志时间无法解析时会被跳过，并在表下提示「有 N 条时间无法解析，未计入」。
+
+同属「运行状态」的 `/admin/ops-steps`（运维步骤）按操作号只读查看进行中与已结束步骤及写入降级，用于排查长操作卡点；侧栏位置见 [1.5 WebUI 入口速查](#webui-entry-map)。不代替访问日志取证，也不修改配置。
 
 ### 3.2 数据接入 · 连接 / Schema / 表范围
 
@@ -1311,6 +1316,12 @@ PUT /api/wiki/:key
 | `sl_validate` | — | — | ● | — |
 | `lucy_ops_connection_tables` | — | — | — | ● |
 | `lucy_ops_source_import` | — | — | — | ● |
+| `lucy_ops_concept_list` | — | — | — | ● |
+| `lucy_ops_concept_show` | — | — | — | ● |
+| `lucy_ops_concept_summary` | — | — | — | ● |
+| `lucy_ops_concept_scan` | — | — | — | ● |
+| `lucy_ops_concept_set_canonical` | — | — | — | ● |
+| `lucy_ops_concept_reject` | — | — | — | ● |
 
 ¹ 环境里已有已发布业务 Skill 时再开；没有就保持 `—`。
 
@@ -2925,13 +2936,11 @@ Step 6 输出的 MCP 配置是**占位符 + 环境变量**，**不写明文**。
 
 多角色叠加时，同源多个角色的行授予取**并集**；再与 Agent 强制约束求交，得到**最终行约束**（Final Rows）。配置保存前可用 dryRun 预览最终行约束的摘要与 `digest`。
 
-**重要边界——当前取数能力受上游证明开关约束**：
+**行级策略自动执行**：合法策略保存并取得运行时确认后，`lucy_query` 自动按最终行约束过滤。无需设置 `LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN` 或重启服务；旧部署遗留的该变量已忽略。
 
-行级策略依赖上游对强制谓词的拼接能力。该能力默认**未证明**（`LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN` 不应设置）。在未证明状态下：
-
-- 受行级策略保护的表通过 `lucy_query` 取数会返回 `row_policy_upstream_unproven`，这是**预期的安全拒绝，不是故障**；
-- 受保护表上的 `lucy_read_source` / `lucy_freshness` / `entity_details` 会被 `row_policy_requires_wrapped_tool` 拒绝，只允许走已包装的查询路径；
-- `lucy_explain_query` 始终可在本地执行，用于诊断。
+- 行约束由代理强制注入，用户过滤只能进一步收紧；无法安全执行的查询会明确拒绝，不会返回全部行；
+- 受保护表上的 `lucy_read_source` / `lucy_freshness` / `entity_details` 仍按 `row_policy_requires_wrapped_tool` 拒绝，应使用 `lucy_query`；
+- `lucy_explain_query` 提供本地诊断，不转发、不返回行数据；诊断成功不代表其他查询校验已通过。
 
 **不要**为了「恢复业务」而把强制条件手写进用户查询的 `filters` 字符串——代理自动前置的条件与用户可写的过滤条件是两回事，手写会绕过裁决。
 
@@ -2961,13 +2970,7 @@ Step 6 输出的 MCP 配置是**占位符 + 环境变量**，**不写明文**。
 
 **权限**：需要已登录的 `WebUI` 管理员，`owner` 与运维都能看，页内链接可达角色详情。
 
-**必须知道的一条边界——视图不反映上游证明开关**：行级策略依赖上游对强制谓词的拼接能力，该能力默认**未证明**（`LUCY_UPSTREAM_FORCED_PREDICATE_PROVEN` 不应设置）。在未证明状态下：
-
-- 受行级策略保护的表通过 `lucy_query` 取数会返回 `row_policy_upstream_unproven`——这是**预期的安全拒绝，不是故障**；
-- 受保护表上的 `lucy_read_source` / `lucy_freshness` / `entity_details` 会被 `row_policy_requires_wrapped_tool` 拒绝，只允许走已包装的查询路径；
-- `lucy_explain_query` 始终可在本地执行，用于诊断。
-
-也就是说：**行权限视图可能显示「受限行授予」，而真实取数会被拒**。视图展示的是配置态，执行是否放行取决于上游开关。
+**视图与执行**：视图展示最终行约束；合法配置在支持的查询路径上自动执行，无需运维开启证明开关。字段绑定、工具权限及查询形状检查仍然生效；视图展示不等于任意查询一定成功。受保护表请使用 `lucy_query`，可用 `lucy_explain_query` 查看本地诊断。
 
 **四种降级态互不共用空态**：无授权、不可满足、编译失败、空筛选各有独立文案；全部必需编译失败时显示不可用，**不会显示成「零授权」**。字段绑定失败时也要先分清是运维侧（目录不可用）还是用户侧（字段不存在）。
 
@@ -3325,7 +3328,7 @@ export LUCY_AGENT_TOKEN="$(cat <PROJECT_ROOT>/.ktx/secrets/lucy-agent-token)"
 
 #### 工具全集
 
-下表是运行时**可授予**的全部工具（21 个），按类别分组。工具是否对某个 `Agent` 可见，取决于角色的 `allow.tools` 与全局 `defaults.deny_tools`；不在角色里显式列出的工具不会隐式授予。
+下表是运行时**可授予**的全部工具（27 个），按类别分组。工具是否对某个 `Agent` 可见，取决于角色的 `allow.tools` 与全局 `defaults.deny_tools`；不在角色里显式列出的工具不会隐式授予。
 
 | 工具 | 类别 | 用途 |
 | --- | --- | --- |
@@ -3350,12 +3353,18 @@ export LUCY_AGENT_TOKEN="$(cat <PROJECT_ROOT>/.ktx/secrets/lucy-agent-token)"
 | `lucy_report_template` | 认证路线 | 按已发布的报告模板产出报告；其取数仍走 `lucy_query` 的授权 |
 | `lucy_ops_connection_tables` | 控制面 | 批量维护连接的启用表范围 / 移除 Schema；整批全成或全拒 |
 | `lucy_ops_source_import` | 控制面 | 批量导入源表语义、校验与版本回滚 |
+| `lucy_ops_concept_list` | 控制面 | 只读列出 `concepts/` 概念摘要（无计划机、不创建目录） |
+| `lucy_ops_concept_show` | 控制面 | 只读查看单个概念及冲突状态 |
+| `lucy_ops_concept_summary` | 控制面 | 只读汇总全部概念或单概念统计 |
+| `lucy_ops_concept_scan` | 控制面 | 预览→提交扫描 semantic／wiki，写集仅 `concepts/*.yaml`；整批全成或全拒 |
+| `lucy_ops_concept_set_canonical` | 控制面 | 预览→提交将 binding 升为 canonical（需 summary） |
+| `lucy_ops_concept_reject` | 控制面 | 预览→提交将 binding 标为 rejected |
 
 > **这张表是机器校验的。** 运行时新增或下线工具而本表未同步，`npm run lint:handbook-tool-surface` 会失败。事实源是 `webui/server/proxy/acl.ts` 的 `DATA_PLANE_TOOLS` / `META_TOOLS` / `CONTEXT_TOOLS` 与 `webui/server/ops/control-plane.ts` 的 `CONTROL_PLANE_TOOLS`。
 
 #### 选工具时最容易踩的三条
 
-不要一上来就把 21 个全开。三个最容易踩的点：
+不要一上来就把 27 个全开。三个最容易踩的点：
 
 1. **上下文面必须显式授予。** `wiki_search` / `wiki_read` / `lucy_skill_search` / `lucy_skill_read` 不在角色里显式列出就没有——业务 `Skill` 明明已发布，`Agent` 却查不到。这是「配置了也不生效」的头号原因。
 2. **只读与业务问答的差别就在上下文面和问询协议。** 只回答「这张表怎么定义的」，最小只读集就够（`lucy_catalog`、`lucy_read_source`、`lucy_query`、`lucy_explain_query`、`lucy_freshness`）；一旦回答里要引用业务口径或 `Skill` 规程，就得把上下文面连同 `lucy_begin_question` / `lucy_continue_question` 一起勾上——否则审计里看不到这次问询，问询预算也接不上。

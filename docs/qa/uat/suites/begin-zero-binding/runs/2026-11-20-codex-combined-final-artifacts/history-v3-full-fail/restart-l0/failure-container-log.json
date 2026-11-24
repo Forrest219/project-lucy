@@ -1,0 +1,84 @@
+Initialized empty Git repository in /data/lucy/.git/
+[lucy] initialized git repository at /data/lucy
+[lucy] template sync disabled (LUCY_DISABLE_TEMPLATE_SYNC=1)
+[system_ensure_formal_roles] lucy_admin wrote=true branch=A
+[lucy] created persistent KTX internal token
+[system_ensure_formal_roles] lucy_ops_reader wrote=true branch=C
+[ops-evidence] connection=inserted readiness=reload_required assets=15 upgrades=0 conflicts=0 mirror(copied=17,skipped=0,failed=0)
+[lucy] synced 15 missing runtime mirror semantic-layer file(s) into /data/lucy/runtime/semantic-layer
+[lucy] synced 1 missing runtime mirror wiki file(s) into /data/lucy/runtime/wiki
+[lucy] synced 1 missing runtime mirror skills file(s) into /data/lucy/runtime/skills
+[ops-evidence] ktx.yaml digest stamped: 418d408faa417c77e0ac6597e09d20c45dfdde39420597f26a1ce22385407728
+[lucy] refreshing KTX semantic index
+[lucy] bundled KTX: @kaelio/ktx 0.16.0
+[lucy] project root: /data/lucy
+ktx MCP server listening at http://127.0.0.1:7878/mcp
+
+> webui@1.0.0 start
+> tsx server/index.ts
+
+[system_ensure_formal_roles] lucy_ops_reader wrote=false branch=D
+[lucy-audit] schema ready in 6ms (foreign_key_check 0ms)
+{"level":30,"time":1795150449032,"pid":328,"hostname":"a67a4a79e00f","msg":"Server listening at http://127.0.0.1:5174"}
+{"level":30,"time":1795150449032,"pid":328,"hostname":"a67a4a79e00f","msg":"Server listening at http://172.25.0.3:5174"}
+Lucy WebUI listening on http://0.0.0.0:5174
+MCP proxy listening on http://0.0.0.0:7879/mcp
+{"level":30,"time":1795150450043,"pid":328,"hostname":"a67a4a79e00f","reqId":"req-1","req":{"method":"GET","url":"/api/health","host":"127.0.0.1:49704","remoteAddress":"172.25.0.1","remotePort":57552},"msg":"incoming request"}
+{"level":30,"time":1795150450047,"pid":328,"hostname":"a67a4a79e00f","reqId":"req-1","res":{"statusCode":200},"responseTime":4.293666999999914,"msg":"request completed"}
+{"level":30,"time":1795150450050,"pid":328,"hostname":"a67a4a79e00f","reqId":"req-2","req":{"method":"POST","url":"/api/auth/bootstrap","host":"127.0.0.1:49704","remoteAddress":"172.25.0.1","remotePort":57564},"msg":"incoming request"}
+{"level":30,"time":1795150450105,"pid":328,"hostname":"a67a4a79e00f","reqId":"req-2","res":{"statusCode":200},"responseTime":55.528833000000304,"msg":"request completed"}
+[lucy] template sync disabled (LUCY_DISABLE_TEMPLATE_SYNC=1)
+[system_ensure_formal_roles] lucy_admin wrote=false branch=D
+[lucy] reused persistent KTX internal token
+[system_ensure_formal_roles] lucy_ops_reader wrote=false branch=D
+[ops-evidence] connection=unchanged readiness=current assets=15 upgrades=0 conflicts=0 mirror(copied=17,skipped=0,failed=0)
+[lucy] preserved 15 existing runtime mirror semantic-layer file(s) in /data/lucy/runtime/semantic-layer
+[lucy] preserved 1 existing runtime mirror wiki file(s) in /data/lucy/runtime/wiki
+[lucy] preserved 1 existing runtime mirror skills file(s) in /data/lucy/runtime/skills
+[ops-evidence] ktx.yaml digest stamped: 418d408faa417c77e0ac6597e09d20c45dfdde39420597f26a1ce22385407728
+[lucy] refreshing KTX semantic index
+[lucy] bundled KTX: @kaelio/ktx 0.16.0
+[lucy] project root: /data/lucy
+ktx MCP server listening at http://127.0.0.1:7878/mcp
+
+> webui@1.0.0 start
+> tsx server/index.ts
+
+[system_ensure_formal_roles] lucy_ops_reader wrote=false branch=D
+[lucy-audit] schema ready in 2ms (foreign_key_check 0ms)
+{"level":30,"time":1795150458643,"pid":227,"hostname":"a67a4a79e00f","msg":"Server listening at http://127.0.0.1:5174"}
+{"level":30,"time":1795150458644,"pid":227,"hostname":"a67a4a79e00f","msg":"Server listening at http://172.25.0.3:5174"}
+Lucy WebUI listening on http://0.0.0.0:5174
+MCP proxy listening on http://0.0.0.0:7879/mcp
+{"level":30,"time":1795150459201,"pid":227,"hostname":"a67a4a79e00f","reqId":"req-1","req":{"method":"GET","url":"/api/health","host":"127.0.0.1:49969","remoteAddress":"172.25.0.1","remotePort":63128},"msg":"incoming request"}
+{"level":30,"time":1795150459207,"pid":227,"hostname":"a67a4a79e00f","reqId":"req-1","res":{"statusCode":200},"responseTime":5.690583999999944,"msg":"request completed"}
+{"level":30,"time":1795150459954,"pid":227,"hostname":"a67a4a79e00f","reqId":"req-2","req":{"method":"GET","url":"/api/health","host":"127.0.0.1:5174","remoteAddress":"127.0.0.1","remotePort":42982},"msg":"incoming request"}
+{"level":30,"time":1795150459955,"pid":227,"hostname":"a67a4a79e00f","reqId":"req-2","res":{"statusCode":200},"responseTime":0.7068330000001879,"msg":"request completed"}
+{"level":30,"time":1795150460259,"pid":227,"hostname":"a67a4a79e00f","reqId":"req-3","req":{"method":"GET","url":"/api/health","host":"127.0.0.1:49969","remoteAddress":"172.25.0.1","remotePort":63130},"msg":"incoming request"}
+{"level":30,"time":1795150460260,"pid":227,"hostname":"a67a4a79e00f","reqId":"req-3","res":{"statusCode":200},"responseTime":1.5579999999999927,"msg":"request completed"}
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: is subject to change. To configure the initial branch name to use in all
+hint: of your new repositories, which will suppress this warning, call:
+hint: 
+hint: 	git config --global init.defaultBranch <name>
+hint: 
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint: 
+hint: 	git branch -m <name>
+Project: /data/lucy
+ktx MCP memory_ingest disabled: createLocalProjectMemoryIngest requires llm.provider.backend or an injected agentRunner
+{"level":30,"time":1795150449324,"pid":249,"hostname":"a67a4a79e00f","sessionId":"63fb6ade-2ce8-430d-a45f-0541ddaf268a","msg":"session.open"}
+{"level":30,"time":1795150450343,"pid":249,"hostname":"a67a4a79e00f","sessionId":"d8288cd6-52a3-40fd-94d5-68f920858c4e","msg":"session.open"}
+{"level":30,"time":1795150450348,"pid":249,"hostname":"a67a4a79e00f","tool":"sl_query","callId":"5aac0265-f6e3-4449-b326-1db6bdd8eff3","sessionId":"d8288cd6-52a3-40fd-94d5-68f920858c4e","params":{"connectionId":"uat-mysql","measures":["uat_begin_zero_orders.order_count","uat_begin_zero_orders.amount_sum"],"dimensions":[],"filters":[],"segments":[],"order_by":[],"limit":100,"include_empty":true,"include":["sql"]},"msg":"tool.start"}
+{"level":30,"time":1795150452467,"pid":249,"hostname":"a67a4a79e00f","tool":"sl_query","callId":"5aac0265-f6e3-4449-b326-1db6bdd8eff3","sessionId":"d8288cd6-52a3-40fd-94d5-68f920858c4e","durationMs":2118.702542,"outcome":"ok","resultSize":310,"msg":"tool.end"}
+[lucy-proxy] re-established KTX upstream session user=uat_zb_a tool=lucy_query
+[lucy] drain: begin pid=290 budget=20s
+[lucy] drain: ack received
+[lucy] drain: lucy settled exit
+[lucy] drain: stopping supervisor pid=241
+Project: /data/lucy
+ktx MCP memory_ingest disabled: createLocalProjectMemoryIngest requires llm.provider.backend or an injected agentRunner
+{"level":30,"time":1795150458886,"pid":162,"hostname":"a67a4a79e00f","sessionId":"dbdd15a8-2846-4617-ad98-c6d1e5f7cd72","msg":"session.open"}
+{"level":30,"time":1795150460601,"pid":162,"hostname":"a67a4a79e00f","sessionId":"c0150e90-6595-436c-a7b8-0c469f6d3a70","msg":"session.open"}
+

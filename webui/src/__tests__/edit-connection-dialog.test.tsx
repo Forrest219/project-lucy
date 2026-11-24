@@ -180,7 +180,9 @@ describe("EditConnectionDialog", () => {
         current: { host: "db-test.internal", port: 3306, username: "sc" },
         test: { status: "ok" },
         presence: { status: "ok", missingEnabledTables: [] },
-        executionRuntimePending: true
+        executionRuntimePending: false,
+        executionRuntimeAck: true,
+        executionDecisionReason: "ok"
       });
 
     renderDialog();
@@ -193,8 +195,50 @@ describe("EditConnectionDialog", () => {
     fireEvent.click(screen.getByTestId("edit-connection-confirm-btn"));
     await waitFor(() => expect(toast.success).toHaveBeenCalled());
     const successMsg = String(vi.mocked(toast.success).mock.calls[0]?.[0] ?? "");
-    expect(successMsg).not.toMatch(/问数已切到新库|权限已恢复/);
+    expect(successMsg).not.toMatch(/问数已切到新库|权限已恢复|已全部生效/);
     expect(toast.error).not.toHaveBeenCalled();
+    const execFace = await screen.findByTestId("edit-connection-execution-runtime");
+    expect(execFace).toHaveTextContent("已加载新连接");
+    expect(screen.getByTestId("edit-connection-success")).toBeInTheDocument();
+  });
+
+  it("edit success face shows pending execution reload guidance when ack is false", async () => {
+    apiPost
+      .mockResolvedValueOnce({
+        diff: "",
+        proposedYaml: "",
+        current: { host: "db-prod.internal", port: 3306, username: "sc" },
+        passwordAction: "keep"
+      })
+      .mockResolvedValueOnce({
+        diff: "- host: db-prod\n+ host: db-test",
+        proposedYaml: "host: db-test",
+        current: { host: "db-prod.internal", port: 3306, username: "sc" },
+        passwordAction: "keep"
+      })
+      .mockResolvedValueOnce({
+        written: true,
+        current: { host: "db-test.internal", port: 3306, username: "sc" },
+        test: { status: "ok" },
+        presence: { status: "ok", missingEnabledTables: [] },
+        executionRuntimePending: false,
+        executionRuntimeAck: false,
+        executionDecisionReason: "execution_connection_not_loaded",
+        executionRuntimeError: "connection missing from daemon"
+      });
+
+    const { onClose } = renderDialog();
+    await waitFor(() => expect(screen.getByTestId("edit-connection-username")).toHaveValue("sc"));
+    fireEvent.click(screen.getByTestId("edit-connection-preview-btn"));
+    await waitFor(() => expect(screen.getByTestId("edit-connection-preview")).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId("edit-connection-confirm-btn"));
+    const execFace = await screen.findByTestId("edit-connection-execution-runtime");
+    expect(execFace).toHaveTextContent("尚未确认加载");
+    expect(execFace).toHaveTextContent("重载执行层");
+    expect(execFace).not.toHaveTextContent("已全部生效");
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId("edit-connection-done-btn"));
+    expect(onClose).toHaveBeenCalled();
   });
 
   it("SC-22 conflict uses 仍要改到相同端点 not 仍要新建连接", async () => {
@@ -229,7 +273,8 @@ describe("EditConnectionDialog", () => {
       current: { host: string; port: number; username: string };
       test: { status: "ok" };
       presence: { status: "ok"; missingEnabledTables: [] };
-      executionRuntimePending: true;
+      executionRuntimePending: boolean;
+      executionRuntimeAck: boolean;
     };
 
     apiPost
@@ -270,9 +315,13 @@ describe("EditConnectionDialog", () => {
       current: { host: "db-test.internal", port: 3306, username: "sc" },
       test: { status: "ok" },
       presence: { status: "ok", missingEnabledTables: [] },
-      executionRuntimePending: true
+      executionRuntimePending: false,
+      executionRuntimeAck: true
     });
-    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByTestId("edit-connection-done-btn")).toBeInTheDocument());
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId("edit-connection-done-btn"));
+    expect(onClose).toHaveBeenCalled();
   });
 
   it("SC-14 terminology includes Edit Connection Preview row", () => {

@@ -70,6 +70,8 @@ export type GatedResponseInput = {
   config?: ResponseCommitConfig;
   /** Called once the operation reached a terminal state (e.g. to schedule projection). */
   onSettled?: () => void;
+  /** Registers real gate work: includes pending prepare AND terminal writes after transport close. */
+  onWorkRegistered?: (settled: Promise<void>) => void;
 };
 
 function errorBody(
@@ -148,11 +150,16 @@ class ResponseGate {
   /** True once a terminal path was taken; later handler writes are ignored. */
   private settled = false;
   private timer: NodeJS.Timeout | undefined;
+  private commitsInFlight = 0;
+  private terminalFinished = false;
+  private resolveWorkSettled!: () => void;
 
   constructor(
     private readonly res: ServerResponse,
     private readonly input: GatedResponseInput
   ) {
+    const workSettled = new Promise<void>((resolve) => { this.resolveWorkSettled = resolve; });
+    input.onWorkRegistered?.(workSettled);
     this.config = input.config ?? resolveResponseCommitConfig();
     const target = res as unknown as SendMethods & { flushHeaders: () => void };
     this.send = {
@@ -184,7 +191,17 @@ class ResponseGate {
       if (this.settled) return res;
       this.ended = true;
       trailingCallback(args)?.();
-      void this.commit();
+      this.commitsInFlight += 1;
+      void this.commit().catch((error: unknown) => {
+        // A thrown prepare is still fail-closed; never retire while the real write is pending.
+        console.error("[lucy-proxy] audit prepare threw", error instanceof Error ? error.message : "unknown");
+        this.fail("audit_prepare_failed", 503, errorBody(
+          this.input.requestId, -32004, "Audit unavailable; no content was released", AUDIT_UNAVAILABLE_CODE
+        ));
+      }).finally(() => {
+        this.commitsInFlight -= 1;
+        this.finishActualWork();
+      });
       return res;
     };
     // Early header flushes would bypass the gate.
@@ -312,6 +329,12 @@ class ResponseGate {
 
   private terminalWritten = false;
 
+  private finishActualWork(): void {
+    // A close can finish its terminal write before an earlier prepare settles;
+    // conversely commit can return before finish starts the terminal write.
+    if (this.terminalFinished && this.commitsInFlight === 0) this.resolveWorkSettled();
+  }
+
   private async terminal(kind: "delivered" | "failed", reason?: string): Promise<void> {
     if (this.terminalWritten) return;
     this.terminalWritten = true;
@@ -324,6 +347,8 @@ class ResponseGate {
     } catch (error) {
       console.error("[lucy-proxy] audit terminal threw", error instanceof Error ? error.message : "unknown");
     } finally {
+      this.terminalFinished = true;
+      this.finishActualWork();
       this.input.onSettled?.();
     }
   }

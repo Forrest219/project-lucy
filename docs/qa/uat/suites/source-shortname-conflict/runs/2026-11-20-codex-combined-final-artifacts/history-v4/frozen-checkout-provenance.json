@@ -1,0 +1,7 @@
+{
+  "candidate": "sha256:0d190b3747ff67e033279c7e5d373903f0e331dcd14143603d8dce60a24dbb2e",
+  "source": "v4 server/src/scripts exported over independent base77e2ad84; locks/configs also exported",
+  "validation": "all final overlay hashes match independently recorded build inputs",
+  "hostDependencies": "unchanged lockfile-matched installed modules; no source link back to shared workspace",
+  "workspace": "/Users/zhangxingchen/Projects/project-lucy/inbox/20261120-combined-final/frozen-checkout"
+}

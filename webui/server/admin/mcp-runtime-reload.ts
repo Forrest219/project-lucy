@@ -37,6 +37,10 @@ import {
   recordExecutionRuntimeObservation
 } from "../mcp-runtime-state.js";
 import { readProject, resolveProjectRoot } from "../project.js";
+import { getProcessLifecyclePhase } from "../runtime/process-drain.js";
+import {
+  acquireMcpReloadWindow, awaitReloadDeadline, remainingReloadMs,
+} from "../runtime/mcp-process-work.js";
 
 /** Protocol version the supervisor publishes in its capability file (Spec §9.1). */
 export const KTX_RELOAD_PROTOCOL = "lucy-ktx-reload/1";
@@ -55,7 +59,7 @@ const RECEIPT_POLL_MS = 100;
  */
 function reloadTimeoutMs(): number {
   const configured = Number(process.env.LUCY_KTX_RELOAD_TIMEOUT_MS);
-  return Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : RELOAD_TIMEOUT_MS;
+  return Number.isFinite(configured) && configured > 0 ? Math.min(RELOAD_TIMEOUT_MS, Math.floor(configured)) : RELOAD_TIMEOUT_MS;
 }
 
 export type ExecutionRuntimeActivation = "current" | "reload_required" | "unknown";
@@ -100,6 +104,8 @@ export type ChannelCapability = {
   heartbeatAt: string;
   state: string;
   currentRequestId: string;
+  /** Only published together with idle AFTER that owner's actual execution terminates. */
+  completedRequestId?: string;
 };
 
 export type ChannelAvailability = {
@@ -152,7 +158,42 @@ const EMPTY_STATE: PersistedReloadState = {
  * by digest: two different digests would still race on the same request and
  * receipt files, which is exactly the failure mode P1 forbids.
  */
-let inflight: { requestId: string; digest: string; startedAt: string } | null = null;
+type ReloadOwner = {
+  requestId: string;
+  digest: string;
+  startedAt: string;
+  deadlineAt: number;
+  projectRoot?: string;
+  published: boolean;
+  publishedAt?: number;
+  lease?: ReturnType<typeof acquireMcpReloadWindow>;
+  reconcileTimer?: ReturnType<typeof setTimeout>;
+};
+let inflight: ReloadOwner | null = null;
+
+/** Never release because a caller stopped waiting: require actual channel terminal evidence. */
+async function retireReloadOwner(owner: ReloadOwner): Promise<void> {
+  if (inflight !== owner) return;
+  if (owner.published && owner.projectRoot) {
+    try {
+      const channel = await queryChannelState(owner.projectRoot);
+      // Idle/heartbeat or a missing request alone do not identify OUR actual terminal.
+      const exactTerminal = channel.lastResult?.requestId === owner.requestId
+        || (channel.capability?.state === "idle" && channel.capability.completedRequestId === owner.requestId);
+      if (channel.busy || !exactTerminal) {
+        owner.reconcileTimer = setTimeout(() => { void retireReloadOwner(owner); }, 200);
+        owner.reconcileTimer.unref?.();
+        return;
+      }
+    } catch {
+      owner.reconcileTimer = setTimeout(() => { void retireReloadOwner(owner); }, 200);
+      owner.reconcileTimer.unref?.();
+      return;
+    }
+  }
+  owner.lease?.release();
+  if (inflight === owner) inflight = null;
+}
 
 function channelPaths(projectRoot: string) {
   const dir = path.join(projectRoot, ".ktx-ui");
@@ -204,8 +245,9 @@ export async function readChannelCapability(
   const heartbeatAt = typeof raw.heartbeatAt === "string" ? raw.heartbeatAt : "";
   const state = typeof raw.state === "string" ? raw.state : "idle";
   const currentRequestId = typeof raw.currentRequestId === "string" ? raw.currentRequestId : "";
+  const completedRequestId = typeof raw.completedRequestId === "string" ? raw.completedRequestId : undefined;
   if (!protocol || !Number.isFinite(supervisorPid) || supervisorPid <= 0) return undefined;
-  return { protocol, supervisorPid, startedAt, heartbeatAt, state, currentRequestId };
+  return { protocol, supervisorPid, startedAt, heartbeatAt, state, currentRequestId, ...(completedRequestId ? { completedRequestId } : {}) };
 }
 
 function heartbeatAgeMs(capability: ChannelCapability, now: number): number {
@@ -428,10 +470,11 @@ type UpstreamToolCall =
  */
 async function callUpstreamTool(
   toolName: string,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
+  deadlineAt = Date.now() + 10_000
 ): Promise<UpstreamToolCall> {
   const controller = new AbortController();
-  const timeoutMs = 10_000;
+  const timeoutMs = remainingReloadMs(deadlineAt, 10_000);
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const headers: Record<string, string> = {
@@ -532,9 +575,10 @@ async function callUpstreamTool(
  */
 export async function verifyConfigLoaded(
   expectedConnectionIds: string[],
-  targetConnectionId?: string
+  targetConnectionId?: string,
+  deadlineAt = Date.now() + 10_000
 ): Promise<VerificationOutcome> {
-  const call = await callUpstreamTool("connection_list", {});
+  const call = await callUpstreamTool("connection_list", {}, deadlineAt);
   if (!call.ok) {
     return {
       state: "unverified",
@@ -576,29 +620,62 @@ export async function verifyConfigLoaded(
 
 async function writeReloadRequest(
   projectRoot: string,
-  payload: { requestId: string; requestedDigest: string; requestedAt: string }
+  payload: { requestId: string; requestedDigest: string; requestedAt: string; deadlineAt: number },
+  owner: ReloadOwner
 ): Promise<void> {
   const paths = channelPaths(projectRoot);
-  await mkdir(paths.dir, { recursive: true });
   const tmp = `${paths.request}.tmp.${process.pid}`;
-  await writeFile(tmp, `${JSON.stringify(payload)}\n`, "utf8");
-  await rename(tmp, paths.request);
+  try {
+    await mkdir(paths.dir, { recursive: true });
+    owner.lease!.assertCanProceed();
+    await writeFile(tmp, `${JSON.stringify(payload)}\n`, "utf8");
+    owner.lease!.assertCanProceed(); // Final synchronous check before requesting atomic publication.
+    await rename(tmp, paths.request);
+    owner.published = true; // Publication may complete after TERM; retain ownership before checking it.
+    owner.publishedAt = Date.now();
+    owner.lease!.assertCanProceed();
+  } catch (error) {
+    if (owner.published && await cancelOwnReloadRequest(projectRoot, owner.requestId)) owner.published = false;
+    await rm(tmp, { force: true }).catch(() => undefined);
+    throw error;
+  }
+}
+
+/** Taking the pending file atomically wins against supervisor consumption, or does nothing. */
+async function cancelOwnReloadRequest(projectRoot: string, requestId: string): Promise<boolean> {
+  const paths = channelPaths(projectRoot);
+  const cancelled = `${paths.request}.cancel.${requestId}`;
+  try {
+    await rename(paths.request, cancelled);
+  } catch { return false; } // Already consumed is NOT proof of execution termination.
+  const request = await readJsonFile<{ requestId?: string }>(cancelled);
+  if (request?.requestId !== requestId) {
+    await rename(cancelled, paths.request).catch(() => undefined);
+    return false;
+  }
+  await rm(cancelled, { force: true });
+  return true;
 }
 
 async function waitForReceipt(
   projectRoot: string,
   requestId: string,
-  timeoutMs: number
-): Promise<{ receipt?: ReloadReceipt; timedOut: boolean }> {
+  timeoutMs: number,
+  owner: ReloadOwner
+): Promise<{ receipt?: ReloadReceipt; timedOut: boolean; stopping?: boolean }> {
   const paths = channelPaths(projectRoot);
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
+    if (["DRAINING", "STOPPING", "STOPPED"].includes(getProcessLifecyclePhase())) {
+      if (await cancelOwnReloadRequest(projectRoot, requestId)) owner.published = false;
+      return { timedOut: false, stopping: true };
+    }
     const receipt = await readJsonFile<ReloadReceipt>(paths.result);
     // P6: only a receipt that answers THIS request may complete it.
     if (receipt && receipt.requestId === requestId) {
       return { receipt, timedOut: false };
     }
-    await sleep(RECEIPT_POLL_MS);
+    await sleep(Math.min(RECEIPT_POLL_MS, Math.max(1, deadline - Date.now())));
   }
   return { timedOut: true };
 }
@@ -607,6 +684,8 @@ export type ReloadExecutionRuntimeInput = {
   connectionId?: string;
   reason?: string;
   projectRoot?: string;
+  /** Internal propagation from a write path; never extends the default total budget. */
+  deadlineAt?: number;
 };
 
 /**
@@ -616,47 +695,38 @@ export type ReloadExecutionRuntimeInput = {
 export async function reloadExecutionRuntime(
   input: ReloadExecutionRuntimeInput = {}
 ): Promise<McpRuntimeReloadResult> {
-  const projectRoot = input.projectRoot ?? await resolveProjectRoot();
   const startedAtMs = Date.now();
   const startedAt = new Date(startedAtMs).toISOString();
+  const deadlineAt = Math.min(input.deadlineAt ?? Infinity, startedAtMs + reloadTimeoutMs());
   const finish = (
     result: Omit<McpRuntimeReloadResult, "startedAt" | "durationMs" | "finishedAt">
   ): McpRuntimeReloadResult => ({
-    ...result,
-    startedAt,
-    finishedAt: new Date().toISOString(),
-    durationMs: Date.now() - startedAtMs
+    ...result, startedAt, finishedAt: new Date().toISOString(), durationMs: Date.now() - startedAtMs
   });
-
-  // ① global single-in-flight gate — any digest (P1).
-  //
-  // The slot is RESERVED before the first await, so two concurrent callers can
-  // never both issue a request. The slot is only released when the previous
-  // request's receipt exists: a request that has been written but not yet
-  // consumed by the supervisor still counts as in flight.
+  // The slot is reserved synchronously; no awaited project/FS lookup can open a race.
   if (inflight) {
-    const channelState = await queryChannelState(projectRoot);
-    const previousFinished = channelState.lastResult?.requestId === inflight.requestId;
-    if (!previousFinished) {
-      return finish({
-        requestId: inflight.requestId,
-        reloadStatus: "already_running",
-        configVerification: "unverified",
-        requestedDigest: inflight.digest,
-        detail: "上一次执行层重载仍在进行中，请等待其结束后再试"
-      });
-    }
-    // The previous run is provably finished — the gate can be released.
-    inflight = null;
+    return finish({ requestId: inflight.requestId, reloadStatus: "already_running",
+      configVerification: "unverified", requestedDigest: inflight.digest,
+      detail: "上一次执行层重载仍在进行中，请等待其实际结束后再试" });
   }
-
-  const requestId = randomUUID();
-  inflight = { requestId, digest: "", startedAt };
+  const owner: ReloadOwner = { requestId: randomUUID(), digest: "", startedAt, deadlineAt, published: false };
+  inflight = owner;
+  const actualWork = (async () => {
+    const projectRoot = input.projectRoot ?? await resolveProjectRoot();
+    owner.projectRoot = projectRoot;
+    remainingReloadMs(deadlineAt);
+    return await runReload(input, projectRoot, owner.requestId, startedAt, startedAtMs, finish, owner);
+  })();
+  // Observe actual settlement separately from the caller deadline; never a bare finally release.
+  const settledWork = actualWork.then(
+    async (result) => { await retireReloadOwner(owner); return result; },
+    async (error: unknown) => { await retireReloadOwner(owner); throw error; }
+  );
   try {
-    return await runReload(input, projectRoot, requestId, startedAt, startedAtMs, finish);
-  } finally {
-    // Only release OUR reservation: a later request may already hold the slot.
-    if (inflight?.requestId === requestId) inflight = null;
+    return await awaitReloadDeadline(settledWork, deadlineAt);
+  } catch (error) {
+    return finish({ requestId: owner.requestId, reloadStatus: "failed", configVerification: "unverified",
+      requestedDigest: owner.digest, detail: error instanceof Error ? error.message : String(error) });
   }
 }
 
@@ -670,7 +740,8 @@ async function runReload(
   requestId: string,
   startedAt: string,
   startedAtMs: number,
-  finish: (result: Omit<McpRuntimeReloadResult, "startedAt" | "durationMs" | "finishedAt">) => McpRuntimeReloadResult
+  finish: (result: Omit<McpRuntimeReloadResult, "startedAt" | "durationMs" | "finishedAt">) => McpRuntimeReloadResult,
+  owner: ReloadOwner
 ): Promise<McpRuntimeReloadResult> {
   // ② the channel may still be busy after a WebUI restart (H6).
   const channelState = await queryChannelState(projectRoot);
@@ -723,9 +794,19 @@ async function runReload(
       detail: `连接 ${input.connectionId} 不在当前 ktx.yaml 中，未发起执行层重载`
     });
   }
+  owner.digest = requestedDigest;
+  owner.lease = acquireMcpReloadWindow(requestId, owner.deadlineAt);
+  const drainMs = Math.min(20_000, Number(process.env.LUCY_KTX_RELOAD_DRAIN_TIMEOUT_MS) || 20_000);
+  if (!await owner.lease.waitForIdle(Math.min(drainMs, remainingReloadMs(owner.deadlineAt)))) {
+    return finish({ requestId, reloadStatus: "failed", configVerification: "unverified", requestedDigest,
+      detail: "执行层重载等待在途查询结束超时；未停止执行层，请待原查询结束后重试" });
+  }
+  owner.lease.assertCanProceed();
   const requestedAt = startedAt;
 
   await persistReloadState(projectRoot, {
+    activation: "reload_required",
+    activationDigest: requestedDigest,
     reload: {
       state: "running",
       requestId,
@@ -739,18 +820,21 @@ async function runReload(
     }
   });
 
-  await writeReloadRequest(projectRoot, { requestId, requestedDigest, requestedAt });
-  if (inflight?.requestId === requestId) {
-    inflight = { requestId, digest: requestedDigest, startedAt: requestedAt };
-  }
+  owner.lease.assertCanProceed();
+  // Publishing is owned until an actual matching receipt exists, including write/rename failures.
+  await writeReloadRequest(projectRoot, { requestId, requestedDigest, requestedAt, deadlineAt: owner.deadlineAt }, owner);
 
   {
-    const { receipt, timedOut } = await waitForReceipt(projectRoot, requestId, reloadTimeoutMs());
+    // Reserve part of the SAME deadline for cancellation/state recording, never extra budget.
+    const remaining = remainingReloadMs(owner.deadlineAt);
+    const { receipt, timedOut, stopping } = await waitForReceipt(projectRoot, requestId,
+      Math.max(1, remaining - Math.min(100, Math.ceil(remaining / 10))), owner);
 
     if (timedOut || !receipt) {
+      if (await cancelOwnReloadRequest(projectRoot, requestId)) owner.published = false;
       // P7/P9: ask the channel what really happened before reporting.
       const afterTimeout = await queryChannelState(projectRoot);
-      const detail = afterTimeout.busy
+      const detail = stopping ? "服务正在停止，执行层重载已取消；已消费请求按实际关停状态处理" : afterTimeout.busy
         ? "等待执行层重载回执超时；通道仍在执行，可稍后重试"
         : "等待执行层重载回执超时";
       await persistReloadState(projectRoot, {
@@ -817,7 +901,9 @@ async function runReload(
     // writing any new evidence (Spec §5.4).
     clearExecutionRuntimeObservations();
 
-    const verification = await verifyConfigLoaded(expectedConnectionIds, input.connectionId);
+    owner.lease.assertCanProceed();
+    const verification = await verifyConfigLoaded(expectedConnectionIds, input.connectionId, owner.deadlineAt);
+    owner.lease.assertCanProceed();
     const digestMismatch = actualDigest !== requestedDigest;
     const verificationDetail = [
       verification.detail,
@@ -841,6 +927,7 @@ async function runReload(
     }
 
     const currentDigest = await readKtxYamlDigest(projectRoot).catch(() => actualDigest);
+    owner.lease.assertCanProceed();
     const activation: ExecutionRuntimeActivation =
       verification.state === "verified" && actualDigest === currentDigest
         ? "current"
@@ -883,6 +970,8 @@ async function runReload(
  * to be able to release it explicitly.
  */
 export function resetReloadControllerForTests(): void {
+  if (inflight?.reconcileTimer) clearTimeout(inflight.reconcileTimer);
+  inflight?.lease?.release();
   inflight = null;
 }
 

@@ -1,8 +1,39 @@
 # Changelog
 
-All notable user-visible changes to Lucy ship here. Versions follow `<major>.<minor>.<patch>`; the current development line is M31.
+All notable user-visible changes to Lucy ship here. Versions follow `<major>.<minor>.<patch>`; the current development line is `0.30.0` (`lucy-v0.30`).
 
 > Conventions: `**Breaking**` = action required on upgrade; `**Deprecated**` = still works, will be removed; `**Added**` / `**Changed**` / `**Fixed**` are self-describing.
+
+---
+
+## Unreleased — 0.30.0
+
+产品线 `lucy-v0.30`／`VERSION=0.30.0` 开发中捕捉（**中间态已出口**，见 `docs/reviews/2026-11-13-025-to-030-midstate-inventory.md`）。对外叙事定稿见 `docs/releases/v0.30.0-user-facing.md`；草稿捕捉层见 `docs/releases/drafts/0.30.0-user.md`。**未**开 `v0.30.0` 发版台账／tag；合入 ≠ 可上线。对齐 tip `eb38eee5140c`（以 `git rev-parse HEAD` 为准）。
+
+### Added
+- **P0-1／REQ-030-027 问题类型口径绑定**：运维可发布「问题类型 → 唯一 source + 固定口径」绑定；命中后 `lucy_query`／`lucy_explain_query` 偏离由 Proxy 本机拒绝且零上游执行。
+- **P0-2／REQ-030-023 Catalog 业务语义暴露**：可见表在 catalog 携带业务描述等语义资产；**首期排序仍为字母序**（清单理想「业务相关排序」已显式降级，见 Spec D7）。
+- **P0-A／REQ-030-012 Source 级字段暴露裁剪**：按 source 裁剪 Agent 可见业务字段。
+- **P0-3／REQ-030-024 表级歧义门闩**：多表命中不得静默成交；限定名错表可拦。
+- **P0-4／REQ-030-022 答复可核对块**：纳入路径成功 `lucy_query` 强制带 `answer_verifiability`（来源／口径／截止期披露）；首期截止期可 `not_checked`。
+- **P0-5／REQ-030-018 空结果下一步**：严格 0 行返回结构化 `next_step`。
+- **P1-11／REQ-030-032 概念注册表 Lucy Ops 控制面**：`lucy_ops_concept_*` 扫描／人审写；本分支概念注册表**唯一产品交付面＝Ops MCP**（P1-10 CLI／WebUI 已结案不做）。
+- **P1-12／REQ-030-033 问询预算默认阈值**：默认窗口放宽为 60 次／300s（续查仍 1 次）。
+- **P1-13／REQ-030-034 发版性能基线门禁**：WebUI＋MCP 相对不回退 harness；发布取证出口证据齐（acceptance 代替实现 CR）。
+- **P1-14／REQ-030-035 问询预算复盘审计字段**：`budgetSnapshot` 与 `calls.csv` 表尾支持运维复盘。
+
+### Changed
+- **连接创建／编辑 → 执行层重载（Spec 191）**：有 supervisor 时写路径统一走 supervisor；创建／编辑成功面诚实回报 `executionRuntimeAck`；live E2E（`E2E-CON-07`／`E2E-MCP-02`）与 UAT-01 已取证。
+
+### Fixed
+- **MCP 客户端 Skill 入口**：仓库默认 `.mcp.json` 改挂主面 `/mcp`（不再指向已关闭的 `/mcp/skills`），并加静态门禁与可选 CC 探针，避免 Claude Code／Codex 侧业务 Skill 假连通。
+- **库内扫表读法**：外部目录列库／列表改直连 `SHOW`；普通 MySQL 准备表结构一次读 `information_schema.columns`（**不入 0.30 产品分母**，事故修复）。
+- **访问关系图空桑基**：begin 后同会话触表写入 confirmed；无访问时画闲置骨干连通带（功能合同已收口）。
+
+### Notes
+- 用户叙事定稿：`docs/releases/v0.30.0-user-facing.md`；草稿：`docs/releases/drafts/0.30.0-user.md`（双层 RN 设计见 `docs/plans/lucy-20261107-dual-layer-release-notes-design.md`）。Skill／扫表／harness 类 Fixed／Changed 中，仅用户可观察项进定稿／草稿；工程接入项可不进。
+- **P1-10／REQ-030-031**：委托人结案——本分支不做 CLI／WebUI／效果门；不得再写成「已交付 CLI」。
+- P0-6／P0-7／P0-B 及未授权 P1／P2 **不进**本节主张（O 已闭合者仍待 R2-F／未授权实现）。
 
 ---
 
@@ -39,7 +70,8 @@ Formal annotated tag `v0.25.0` on 2026-11-06 at commit `e84c9ed4`（产品版本
   - 新增重载通道能力握手：supervisor 发布 `ktx-reload.capability`（协议版本 + 心跳 + 在途状态），
     无有效 supervisor 时快速返回 `unsupported` 且不产生任何文件或进程副作用。
   - 新增写路径响应字段 `executionRuntimePending`：连接创建、启用表范围调整与 Schema
-    增删在写入 `ktx.yaml` 后如实回报「执行层尚未加载」，但**不自动触发**重载。
+    增删在写入 `ktx.yaml` 后**自动尝试**重载执行层；成功则 `false`，失败／跳过则标
+    pending 并由所有者确认重试。
   - 容器入口 `scripts/runtime/docker-entrypoint.sh` 引入 KTX supervisor：进程归属、信号转发、
     退出码、首次启动失败不退化、自发退出的有限退避重启与遗留进程清理全部显式定义。
 - **运维问数连接（Spec 149）**：新增只读连接 `lucy-ops`，把审计热库的调用流水做成两张视图
@@ -47,7 +79,7 @@ Formal annotated tag `v0.25.0` on 2026-11-06 at commit `e84c9ed4`（产品版本
   「某个工具的失败是否集中在一个 Agent」。
   - 连接在**启动时**幂等建立：容器入口在 KTX daemon 启动**之前**完成视图、连接块、内容根资产
     与项目根镜像，并写下 `ktx.yaml` 摘要戳；已有卷第一次补上该连接时状态为「未就绪」，
-    需所有者按 Spec 191 确认重载后才可查询，**不自动重载**。
+    首次补齐后若写路径自动重载未成功，需所有者按 Spec 191 确认重试后才可查询。
   - 授权只认**显式列出**：只有 `allow.connections` 里写明 `lucy-ops` 的 Role 能看见并查询它；
     `*` 与 `catalog_bound`（含 `lucy_admin`）都不算。
   - 连接不可删除：删除接口在预览与写入时都返回 400 `OPS_EVIDENCE_CONNECTION_PROTECTED`，

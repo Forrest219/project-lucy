@@ -1,0 +1,32 @@
+# Local Hive Metastore + HiveServer2 for the large-schema UAT (UAT-SUITE-LARGE-SCHEMA).
+# Dev/UAT only. Metadata-only: no HDFS, no data files. Derby-backed.
+#
+# Usage (repo root):
+#   docker compose -f deploy/compose/docker-compose.uat-hive-local.yml up -d
+#   bash scripts/uat/seed-large-schema-fixtures.sh hive
+#
+# The network name must NOT contain an underscore: Hive builds a hostname from
+# "<container>.<network>" and rejects "_" with URISyntaxException. That is why
+# the network name is pinned and is not the compose-generated "<project>_<net>".
+
+services:
+  hms:
+    image: apache/hive:4.0.0
+    container_name: lucy-uat-hive-hms
+    environment:
+      SERVICE_NAME: metastore
+    networks: [lucy-uat-hive]
+
+  hs2:
+    image: apache/hive:4.0.0
+    container_name: lucy-uat-hive-hs2
+    depends_on: [hms]
+    environment:
+      SERVICE_NAME: hiveserver2
+      SERVICE_OPTS: "-Dhive.metastore.uris=thrift://lucy-uat-hive-hms:9083"
+      IS_RESUME: "true"
+    networks: [lucy-uat-hive]
+
+networks:
+  lucy-uat-hive:
+    name: lucy-uat-hive

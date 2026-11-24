@@ -1,3 +1,4 @@
+# P1-72: legacy-env compatibility fixture only. The variable is ignored; row policies always enforce.
 # AC-P1 BY-01 integration UAT override.
 # Usage:
 #   LUCY_DEMO_WEBUI_HOST_PORT=55176 \
@@ -8,7 +9,7 @@
 #     -f deploy/compose/docker-compose.ac-p1-by01.yml \
 #     -p lucy-ac-p1-by01 up -d --build
 #
-# TEMPORARY: proven=true only for BY-01 rowset sampling. Turn off after evidence.
+# Legacy true value intentionally exercises upgrade compatibility; not an enablement requirement.
 services:
   lucy:
     environment:

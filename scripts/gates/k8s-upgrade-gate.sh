@@ -33,6 +33,11 @@ Options:
   --evidence-dir <path>  Write PRE/TARGET/ROLLBACK imageID evidence
   --fixture-uid <0|10001>
                          After seeding sentinels, scale down, chown PVC, then upgrade
+
+MCP compatibility (P1-53, optional; default off):
+  When LUCY_MCP_COMPAT=1, after H3 runs upgrade (POST) via mcp-compatibility-hook;
+  customer/instance lane requires LUCY_MCP_COMPAT_BASELINE. With --test-rollback,
+  after H4 helm rollback runs ROLLBACK_VERIFY (never auto production rollback).
 EOF
 }
 
@@ -142,6 +147,28 @@ log "  ok /api/health"
 POST_IMAGE="$(kubectl -n "${NAMESPACE}" get deploy "${RELEASE}" -o jsonpath='{.spec.template.spec.containers[0].image}')"
 log "  upgraded image ref: ${POST_IMAGE} (was ${PRE_IMAGE})"
 
+# Optional instance-lane MCP compatibility POST (P1-53 Task 5). Does not roll back.
+maybe_run_mcp_compat_upgrade_post() {
+  local hook="${ROOT}/scripts/e2e/mcp-compatibility-hook.sh"
+  local hook_rc=0
+  local lane="${LUCY_MCP_COMPAT_LANE:-instance}"
+  export LUCY_MCP_COMPAT_ENTRYPOINT="${LUCY_MCP_COMPAT_ENTRYPOINT:-upgrade}"
+  set +e
+  bash "${hook}" run --lane "${lane}"
+  hook_rc=$?
+  set -e
+  if [[ "${hook_rc}" -eq 3 ]]; then
+    log "mcp-compat POST: SKIPPED (set LUCY_MCP_COMPAT=1 + LUCY_MCP_COMPAT_BASELINE for instance lane)"
+    return 0
+  fi
+  if [[ "${hook_rc}" -ne 0 ]]; then
+    fail "mcp-compat POST blocked/failed (exit ${hook_rc}); H3 health alone is not upgrade compatibility PASS"
+  fi
+  log "mcp-compat POST: upgrade entrypoint finished"
+}
+
+maybe_run_mcp_compat_upgrade_post
+
 if [[ "${TEST_ROLLBACK}" -eq 1 ]]; then
   log "H4-0 induce failed upgrade (bad tag) — must not change PRE runtime identity after atomic rollback"
   set +e
@@ -176,6 +203,26 @@ if [[ "${TEST_ROLLBACK}" -eq 1 ]]; then
   verify_sentinel_hashes "${NAMESPACE}" "${RELEASE}" "${SENTINEL_FILE}"
   curl_health_in_pod "${NAMESPACE}" "${RELEASE}" "${WEBUI_PORT}" 60 || \
     fail "/api/health failed after rollback"
+
+  # Conditional ROLLBACK_VERIFY after operator/H4 rollback (P1-53). Never initiates prod rollback.
+  maybe_run_mcp_compat_rollback_verify() {
+    local hook="${ROOT}/scripts/e2e/mcp-compatibility-hook.sh"
+    local hook_rc=0
+    local lane="${LUCY_MCP_COMPAT_LANE:-instance}"
+    set +e
+    bash "${hook}" run --lane "${lane}" --rollback-occurred
+    hook_rc=$?
+    set -e
+    if [[ "${hook_rc}" -eq 3 ]]; then
+      log "mcp-compat ROLLBACK_VERIFY: SKIPPED (flag off)"
+      return 0
+    fi
+    if [[ "${hook_rc}" -ne 0 ]]; then
+      fail "mcp-compat ROLLBACK_VERIFY blocked/failed (exit ${hook_rc}); cannot claim business recovery"
+    fi
+    log "mcp-compat ROLLBACK_VERIFY finished"
+  }
+  maybe_run_mcp_compat_rollback_verify
 
   log "H4-2 re-upgrade to target (restore test head)"
   helm upgrade "${RELEASE}" "${CHART}" \

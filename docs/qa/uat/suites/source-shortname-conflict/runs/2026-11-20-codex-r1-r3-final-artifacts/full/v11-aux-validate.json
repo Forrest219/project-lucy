@@ -1,0 +1,26 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 20,
+  "body": {
+    "ok": true,
+    "data": {
+      "valid": true,
+      "connectionId": "hive-1",
+      "schema": "aux",
+      "assetKind": "schema_manifest",
+      "assetType": "schemaManifest",
+      "targetPath": "semantic-layer/hive-1/_schema/aux.yaml",
+      "originalFilename": "aux.yaml",
+      "sizeBytes": 132,
+      "sha256": "25755044b4d62efd93a918b37d4f783936fb1d47f91da7967231ec6643c6dc65",
+      "errors": [],
+      "warnings": [],
+      "tableNames": [
+        "aux_City"
+      ],
+      "tables": 1,
+      "sourceNameConflicts": [],
+      "exists": false
+    }
+  }
+}

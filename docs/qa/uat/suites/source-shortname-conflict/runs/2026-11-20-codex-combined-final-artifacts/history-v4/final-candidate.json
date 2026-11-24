@@ -1,0 +1,13 @@
+{
+  "image": "sha256:0d190b3747ff67e033279c7e5d373903f0e331dcd14143603d8dce60a24dbb2e",
+  "tag": "project-lucy:p160-p164-final-v4",
+  "parent": "sha256:9b8441fc25391baa042e33b5916ddad56d6e8b19d1e97777f1608eb4f263dbdf",
+  "buildRevision": "77e2ad8425ae0e7a2918803e497da10636b14e5a-dirty",
+  "gitDirty": true,
+  "sourceChangesFromParent": [
+    "webui/server/proxy/source-ambiguity-gate.ts",
+    "webui/server/__tests__/begin-hide-inactive.test.ts"
+  ],
+  "change": "include exact missing 77e2ad84 source-ambiguity fix and HTTP full-chain regression, rebuild identity and typecheck",
+  "runtimeProvenance": "32 independent inputs matched; inherited P1-64/TS/P1-60/budget hashes plus exact 77e2ad84 two-file overlay; v4-source-check.json"
+}

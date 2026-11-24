@@ -1,0 +1,44 @@
+{
+  "budgetBefore": [
+    {
+      "scope_key": "bq:uat_zb_a|sha256:0106c7e451ca:r11-budget-I4-valid",
+      "started_at": 1795152037012,
+      "origin_started_at": 1795152037012,
+      "calls": 1,
+      "continuations": 0,
+      "attempts": 1,
+      "peak_concurrency": 1,
+      "current_concurrency": 0,
+      "updated_at": 1795152039099,
+      "busy_ms": 2047.739709,
+      "round": 0,
+      "turn_id": null,
+      "window_id": 0,
+      "pending_token": null,
+      "presented_token": null,
+      "archived_busy_json": "{}"
+    }
+  ],
+  "budgetAfter": [
+    {
+      "scope_key": "bq:uat_zb_a|sha256:0106c7e451ca:r11-budget-I4-valid",
+      "started_at": 1795152037012,
+      "origin_started_at": 1795152037012,
+      "calls": 1,
+      "continuations": 0,
+      "attempts": 1,
+      "peak_concurrency": 1,
+      "current_concurrency": 0,
+      "updated_at": 1795152039099,
+      "busy_ms": 2047.739709,
+      "round": 0,
+      "turn_id": null,
+      "window_id": 0,
+      "pending_token": null,
+      "presented_token": null,
+      "archived_busy_json": "{}"
+    }
+  ],
+  "bindingsBefore": {},
+  "bindingsAfter": {}
+}

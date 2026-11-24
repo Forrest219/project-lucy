@@ -18,6 +18,19 @@ import {
 import { requireOwner } from "../auth/guard.js";
 import { resolveAuthMode } from "../auth/admins-store.js";
 import { auditActorFields, trustedActorFromRequest } from "../security/request-actor.js";
+import type { OpsStepName } from "../runtime/ops-step-journal.js";
+
+export type DiagnosticStepObserver = {
+  runStep<T>(step: OpsStepName, body: () => Promise<T>): Promise<T>;
+};
+
+async function observeDiagnosticStep<T>(
+  observer: DiagnosticStepObserver | undefined,
+  step: OpsStepName,
+  body: () => Promise<T>
+): Promise<T> {
+  return observer ? observer.runStep(step, body) : body();
+}
 
 export type ExecutionRuntimeStatus = "unknown" | "ok" | "stale" | "unavailable" | "error";
 export type CanaryCheckStatus = "pass" | "fail" | "blocked";
@@ -179,6 +192,31 @@ export async function probeExecutionRuntime(
 
 export function resetExecutionRuntimeProbeForTests(): void {
   cachedProbe = undefined;
+  if (probeRefresh) clearInterval(probeRefresh);
+  probeRefresh = undefined;
+}
+
+/** Last probe, including an expired one. Does not open a connection. */
+export function peekExecutionProbe(): ExecutionProbeResult | undefined {
+  return cachedProbe?.result;
+}
+
+let probeRefresh: NodeJS.Timeout | undefined;
+
+/** Refresh the execution probe off the request path. */
+export function startExecutionProbeRefresh(intervalMs = positiveInteger(process.env.LUCY_MCP_RUNTIME_PROBE_TTL_MS, 5_000)): void {
+  if (probeRefresh) return;
+  const tick = () => {
+    void probeExecutionRuntime({ force: true }).catch(() => undefined);
+  };
+  tick();
+  probeRefresh = setInterval(tick, intervalMs);
+  probeRefresh.unref();
+}
+
+export function stopExecutionProbeRefresh(): void {
+  if (probeRefresh) clearInterval(probeRefresh);
+  probeRefresh = undefined;
 }
 
 function summarizeExecution(
@@ -232,21 +270,26 @@ function summarizeExecution(
 }
 
 export async function readMcpRuntimeStatus(
-  probeFn?: McpRuntimeDependencies["probeExecutionRuntime"]
+  probeFn?: McpRuntimeDependencies["probeExecutionRuntime"],
+  diagnosticSteps?: DiagnosticStepObserver
 ) {
   const projectRoot = await resolveProjectRoot();
   const [project, digest, fileStatus, catalog, probe] = await Promise.all([
-    readProject(projectRoot),
-    readKtxYamlDigest(projectRoot),
+    observeDiagnosticStep(diagnosticSteps, "read_project", () => readProject(projectRoot)),
+    observeDiagnosticStep(diagnosticSteps, "read_ktx_yaml", () => readKtxYamlDigest(projectRoot)),
     stat(path.join(projectRoot, "ktx.yaml")),
-    readCatalogReloads(projectRoot).catch(() => undefined),
-    (probeFn ?? probeExecutionRuntime)()
+    observeDiagnosticStep(diagnosticSteps, "read_catalog_reloads", () =>
+      readCatalogReloads(projectRoot)
+    ).catch(() => undefined),
+    observeDiagnosticStep(diagnosticSteps, "probe_execution", () => (probeFn ?? probeExecutionRuntime)())
   ]);
   // Spec 191 §11.2 — the execution surface carries three orthogonal facts:
   // whether the configuration is activated, whether the last reload operation
   // succeeded, and whether the target digest was verified with connection
   // level evidence.
-  const reloadState = await readReloadState(projectRoot, digest);
+  const reloadState = await observeDiagnosticStep(diagnosticSteps, "read_reload_state", () =>
+    readReloadState(projectRoot, digest)
+  );
   const connectionIds = project.connections.map((connection) => connection.id).sort();
   const policy = getPolicyRuntimeStatus();
   const endpoint = upstreamEndpoint();

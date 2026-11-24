@@ -1,0 +1,17 @@
+{
+  "dispatch": {
+    "sessionId": "7e5d3c97-537e-4f86-853a-14701e523b3b",
+    "isError": false,
+    "toolCalls": [
+      "/bin/bash ./role-entry.sh start",
+      "/bin/bash ./role-entry.sh status"
+    ]
+  },
+  "closeout": {
+    "sessionId": "7e5d3c97-537e-4f86-853a-14701e523b3b",
+    "isError": false,
+    "toolCalls": [
+      "/bin/bash ./role-entry.sh status"
+    ]
+  }
+}

@@ -117,16 +117,22 @@ describe("question budget window", () => {
     expect((await run("elapsed")).action).toBe("stop");
   });
 
-  it("SC-07 stops once settled busy time reaches 120 seconds", async () => {
+  it("SC-07 stops once settled busy time reaches MAX_BUSY_MS", async () => {
     const budget = new QuestionBudget();
     let mono = 0;
     budget.setMonoClock(() => mono);
-    const first = await scoped(budget, 1_000, undefined, true, false);
-    expect(first.action).toBe("allow");
-    if (first.action !== "allow" || !first.ticket) return;
-    mono += QUESTION_BUDGET_MAX_BUSY_MS;
-    await budget.settle(first.ticket, mono);
-    const stopped = await scoped(budget, 2_000);
+    // 单次 settle 受 ABS_EXEC 封顶；按剩余额度切块累计到恰好 MAX_BUSY_MS。
+    let remainingBusy = QUESTION_BUDGET_MAX_BUSY_MS;
+    while (remainingBusy > 0) {
+      const step = await scoped(budget, mono + 1, undefined, true, false);
+      expect(step.action).toBe("allow");
+      if (step.action !== "allow" || !step.ticket) return;
+      const chunk = Math.min(QUESTION_BUDGET_ABS_EXEC_MS, remainingBusy);
+      mono += chunk;
+      await budget.settle(step.ticket, mono);
+      remainingBusy -= chunk;
+    }
+    const stopped = await scoped(budget, mono + 1);
     expect(stopped.action).toBe("stop");
   });
 

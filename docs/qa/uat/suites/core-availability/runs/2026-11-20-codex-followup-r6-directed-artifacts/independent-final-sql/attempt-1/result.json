@@ -1,0 +1,1025 @@
+{
+  "sourceSha256": "1135260fc004302f198b6d1286824a8f1dccaba6e3947d011450506f62a2c5ed",
+  "startedAt": "2026-11-20T13:17:26.199331+00:00",
+  "cases": [
+    {
+      "case": "normal",
+      "run": "/Users/zhangxingchen/Projects/project-lucy/inbox/core-availability-followup/20261120-execution/10-semantic-read-delta/docker-driver/r6-revision7/normal",
+      "actualExitCode": 0,
+      "requestDenominator": 3,
+      "originalSuccesses": 3,
+      "originalFailures": 0,
+      "ownerClosures": [
+        {
+          "rpcId": 2,
+          "begin": {
+            "event": "read_wait_begin",
+            "ingressOperationId": "mcp_13745cd6-397f-4c4a-849a-5026b244a876",
+            "rpcId": 2,
+            "owners": [
+              {
+                "holderOperationId": "667503b7-0c68-4317-ba21-22e8e79d1cc7",
+                "journalId": "rj_76abc87c-afea-41bf-8d88-27706e1121eb",
+                "releaseId": "rel_20261120_124024_494_36a6de9d"
+              }
+            ],
+            "ingressMonoMs": 36861.303225,
+            "fixedInitialWaitDeadlineMonoMs": 56861.303225,
+            "waitDeadlineMonoMs": 56861.303225,
+            "atMs": 1795178428339,
+            "monoMs": 40572.486019
+          },
+          "end": {
+            "event": "read_wait_end",
+            "ingressOperationId": "mcp_13745cd6-397f-4c4a-849a-5026b244a876",
+            "rpcId": 2,
+            "owners": [
+              {
+                "holderOperationId": "667503b7-0c68-4317-ba21-22e8e79d1cc7",
+                "journalId": "rj_76abc87c-afea-41bf-8d88-27706e1121eb",
+                "releaseId": "rel_20261120_124024_494_36a6de9d"
+              }
+            ],
+            "ingressMonoMs": 36861.303225,
+            "fixedInitialWaitDeadlineMonoMs": 56861.303225,
+            "waitDeadlineMonoMs": 56861.303225,
+            "atMs": 1795178429333,
+            "monoMs": 41565.881727,
+            "endOutcome": "owner_settled"
+          }
+        },
+        {
+          "rpcId": 3,
+          "begin": {
+            "event": "read_wait_begin",
+            "ingressOperationId": "mcp_161ba7bb-452c-43f9-9660-9e61254a866c",
+            "rpcId": 3,
+            "owners": [
+              {
+                "holderOperationId": "3151ef6a-ac48-468f-9c5e-e2927fd63708",
+                "journalId": "rj_84109e66-4125-4a7d-9908-752aafbaa3f8",
+                "releaseId": "rel_20261120_124033_179_db76f1b9"
+              }
+            ],
+            "ingressMonoMs": 45663.249312,
+            "fixedInitialWaitDeadlineMonoMs": 65663.249312,
+            "waitDeadlineMonoMs": 65663.249312,
+            "atMs": 1795178433438,
+            "monoMs": 45670.580396
+          },
+          "end": {
+            "event": "read_wait_end",
+            "ingressOperationId": "mcp_161ba7bb-452c-43f9-9660-9e61254a866c",
+            "rpcId": 3,
+            "owners": [
+              {
+                "holderOperationId": "3151ef6a-ac48-468f-9c5e-e2927fd63708",
+                "journalId": "rj_84109e66-4125-4a7d-9908-752aafbaa3f8",
+                "releaseId": "rel_20261120_124033_179_db76f1b9"
+              }
+            ],
+            "ingressMonoMs": 45663.249312,
+            "fixedInitialWaitDeadlineMonoMs": 65663.249312,
+            "waitDeadlineMonoMs": 65663.249312,
+            "atMs": 1795178434594,
+            "monoMs": 46826.731355,
+            "endOutcome": "owner_settled"
+          }
+        },
+        {
+          "rpcId": 4,
+          "begin": {
+            "event": "read_wait_begin",
+            "ingressOperationId": "mcp_b09211e6-1740-4c79-b434-a2544b392f7b",
+            "rpcId": 4,
+            "owners": [
+              {
+                "holderOperationId": "c1e1cba0-8e0f-4f25-886f-824e58a8992a",
+                "journalId": "rj_2a9ea4b1-f59a-44a2-ace2-2d4f5c2fde92",
+                "releaseId": "rel_20261120_124037_565_7c84c7b3"
+              }
+            ],
+            "ingressMonoMs": 50087.037898,
+            "fixedInitialWaitDeadlineMonoMs": 70087.03789800001,
+            "waitDeadlineMonoMs": 70087.03789800001,
+            "atMs": 1795178441705,
+            "monoMs": 53937.790691
+          },
+          "end": {
+            "event": "read_wait_end",
+            "ingressOperationId": "mcp_b09211e6-1740-4c79-b434-a2544b392f7b",
+            "rpcId": 4,
+            "owners": [
+              {
+                "holderOperationId": "c1e1cba0-8e0f-4f25-886f-824e58a8992a",
+                "journalId": "rj_2a9ea4b1-f59a-44a2-ace2-2d4f5c2fde92",
+                "releaseId": "rel_20261120_124037_565_7c84c7b3"
+              }
+            ],
+            "ingressMonoMs": 50087.037898,
+            "fixedInitialWaitDeadlineMonoMs": 70087.03789800001,
+            "waitDeadlineMonoMs": 70087.03789800001,
+            "atMs": 1795178442777,
+            "monoMs": 55009.448567,
+            "endOutcome": "owner_settled"
+          }
+        }
+      ],
+      "rawMysql": [
+        {
+          "tool": "lucy_query",
+          "rpcId": 2,
+          "business": [
+            {
+              "commandType": "Query",
+              "eventTime": "2026-11-20 12:40:31.690233",
+              "sql": "select * from (SELECT COUNT(DISTINCT uat_begin_zero_orders.order_id) AS order_count, SUM(uat_begin_zero_orders.amount) AS amount_sum FROM uat.uat_begin_zero_orders AS uat_begin_zero_orders LIMIT 100) as ktx_query_result limit 100",
+              "threadId": 17
+            }
+          ],
+          "ignored": [
+            {
+              "kind": "Quit"
+            },
+            {
+              "kind": "Connect"
+            },
+            {
+              "kind": "Query",
+              "knownMetadata": "SET SESSION max_execution_time = 30000"
+            },
+            {
+              "kind": "Quit"
+            },
+            {
+              "kind": "Connect"
+            },
+            {
+              "kind": "Query",
+              "knownMetadata": "select @@version_comment limit 1"
+            },
+            {
+              "kind": "Query",
+              "knownMetadata": "SELECT JSON_OBJECT('eventTime',CAST(event_time AS CHAR),'threadId',thread_id,'commandType',command_type,'sql',CONVERT(argument USING utf8mb4)) FROM mysql.general_log ORDER BY event_time,thread_id"
+            }
+          ]
+        },
+        {
+          "tool": "lucy_read_source",
+          "rpcId": 3,
+          "business": [],
+          "ignored": [
+            {
+              "kind": "Quit"
+            },
+            {
+              "kind": "Connect"
+            },
+            {
+              "kind": "Query",
+              "knownMetadata": "select @@version_comment limit 1"
+            },
+            {
+              "kind": "Query",
+              "knownMetadata": "SELECT JSON_OBJECT('eventTime',CAST(event_time AS CHAR),'threadId',thread_id,'commandType',command_type,'sql',CONVERT(argument USING utf8mb4)) FROM mysql.general_log ORDER BY event_time,thread_id"
+            }
+          ]
+        },
+        {
+          "tool": "lucy_explain_query",
+          "rpcId": 4,
+          "business": [],
+          "ignored": [
+            {
+              "kind": "Quit"
+            },
+            {
+              "kind": "Connect"
+            },
+            {
+              "kind": "Query",
+              "knownMetadata": "select @@version_comment limit 1"
+            },
+            {
+              "kind": "Query",
+              "knownMetadata": "SELECT JSON_OBJECT('eventTime',CAST(event_time AS CHAR),'threadId',thread_id,'commandType',command_type,'sql',CONVERT(argument USING utf8mb4)) FROM mysql.general_log ORDER BY event_time,thread_id"
+            }
+          ]
+        }
+      ],
+      "backupVerification": {
+        "gzipBytes": 140267,
+        "gzipSha256": "4186632be1ee57dbc5c202d5720535dbee6b5a3d3c2eaed9b2dd7b2589e6596a",
+        "sqliteBytes": 1724416,
+        "sqliteSha256": "723a1c02e5664f057ef536fd3481b59ebba67606e8ee26a773dc411db0598463",
+        "mode": "verified closed backup only; ro&immutable=1"
+      },
+      "fullDatabase": {
+        "allRows": 4,
+        "maxId": 4,
+        "firstId": 1,
+        "eligibleNonemptyUserRows": 4,
+        "missing": 0,
+        "duplicates": 0,
+        "wrongUser": 0,
+        "watermarks": [
+          {
+            "user": "uat_zb_a",
+            "newest": 4,
+            "status": "complete",
+            "watermark": "4",
+            "valid": true
+          }
+        ],
+        "orphanRaw": 0,
+        "orphanTurn": 0
+      },
+      "budgetsAndRpcAudit": [
+        {
+          "scopeKey": "bq:uat_zb_a|sha256:499411c3baba:normal-lease-lucy_query",
+          "identityEvidence": "raw dispatch staticwho + HTTP operation/RPC + actual audit user/session/tool + unique stable audit prefix; no raw Token read",
+          "state": {
+            "scope_key": "bq:uat_zb_a|sha256:499411c3baba:normal-lease-lucy_query",
+            "started_at": 1795178424644,
+            "origin_started_at": 1795178424644,
+            "calls": 1,
+            "continuations": 0,
+            "attempts": 1,
+            "peak_concurrency": 1,
+            "current_concurrency": 0,
+            "updated_at": 1795178431767,
+            "busy_ms": 3433.550417999999,
+            "round": 0,
+            "turn_id": null,
+            "window_id": 0,
+            "pending_token": null,
+            "presented_token": null,
+            "archived_busy_json": "{}"
+          },
+          "directAtWaitSnapshotUsed": false,
+          "rpcs": [
+            {
+              "auditId": 2,
+              "rpcId": "2",
+              "outcome": "ok",
+              "generatedSql": "SELECT COUNT(DISTINCT uat_begin_zero_orders.order_id) AS order_count, SUM(uat_begin_zero_orders.amount) AS amount_sum FROM uat.uat_begin_zero_orders AS uat_begin_zero_orders LIMIT 100",
+              "queryOperation": "select",
+              "turnId": "inf_uat_zb_a_2",
+              "operationId": "mcp_13745cd6-397f-4c4a-849a-5026b244a876"
+            }
+          ]
+        },
+        {
+          "scopeKey": "bq:uat_zb_a|sha256:499411c3baba:normal-lease-lucy_read_source",
+          "identityEvidence": "raw dispatch staticwho + HTTP operation/RPC + actual audit user/session/tool + unique stable audit prefix; no raw Token read",
+          "state": {
+            "scope_key": "bq:uat_zb_a|sha256:499411c3baba:normal-lease-lucy_read_source",
+            "started_at": 1795178433435,
+            "origin_started_at": 1795178433435,
+            "calls": 1,
+            "continuations": 0,
+            "attempts": 1,
+            "peak_concurrency": 1,
+            "current_concurrency": 0,
+            "updated_at": 1795178436123,
+            "busy_ms": 2686.938209999993,
+            "round": 0,
+            "turn_id": null,
+            "window_id": 0,
+            "pending_token": null,
+            "presented_token": null,
+            "archived_busy_json": "{}"
+          },
+          "directAtWaitSnapshotUsed": false,
+          "rpcs": [
+            {
+              "auditId": 3,
+              "rpcId": "3",
+              "outcome": "ok",
+              "generatedSql": null,
+              "queryOperation": null,
+              "turnId": "inf_uat_zb_a_3",
+              "operationId": "mcp_161ba7bb-452c-43f9-9660-9e61254a866c"
+            }
+          ]
+        },
+        {
+          "scopeKey": "bq:uat_zb_a|sha256:499411c3baba:normal-lease-lucy_explain_query",
+          "identityEvidence": "raw dispatch staticwho + HTTP operation/RPC + actual audit user/session/tool + unique stable audit prefix; no raw Token read",
+          "state": {
+            "scope_key": "bq:uat_zb_a|sha256:499411c3baba:normal-lease-lucy_explain_query",
+            "started_at": 1795178437858,
+            "origin_started_at": 1795178437858,
+            "calls": 1,
+            "continuations": 0,
+            "attempts": 1,
+            "peak_concurrency": 1,
+            "current_concurrency": 0,
+            "updated_at": 1795178443109,
+            "busy_ms": 1406.835334000003,
+            "round": 0,
+            "turn_id": null,
+            "window_id": 0,
+            "pending_token": null,
+            "presented_token": null,
+            "archived_busy_json": "{}"
+          },
+          "directAtWaitSnapshotUsed": false,
+          "rpcs": [
+            {
+              "auditId": 4,
+              "rpcId": "4",
+              "outcome": "ok",
+              "generatedSql": null,
+              "queryOperation": null,
+              "turnId": "inf_uat_zb_a_4",
+              "operationId": "mcp_b09211e6-1740-4c79-b434-a2544b392f7b"
+            }
+          ]
+        }
+      ],
+      "decodedTemporaryDeleted": true,
+      "status": "INDEPENDENT SCOPED VALID",
+      "elapsedSeconds": 0.007792583000000002
+    },
+    {
+      "case": "deadline",
+      "run": "/Users/zhangxingchen/Projects/project-lucy/inbox/core-availability-followup/20261120-execution/10-semantic-read-delta/docker-driver/r6-revision7/deadline",
+      "actualExitCode": 0,
+      "requestDenominator": 2,
+      "originalSuccesses": 1,
+      "originalFailures": 1,
+      "ownerClosures": [
+        {
+          "rpcId": 2,
+          "begin": {
+            "event": "read_wait_begin",
+            "ingressOperationId": "mcp_47fe896f-0657-439f-a258-2861cb8d2629",
+            "rpcId": 2,
+            "owners": [
+              {
+                "holderOperationId": "a01cae7c-782e-4f7e-9513-f84180a9f32a",
+                "journalId": "rj_4d50283f-8830-4802-bfaa-197c227fa5fd",
+                "releaseId": "rel_20261120_124216_743_53b48061"
+              }
+            ],
+            "ingressMonoMs": 37070.825517,
+            "fixedInitialWaitDeadlineMonoMs": 57070.825517,
+            "waitDeadlineMonoMs": 57070.825517,
+            "atMs": 1795178540586,
+            "monoMs": 40682.090894
+          },
+          "end": {
+            "event": "read_wait_end",
+            "ingressOperationId": "mcp_47fe896f-0657-439f-a258-2861cb8d2629",
+            "rpcId": 2,
+            "owners": [
+              {
+                "holderOperationId": "a01cae7c-782e-4f7e-9513-f84180a9f32a",
+                "journalId": "rj_4d50283f-8830-4802-bfaa-197c227fa5fd",
+                "releaseId": "rel_20261120_124216_743_53b48061"
+              }
+            ],
+            "ingressMonoMs": 37070.825517,
+            "fixedInitialWaitDeadlineMonoMs": 57070.825517,
+            "waitDeadlineMonoMs": 57070.825517,
+            "atMs": 1795178556975,
+            "monoMs": 57071.272109,
+            "endOutcome": "timeout"
+          }
+        }
+      ],
+      "rawMysql": [
+        {
+          "business": [
+            {
+              "sql": "select * from (SELECT COUNT(DISTINCT uat_begin_zero_orders.order_id) AS order_count, SUM(uat_begin_zero_orders.amount) AS amount_sum FROM uat.uat_begin_zero_orders AS uat_begin_zero_orders LIMIT 100) as ktx_query_result limit 100",
+              "threadId": 16,
+              "eventTime": "2026-11-20 12:42:44.464997",
+              "commandType": "Query"
+            }
+          ],
+          "ignored": [
+            {
+              "kind": "Quit"
+            },
+            {
+              "kind": "Connect"
+            },
+            {
+              "kind": "Query",
+              "knownMetadata": "SET SESSION max_execution_time = 30000"
+            },
+            {
+              "kind": "Quit"
+            },
+            {
+              "kind": "Connect"
+            },
+            {
+              "kind": "Query",
+              "knownMetadata": "select @@version_comment limit 1"
+            },
+            {
+              "kind": "Query",
+              "knownMetadata": "SELECT JSON_OBJECT('eventTime',CAST(event_time AS CHAR),'threadId',thread_id,'commandType',command_type,'sql',CONVERT(argument USING utf8mb4)) FROM mysql.general_log ORDER BY event_time,thread_id"
+            }
+          ]
+        }
+      ],
+      "backupVerification": {
+        "gzipBytes": 144809,
+        "gzipSha256": "a369088203bb2b1acb5b66b30e30e77324a9951802d381fc686f3d89963515a7",
+        "sqliteBytes": 1740800,
+        "sqliteSha256": "439d0d9d405002189b9ef3f0dffb7ce6994c1e4031652407e0c616c1bdfdf2a9",
+        "mode": "verified closed backup only; ro&immutable=1"
+      },
+      "fullDatabase": {
+        "allRows": 5,
+        "maxId": 5,
+        "firstId": 1,
+        "eligibleNonemptyUserRows": 5,
+        "missing": 0,
+        "duplicates": 0,
+        "wrongUser": 0,
+        "watermarks": [
+          {
+            "user": "uat_zb_a",
+            "newest": 5,
+            "status": "complete",
+            "watermark": "5",
+            "valid": true
+          }
+        ],
+        "orphanRaw": 0,
+        "orphanTurn": 0
+      },
+      "budgetsAndRpcAudit": [
+        {
+          "scopeKey": "bq:uat_zb_a|sha256:9f32921e6887:original-query",
+          "identityEvidence": "raw dispatch staticwho + HTTP operation/RPC + actual audit user/session/tool + unique stable audit prefix; no raw Token read",
+          "state": {
+            "scope_key": "bq:uat_zb_a|sha256:9f32921e6887:original-query",
+            "started_at": 1795178536991,
+            "origin_started_at": 1795178536991,
+            "calls": 2,
+            "continuations": 0,
+            "attempts": 2,
+            "peak_concurrency": 1,
+            "current_concurrency": 0,
+            "updated_at": 1795178564642,
+            "busy_ms": 18064.07379999999,
+            "round": 0,
+            "turn_id": null,
+            "window_id": 0,
+            "pending_token": null,
+            "presented_token": null,
+            "archived_busy_json": "{}"
+          },
+          "directAtWaitSnapshotUsed": true,
+          "rpcs": [
+            {
+              "auditId": 2,
+              "rpcId": "2",
+              "outcome": "error",
+              "generatedSql": null,
+              "queryOperation": null,
+              "turnId": "inf_uat_zb_a_2",
+              "operationId": "mcp_47fe896f-0657-439f-a258-2861cb8d2629"
+            },
+            {
+              "auditId": 5,
+              "rpcId": "5",
+              "outcome": "ok",
+              "generatedSql": "SELECT COUNT(DISTINCT uat_begin_zero_orders.order_id) AS order_count, SUM(uat_begin_zero_orders.amount) AS amount_sum FROM uat.uat_begin_zero_orders AS uat_begin_zero_orders LIMIT 100",
+              "queryOperation": "select",
+              "turnId": "inf_uat_zb_a_2",
+              "operationId": "mcp_720aa8a9-2c1d-4cbe-be2b-89cd534bed0e"
+            }
+          ]
+        }
+      ],
+      "decodedTemporaryDeleted": true,
+      "status": "INDEPENDENT SCOPED VALID",
+      "elapsedSeconds": 0.005425125000000003
+    },
+    {
+      "case": "revoke",
+      "run": "/Users/zhangxingchen/Projects/project-lucy/inbox/core-availability-followup/20261120-execution/10-semantic-read-delta/docker-driver/r6-revision8/revoke",
+      "actualExitCode": 0,
+      "requestDenominator": 2,
+      "originalSuccesses": 1,
+      "originalFailures": 1,
+      "ownerClosures": [
+        {
+          "rpcId": 2,
+          "begin": {
+            "event": "read_wait_begin",
+            "ingressOperationId": "mcp_086adc86-a54a-462e-bc50-39a48eb1c6ba",
+            "rpcId": 2,
+            "owners": [
+              {
+                "holderOperationId": "4b8d899b-29dd-46ee-9ab6-f4a43d5de652",
+                "journalId": "rj_bc2203b6-ecb5-4b0b-ae22-873b5f77ad00",
+                "releaseId": "rel_20261120_125048_027_c9c7e415"
+              }
+            ],
+            "ingressMonoMs": 36870.788392,
+            "fixedInitialWaitDeadlineMonoMs": 56870.788392,
+            "waitDeadlineMonoMs": 56870.788392,
+            "atMs": 1795179051873,
+            "monoMs": 40480.084935
+          },
+          "end": {
+            "event": "read_wait_end",
+            "ingressOperationId": "mcp_086adc86-a54a-462e-bc50-39a48eb1c6ba",
+            "rpcId": 2,
+            "owners": [
+              {
+                "holderOperationId": "4b8d899b-29dd-46ee-9ab6-f4a43d5de652",
+                "journalId": "rj_bc2203b6-ecb5-4b0b-ae22-873b5f77ad00",
+                "releaseId": "rel_20261120_125048_027_c9c7e415"
+              }
+            ],
+            "ingressMonoMs": 36870.788392,
+            "fixedInitialWaitDeadlineMonoMs": 56870.788392,
+            "waitDeadlineMonoMs": 56870.788392,
+            "atMs": 1795179056885,
+            "monoMs": 45492.380563,
+            "endOutcome": "cancelled"
+          }
+        }
+      ],
+      "rawMysql": [
+        {
+          "business": [
+            {
+              "sql": "select * from (SELECT COUNT(DISTINCT uat_begin_zero_orders.order_id) AS order_count, SUM(uat_begin_zero_orders.amount) AS amount_sum FROM uat.uat_begin_zero_orders AS uat_begin_zero_orders WHERE (uat_begin_zero_orders.tenant = 'NORTH') LIMIT 100) as ktx_query_result limit 100",
+              "threadId": 16,
+              "eventTime": "2026-11-20 12:51:03.584306",
+              "commandType": "Query"
+            }
+          ],
+          "ignored": [
+            {
+              "kind": "Quit"
+            },
+            {
+              "kind": "Connect"
+            },
+            {
+              "kind": "Query",
+              "knownMetadata": "SET SESSION max_execution_time = 30000"
+            },
+            {
+              "kind": "Quit"
+            },
+            {
+              "kind": "Connect"
+            },
+            {
+              "kind": "Query",
+              "knownMetadata": "select @@version_comment limit 1"
+            },
+            {
+              "kind": "Query",
+              "knownMetadata": "SELECT JSON_OBJECT('eventTime',CAST(event_time AS CHAR),'threadId',thread_id,'commandType',command_type,'sql',CONVERT(argument USING utf8mb4)) FROM mysql.general_log ORDER BY event_time,thread_id"
+            }
+          ]
+        }
+      ],
+      "backupVerification": {
+        "gzipBytes": 238008,
+        "gzipSha256": "2a93d0465b6a573a2a5a02e2630fd0e692f4433e21b257f1a2d879736ad69c16",
+        "sqliteBytes": 3080192,
+        "sqliteSha256": "a0a7f5f088ad94f5948982b66e8de07e87085019e20a96c3ccdf89ad663cff82",
+        "mode": "verified closed backup only; ro&immutable=1"
+      },
+      "fullDatabase": {
+        "allRows": 5,
+        "maxId": 5,
+        "firstId": 1,
+        "eligibleNonemptyUserRows": 5,
+        "missing": 0,
+        "duplicates": 0,
+        "wrongUser": 0,
+        "watermarks": [
+          {
+            "user": "uat_zb_a",
+            "newest": 2,
+            "status": "complete",
+            "watermark": "2",
+            "valid": true
+          },
+          {
+            "user": "uat_zb_b",
+            "newest": 5,
+            "status": "complete",
+            "watermark": "5",
+            "valid": true
+          }
+        ],
+        "orphanRaw": 0,
+        "orphanTurn": 0
+      },
+      "budgetsAndRpcAudit": [
+        {
+          "scopeKey": "bq:uat_zb_a|sha256:333f73d4ef85:original-query",
+          "identityEvidence": "raw dispatch staticwho + HTTP operation/RPC + actual audit user/session/tool + unique stable audit prefix; no raw Token read",
+          "state": {
+            "scope_key": "bq:uat_zb_a|sha256:333f73d4ef85:original-query",
+            "started_at": 1795179048281,
+            "origin_started_at": 1795179048281,
+            "calls": 1,
+            "continuations": 0,
+            "attempts": 1,
+            "peak_concurrency": 1,
+            "current_concurrency": 0,
+            "updated_at": 1795179056873,
+            "busy_ms": 5004.2225860000035,
+            "round": 0,
+            "turn_id": null,
+            "window_id": 0,
+            "pending_token": null,
+            "presented_token": null,
+            "archived_busy_json": "{}"
+          },
+          "directAtWaitSnapshotUsed": true,
+          "rpcs": [
+            {
+              "auditId": 2,
+              "rpcId": "2",
+              "outcome": "error",
+              "generatedSql": null,
+              "queryOperation": null,
+              "turnId": "inf_uat_zb_a_2",
+              "operationId": "mcp_086adc86-a54a-462e-bc50-39a48eb1c6ba"
+            }
+          ]
+        },
+        {
+          "scopeKey": "bq:uat_zb_b|sha256:e42550d6fd80:legal-b",
+          "identityEvidence": "raw dispatch staticwho + HTTP operation/RPC + actual audit user/session/tool + unique stable audit prefix; no raw Token read",
+          "state": {
+            "scope_key": "bq:uat_zb_b|sha256:e42550d6fd80:legal-b",
+            "started_at": 1795179060363,
+            "origin_started_at": 1795179060363,
+            "calls": 1,
+            "continuations": 0,
+            "attempts": 1,
+            "peak_concurrency": 1,
+            "current_concurrency": 0,
+            "updated_at": 1795179063598,
+            "busy_ms": 1245.0502500000002,
+            "round": 0,
+            "turn_id": null,
+            "window_id": 0,
+            "pending_token": null,
+            "presented_token": null,
+            "archived_busy_json": "{}"
+          },
+          "directAtWaitSnapshotUsed": false,
+          "rpcs": [
+            {
+              "auditId": 5,
+              "rpcId": "5",
+              "outcome": "ok",
+              "generatedSql": "SELECT COUNT(DISTINCT uat_begin_zero_orders.order_id) AS order_count, SUM(uat_begin_zero_orders.amount) AS amount_sum FROM uat.uat_begin_zero_orders AS uat_begin_zero_orders WHERE (uat_begin_zero_orders.tenant = 'NORTH') LIMIT 100",
+              "queryOperation": "select",
+              "turnId": "inf_uat_zb_b_5",
+              "operationId": "mcp_7aaa012b-4d51-4e7f-a054-436b642ea5b9"
+            }
+          ]
+        }
+      ],
+      "decodedTemporaryDeleted": true,
+      "status": "INDEPENDENT SCOPED VALID",
+      "elapsedSeconds": 0.006171500000000003
+    },
+    {
+      "case": "failure",
+      "run": "/Users/zhangxingchen/Projects/project-lucy/inbox/core-availability-followup/20261120-execution/10-semantic-read-delta/docker-driver/r6-revision10/failure",
+      "actualExitCode": 0,
+      "requestDenominator": 2,
+      "originalSuccesses": 1,
+      "originalFailures": 1,
+      "ownerClosures": [
+        {
+          "rpcId": 2,
+          "begin": {
+            "event": "read_wait_begin",
+            "ingressOperationId": "mcp_edde51ed-dd2d-44d1-8e19-d8a5cb596d01",
+            "rpcId": 2,
+            "owners": [
+              {
+                "holderOperationId": "ea93a07b-52c4-4d82-919a-8b91783ca56a",
+                "journalId": "rj_2c88ebb2-0fab-4e81-b402-5b8a1ab27793",
+                "releaseId": "rel_20261120_130946_470_b6b41bfe"
+              }
+            ],
+            "ingressMonoMs": 36854.582642,
+            "fixedInitialWaitDeadlineMonoMs": 56854.582642,
+            "waitDeadlineMonoMs": 56854.582642,
+            "atMs": 1795180190342,
+            "monoMs": 40508.347144
+          },
+          "end": {
+            "event": "read_wait_end",
+            "ingressOperationId": "mcp_edde51ed-dd2d-44d1-8e19-d8a5cb596d01",
+            "rpcId": 2,
+            "owners": [
+              {
+                "holderOperationId": "ea93a07b-52c4-4d82-919a-8b91783ca56a",
+                "journalId": "rj_2c88ebb2-0fab-4e81-b402-5b8a1ab27793",
+                "releaseId": "rel_20261120_130946_470_b6b41bfe"
+              }
+            ],
+            "ingressMonoMs": 36854.582642,
+            "fixedInitialWaitDeadlineMonoMs": 56854.582642,
+            "waitDeadlineMonoMs": 56854.582642,
+            "atMs": 1795180191330,
+            "monoMs": 41496.435144,
+            "endOutcome": "blocked"
+          }
+        }
+      ],
+      "rawMysql": [
+        {
+          "business": [
+            {
+              "sql": "select * from (SELECT COUNT(DISTINCT uat_begin_zero_orders.order_id) AS order_count, SUM(uat_begin_zero_orders.amount) AS amount_sum FROM uat.uat_begin_zero_orders AS uat_begin_zero_orders LIMIT 100) as ktx_query_result limit 100",
+              "threadId": 16,
+              "eventTime": "2026-11-20 13:09:57.687193",
+              "commandType": "Query"
+            }
+          ],
+          "ignored": [
+            {
+              "kind": "Quit"
+            },
+            {
+              "kind": "Connect"
+            },
+            {
+              "kind": "Query",
+              "knownMetadata": "SET SESSION max_execution_time = 30000"
+            },
+            {
+              "kind": "Quit"
+            },
+            {
+              "kind": "Connect"
+            },
+            {
+              "kind": "Query",
+              "knownMetadata": "select @@version_comment limit 1"
+            },
+            {
+              "kind": "Query",
+              "knownMetadata": "SELECT JSON_OBJECT('eventTime',CAST(event_time AS CHAR),'threadId',thread_id,'commandType',command_type,'sql',CONVERT(argument USING utf8mb4)) FROM mysql.general_log ORDER BY event_time,thread_id"
+            }
+          ]
+        }
+      ],
+      "backupVerification": {
+        "gzipBytes": 144350,
+        "gzipSha256": "e07e7e99b3efe320d69bd29d297e17669081862e7cc6dc39972bfa81400e5ebd",
+        "sqliteBytes": 1740800,
+        "sqliteSha256": "996c67bad484800c588178e11c66f44aeda3037c79c29b7ff4991bcb42067120",
+        "mode": "verified closed backup only; ro&immutable=1"
+      },
+      "fullDatabase": {
+        "allRows": 5,
+        "maxId": 5,
+        "firstId": 1,
+        "eligibleNonemptyUserRows": 5,
+        "missing": 0,
+        "duplicates": 0,
+        "wrongUser": 0,
+        "watermarks": [
+          {
+            "user": "uat_zb_a",
+            "newest": 5,
+            "status": "complete",
+            "watermark": "5",
+            "valid": true
+          }
+        ],
+        "orphanRaw": 0,
+        "orphanTurn": 0
+      },
+      "budgetsAndRpcAudit": [
+        {
+          "scopeKey": "bq:uat_zb_a|sha256:de7f5db65f5e:original-query",
+          "identityEvidence": "raw dispatch staticwho + HTTP operation/RPC + actual audit user/session/tool + unique stable audit prefix; no raw Token read",
+          "state": {
+            "scope_key": "bq:uat_zb_a|sha256:de7f5db65f5e:original-query",
+            "started_at": 1795180186706,
+            "origin_started_at": 1795180186706,
+            "calls": 2,
+            "continuations": 0,
+            "attempts": 2,
+            "peak_concurrency": 1,
+            "current_concurrency": 0,
+            "updated_at": 1795180197697,
+            "busy_ms": 2495.660751000003,
+            "round": 0,
+            "turn_id": null,
+            "window_id": 0,
+            "pending_token": null,
+            "presented_token": null,
+            "archived_busy_json": "{}"
+          },
+          "directAtWaitSnapshotUsed": true,
+          "rpcs": [
+            {
+              "auditId": 2,
+              "rpcId": "2",
+              "outcome": "error",
+              "generatedSql": null,
+              "queryOperation": null,
+              "turnId": "inf_uat_zb_a_2",
+              "operationId": "mcp_edde51ed-dd2d-44d1-8e19-d8a5cb596d01"
+            },
+            {
+              "auditId": 5,
+              "rpcId": "5",
+              "outcome": "ok",
+              "generatedSql": "SELECT COUNT(DISTINCT uat_begin_zero_orders.order_id) AS order_count, SUM(uat_begin_zero_orders.amount) AS amount_sum FROM uat.uat_begin_zero_orders AS uat_begin_zero_orders LIMIT 100",
+              "queryOperation": "select",
+              "turnId": "inf_uat_zb_a_2",
+              "operationId": "mcp_c9c42e17-4dc6-42f1-8751-596f32089aea"
+            }
+          ]
+        }
+      ],
+      "decodedTemporaryDeleted": true,
+      "status": "INDEPENDENT SCOPED VALID",
+      "elapsedSeconds": 0.004499708999999998
+    },
+    {
+      "case": "term",
+      "run": "/Users/zhangxingchen/Projects/project-lucy/inbox/core-availability-followup/20261120-execution/10-semantic-read-delta/docker-driver/r6-revision11/term",
+      "actualExitCode": 0,
+      "requestDenominator": 2,
+      "originalSuccesses": 1,
+      "originalFailures": 1,
+      "ownerClosures": [
+        {
+          "rpcId": 2,
+          "begin": {
+            "event": "read_wait_begin",
+            "ingressOperationId": "mcp_10599fd4-2107-4758-accd-da14a9794b92",
+            "rpcId": 2,
+            "owners": [
+              {
+                "holderOperationId": "d205516f-97f1-4a85-bf61-46c8c6f0379d",
+                "journalId": "rj_5c088312-3187-45fd-972c-0c4b28d54b12",
+                "releaseId": "rel_20261120_131321_636_b4d5904c"
+              }
+            ],
+            "ingressMonoMs": 37393.420017,
+            "fixedInitialWaitDeadlineMonoMs": 57393.420017,
+            "waitDeadlineMonoMs": 57393.420017,
+            "atMs": 1795180405367,
+            "monoMs": 41037.161477
+          },
+          "end": {
+            "event": "read_wait_end",
+            "ingressOperationId": "mcp_10599fd4-2107-4758-accd-da14a9794b92",
+            "rpcId": 2,
+            "owners": [
+              {
+                "holderOperationId": "d205516f-97f1-4a85-bf61-46c8c6f0379d",
+                "journalId": "rj_5c088312-3187-45fd-972c-0c4b28d54b12",
+                "releaseId": "rel_20261120_131321_636_b4d5904c"
+              }
+            ],
+            "ingressMonoMs": 37393.420017,
+            "fixedInitialWaitDeadlineMonoMs": 57393.420017,
+            "waitDeadlineMonoMs": 57393.420017,
+            "atMs": 1795180405492,
+            "monoMs": 41161.951102,
+            "endOutcome": "term"
+          }
+        }
+      ],
+      "rawMysql": [
+        {
+          "business": [
+            {
+              "sql": "select * from (SELECT COUNT(DISTINCT uat_begin_zero_orders.order_id) AS order_count, SUM(uat_begin_zero_orders.amount) AS amount_sum FROM uat.uat_begin_zero_orders AS uat_begin_zero_orders LIMIT 100) as ktx_query_result limit 100",
+              "threadId": 16,
+              "eventTime": "2026-11-20 13:14:05.845110",
+              "commandType": "Query"
+            }
+          ],
+          "ignored": [
+            {
+              "kind": "Quit"
+            },
+            {
+              "kind": "Connect"
+            },
+            {
+              "kind": "Query",
+              "knownMetadata": "SET SESSION max_execution_time = 30000"
+            },
+            {
+              "kind": "Quit"
+            },
+            {
+              "kind": "Connect"
+            },
+            {
+              "kind": "Query",
+              "knownMetadata": "select @@version_comment limit 1"
+            },
+            {
+              "kind": "Query",
+              "knownMetadata": "SELECT JSON_OBJECT('eventTime',CAST(event_time AS CHAR),'threadId',thread_id,'commandType',command_type,'sql',CONVERT(argument USING utf8mb4)) FROM mysql.general_log ORDER BY event_time,thread_id"
+            }
+          ]
+        }
+      ],
+      "backupVerification": {
+        "gzipBytes": 211058,
+        "gzipSha256": "9d4874c64e4cde73dd597f159349e838ef8214f749d0c14e6bcd396bc1163501",
+        "sqliteBytes": 2904064,
+        "sqliteSha256": "f5046a4d3b8e456bd0b8242737a9b7d31c0c0f1eb8ce2aeacda53f849c7c72ba",
+        "mode": "verified closed backup only; ro&immutable=1"
+      },
+      "fullDatabase": {
+        "allRows": 5,
+        "maxId": 5,
+        "firstId": 1,
+        "eligibleNonemptyUserRows": 5,
+        "missing": 0,
+        "duplicates": 0,
+        "wrongUser": 0,
+        "watermarks": [
+          {
+            "user": "uat_zb_a",
+            "newest": 5,
+            "status": "complete",
+            "watermark": "5",
+            "valid": true
+          }
+        ],
+        "orphanRaw": 0,
+        "orphanTurn": 0
+      },
+      "budgetsAndRpcAudit": [
+        {
+          "scopeKey": "bq:uat_zb_a|sha256:b5a206a496d8:original-query",
+          "identityEvidence": "raw dispatch staticwho + HTTP operation/RPC + actual audit user/session/tool + unique stable audit prefix; no raw Token read",
+          "state": {
+            "scope_key": "bq:uat_zb_a|sha256:b5a206a496d8:original-query",
+            "started_at": 1795180401743,
+            "origin_started_at": 1795180401743,
+            "calls": 2,
+            "continuations": 0,
+            "attempts": 2,
+            "peak_concurrency": 1,
+            "current_concurrency": 0,
+            "updated_at": 1795180445917,
+            "busy_ms": 2117.865334999995,
+            "round": 0,
+            "turn_id": null,
+            "window_id": 0,
+            "pending_token": null,
+            "presented_token": null,
+            "archived_busy_json": "{}"
+          },
+          "directAtWaitSnapshotUsed": true,
+          "rpcs": [
+            {
+              "auditId": 2,
+              "rpcId": "2",
+              "outcome": "error",
+              "generatedSql": null,
+              "queryOperation": null,
+              "turnId": "inf_uat_zb_a_2",
+              "operationId": "mcp_10599fd4-2107-4758-accd-da14a9794b92"
+            },
+            {
+              "auditId": 5,
+              "rpcId": "5",
+              "outcome": "ok",
+              "generatedSql": "SELECT COUNT(DISTINCT uat_begin_zero_orders.order_id) AS order_count, SUM(uat_begin_zero_orders.amount) AS amount_sum FROM uat.uat_begin_zero_orders AS uat_begin_zero_orders LIMIT 100",
+              "queryOperation": "select",
+              "turnId": "inf_uat_zb_a_5",
+              "operationId": "mcp_24785b88-6c2b-49d8-8596-ebe06dc000ec"
+            }
+          ]
+        }
+      ],
+      "decodedTemporaryDeleted": true,
+      "status": "INDEPENDENT SCOPED VALID",
+      "elapsedSeconds": 0.005298749999999998
+    }
+  ],
+  "scope": "five selected actual P170 branches; no complete publishing audit/mode/successor-owner matrix, no UAT/release, no reinterpretation of old formal strictFAIL; credential evidence excludes raw Tokens",
+  "status": "INDEPENDENT SCOPED VALID",
+  "finishedAt": "2026-11-20T13:17:26.231356+00:00"
+}

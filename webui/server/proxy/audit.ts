@@ -3,7 +3,8 @@ import { createHash } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { resolveProjectRoot } from "../project.js";
-import { prepareTraceDatabase } from "../trace/evidence.js";
+import { redactStorageDetail } from "../security/redaction.js";
+import { AUDIT_WAL_AUTOCHECKPOINT_PAGES, prepareTraceDatabase } from "../trace/evidence.js";
 import { resolveSourceRefsForTables } from "./acl.js";
 import { scrubArgsSummaryJson } from "./audit-privacy.js";
 import {
@@ -14,6 +15,13 @@ import {
   type ExecutionEvidence
 } from "./audit-classification.js";
 import { DERIVATION_VERSION } from "./audit-derivation.js";
+import {
+  REASON_CODES,
+  SPAN_DERIVATION_VERSION,
+  SPAN_STATUSES,
+  TRACE_STAGES,
+  type TraceSpanRow
+} from "./audit-trace-span.js";
 import { resolveLedgerSeq } from "./audit-reconcile.js";
 import {
   MCP_HANDSHAKE_METHODS,
@@ -32,6 +40,23 @@ import {
   lookupInquiryNo,
   withAllocatedInquiryNo
 } from "../admin/audit-inquiry-serial.js";
+import { pauseAfterStretch } from "../admin/yield-slices.js";
+import {
+  nextRebuildPageSize,
+  nextSliceSize,
+  REBUILD_ALLOCATE_CHUNK,
+  REBUILD_PAGE_INITIAL,
+  REBUILD_WRITE_SLICE_INITIAL,
+  REBUILD_WRITE_SLICE_MAX,
+  REBUILD_WRITE_SLICE_MIN,
+  REBUILD_WRITE_SLICE_SLOW_MS
+} from "../admin/page-budget.js";
+import {
+  closeRebuildWriteWorker,
+  runDeleteWindowOffThread,
+  runWriteSliceOffThread,
+  type RebuildTurnWrite
+} from "./audit-rebuild-write.js";
 import {
   CALL_MONITOR_P95_MIN_SAMPLES,
   callMonitorBucketIndex,
@@ -140,6 +165,14 @@ export interface AccessLogEntry {
   durationMs: number;
   requestId: string | number;
   traceId?: string;
+  /** P1-36：本次调用的 span（与行同一事务写入；有 span 的行派生版本为 v2p5-2）。 */
+  spans?: TraceSpanRow[];
+  /** P1-36 D8：`client_ip` 的取值来源（socket / xff / real_ip）。 */
+  ipSource?: string;
+  /** P1-36 D8：`classifyTrustedSource()` 的结果。 */
+  trustedSource?: string;
+  /** P1-37 U2：被拒请求的 HMAC 指纹（`rf1:` 前缀），只用于 M3 同版本内比较。 */
+  rejectionFingerprint?: string;
   responseBytes?: number;
   responseRowCount?: number;
   responseColumnCount?: number;
@@ -244,6 +277,7 @@ export interface AccessLogSourceRecord {
 }
 
 let db: Database.Database | null = null;
+let spanInsertStmt: Database.Statement | null = null;
 
 /**
  * audit-trust-2026-10-19-r1 / T03a: audit.sqlite schema version (independent
@@ -262,6 +296,11 @@ export const AUDIT_DB_SCHEMA_VERSION = 4;
  * 历史行**不重解释**（Spec §4.6）。
  */
 export const ACCESS_LOG_COLUMNS = [
+  // Present in CREATE TABLE baselines; keep additive for fixtures that omit them
+  // (e.g. N26 / audit-trust minimal access_log) before covering indexes reference the columns.
+  ["outcome", "TEXT"],
+  ["tables", "TEXT"],
+  ["args_summary", "TEXT"],
   ["role_ids", "TEXT"],
   ["permission_snapshot_hash", "TEXT"],
   ["effective_tables_count", "INTEGER"],
@@ -378,7 +417,11 @@ export const ACCESS_LOG_COLUMNS = [
   ["inference_confidence", "TEXT"],
   ["inference_rule_version", "TEXT"],
   // S07 七分类（与 162 四维并行披露）。
-  ["error_category", "TEXT"]
+  ["error_category", "TEXT"],
+  // P1-36 D8：client_ip 取值来源与可信度落账（历史行 NULL）。
+  ["ip_source", "TEXT"],
+  ["rejection_fingerprint", "TEXT"],
+  ["trusted_source", "TEXT"]
 ] as const;
 export type AccessLogColumnName = (typeof ACCESS_LOG_COLUMNS)[number][0];
 const PERMISSION_SNAPSHOT_COLUMNS = [
@@ -392,6 +435,102 @@ function ensureColumn(database: Database.Database, table: string, column: string
   database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
 }
 
+const sqlList = (values: readonly string[]): string => values.map((v) => `'${v}'`).join(", ");
+
+/** P1-36 §5.1：span 表。列约束落 DB CHECK；与 `access_log` 外键级联。 */
+const TRACE_SPAN_DDL = `
+  CREATE TABLE IF NOT EXISTS access_trace_span (
+    span_id            TEXT PRIMARY KEY,
+    trace_id           TEXT NOT NULL,
+    access_log_id      INTEGER NOT NULL REFERENCES access_log(id) ON DELETE CASCADE,
+    parent_span_id     TEXT,
+    seq                INTEGER NOT NULL CHECK (seq >= 1),
+    stage              TEXT NOT NULL CHECK (stage IN (${sqlList(TRACE_STAGES)})),
+    started_at_ms      INTEGER NOT NULL,
+    duration_ms        INTEGER NOT NULL CHECK (duration_ms >= 0),
+    status             TEXT NOT NULL CHECK (status IN (${sqlList(SPAN_STATUSES)})),
+    reason_code        TEXT CHECK (reason_code IS NULL OR reason_code IN (${sqlList(REASON_CODES)})),
+    reason_param       TEXT,
+    error_category     TEXT,
+    attrs_json         TEXT CHECK (attrs_json IS NULL OR (json_valid(attrs_json) AND length(CAST(attrs_json AS BLOB)) <= 1024)),
+    derivation_version TEXT NOT NULL CHECK (derivation_version = '${SPAN_DERIVATION_VERSION}'),
+    UNIQUE(trace_id, seq)
+  );
+  CREATE INDEX IF NOT EXISTS idx_ats_access_log ON access_trace_span(access_log_id);
+  CREATE INDEX IF NOT EXISTS idx_ats_stage_ts ON access_trace_span(stage, started_at_ms);
+`;
+
+const SPAN_INSERT_SQL = `
+  INSERT INTO access_trace_span
+    (span_id, trace_id, access_log_id, parent_span_id, seq, stage, started_at_ms, duration_ms,
+     status, reason_code, reason_param, error_category, attrs_json, derivation_version)
+  VALUES
+    (@spanId, @traceId, @accessLogId, @parentSpanId, @seq, @stage, @startedAtMs, @durationMs,
+     @status, @reasonCode, @reasonParam, @errorCategory, @attrsJson, @derivationVersion)
+`;
+
+export type AuditSqliteStatus = {
+  /** 服务单例连接上 `PRAGMA foreign_keys` 的实际值。 */
+  foreignKeys: boolean;
+  /** 指向 `access_log` 的子表盘点（开启外键前的盘点结果）。 */
+  foreignKeyChildren: Array<{ table: string; onDelete: string }>;
+  /** 开启时 `PRAGMA foreign_key_check` 的存量违规数（null＝尚未检查）。 */
+  foreignKeyViolations: number | null;
+};
+
+let auditSqliteStatus: AuditSqliteStatus = { foreignKeys: false, foreignKeyChildren: [], foreignKeyViolations: null };
+
+/** 只读：admin 审计状态接口据此报告服务连接的 `foreign_keys`（不另开连接自查）。 */
+export async function getAuditSqliteStatus(): Promise<AuditSqliteStatus> {
+  const database = await getDb();
+  const live = database.pragma("foreign_keys", { simple: true });
+  return { ...auditSqliteStatus, foreignKeys: Number(live) === 1 };
+}
+
+/**
+ * P1-36 §5.1：开启外键前先盘点指向 `access_log` 的子表并做存量孤儿扫描。
+ * 存量违规不阻断启动（外键只约束新写入与父行删除），但数量如实上报。
+ */
+let foreignKeyCheckMs = 0;
+
+/** P1-39: 启动预热日志用；最近一次打开审计库时 `PRAGMA foreign_key_check` 的耗时。 */
+export function lastForeignKeyCheckMs(): number {
+  return foreignKeyCheckMs;
+}
+
+function enableForeignKeysWithInventory(database: Database.Database): void {
+  const tables = database
+    .prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`)
+    .all() as Array<{ name: string }>;
+  const children: AuditSqliteStatus["foreignKeyChildren"] = [];
+  for (const { name } of tables) {
+    const fks = database.prepare(`PRAGMA foreign_key_list("${name.replace(/"/g, '""')}")`).all() as Array<{
+      table: string;
+      on_delete: string;
+    }>;
+    for (const fk of fks) {
+      if (fk.table === "access_log") children.push({ table: name, onDelete: fk.on_delete });
+    }
+  }
+  let violations: number | null = null;
+  const checkStartedAt = performance.now();
+  try {
+    violations = (database.prepare(`PRAGMA foreign_key_check`).all() as unknown[]).length;
+  } catch {
+    violations = null;
+  }
+  foreignKeyCheckMs = performance.now() - checkStartedAt;
+  database.pragma("foreign_keys = ON");
+  auditSqliteStatus = {
+    foreignKeys: Number(database.pragma("foreign_keys", { simple: true })) === 1,
+    foreignKeyChildren: children,
+    foreignKeyViolations: violations
+  };
+  if (violations) {
+    console.warn(`[lucy-proxy] audit db has ${violations} pre-existing foreign key violation(s); new writes are enforced`);
+  }
+}
+
 export function closeAuditDb(): void {
   if (db) {
     try {
@@ -399,10 +538,13 @@ export function closeAuditDb(): void {
     } catch {}
     db = null;
     insertStmt = null;
+    spanInsertStmt = null;
+    auditSqliteStatus = { foreignKeys: false, foreignKeyChildren: [], foreignKeyViolations: null };
     sourceInsertStmt = null;
     snapshotStmt = null;
     conversationTurnInsertStmt = null;
   }
+  void closeRebuildWriteWorker();
   // F-02：重开数据库后基线需重新核对（换一个库文件时基线不在旧库里）。
   asofBaselineResolved = false;
   budgetTableReady = false;
@@ -517,6 +659,14 @@ function hasAttributionMutationTable(database: Database.Database): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * P1-39: 监听前预热。打开连接、建表迁移和外键盘点在 app.listen 之前做完，
+ * 不再落在首个请求或 onReady 钩子里（冷盘上整段同步执行会卡死 livez / 触发钩子超时）。
+ */
+export async function openProxyAuditDb(): Promise<void> {
+  await getDb();
 }
 
 async function getDb(): Promise<Database.Database> {
@@ -666,6 +816,13 @@ async function getDb(): Promise<Database.Database> {
       PRIMARY KEY(inferred_turn_id, access_log_id)
     );
     CREATE INDEX IF NOT EXISTS idx_it_user_time ON inferred_turns(user_id, started_at, ended_at);
+    -- P1-45: 重建中断后恢复 — 持久化重建进行中／完整完成标记与访问上界水位。
+    CREATE TABLE IF NOT EXISTS inferred_rebuild_state (
+      user_id    TEXT PRIMARY KEY,
+      status     TEXT NOT NULL,
+      watermark  TEXT,
+      updated_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS auth_failure_log (
       id                 INTEGER PRIMARY KEY AUTOINCREMENT,
       ts                 TEXT    NOT NULL,
@@ -741,6 +898,7 @@ async function getDb(): Promise<Database.Database> {
   for (const [column, definition] of PERMISSION_SNAPSHOT_COLUMNS) {
     ensureColumn(db, "permission_snapshots", column, definition);
   }
+  db.exec(TRACE_SPAN_DDL);
   // F-02：来源行也要有账本序号，否则「关联事实 as-of S」不可证明 ——
   // 晚于 S 写入的来源行会被当前视图读到，成为混入的 >S 事实。
   ensureColumn(db, "access_log_sources", "ledger_seq", "INTEGER");
@@ -761,7 +919,15 @@ async function getDb(): Promise<Database.Database> {
     CREATE INDEX IF NOT EXISTS idx_al_attempt_id ON access_log(attempt_id);
     CREATE INDEX IF NOT EXISTS idx_al_event_type ON access_log(event_type);
     CREATE INDEX IF NOT EXISTS idx_al_instance_id ON access_log(instance_id);
+    -- P1-32/P1-33: lookups that scale with audit volume (inquiry detail, export link join) must not scan.
+    CREATE INDEX IF NOT EXISTS idx_al_lucy_turn_id ON access_log(lucy_turn_id);
+    CREATE INDEX IF NOT EXISTS idx_al_effective_turn_id ON access_log(effective_turn_id);
+    CREATE INDEX IF NOT EXISTS idx_al_original_turn_id ON access_log(original_turn_id);
+    CREATE INDEX IF NOT EXISTS idx_ital_access_log ON inferred_turn_access_logs(access_log_id);
+    -- P1-36：仅约束新版本（v2p5-2）行；旧行 trace_id 可空或重复，不受约束。
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_al_trace_v2p5_2 ON access_log(trace_id) WHERE derivation_version = '${SPAN_DERIVATION_VERSION}';
   `);
+  enableForeignKeysWithInventory(db);
   // F-02：归属改写日志基线必须在表建好之后登记（表不存在时无法登记）。
   await ensureAsOfBaseline(db);
   return db;
@@ -1022,9 +1188,9 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     // B18: 四轴分类结果与主状态由**同一个**分类函数产出（写路径与读路径共用）。
     insertStmt = database.prepare(`
       INSERT INTO access_log
-        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, turn_attribution_mode, turn_attribution_confidence, turn_attribution_reason, association_status, original_turn_id, original_attribution_mode, original_association_status, original_attribution_confidence, original_reason, effective_turn_id, effective_attribution_mode, effective_association_status, effective_attribution_confidence, effective_reason, lucy_platform, client, client_version, client_ip, client_forwarded_for, user_agent, device_name, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, query_artifact_ref, generated_sql, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason, policy_version, capability_digest, skill_uri, skill_version, skill_file_version, skill_action, skill_roles_allowed, matched_role_id, compiler_reason, failure_dimension, applied_version, applied_business_date, applied_value_kind, actor_id, actor_kind, wiki_injected_keys, wiki_versions, eval_mark, is_slow_call, slow_basis, result_empty, turn_wall_clock_ms, reported_client, reported_client_version, attempt_id, parent_attempt_id, event_type, instance_id, credential_principal_id, classification_version, attribution_rule_version, transport_sub_type, transport_status, authorization_status, execution_status, usability_status, primary_status, derivation_version, delivery_status, null_reason, legacy_outcome, digest_kind, digest_version, preview_version, ingress_event_id, endpoint_id, ledger_seq, client_call_id, client_event_id, upstream_operation_id, rpc_request_id, retry_of, reported_role, observed_role_ids, observed_protocol, inferred_client, inference_method, inference_confidence, inference_rule_version, error_category)
+        (ts, user_id, token_label, token_hash_prefix, lucy_session_id, lucy_turn_id, turn_attribution_mode, turn_attribution_confidence, turn_attribution_reason, association_status, original_turn_id, original_attribution_mode, original_association_status, original_attribution_confidence, original_reason, effective_turn_id, effective_attribution_mode, effective_association_status, effective_attribution_confidence, effective_reason, lucy_platform, client, client_version, client_ip, client_forwarded_for, user_agent, device_name, tool, tables, args_summary, query_hash, query_length, query_operation, query_preview, query_artifact_ref, generated_sql, outcome, error_detail, duration_ms, response_bytes, response_row_count, response_column_count, response_truncated, request_id, trace_id, role_ids, permission_snapshot_hash, effective_tables_count, decision_reason, policy_version, capability_digest, skill_uri, skill_version, skill_file_version, skill_action, skill_roles_allowed, matched_role_id, compiler_reason, failure_dimension, applied_version, applied_business_date, applied_value_kind, actor_id, actor_kind, wiki_injected_keys, wiki_versions, eval_mark, is_slow_call, slow_basis, result_empty, turn_wall_clock_ms, reported_client, reported_client_version, attempt_id, parent_attempt_id, event_type, instance_id, credential_principal_id, classification_version, attribution_rule_version, transport_sub_type, transport_status, authorization_status, execution_status, usability_status, primary_status, derivation_version, delivery_status, null_reason, legacy_outcome, digest_kind, digest_version, preview_version, ingress_event_id, endpoint_id, ledger_seq, client_call_id, client_event_id, upstream_operation_id, rpc_request_id, retry_of, reported_role, observed_role_ids, observed_protocol, inferred_client, inference_method, inference_confidence, inference_rule_version, error_category, ip_source, trusted_source, rejection_fingerprint)
       VALUES
-        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @turnAttributionMode, @turnAttributionConfidence, @turnAttributionReason, @associationStatus, @originalTurnId, @originalAttributionMode, @originalAssociationStatus, @originalAttributionConfidence, @originalReason, @effectiveTurnId, @effectiveAttributionMode, @effectiveAssociationStatus, @effectiveAttributionConfidence, @effectiveReason, @lucyPlatform, @client, @clientVersion, @clientIp, @clientForwardedFor, @userAgent, @deviceName, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @queryArtifactRef, @generatedSql, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason, @policyVersion, @capabilityDigest, @skillUri, @skillVersion, @skillFileVersion, @skillAction, @skillRolesAllowed, @matchedRoleId, @compilerReason, @failureDimension, @appliedVersion, @appliedBusinessDate, @appliedValueKind, @actorId, @actorKind, @wikiInjectedKeys, @wikiVersions, @evalMark, @isSlowCall, @slowBasis, @resultEmpty, @turnWallClockMs, @reportedClient, @reportedClientVersion, @attemptId, @parentAttemptId, @eventType, @instanceId, @credentialPrincipalId, @classificationVersion, @attributionRuleVersion, @transportSubType, @transportStatus, @authorizationStatus, @executionStatus, @usabilityStatus, @primaryStatus, @derivationVersion, @deliveryStatus, @nullReason, @legacyOutcome, @digestKind, @digestVersion, @previewVersion, @ingressEventId, @endpointId, @ledgerSeq, @clientCallId, @clientEventId, @upstreamOperationId, @rpcRequestId, @retryOf, @reportedRole, @observedRoleIds, @observedProtocol, @inferredClient, @inferenceMethod, @inferenceConfidence, @inferenceRuleVersion, @errorCategory)
+        (@ts, @userId, @tokenLabel, @tokenHashPrefix, @lucySessionId, @lucyTurnId, @turnAttributionMode, @turnAttributionConfidence, @turnAttributionReason, @associationStatus, @originalTurnId, @originalAttributionMode, @originalAssociationStatus, @originalAttributionConfidence, @originalReason, @effectiveTurnId, @effectiveAttributionMode, @effectiveAssociationStatus, @effectiveAttributionConfidence, @effectiveReason, @lucyPlatform, @client, @clientVersion, @clientIp, @clientForwardedFor, @userAgent, @deviceName, @tool, @tables, @argsSummary, @queryHash, @queryLength, @queryOperation, @queryPreview, @queryArtifactRef, @generatedSql, @outcome, @errorDetail, @durationMs, @responseBytes, @responseRowCount, @responseColumnCount, @responseTruncated, @requestId, @traceId, @roleIds, @permissionSnapshotHash, @effectiveTablesCount, @decisionReason, @policyVersion, @capabilityDigest, @skillUri, @skillVersion, @skillFileVersion, @skillAction, @skillRolesAllowed, @matchedRoleId, @compilerReason, @failureDimension, @appliedVersion, @appliedBusinessDate, @appliedValueKind, @actorId, @actorKind, @wikiInjectedKeys, @wikiVersions, @evalMark, @isSlowCall, @slowBasis, @resultEmpty, @turnWallClockMs, @reportedClient, @reportedClientVersion, @attemptId, @parentAttemptId, @eventType, @instanceId, @credentialPrincipalId, @classificationVersion, @attributionRuleVersion, @transportSubType, @transportStatus, @authorizationStatus, @executionStatus, @usabilityStatus, @primaryStatus, @derivationVersion, @deliveryStatus, @nullReason, @legacyOutcome, @digestKind, @digestVersion, @previewVersion, @ingressEventId, @endpointId, @ledgerSeq, @clientCallId, @clientEventId, @upstreamOperationId, @rpcRequestId, @retryOf, @reportedRole, @observedRoleIds, @observedProtocol, @inferredClient, @inferenceMethod, @inferenceConfidence, @inferenceRuleVersion, @errorCategory, @ipSource, @trustedSource, @rejectionFingerprint)
     `);
   }
   // B18: 生产写路径接入 v2p5-1 分类（读路径共用同一函数）。
@@ -1040,7 +1206,8 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     authorizationStatusHint: entry.associationStatus === "conflict" ? "unknown" : undefined,
     evidence: entry.executionEvidence
   });
-  const result = insertStmt.run({
+  const resolvedLedgerSeq = entry.ledgerSeq ?? (await resolveLedgerSeq());
+  const rowParams = {
     ts: entry.ts,
     userId: entry.userId,
     tokenLabel: entry.tokenLabel ?? null,
@@ -1080,7 +1247,7 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     queryArtifactRef: entry.queryArtifactRef ?? null,
     generatedSql: entry.generatedSql ?? null,
     outcome: entry.outcome,
-    errorDetail: entry.errorDetail ? truncateErrorDetail(entry.errorDetail) : null,
+    errorDetail: entry.errorDetail ? truncateErrorDetail(redactStorageDetail(entry.errorDetail)) : null,
     durationMs: entry.durationMs,
     responseBytes: entry.responseBytes ?? null,
     responseRowCount: entry.responseRowCount ?? null,
@@ -1131,11 +1298,14 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     executionStatus: classified.executionStatus,
     usabilityStatus: classified.usabilityStatus,
     primaryStatus: classified.primaryStatus,
-    derivationVersion: classified.derivationVersion,
+    derivationVersion: entry.spans && entry.spans.length > 0 ? SPAN_DERIVATION_VERSION : classified.derivationVersion,
     deliveryStatus: classified.deliveryStatus,
     nullReason: classified.nullReason,
     legacyOutcome: entry.outcome,
     errorCategory: classified.errorCategory ?? null,
+    ipSource: entry.ipSource ?? null,
+    trustedSource: entry.trustedSource ?? null,
+    rejectionFingerprint: entry.rejectionFingerprint ?? null,
     // ─── U11：摘要 / 预览版本 ────────────────────────────────────────────
     digestKind: entry.digestKind ?? null,
     digestVersion: entry.digestVersion ?? (entry.digestKind ? DIGEST_VERSION_V2P5 : null),
@@ -1143,7 +1313,7 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     // ─── S02 / S03：入口与标识 ───────────────────────────────────────────
     ingressEventId: entry.ingressEventId ?? null,
     endpointId: entry.endpointId ?? null,
-    ledgerSeq: entry.ledgerSeq ?? (await resolveLedgerSeq()),
+    ledgerSeq: resolvedLedgerSeq,
     clientCallId: entry.clientCallId ?? null,
     clientEventId: entry.clientEventId ?? null,
     upstreamOperationId: entry.upstreamOperationId ?? null,
@@ -1157,8 +1327,20 @@ export async function writeLog(entry: AccessLogEntry): Promise<number> {
     inferenceMethod: entry.inferenceMethod ?? null,
     inferenceConfidence: entry.inferenceConfidence ?? null,
     inferenceRuleVersion: entry.inferenceRuleVersion ?? null
+  };
+  const spans = entry.spans ?? [];
+  if (spans.length === 0) {
+    return Number(insertStmt.run(rowParams).lastInsertRowid);
+  }
+  // P1-36 D4：行与全部 span 同一事务提交；任一失败整笔回滚（无孤儿行 / 孤儿 span）。
+  const stmt = insertStmt;
+  const spanStmt = (spanInsertStmt ??= database.prepare(SPAN_INSERT_SQL));
+  const writeAll = database.transaction((): number => {
+    const accessLogId = Number(stmt.run(rowParams).lastInsertRowid);
+    for (const span of spans) spanStmt.run({ ...span, accessLogId });
+    return accessLogId;
   });
-  return Number(result.lastInsertRowid);
+  return writeAll.immediate();
 }
 
 /** Ensures the idempotent access-log migration completed before returning Skill bodies. */
@@ -1195,7 +1377,11 @@ const BUDGET_STATE_COLUMNS = [
   ["window_id", "INTEGER NOT NULL DEFAULT 0"],
   ["pending_token", "TEXT"],
   ["presented_token", "TEXT"],
-  ["archived_busy_json", "TEXT"]
+  ["archived_busy_json", "TEXT"],
+  // P1-74 / SC-E9b：续查档数快照、代次与 new_question 声明随状态行同事务恢复。
+  ["continuation_policy", "TEXT"],
+  ["generation", "INTEGER NOT NULL DEFAULT 0"],
+  ["pending_reopen_json", "TEXT"]
 ] as const;
 
 const BUDGET_IDEMPOTENCY_TABLE = `
@@ -1222,6 +1408,12 @@ export type PersistedBudgetState = {
   presentedToken?: string | null;
   archivedBusyMsByWindow?: Record<string, number>;
   scopeKey?: string | null;
+  /** P1-74：续查档数快照（active=1 / inactive=默认 5）；旧行缺省由调用方按 turnId 推导一次。 */
+  continuationPolicy?: "active" | "inactive";
+  /** P1-74：代次；幂等键含代次，旧凭证不得跨代兑现。 */
+  generation?: number;
+  /** P1-74：mode=new_question 声明（与 pendingToken 互斥）。 */
+  pendingReopen?: { token: string; round: number; windowId: number; generation: number } | null;
 };
 
 let budgetTableReady = false;
@@ -1246,7 +1438,8 @@ export async function loadBudgetState(
     .prepare(
       `SELECT started_at, origin_started_at, calls, continuations, attempts,
               peak_concurrency, current_concurrency, busy_ms, round, turn_id,
-              window_id, pending_token, presented_token, archived_busy_json
+              window_id, pending_token, presented_token, archived_busy_json,
+              continuation_policy, generation, pending_reopen_json
          FROM question_budget_state WHERE scope_key = ?`
     )
     .get(scopeKey) as
@@ -1265,6 +1458,9 @@ export async function loadBudgetState(
         pending_token: string | null;
         presented_token: string | null;
         archived_busy_json: string | null;
+        continuation_policy: string | null;
+        generation: number | null;
+        pending_reopen_json: string | null;
       }
     | undefined;
   if (!row) return null;
@@ -1275,6 +1471,25 @@ export async function loadBudgetState(
       if (parsed && typeof parsed === "object") archived = parsed;
     } catch {
       archived = {};
+    }
+  }
+  let pendingReopen: { token: string; round: number; windowId: number; generation: number } | null = null;
+  if (row.pending_reopen_json) {
+    try {
+      const parsed = JSON.parse(row.pending_reopen_json) as {
+        token?: unknown; round?: unknown; windowId?: unknown; generation?: unknown;
+      };
+      if (
+        parsed && typeof parsed === "object"
+        && typeof parsed.token === "string"
+        && typeof parsed.round === "number"
+        && typeof parsed.windowId === "number"
+        && typeof parsed.generation === "number"
+      ) {
+        pendingReopen = { token: parsed.token, round: parsed.round, windowId: parsed.windowId, generation: parsed.generation };
+      }
+    } catch {
+      pendingReopen = null;
     }
   }
   const keys = database
@@ -1296,6 +1511,11 @@ export async function loadBudgetState(
       pendingToken: row.pending_token,
       presentedToken: row.presented_token,
       archivedBusyMsByWindow: archived,
+      continuationPolicy: row.continuation_policy === "active" || row.continuation_policy === "inactive"
+        ? row.continuation_policy
+        : undefined,
+      generation: row.generation ?? 0,
+      pendingReopen,
       scopeKey
     },
     appliedKeys: keys.map((entry) => entry.idempotency_key)
@@ -1324,8 +1544,9 @@ export async function saveBudgetState(
         `INSERT INTO question_budget_state
            (scope_key, started_at, origin_started_at, calls, continuations, attempts,
             peak_concurrency, current_concurrency, updated_at, busy_ms, round, turn_id,
-            window_id, pending_token, presented_token, archived_busy_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            window_id, pending_token, presented_token, archived_busy_json,
+            continuation_policy, generation, pending_reopen_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(scope_key) DO UPDATE SET
            started_at = excluded.started_at,
            origin_started_at = excluded.origin_started_at,
@@ -1341,7 +1562,10 @@ export async function saveBudgetState(
            window_id = excluded.window_id,
            pending_token = excluded.pending_token,
            presented_token = excluded.presented_token,
-           archived_busy_json = excluded.archived_busy_json`
+           archived_busy_json = excluded.archived_busy_json,
+           continuation_policy = excluded.continuation_policy,
+           generation = excluded.generation,
+           pending_reopen_json = excluded.pending_reopen_json`
       )
       .run(
         scopeKey,
@@ -1359,7 +1583,10 @@ export async function saveBudgetState(
         state.windowId ?? 0,
         state.pendingToken ?? null,
         state.presentedToken ?? null,
-        JSON.stringify(state.archivedBusyMsByWindow ?? {})
+        JSON.stringify(state.archivedBusyMsByWindow ?? {}),
+        state.continuationPolicy ?? null,
+        state.generation ?? 0,
+        state.pendingReopen ? JSON.stringify(state.pendingReopen) : null
       );
     if (idempotencyKey) {
       database
@@ -1369,7 +1596,10 @@ export async function saveBudgetState(
         .run(scopeKey, idempotencyKey);
     }
   });
-  write();
+  // Acquire the writer reservation before reading the idempotency key. A
+  // deferred WAL transaction cannot wait when upgrading its read snapshot
+  // while another audit writer holds the lock (SQLITE_BUSY).
+  write.immediate();
   const loaded = await loadBudgetState(scopeKey);
   if (!loaded || !("row" in loaded)) {
     throw new Error("question_budget_state_missing_after_save");
@@ -2306,6 +2536,31 @@ export const UNREPORTED_QUESTION_SUMMARY = "未上报问询原文";
 /** Spec 172: page windows filter display only. Rebuild always covers the longest audit preset. */
 export const INFERRED_TURN_REBUILD_LOOKBACK_HOURS = 24 * 30;
 /**
+ * Count bounds for one synchronous stretch of an inferred-turn rebuild.
+ * The log page size is also a time budget (P1-39, `admin/page-budget.ts`): it starts small and
+ * adapts to the measured page time, with this constant as the upper bound. One cluster or the
+ * in-memory grouping can still run longer than a 3s probe. Yields only let already queued
+ * macrotasks run before the next stretch.
+ */
+export const INFERRED_REBUILD_LOG_PAGE = 400;
+export const INFERRED_REBUILD_CLUSTER_SLICE = 25;
+/** Stay under SQLite's variable limit when one cluster references many access_log rows. */
+export const INFERRED_REBUILD_SOURCE_CHUNK = 500;
+
+/** Gate for rebuild phase timing (`LUCY_REBUILD_TRACE=1`). Used by FDE R07 / P1-47 B-line. */
+export function isRebuildTraceEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return (env.LUCY_REBUILD_TRACE ?? "").trim() === "1";
+}
+
+function rebuildTrace(phase: string, detail: Record<string, number | string | boolean>): void {
+  if (!isRebuildTraceEnabled()) return;
+  const parts = Object.entries(detail)
+    .map(([key, value]) => `${key}=${typeof value === "number" ? (Number.isInteger(value) ? value : value.toFixed(1)) : value}`)
+    .join(" ");
+  console.info(`[lucy-rebuild-trace] ${phase} ${parts}`);
+}
+
+/**
  * Spec 173 v0.3 / 2026-10-19 audit-trust: 120 秒近邻回绑已作废。
  * 此常量保留仅为兼容历史 import；`bindPriorSessionCalls` 不再按此窗口回填 `lucy_turn_id`。
  * 新代码不得读取本常量；新建会话归因见 `TurnCorrelationRegistry` 与 admission-time freeze。
@@ -2425,7 +2680,23 @@ function clientFromRows(rows: ClusterLogRow[]): string | null {
   return null;
 }
 
-export async function rebuildInferredTurns(
+const inferredRebuildInflight = new Map<string, Promise<{ turns: number }>>();
+
+/** Same-user rebuilds run one after another. A read-path retry waits instead of deleting under the background pass. */
+export function rebuildInferredTurns(
+  userId: string,
+  options: { lookbackHours?: number; gapMs?: number; includeCatalogOnly?: boolean } = {}
+): Promise<{ turns: number }> {
+  const previous = inferredRebuildInflight.get(userId) ?? Promise.resolve({ turns: 0 });
+  const run = previous.catch(() => ({ turns: 0 })).then(() => rebuildInferredTurnsUnlocked(userId, options));
+  const tracked = run.finally(() => {
+    if (inferredRebuildInflight.get(userId) === tracked) inferredRebuildInflight.delete(userId);
+  });
+  inferredRebuildInflight.set(userId, tracked);
+  return tracked;
+}
+
+async function rebuildInferredTurnsUnlocked(
   userId: string,
   options: { lookbackHours?: number; gapMs?: number; includeCatalogOnly?: boolean } = {}
 ): Promise<{ turns: number }> {
@@ -2433,14 +2704,76 @@ export async function rebuildInferredTurns(
   const gapMs = options.gapMs ?? Number(process.env.LUCY_TURN_INFER_GAP_MS ?? 120_000);
   const includeCatalogOnly = options.includeCatalogOnly ?? (process.env.LUCY_TURN_INFER_INCLUDE_CATALOG_ONLY === "true");
   const database = await getDb();
-  const cutoff = new Date(Date.now() - lookbackHours * 60 * 60 * 1000).toISOString();
+  // P1-39: 每个较长的同步段之后空出相当的时间（上限 250 毫秒），让多跳请求（readyz）在空窗里答完。
+  let stretchStartedAt = performance.now();
+  const rest = async (): Promise<void> => {
+    await pauseAfterStretch(performance.now() - stretchStartedAt);
+    stretchStartedAt = performance.now();
+  };
+  const rebuildStartedAt = performance.now();
+  const auditDbPath = database.name;
+  rebuildTrace("begin", {
+    userId,
+    write_connection: "rebuild_worker",
+    wal_autocheckpoint: Number(database.pragma("wal_autocheckpoint", { simple: true })),
+    target_wal_autocheckpoint: AUDIT_WAL_AUTOCHECKPOINT_PAGES
+  });
+  // P1-47 B-line: enforce the tuned checkpoint even if an older connection skipped prepareTraceDatabase.
+  if (Number(database.pragma("wal_autocheckpoint", { simple: true })) !== AUDIT_WAL_AUTOCHECKPOINT_PAGES) {
+    database.pragma(`wal_autocheckpoint = ${AUDIT_WAL_AUTOCHECKPOINT_PAGES}`);
+  }
+  // AUDIT-01 (P1-38 §8): Expand cutoff via interval closure so clusters that straddle the
+  // rolling window boundary are not split into two inquiries. Each iteration checks whether
+  // any existing inferred_turn started before the current cutoff but ended inside the window;
+  // if so, extend cutoff to that turn's start. Repeat until no crossing turn remains.
+  let cutoff = new Date(Date.now() - lookbackHours * 60 * 60 * 1000).toISOString();
+  const crossingWindow = database.prepare(`
+    SELECT MIN(started_at) AS started_at FROM inferred_turns
+    WHERE user_id = ? AND started_at < ? AND ended_at >= ?
+  `);
+  for (;;) {
+    const crossing = crossingWindow.get(userId, cutoff, cutoff) as { started_at: string | null };
+    if (!crossing.started_at) break;
+    cutoff = crossing.started_at;
+    await rest();
+  }
+  const ceiling = database.prepare(
+    `SELECT COALESCE(MAX(id), 0) AS id FROM access_log WHERE user_id = ? AND ts >= ?`
+  ).get(userId, cutoff) as { id: number };
+  const ceilingId = ceiling.id;
 
-  const loaded = database.prepare(`
+  const loadPage = database.prepare(`
     SELECT id, ts, tool, tables, args_summary, policy_version, permission_snapshot_hash, lucy_session_id, lucy_turn_id, client, client_version, user_agent
     FROM access_log
-    WHERE user_id = ? AND ts >= ?
+    WHERE user_id = ? AND ts >= ? AND id <= ? AND (ts > ? OR (ts = ? AND id > ?))
     ORDER BY ts ASC, id ASC
-  `).all(userId, cutoff) as ClusterLogRow[];
+    LIMIT ?
+  `);
+  const loaded: ClusterLogRow[] = [];
+  let cursorTs = "";
+  let cursorId = 0;
+  // P1-39: 页大小按上一页实测耗时收敛，慢盘冷缓存下单页同步读取不再随固定 400 行失控。
+  let pageSize = REBUILD_PAGE_INITIAL;
+  let readPagesMs = 0;
+  let readPageCount = 0;
+  for (let pageIndex = 0; ; pageIndex += 1) {
+    if (pageIndex > 0) await rest();
+    const startedAt = performance.now();
+    const page = loadPage.all(userId, cutoff, ceilingId, cursorTs, cursorTs, cursorId, pageSize) as ClusterLogRow[];
+    const elapsedMs = performance.now() - startedAt;
+    readPagesMs += elapsedMs;
+    readPageCount += 1;
+    rebuildTrace("read_pages", { page: pageIndex, rows: page.length, pageSize, ms: elapsedMs });
+    if (page.length === 0) break;
+    loaded.push(...page);
+    const tail = page[page.length - 1]!;
+    cursorTs = tail.ts;
+    cursorId = tail.id;
+    if (page.length < pageSize) break;
+    pageSize = nextRebuildPageSize(pageSize, elapsedMs);
+  }
+  rebuildTrace("read_pages_total", { pages: readPageCount, rows: loaded.length, ms: readPagesMs });
+  await rest();
 
   const business = loaded.filter((row) =>
     !isMcpProtocolMethod(row.tool)
@@ -2493,99 +2826,250 @@ export async function rebuildInferredTurns(
       summaryOverride: sessionVisitSummary(clientFromRows(rows))
     });
   }
+  await rest();
 
-  const deleteAccessLogsStmt = database.prepare(`
-    DELETE FROM inferred_turn_access_logs
-    WHERE inferred_turn_id IN (SELECT inferred_turn_id FROM inferred_turns WHERE user_id = ? AND started_at >= ?)
-  `);
-  const deleteTurnsStmt = database.prepare(`DELETE FROM inferred_turns WHERE user_id = ? AND started_at >= ?`);
-  const insertTurnStmt = database.prepare(`
-    INSERT INTO inferred_turns
-      (inferred_turn_id, user_id, started_at, ended_at, call_count, business_call_count, tool_summary, source_summary, question_summary, confidence, evidence_json, client, session_id, created_at, updated_at, inquiry_no)
-    VALUES
-      (@id, @userId, @startedAt, @endedAt, @callCount, @businessCallCount, @toolSummary, @sourceSummary, @questionSummary, @confidence, @evidenceJson, @client, @sessionId, @createdAt, @updatedAt, @inquiryNo)
-  `);
-  const insertLinkStmt = database.prepare(`INSERT INTO inferred_turn_access_logs (inferred_turn_id, access_log_id) VALUES (?, ?)`);
   const sourceQueryCache = new Map<string, Array<{ connection_id: string | null; schema_name: string | null; source_name: string | null; physical_table: string }>>();
+  const assignedInquiry = new Map<string, number>();
 
   function sourcesFor(accessLogIds: number[]): Array<{ connection_id: string | null; schema_name: string | null; source_name: string | null; physical_table: string }> {
     if (accessLogIds.length === 0) return [];
     const key = accessLogIds.join(",");
     const cached = sourceQueryCache.get(key);
     if (cached) return cached;
-    const result = database.prepare(`
-      SELECT DISTINCT connection_id, schema_name, source_name, physical_table
-      FROM access_log_sources
-      WHERE access_log_id IN (${accessLogIds.map(() => "?").join(",")})
-    `).all(...accessLogIds) as Array<{ connection_id: string | null; schema_name: string | null; source_name: string | null; physical_table: string }>;
-    sourceQueryCache.set(key, result);
-    return result;
+    const merged = new Map<string, { connection_id: string | null; schema_name: string | null; source_name: string | null; physical_table: string }>();
+    for (let offset = 0; offset < accessLogIds.length; offset += INFERRED_REBUILD_SOURCE_CHUNK) {
+      const chunk = accessLogIds.slice(offset, offset + INFERRED_REBUILD_SOURCE_CHUNK);
+      const result = database.prepare(`
+        SELECT DISTINCT connection_id, schema_name, source_name, physical_table
+        FROM access_log_sources
+        WHERE access_log_id IN (${chunk.map(() => "?").join(",")})
+      `).all(...chunk) as Array<{ connection_id: string | null; schema_name: string | null; source_name: string | null; physical_table: string }>;
+      for (const row of result) {
+        const dedupe = `${row.connection_id ?? ""}\0${row.schema_name ?? ""}\0${row.source_name ?? ""}\0${row.physical_table}`;
+        if (!merged.has(dedupe)) merged.set(dedupe, row);
+      }
+    }
+    const rows = [...merged.values()];
+    sourceQueryCache.set(key, rows);
+    return rows;
   }
 
-  const rebuild = database.transaction((): number => {
-    ensureBackfillBeforeAllocate(database);
-    deleteAccessLogsStmt.run(userId, cutoff);
-    deleteTurnsStmt.run(userId, cutoff);
-
-    let written = 0;
-    for (const cluster of built) {
-      const members = [...cluster.handshake, ...cluster.business].sort((a, b) => a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : a.id - b.id);
-      if (members.length === 0) continue;
-      const anchor = cluster.business[0] ?? members[0];
-      const accessLogIds = members.map((row) => row.id);
-      const businessRows = cluster.business.filter((row) => row.tables !== null);
-      const dataBearing = businessRows.length > 0;
-      const toolSummary = [...new Set(members.map((row) => row.tool))];
-      const sourceRows = sourcesFor(cluster.business.map((row) => row.id));
-      const sourceSummary: SourceSummaryEntry[] = sourceRows.map((row) => ({
-        connectionId: row.connection_id ?? undefined,
-        schema: row.schema_name ?? undefined,
-        sourceName: row.source_name ?? undefined,
-        physicalTable: row.physical_table
-      }));
-      const confidence: "medium" | "low" = dataBearing ? "medium" : "low";
-      const questionSummary = cluster.summaryOverride ?? UNREPORTED_QUESTION_SUMMARY;
-      const now = new Date().toISOString();
-      const startedAt = members[0].ts;
-      const endedAt = members[members.length - 1].ts;
-      const inferredId = inferredTurnId(userId, anchor.id);
-      const client = clientFromRows(members);
-      const inquiryNo = lookupInquiryNo(database, inferredId) ?? allocateInquiryNo(database, inferredId);
-
-      insertTurnStmt.run({
-        id: inferredId,
-        inquiryNo,
-        userId,
-        startedAt,
-        endedAt,
+  /** Build a serializable turn write for the rebuild worker (prefetch sources on this thread). */
+  const buildTurnWrite = (cluster: BuiltCluster): RebuildTurnWrite | null => {
+    const members = [...cluster.handshake, ...cluster.business].sort((a, b) => a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : a.id - b.id);
+    if (members.length === 0) return null;
+    const anchor = cluster.business[0] ?? members[0];
+    const accessLogIds = members.map((row) => row.id);
+    const businessRows = cluster.business.filter((row) => row.tables !== null);
+    const dataBearing = businessRows.length > 0;
+    const toolSummary = [...new Set(members.map((row) => row.tool))];
+    const sourceRows = sourcesFor(cluster.business.map((row) => row.id));
+    const sourceSummary: SourceSummaryEntry[] = sourceRows.map((row) => ({
+      connectionId: row.connection_id ?? undefined,
+      schema: row.schema_name ?? undefined,
+      sourceName: row.source_name ?? undefined,
+      physicalTable: row.physical_table
+    }));
+    const confidence: "medium" | "low" = dataBearing ? "medium" : "low";
+    const questionSummary = cluster.summaryOverride ?? UNREPORTED_QUESTION_SUMMARY;
+    const now = new Date().toISOString();
+    const inferredId = inferredTurnId(userId, anchor.id);
+    const inquiryNo = assignedInquiry.get(inferredId);
+    if (inquiryNo == null) throw new Error(`missing inquiry number for ${inferredId}`);
+    return {
+      id: inferredId,
+      inquiryNo,
+      userId,
+      startedAt: members[0].ts,
+      endedAt: members[members.length - 1].ts,
+      callCount: members.length,
+      businessCallCount: businessRows.length,
+      toolSummary: JSON.stringify(toolSummary),
+      sourceSummary: JSON.stringify(sourceSummary),
+      questionSummary,
+      confidence,
+      evidenceJson: JSON.stringify({
+        accessLogIds,
+        toolSummary,
+        sourceSummary,
         callCount: members.length,
         businessCallCount: businessRows.length,
-        toolSummary: JSON.stringify(toolSummary),
-        sourceSummary: JSON.stringify(sourceSummary),
-        questionSummary,
-        confidence,
-        evidenceJson: JSON.stringify({
-          accessLogIds,
-          toolSummary,
-          sourceSummary,
-          callCount: members.length,
-          businessCallCount: businessRows.length,
-          sessionId: cluster.sessionId
-        }),
-        client,
-        sessionId: cluster.sessionId,
-        createdAt: now,
-        updatedAt: now
-      });
-      for (const accessLogId of accessLogIds) {
-        insertLinkStmt.run(inferredId, accessLogId);
+        sessionId: cluster.sessionId
+      }),
+      client: clientFromRows(members),
+      sessionId: cluster.sessionId,
+      createdAt: now,
+      updatedAt: now,
+      accessLogIds
+    };
+  };
+
+  const deleteLinksByTurn = database.prepare(`DELETE FROM inferred_turn_access_logs WHERE inferred_turn_id = ?`);
+  const deleteTurnById = database.prepare(`DELETE FROM inferred_turns WHERE inferred_turn_id = ?`);
+  const plans: Array<{ cluster: BuiltCluster; id: string }> = [];
+  for (const cluster of built) {
+    const members = [...cluster.handshake, ...cluster.business].sort((a, b) => a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : a.id - b.id);
+    if (members.length === 0) continue;
+    const anchor = cluster.business[0] ?? members[0];
+    plans.push({ cluster, id: inferredTurnId(userId, anchor.id) });
+  }
+
+  // P1-45／P1-50: 水位必须与读页冻结的 ceilingId 同一上界（十进制 id 字符串）。
+  // 不得改用 MAX(ts)：重建期间插入且 id>ceiling 但 ts≤MAX(ts) 的行不会进快照，
+  // 却会被 ts 水位判为已覆盖（FDE R01）。空窗口时 ceilingId=0。
+  const watermark = String(ceilingId);
+
+  // P1-45 SC-01: 在 DELETE 之前持久化 in_progress，使任意中断后 covered() 返回 false。
+  database.prepare(`
+    INSERT INTO inferred_rebuild_state (user_id, status, watermark, updated_at)
+    VALUES (?, 'in_progress', ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET
+      status = 'in_progress', watermark = excluded.watermark, updated_at = excluded.updated_at
+  `).run(userId, watermark, new Date().toISOString());
+
+  // P1-47 SC-01: Split the previously unbounded delete+allocate block so the event loop
+  // can yield between chunks. Window-scoped deletes are also chunked by turn id (UAT-RPB
+  // showed a single DELETE of thousands of turns still blocked livez for ~8s on throttled
+  // disk). The per-plan delete+allocate loop stays REBUILD_ALLOCATE_CHUNK-sized.
+  // OQ-1: within each short txn plans are processed in cluster order; between chunks we
+  // yield; existing correlation_key numbers are reused via lookupInquiryNo.
+  // Spike-shave: window DELETE chunks run off-thread (same worker as write_slice).
+  const backfillStartedAt = performance.now();
+  database.transaction(() => {
+    ensureBackfillBeforeAllocate(database);
+  })();
+  rebuildTrace("backfill_serial", { ms: performance.now() - backfillStartedAt });
+  await rest();
+
+  const windowTurnIds = (
+    database.prepare(
+      `SELECT inferred_turn_id AS id FROM inferred_turns WHERE user_id = ? AND started_at >= ?`
+    ).all(userId, cutoff) as Array<{ id: string }>
+  ).map((row) => row.id);
+  let deleteWindowMs = 0;
+  for (let chunkStart = 0; chunkStart < windowTurnIds.length; chunkStart += REBUILD_ALLOCATE_CHUNK) {
+    if (chunkStart > 0) await rest();
+    const chunk = windowTurnIds.slice(chunkStart, chunkStart + REBUILD_ALLOCATE_CHUNK);
+    const offDelete = await runDeleteWindowOffThread(auditDbPath, chunk);
+    deleteWindowMs += offDelete.writeMs;
+    rebuildTrace("delete_window", {
+      offset: chunkStart,
+      size: chunk.length,
+      ms: offDelete.writeMs,
+      off_thread: 1
+    });
+  }
+  rebuildTrace("delete_window_total", { turns: windowTurnIds.length, ms: deleteWindowMs });
+  await rest();
+
+  let allocateMs = 0;
+  for (let chunkStart = 0; chunkStart < plans.length; chunkStart += REBUILD_ALLOCATE_CHUNK) {
+    if (chunkStart > 0) await rest();
+    const chunk = plans.slice(chunkStart, chunkStart + REBUILD_ALLOCATE_CHUNK);
+    // Per-plan deletes for ids outside the window list stay on this thread but are tiny;
+    // inquiry allocate must stay here for serial consistency with lookupInquiryNo.
+    const chunkStartedAt = performance.now();
+    database.transaction(() => {
+      for (const plan of chunk) {
+        deleteLinksByTurn.run(plan.id);
+        deleteTurnById.run(plan.id);
+        assignedInquiry.set(plan.id, lookupInquiryNo(database, plan.id) ?? allocateInquiryNo(database, plan.id));
       }
-      written += 1;
+    })();
+    const chunkMs = performance.now() - chunkStartedAt;
+    allocateMs += chunkMs;
+    rebuildTrace("allocate", { offset: chunkStart, size: chunk.length, ms: chunkMs });
+  }
+  rebuildTrace("allocate_total", { plans: plans.length, ms: allocateMs });
+  await rest();
+
+  let turns = 0;
+  let sliceSize = REBUILD_WRITE_SLICE_INITIAL;
+  let writeSlicesMs = 0;
+  let prefetchMs = 0;
+  let walCheckpointMs = 0;
+  // P1-47 spike-shave: always PASSIVE after each write_slice (no F2++ skip); write+ckpt off-thread.
+  for (let start = 0; start < plans.length;) {
+    const slice = plans.slice(start, start + sliceSize);
+    // Prefetch on the request thread (read-only); build serializable payloads before the worker txn.
+    const prefetchStartedAt = performance.now();
+    const turnWrites: RebuildTurnWrite[] = [];
+    for (const plan of slice) {
+      sourcesFor(plan.cluster.business.map((row) => row.id));
+      const builtTurn = buildTurnWrite(plan.cluster);
+      if (builtTurn) turnWrites.push(builtTurn);
     }
-    return written;
+    const prefetchElapsed = performance.now() - prefetchStartedAt;
+    prefetchMs += prefetchElapsed;
+    rebuildTrace("prefetch_sources", { offset: start, size: slice.length, ms: prefetchElapsed });
+    if (prefetchElapsed >= 20) await rest();
+
+    const off = await runWriteSliceOffThread(auditDbPath, turnWrites);
+    turns += off.written;
+    writeSlicesMs += off.writeMs;
+    walCheckpointMs += off.checkpointMs;
+    rebuildTrace("write_slice", {
+      offset: start,
+      size: turnWrites.length,
+      ms: off.writeMs,
+      sliceSize,
+      off_thread: 1
+    });
+    rebuildTrace("wal_checkpoint", {
+      offset: start,
+      ms: off.checkpointMs,
+      busy: off.busy,
+      log: off.log,
+      checkpointed: off.checkpointed,
+      off_thread: 1
+    });
+    await rest();
+
+    if (off.busy === 1) {
+      const retry = await runWriteSliceOffThread(auditDbPath, []);
+      walCheckpointMs += retry.checkpointMs;
+      rebuildTrace("wal_checkpoint_retry", {
+        offset: start,
+        ms: retry.checkpointMs,
+        busy: retry.busy,
+        log: retry.log,
+        checkpointed: retry.checkpointed,
+        off_thread: 1
+      });
+      await rest();
+    }
+
+    start += slice.length;
+    const sliceMs = off.writeMs + off.checkpointMs;
+    // W0b: slow slices shrink immediately; otherwise adapt toward the time budget.
+    if (sliceMs >= REBUILD_WRITE_SLICE_SLOW_MS) {
+      sliceSize = Math.max(REBUILD_WRITE_SLICE_MIN, Math.min(sliceSize, Math.floor(sliceSize / 2) || REBUILD_WRITE_SLICE_MIN));
+    } else {
+      sliceSize = nextSliceSize(sliceSize, Math.max(off.writeMs, 1), REBUILD_WRITE_SLICE_MIN, REBUILD_WRITE_SLICE_MAX);
+    }
+  }
+
+  // P1-45 SC-01: 全部写片成功后标记 complete；covered() 仅当 newest id ≤ ceilingId 时为 true。
+  database.prepare(`
+    INSERT INTO inferred_rebuild_state (user_id, status, watermark, updated_at)
+    VALUES (?, 'complete', ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET
+      status = 'complete', watermark = excluded.watermark, updated_at = excluded.updated_at
+  `).run(userId, watermark, new Date().toISOString());
+
+  rebuildTrace("complete", {
+    turns,
+    plans: plans.length,
+    read_ms: readPagesMs,
+    delete_ms: deleteWindowMs,
+    allocate_ms: allocateMs,
+    prefetch_ms: prefetchMs,
+    write_ms: writeSlicesMs,
+    wal_checkpoint_ms: walCheckpointMs,
+    total_ms: performance.now() - rebuildStartedAt,
+    watermark
   });
 
-  const turns = rebuild();
   return { turns };
 }
 

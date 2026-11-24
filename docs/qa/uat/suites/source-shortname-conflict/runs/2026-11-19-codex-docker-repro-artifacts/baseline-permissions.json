@@ -1,0 +1,71 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 17,
+  "body": {
+    "ok": true,
+    "data": {
+      "roleIds": [
+        "repro_reader"
+      ],
+      "snapshotHash": "bb4ab9ad5f5fa9fb7002e96899df8c47690ab1a44208132825450fc4da2d6ac1",
+      "sourceMapVersion": "41e7435b16fa69a8",
+      "tools": [
+        "connection_list",
+        "lucy_begin_question",
+        "lucy_catalog",
+        "lucy_continue_question",
+        "lucy_explain_query",
+        "lucy_query",
+        "lucy_read_source"
+      ],
+      "connections": [
+        "hive-1"
+      ],
+      "sources": [
+        {
+          "connectionId": "hive-1",
+          "schema": "weather",
+          "sourceName": "city",
+          "table": "weather.city"
+        }
+      ],
+      "legacyAllow": false,
+      "capabilityDigest": "d5bdb2035b6a701d",
+      "capabilities": [
+        {
+          "tool": "lucy_explain_query",
+          "connectionId": "hive-1",
+          "schema": "weather",
+          "sourceName": "city",
+          "physicalTable": "weather.city",
+          "sourceKey": "hive-1|weather|city|weather.city",
+          "rowGrant": "all",
+          "finalRows": "all",
+          "protected": false
+        },
+        {
+          "tool": "lucy_query",
+          "connectionId": "hive-1",
+          "schema": "weather",
+          "sourceName": "city",
+          "physicalTable": "weather.city",
+          "sourceKey": "hive-1|weather|city|weather.city",
+          "rowGrant": "all",
+          "finalRows": "all",
+          "protected": false
+        },
+        {
+          "tool": "lucy_read_source",
+          "connectionId": "hive-1",
+          "schema": "weather",
+          "sourceName": "city",
+          "physicalTable": "weather.city",
+          "sourceKey": "hive-1|weather|city|weather.city",
+          "rowGrant": "all",
+          "finalRows": "all",
+          "protected": false
+        }
+      ]
+    }
+  }
+}

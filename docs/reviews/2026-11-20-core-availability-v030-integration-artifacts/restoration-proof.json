@@ -1,0 +1,19 @@
+{
+  "at": "2026-11-20T13:58:22.813981+00:00",
+  "rootHead": "f865775dd017757d98f71ab2025ad2b39bb22737",
+  "protectedNonoverlapFiles": 37,
+  "protectedNonoverlapUnchanged": true,
+  "P168CurrentStatusPreservedInSixSharedDocs": true,
+  "P168NewFilesRemainUntracked": true,
+  "specLintExistingP168MissingApiCount": 8,
+  "specLintExistingP168MissingApis": [
+    "/api/admin/ops-step-uat/background",
+    "/api/admin/ops-step-uat/console-probe",
+    "/api/admin/ops-step-uat/diagnostic",
+    "/api/admin/ops-step-uat/read-failure",
+    "/api/admin/ops-step-uat/reset",
+    "/api/admin/ops-step-uat/stdout-failure",
+    "/api/admin/ops-step-uat/sync-section",
+    "/api/admin/ops-steps"
+  ]
+}

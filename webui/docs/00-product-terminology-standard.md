@@ -253,9 +253,9 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Final Rows | 最终行约束 | FinalRows | 仅用户 filter、仅 Role 并集 | `EffectiveRowGrant AND AgentConstraints AND TokenScope`；AC-P1：Constraints/TokenScope≡TRUE；**AC-P1.5**：Constraints 可非 TRUE（Spec 100）；TokenScope 仍≡TRUE |
 | Forced Predicate | 强制谓词 | ForcedPredicateAST | 拼进用户 filters 的 SQL | Proxy 编译自 FinalRows；不可被 OR/括号等放宽 |
 | Forced Filters Field | 专用强制字段 | `forced_filters` | 用户可写 filters | AC-P1 上游主路径；仅 Proxy 可写 |
-| Upstream Forced Predicate Proven | 上游强制谓词已证明 | proven 标志 | 代码写完即已证明 | Gate C bypass 全绿后才可置真；未证明取数 deny |
+| Upstream Forced Predicate Proven | 上游强制谓词已证明 | proven 标志 | 代码写完即已证明 | P1-72 起为产品强制执行契约的兼容诊断字段；不再由部署变量置真 |
 | Row Policy Requires Wrapped Tool | 需包装工具 | `row_policy_requires_wrapped_tool` | capability_forbidden（混作主文案） | 受保护源上非 lucy_query 取数通道 |
-| Row Policy Upstream Unproven | 上游契约未证明 | `row_policy_upstream_unproven` | 临时放行碰运气 | FinalRows≠TRUE 且 proven≠true 的取数路径 |
+| Row Policy Upstream Unproven | 上游契约未证明 | `row_policy_upstream_unproven` | 临时放行碰运气 | 历史拒绝码；P1-72 起不因人工证明变量拒绝 |
 | Agent Constraints | 个人行限制 | 人级收紧、FinalRows 收紧 | 行级策略、行级权限策略、Agent 强制约束（弃用主术语）、Role 间 AND、Row Grant OR（混称）、TokenScope | 挂在 Agent 上、在角色行级策略之上再限制这个人，与 EffectiveRowGrant **AND**；**AC-P1.5 Spec 100**；Role 上 forbidden；AC-P1 配置出现即失败 |
 | Permission Model Version | 权限模型版本 | `permission_model_version`、模型版本 | 用户字段 role/roles、修改历史推断世代 | Role 上 `1`=legacy、`2`=显式模型 |
 | Row Policy | 行级策略 | row_policy、结构化行谓词 | Segment、查询 filters、overlay 表达式当权限 | 仅 `access.yaml` 内 structured 谓词；op∈{eq,in}；Spec 99 |
@@ -343,8 +343,10 @@ Chrome / Edge / 浏览器翻译插件可能会篡改 DOM 文本，造成专业�
 | Discovered Table Count | 已发现表数 | 本地表数（作主标签时易混）、物理表数、远端表数 | Schema Manifest 已读入本地 Catalog 的表数；KPI 卡亦称「服务器目录已发现表」；非 DB 实时扫描 |
 | Enabled Table Count | 已启用表数 | 白名单表数、启用表数（旧列头，仅兼容旧文档） | `ktx.yaml` `enabled_tables`；对齐 `/connections` 列头「已启用表数」 |
 | Unenabled Table Count | 未启用表 | 未白名单表（主导航禁用） | 已发现但未进入 `enabled_tables`；缺 Manifest 的未知表不计入 |
-| Invalid Enabled Table | 无效启用 | 孤儿表、孤儿启用（用户可见主文案禁用） | `enabled_tables` 有、本地 Schema Manifest 无的 `schema.table`（Spec 116） |
-| Remove Invalid Enabled | 移出无效启用 | 清理孤儿、删除脏启用 | 启用表范围页从草稿移除全部无效启用（Spec 116） |
+| Invalid Enabled Table | 无效启用 | 孤儿表、孤儿启用（用户可见主文案禁用） | `enabled_tables` 有、本地 Schema Manifest 无的 `schema.table`（Spec 116）；仅 tables query **success** 后可判定（P1-80） |
+| Remove Invalid Enabled | 移出无效启用 | 清理孤儿、删除脏启用 | 启用表范围页从草稿移除全部无效启用（Spec 116）；tables 未就绪时不可达／禁用（P1-80） |
+| Tables list loading | 正在读取表清单… | 加载中、同步中（过宽） | 启用表范围：该连接 `/tables` pending／无成功 data（P1-80） |
+| Tables list read failed | 表清单读取失败，请重试。 | 缺少 Manifest、无效启用 | 启用表范围：该连接 `/tables` isError；可附重试（P1-80） |
 | Live Catalog | 库内目录 | 物理扫描（作主标签） | Owner 按需只读目录查询结果 |
 | Refresh Live Catalog | 重新拉取库内目录 | 刷新本地目录（易混） | 仅 bypass TTL 重查物理库 |
 | Select Schema | 选择 Schema | 选择架构、选择模式 | Add Schema 下拉候选 |
@@ -408,6 +410,10 @@ Protected DOM（用户可见 DOM 须 `translate="no"` + `notranslate`）：`Hive
 | Metric Definition | 指标定义 | 度量定义混用 | 指标口径、聚合方式、过滤条件 |
 | Dimension Definition | 维度定义 | 维数定义 | 维度字段和展示属性 |
 | Upload Semantic Overlay | 上传 semantic overlay | 上传 overlay YAML | 裸用“上传 YAML” | 写入 `semantic-layer/<connection>/<table>.yaml` |
+| Field Exposure | 字段暴露 | 列级权限、列级脱敏、按角色分列、隐藏列（作文案主术语） | Source 级业务暴露裁剪；库存 ≠ 暴露；全实例同一套采用集。协议名 `field_exposure`。**业务暴露裁剪 ≠ 列级安全** |
+| Unexposed Field | 未暴露字段 | 禁用字段、脱敏字段、隐藏字段（作文案主术语） | 台账 `excluded_columns` 中的物理列；工作台仍可见可恢复 |
+| Field Not Exposed | （机器码，不新造 UI 译名） | — | 裁决码 `field_not_exposed`：查数面点名未暴露字段；沿用「访问控制」裁决码呈现 |
+| Field Exposure Unavailable | （机器码，不新造 UI 译名） | — | 裁决码 `field_exposure_unavailable`：台账／期望集合／执行代次不可用，或四透传首期 trimmed 阻断 |
 
 语义层对象展示必须遵守自顶向下的层级顺序：
 
@@ -465,6 +471,7 @@ Connection (连接)
 | 我已有 Schema Manifest | 展开上传 | 裸「上传 YAML」 |
 | 替换已有 Schema Manifest | 主动覆盖入口，确认后再写入 | 自动覆盖 |
 | 结束并稍后继续 | 关闭并保留第 2 步断点 | 稍后上传 Schema Manifest |
+| 表「x」这次没有读完，请稍后重试。 | 客户端在单表连续两次收到 deferred 后的失败提示（P1-34 §11 C6；`prepareSchemaStructure.ts`）。用于错误汇总文案。x 为实际表名 | 读取超时、批量读取失败、服务器未响应（作 C6 文案）|
 | 如何生成 Schema Manifest | 第 2 步折叠提醒（Spec 167）。展开后只说明：要自己准备文件时，把编写说明交给 Agent。读库由主按钮「从数据库读取表结构」承担 | 下载 Skill、去某个客户端安装、先准备好 YAML 再启动向导 |
 | 如何写业务 Wiki | 第 5 步折叠提醒（Spec 167）。先说明可直接写、上传或跳过；不知道写什么时把编写说明交给 Agent | 维基模板、把业务 Wiki 写成必填 |
 | 编写说明 | 交给 Agent 的生成说明，可复制或下载（Spec 167）。不限定客户端 | Skill、配置作者、业务 Skill |
@@ -665,6 +672,10 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Correlation Key | 关联键 | — | 把关联键当列表问询 ID、第三种来源 badge | 库存主键：`lucy_<uuid>` 或 `inf_<userId>_<accessLogId>`。抽屉与问询 CSV 保留；列表主列不展示 |
 | Inferred Turn ID | 推断问询 ID | — | inferred turn id（裸露作主标签） | 调用流水列 / CSV 关联键回填；仅当问询 ID 为空时由关联表回填 |
 | Audit Event ID | 事件 ID | — | access_log id（裸露作主标签） | 调用流水 L1 身份列；`access_log.id` |
+| Trace ID | 调用链路 ID | — | 追踪号、链路号、trace id（裸露作主标签） | P1-36：调用流水列 `trace_id` 的展示名；同一请求从准入到响应共用一个。见 `docs/specs/lucy-20261116-trace-span-ledger-spec.md` |
+| Trace Span | 阶段记录 | — | 子调用、节点、span（裸露作主标签） | P1-36：一次请求内某一阶段的耗时与结果；导出文件 `spans.csv` 的行对象 |
+| Ops Step | 运维步骤 | — | 阶段记录、调用流水、span（裸露作主标签） | P1-68：一次运维操作进入的一个命名步骤。读者是 Lucy 运维与 IT 运维。与调用流水的阶段记录不是同一本账 |
+| Ops Step Journal | 运维步骤账 | — | 审计账、调用流水、阶段记录 | P1-68：上述步骤的记录。容器标准输出与管理台「运维步骤」页读的是同一条。操作号、步骤名在 DOM 上保留翻译防御 |
 | Range preset | 近 24 小时 / 近 7 天 | — | 地址栏 `hours=168`（新写入） | URL `range=24h\|7d`；兼容读 `hours=24\|168` |
 | Reported turn | 已上报问询 | — | reported turn | 来源 badge |
 | Inferred turn | 推断问询 | — | 推断问题（无来源标注） | 来源 badge |
@@ -816,10 +827,28 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Agent`、`Token
 | Decision Reason | Decision Reason | 裁决原因 | 拒绝码、reason（裸露作主标签） | 访问日志主行中文、次行裁决原因码。调试台用裁决卡，允许时不重复「允许执行」 |
 | Decision Reason Code | Decision Reason Code | 裁决原因码 | — | 机器码（如 `tool_forbidden`）；次行 `notranslate` |
 | Effective Permissions Snapshot | Effective Permissions Snapshot | 生效权限快照 | 权限 dump | 调试台结果不展示计数 |
+| Next Step | next_step | 下一步建议 | 修复提示（作同义词）、安全边界、结论 | 成功但严格 0 行时响应附带的受控下一步指引；落在**已存在承载位**：`content[0].text` 的 JSON 对象内同名键（模型可读主落点，必选）、`structuredContent.next_step`（**仅当** `structuredContent` 已是普通对象时同步）、`_meta.lucy.next_step`（合同／审计位）。**Lucy 注入的** `next_step` 同生同灭（D4）；缺失 structured **不是**失败，不得为凑齐「三处」而新建空对象。**不得与 `Repair Hint` 混称／替代**；**例外（D14）**：成功截断路径的 `_meta.lucy.repair` 与空结果 `next_step` **允许并存**（不得删 Spec 162 截断提示）。Spec `lucy-20261107-empty-result-next-step-guidance` |
+| Empty Result | — | 空结果 | 与审计标记 `result_empty` 混为一件 | `lucy_query` 成功返回 0 行事实数据；与 `result_empty`（Spec 162 §8）同义不同层 |
+| Suggestion | — | 建议动作 | 写成对 Agent 的强制命令 | `next_step.suggestions` 的每一条，是排查方向不是指令 |
+| Question Type Binding | Question Type Binding | 问题类型口径绑定 | 指标绑定、自动口径推断、ACL 绑定、权限绑定 | 协议／资产名 `caliber_binding`。人发布的声明式资产：问题类型（触发词／显式 id）→ **唯一 Source** ＋ **固定口径集合**。见 Spec `lucy-20261107-question-type-caliber-binding-spec` |
+| Bound Caliber | Bound Caliber | 固定口径 | 口径配置、指标口径说明、instructions 软约定 | 绑定内允许的 measures／dimensions／filters／segments 约束集合（首期不含 grain）。运行时由 Proxy 硬门禁，**不得**由 Agent 另行拼装 |
+| Active Binding | Active Binding | 生效绑定 | 全局绑定、跨问询记忆、上次口径 | 一次问询旅程内处于强制状态的那一条绑定。作用域＝问询旅程，以 begin 时深拷贝快照为准 |
+| Caliber Binding Violation | Caliber Binding Violation | 偏离固定口径 | 口径越权、ACL 拒绝、越权访问 | 拒绝码 `caliber_binding_violation`。命中生效绑定后查数参数违反固定口径 |
+| Caliber Binding Unresolved | Caliber Binding Unresolved | 口径绑定无法解析 | 未绑定、绑定缺失、权限不足 | 拒绝码 `caliber_binding_unresolved`。已开题且应有绑定，但权威作用域无法可靠解析（≠「未 begin」） |
+| Field Not Exposed | Field Not Exposed | （机器码） | 列级权限拒绝（混用） | 裁决码 `field_not_exposed`；业务暴露裁剪，非列级安全 |
+| Field Exposure Unavailable | Field Exposure Unavailable | （机器码） | 配置损坏（裸露作文案主标签） | 裁决码 `field_exposure_unavailable`；台账／期望／代次故障或四透传首期阻断 |
+| Source Description | Source Description | 来源描述 | 元数据、schema 说明（作主术语）、授权信息 | 语义层为 source 发布的业务含义文本；目录取 `descriptions.db`。描述是语义，不得用于推断权限。见 Spec `lucy-20261107-catalog-business-semantics-spec` |
+| Source Grain | Source Grain | 来源粒度 | 主键、维度列表（冒充粒度） | overlay 的 `grain`；说明事实粒度。不从 manifest 读取 |
+| Description Coverage | Description Coverage | 描述覆盖率 | 质量门禁、发布阻断指标 | 可见 source 中携带非空描述的比例；首期只观测，不阻断发布 |
+| Description Missing Marker | Description Missing Marker | 描述缺失标记 | 数据缺失、表无数据 | 目录条目 `descriptionState: missing`；区分「无描述」与「未装配」 |
+| Answer Verifiability Block | Answer Verifiability Block | 可核对块 | 自动正确校验、安全边界披露、已校验新鲜度（冒充） | 协议字段名 `answer_verifiability`。成功 `lucy_query` 工具结果中强制露出的来源／口径／截止期结构。见 Spec `lucy-20261107-answer-verifiability-spec` |
+| Data Cutoff Disclosure | Data Cutoff Disclosure | 数据截止期披露 | 已校验业务截止期（当 `not_checked`）、安全边界 | 落在 `answer_verifiability.cutoff`；首期诚实 `not_checked`，不得用语义 mtime／查询时／`businessDate` 冒充已校验 |
+| Model-Readable Tool Result | Model-Readable Tool Result | 模型可读工具结果 | 用户一定看见、宿主已渲染 | MCP `tools/call` 的 `result`（含 `content`／`structuredContent`／`_meta`），供模型与自动化读 |
+| User-Visible Answer | User-Visible Answer | 用户可见答复 | 工具字段已等于用户已见 | 宿主最终呈现给终端用户的文本／UI；本条默认不强制宿主 UI 渲染可核对块 |
 
-Protected terms（DOM 需 `translate="no"` + `notranslate`）：`MCP`、`Agent`、`Role`、`Token`、`ACL`、tool name、`decision_reason` 码、connection / schema / table、JSON-RPC method。
+Protected terms（DOM 需 `translate="no"` + `notranslate`）：`MCP`、`Agent`、`Role`、`Token`、`ACL`、tool name、`decision_reason` 码、connection / schema / table、`descriptionState`、JSON-RPC method、`field_not_exposed`、`field_exposure_unavailable`、`field_exposure`、`answer_verifiability`。
 
-详见 Spec 99。Catalog 语义筛选「未完成」(`incomplete`) 与 overview 深链见 Spec 100，不在本表重复造译名。
+详见 Spec 99。Catalog 语义筛选「未完成」(`incomplete`) 与 overview 深链见 Spec 100，不在本表重复造译名。Catalog 业务语义暴露见 Spec `lucy-20261107-catalog-business-semantics-spec`。
 
 ### 4.8 访问权限升级（Access Control Upgrade / AC-P0 + AC-P1 + AC-P1.5）
 
@@ -835,8 +864,8 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`MCP`、`Agent`�
 | Agent Constraints Editor | 个人行限制 | constraints / 人级收紧 | 行级策略、Agent 强制约束（按钮与标题弃用）、Role 强制约束、Token 行收紧、多 Role 自动 AND | **仅 Agent Admin**（Spec 100）；从当前角色已授权的表勾选；Role / Token 不提供 |
 | Forced Filters Field | 专用强制字段 | `forced_filters` | 用户 filters 即行权限 | 仅 Proxy 注入 |
 | Row Policy Requires Wrapped Tool | 需包装工具 | 请使用 lucy_query | 表未授权（混用） | Toast / 审计主文案 |
-| Row Policy Upstream Unproven | 上游契约未证明 | 行策略未启用取数 | 临时可用 | proven 前取数 deny |
-| Scope Intersection Empty | 行范围与用户筛选无交集 | `scope_intersection_empty` | 允许执行（混用） | 调用流水：`outcome=ok` 且裁决原因区分空交集 |
+| Row Policy Upstream Unproven | 上游契约未证明 | 行策略未启用取数 | 临时可用 | 历史拒绝码；P1-72 起取消人工证明门槛 |
+| Scope Intersection Empty | 行范围与用户筛选无交集 | `scope_intersection_empty` | 允许执行（混用） | 调用流水：`outcome=ok` 且裁决原因区分空交集。**第二处承载：MCP 工具响应的 `next_step.kind`（同一概念、同一机器码，跨面引用须写明承载位）** |
 | Canonical Source Key | 规范源键 | 源键 | 表名（作为唯一 ID） | 预览 / snapshot 展示四元组 |
 | Policy Version | 策略版本 | `policyVersion` | 配置时间戳（冒充策略世代） | 保存成功回执与审计列 |
 | Runtime Ack | 运行时确认 | 已生效 | 已保存（无 ack 时显示成功） | 收窄保存成功条件 |
@@ -854,13 +883,21 @@ Protected terms（DOM 需 `translate="no"` + `notranslate`）：`MCP`、`Agent`�
 | Grant Path | 授权路径 | — | 权限、授权项、访问路径 | 去重 `(Agent, Role, Connection, Schema, Table)` 存在性实例 |
 | Access Path | 访问路径 | — | 调用次数、请求数 | 窗口内至少一次允许调用的去重 `(Agent, Role, Connection, Schema, Table)` 路径 |
 | Dormant Grant | 闲置授权 | 有权未用 | 僵尸授权；未使用权限；闲置资源 | 授权路径数 > 0 且访问路径数 = 0 |
+| Idle Grant Aggregate | 闲置授权 · {k} 张表 | — | 逐表铺开闲置表；闲置资源；僵尸授权 | 访问关系图表列里每个连接（或 Schema）至多一个聚合节点，收纳其下窗口内无任何访问路径的表；访问面不可用时不出现。见 `docs/specs/lucy-20261117-access-map-sankey-restoration-spec.md` |
+| Ghost Band Legend | 虚线轮廓 = 闲置授权（示意宽度，封顶，不与实心带同尺度） | — | 流带宽度 = 授权路径数；骨干；空心 | 访问关系图图例第 2 项；幽灵带宽度是示意量，不参与使用刻度 |
+| Unconfirmed Calls Disclosure | 窗口内另有 {N} 次调用因问询关联未确认，未计入本图（口径：已确认关联） | 对照访问日志（链接文案） | 可调整筛选后再看（在 N>0 时）；越权；异常 | 访问关系图空态说明；{N} 来自 `meta.access.unconfirmedCalls`，只读披露，不放开 `include_candidate` |
 | Needs-review Signal | 需复核信号 | 需复核 | 越权（无调用当时快照证据时） | 当前授权无对应路径但历史有允许访问；快照缺失不得升级结论 |
 | Credential List | 凭证清单 | Token 清单 | 权限节点、凭证流 | 挂在 Agent 下的 Token 附属区，不承载授权、不参与流守恒 |
 | Association Scope | 关联口径 | 关联口径：已确认关联（静态披露） | **问询计入**；把「含候选关联」当作访问关系图可切换筛选项 | 访问关系图对 `trust`／`association_status` 的口径披露；固定已确认关联，只影响访问面。主筛选为问询种类／访问等级。见 `docs/specs/lucy-20261105-access-map-confirmed-only-spec.md`（废止可切换含候选） |
+| Source Ambiguity Gate | 表级歧义门闩 | 多表命中先问（instructions 侧） | ACL 拒绝、自动选表、字段歧义（单独冒充本条） | 业务词命中 ≥2 可见 source 时，在 `lucy_query`／`lucy_explain_query` 前 stop；拒绝码 `source_ambiguity_gate`。见 `docs/specs/lucy-20261107-source-ambiguity-gate-spec.md` |
+| Multi-Source Ask-First | 多表命中先问 | 问询范围确认（同族扩展） | 仅模型自觉、无 tool 硬拦（作本条完整交付） | instructions 层要求多表可能命中时先澄清再查 |
+| Ambiguity Candidate List | 歧义候选表清单 | 候选来源 | 越权推荐表、相似表推荐 | 门闩响应中的 ACL 裁剪候选（完整 source 身份＋展示名＋度量摘要） |
+| Source Confirmation | 选表确认 | 确认来源表 | Agent 自证确认、nonce 冒充确认 | 解除门闩所需的用户意图驱动可信显式信号（旅程 `confirmedSourceKey`＋宿主 attested 证据） |
+| Source Identity | 来源完整身份 | 四元组身份、CanonicalSourceKey | 仅用展示名／短名确认 | `{connectionId, schema, sourceName, physicalTable}`；命中去重与确认比较以此为准 |
 
 以上 v0.25 P1 条目仅登记设计术语（2026-10-25 需求审查已签核通过，设计口径），不表示对应页面、API 或验收已交付。
 
-Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Role`、`Agent`、`Token`、`MCP`、`YAML`、`policyVersion`、`permission_model_version`、`capability`、`runtimeAck`、`row_policy`、`row_policy_templates`、`row_access`、`forced_filters`、`constraints`、`RowGrant`、`FinalRows`、`AgentConstraints`、`grantPath`、`accessPath`、`policyVersion`、`sourceMapVersion`、`capabilityDigest`、tool name、`sourceName`、`connectionId`、physical table、规范源键四元组、裁决码全文。
+Protected terms（DOM 需 `translate="no"` + `notranslate`）：`Role`、`Agent`、`Token`、`MCP`、`YAML`、`policyVersion`、`permission_model_version`、`capability`、`runtimeAck`、`row_policy`、`row_policy_templates`、`row_access`、`forced_filters`、`constraints`、`RowGrant`、`FinalRows`、`AgentConstraints`、`grantPath`、`accessPath`、`policyVersion`、`sourceMapVersion`、`capabilityDigest`、tool name、`sourceName`、`connectionId`、physical table、规范源键四元组、裁决码全文、`source_ambiguity_gate`、Source Identity 四元组。
 
 与既有 Role Admin 术语（§3 `Role Permission` / `Role Table Selector` / `Table Name Prefix` 等）并存：升级后「权限摘要」主展示改为 Data Capability Preview，不得回退为仅工具并集+表并集。
 
@@ -1003,6 +1040,20 @@ Protected terms（DOM 须 `translate="no"` + `notranslate`）：`Agent`、`Role`
 Protected terms（DOM 须 `translate="no"` + `notranslate`）：`semantic-release-snapshot/v1`、`releaseId`、`snapshotId`、`planDigest`、`scopeDigest`、路径、digest 与恢复包 URL。
 
 **「不修改无关文件」的两种方向不得合并表述**：内容根侧，恢复写集之外的文件内容与摘要完全不变；ktx 视图侧，允许变化的恰为「恢复写集的受控镜像目标 ∪ 已确认的镜像同步写集」两类。两类变化方向不同，分区展示、分别核对。
+
+### 4.16 概念注册表（Concept Registry / P1-10）
+
+内容根 `concepts/` 下的人机共读概念盘点层。一期仅 CLI；不改查询执行语义，不把 Concept 当作第二公式源。
+
+| Canonical Term | UI 主术语 | 允许补充说法 | 禁止文案 | 说明 |
+|---|---|---|---|---|
+| Concept | 业务概念 | 概念 | 知识图谱节点、指标平台指标 | 跨表／跨文件收敛的业务词（如收入、资产） |
+| Concept Registry | 概念注册表 | 概念盘点 | 知识图谱、本体论平台、指标平台、元数据仓库 | 存放 Concept、Binding、权威状态的薄层资产 |
+| Binding | 概念绑定 | 绑定 | 边、三元组 | Concept 与语义／Wiki 出现关系，含证据与角色 |
+| Canonical Binding | 权威绑定 | 权威 | 把 `confidence` 写成权威 | 人指定的该 Concept 当前唯一权威出现；空＝尚未定权威 |
+| Conflict | 概念冲突 | 冲突 | 图谱不一致 | 派生状态（多候选未定权威、权威悬空等），可计算 |
+
+Protected terms（DOM 须 `translate="no"` + `notranslate`）：`conceptId`、`bindingId`、`canonical`、`confidence`、`needs_authority`、`broken_canonical`、路径与文件名。
 
 ## 5. 新术语登记流程
 

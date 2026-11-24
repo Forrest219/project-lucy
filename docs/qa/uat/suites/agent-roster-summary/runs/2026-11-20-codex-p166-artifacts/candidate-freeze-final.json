@@ -1,0 +1,10 @@
+{
+  "frozenAt": "2026-11-20T14:43:15.523389+08:00",
+  "runtimeFiles": 9,
+  "uiTests": 93,
+  "serverTests": 113,
+  "typeErrors": 0,
+  "globalDisplayReadTimeoutExcluded": true,
+  "detailRecoveryIncluded": true,
+  "noFurtherRuntimeChangesDuringMatrix": true
+}

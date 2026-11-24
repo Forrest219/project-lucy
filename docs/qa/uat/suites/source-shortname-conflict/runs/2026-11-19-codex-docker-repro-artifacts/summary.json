@@ -1,0 +1,530 @@
+{
+  "startedAt": "2026-11-19T15:14:29.988867+00:00",
+  "containers": [
+    "lucy-snc-88ac4a-app",
+    "lucy-snc-88ac4a-db"
+  ],
+  "network": "lucy-snc-88ac4a",
+  "imageTag": "project-lucy:demo",
+  "steps": [
+    {
+      "step": "bootstrap",
+      "httpStatus": 200,
+      "cookieIssued": true
+    },
+    {
+      "step": "scan-weather",
+      "httpStatus": 200,
+      "tableCount": 1,
+      "columnCount": 2,
+      "yaml": "tables:\n  city:\n    table: weather.city\n    columns:\n      - name: id\n        type: number\n        nullable: false\n        pk: true\n      - name: name\n        type: string\n        nullable: true\n"
+    },
+    {
+      "step": "baseline-weather-upload",
+      "httpStatus": 200,
+      "valid": true,
+      "ok": true,
+      "uploaded": true
+    },
+    {
+      "step": "baseline-enabled",
+      "httpStatus": 200,
+      "ok": true,
+      "data": {
+        "written": true,
+        "auditId": 3,
+        "oldEnabledTables": [
+          "weather.city"
+        ],
+        "newEnabledTables": [
+          "weather.city"
+        ],
+        "warnings": [],
+        "policyVersion": "6fa3e672f519c958115a45b5a110cea84e372ee754fe62bc26cda543532194d1",
+        "policyRuntimeAck": true,
+        "catalogRuntimeAck": false,
+        "executionRuntimeAck": true,
+        "executionRuntimeStatus": "ok",
+        "executionDecisionReason": "allowed",
+        "executionRuntimePending": false,
+        "runtimeAck": true
+      }
+    },
+    {
+      "step": "baseline-tools-list",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "baseline-catalog",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "baseline-begin",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "baseline-read",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "baseline-query",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null,
+      "result": {
+        "answer_verifiability": {
+          "schema_version": "1",
+          "sources": [
+            {
+              "connectionId": "hive-1",
+              "schema": "weather",
+              "sourceName": "city",
+              "table": "weather.city",
+              "display": "hive-1.weather.city"
+            }
+          ],
+          "caliber": {
+            "measures": [
+              "row_count"
+            ],
+            "dimensions": [],
+            "segments": [],
+            "orderBy": [],
+            "userFilters": [],
+            "systemConstraints": [],
+            "caliberBinding": {
+              "status": "none"
+            },
+            "omissions": {}
+          },
+          "cutoff": {
+            "status": "not_checked",
+            "note": "数据截止期未校验"
+          },
+          "carriers": {
+            "structuredContent": "projected"
+          }
+        },
+        "connectionId": "hive-1",
+        "dialect": "mysql",
+        "headers": [
+          "row_count"
+        ],
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "totalRows": 1,
+        "sql": "SELECT COUNT(city.id) AS row_count FROM weather.city AS city LIMIT 1"
+      }
+    },
+    {
+      "step": "scan-ods",
+      "httpStatus": 200,
+      "tableCount": 1,
+      "columnCount": 2,
+      "yaml": "tables:\n  city:\n    table: ods.city\n    columns:\n      - name: id\n        type: number\n        nullable: false\n        pk: true\n      - name: name\n        type: string\n        nullable: true\n"
+    },
+    {
+      "step": "collision-ods-upload",
+      "httpStatus": 200,
+      "valid": true,
+      "ok": true,
+      "uploaded": true
+    },
+    {
+      "step": "collision-enabled",
+      "httpStatus": 200,
+      "ok": true,
+      "data": {
+        "written": true,
+        "auditId": 5,
+        "oldEnabledTables": [
+          "weather.city"
+        ],
+        "newEnabledTables": [
+          "weather.city",
+          "ods.city"
+        ],
+        "warnings": [],
+        "policyVersion": "c396397d3ebe329bf0c166dad92d322fcdf998469639e98ca46d67a8f75983f3",
+        "policyRuntimeAck": true,
+        "catalogRuntimeAck": true,
+        "executionRuntimeAck": true,
+        "executionRuntimeStatus": "ok",
+        "executionDecisionReason": "allowed",
+        "executionRuntimePending": false,
+        "runtimeAck": true
+      }
+    },
+    {
+      "step": "collision-tools-list",
+      "httpStatus": 403,
+      "error": {
+        "code": -32003,
+        "message": "Access denied: source_map_compile_failed:duplicate_source_name:hive-1:city"
+      },
+      "isError": null
+    },
+    {
+      "step": "collision-catalog",
+      "httpStatus": 200,
+      "error": null,
+      "isError": true
+    },
+    {
+      "step": "collision-begin",
+      "httpStatus": 200,
+      "error": null,
+      "isError": true
+    },
+    {
+      "step": "collision-read",
+      "httpStatus": 200,
+      "error": null,
+      "isError": true
+    },
+    {
+      "step": "collision-query",
+      "httpStatus": 200,
+      "error": null,
+      "isError": true,
+      "result": "Access denied: source_map_compile_failed:duplicate_source_name:hive-1:city"
+    },
+    {
+      "step": "workaround-ods-upload",
+      "httpStatus": 200,
+      "valid": true,
+      "ok": true,
+      "uploaded": true
+    },
+    {
+      "step": "workaround-enabled",
+      "httpStatus": 200,
+      "ok": true,
+      "data": {
+        "written": true,
+        "auditId": 10,
+        "oldEnabledTables": [
+          "weather.city",
+          "ods.city"
+        ],
+        "newEnabledTables": [
+          "weather.city",
+          "ods.city"
+        ],
+        "warnings": [],
+        "policyVersion": "f886ad0966d97dd1d125a3de714f37b2266ad8235b0a371a9f27a291dae9f955",
+        "policyRuntimeAck": true,
+        "catalogRuntimeAck": true,
+        "executionRuntimeAck": true,
+        "executionRuntimeStatus": "ok",
+        "executionDecisionReason": "allowed",
+        "executionRuntimePending": false,
+        "runtimeAck": true
+      }
+    },
+    {
+      "step": "restored-tools-list",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "restored-catalog",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "restored-begin",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "restored-read",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null
+    },
+    {
+      "step": "restored-query",
+      "httpStatus": 200,
+      "error": null,
+      "isError": null,
+      "result": {
+        "answer_verifiability": {
+          "schema_version": "1",
+          "sources": [
+            {
+              "connectionId": "hive-1",
+              "schema": "weather",
+              "sourceName": "city",
+              "table": "weather.city",
+              "display": "hive-1.weather.city"
+            }
+          ],
+          "caliber": {
+            "measures": [
+              "row_count"
+            ],
+            "dimensions": [],
+            "segments": [],
+            "orderBy": [],
+            "userFilters": [],
+            "systemConstraints": [],
+            "caliberBinding": {
+              "status": "none"
+            },
+            "omissions": {}
+          },
+          "cutoff": {
+            "status": "not_checked",
+            "note": "数据截止期未校验"
+          },
+          "carriers": {
+            "structuredContent": "projected"
+          }
+        },
+        "connectionId": "hive-1",
+        "dialect": "mysql",
+        "headers": [
+          "row_count"
+        ],
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "totalRows": 1,
+        "sql": "SELECT COUNT(city.id) AS row_count FROM weather.city AS city LIMIT 1"
+      }
+    },
+    {
+      "step": "restored-ods-query",
+      "httpStatus": 200,
+      "result": {
+        "answer_verifiability": {
+          "schema_version": "1",
+          "sources": [
+            {
+              "connectionId": "hive-1",
+              "schema": "ods",
+              "sourceName": "ods_city",
+              "table": "ods.city",
+              "display": "hive-1.ods.ods_city"
+            }
+          ],
+          "caliber": {
+            "measures": [
+              "row_count"
+            ],
+            "dimensions": [],
+            "segments": [],
+            "orderBy": [],
+            "userFilters": [],
+            "systemConstraints": [],
+            "caliberBinding": {
+              "status": "none"
+            },
+            "omissions": {}
+          },
+          "cutoff": {
+            "status": "not_checked",
+            "note": "数据截止期未校验"
+          },
+          "carriers": {
+            "structuredContent": "projected"
+          }
+        },
+        "connectionId": "hive-1",
+        "dialect": "mysql",
+        "headers": [
+          "row_count"
+        ],
+        "rows": [
+          [
+            1
+          ]
+        ],
+        "totalRows": 1,
+        "sql": "SELECT COUNT(ods_city.id) AS row_count FROM ods.city AS ods_city LIMIT 1"
+      }
+    },
+    {
+      "step": "completed",
+      "reproduced": true
+    }
+  ],
+  "image": "sha256:2868339971daf25c6dc87a85a03539bd722c138b30d11d73abe3c270f154b385 linux/arm64",
+  "buildRevisionAndHashes": "6208ea5727bdb72b19333c574e8fbe047871f846\n671cf30da6e5f3bae8853b70d5c2502857de110c33a7f0eaafc9cb01d836f31d  /app/webui/server/schema-structure.ts\n0c742a5fa14dea5c04276ba2dc53c0d6e0e7c89ae1da0b3ee8dc9d7515e2c783  /app/webui/server/proxy/acl.ts",
+  "sourceComparison": {
+    "webui/server/schema-structure.ts": {
+      "hostSha256": "671cf30da6e5f3bae8853b70d5c2502857de110c33a7f0eaafc9cb01d836f31d",
+      "imageMatchesHost": true
+    },
+    "webui/server/proxy/acl.ts": {
+      "hostSha256": "0c742a5fa14dea5c04276ba2dc53c0d6e0e7c89ae1da0b3ee8dc9d7515e2c783",
+      "imageMatchesHost": true
+    }
+  },
+  "hostGitHead": "6208ea5727bdb72b19333c574e8fbe047871f846",
+  "hostGitDirty": true,
+  "database": "MySQL 8.4; synthetic schemas weather/ods; connection label hive-1",
+  "webui": "http://127.0.0.1:52096",
+  "mcp": "http://127.0.0.1:52095/mcp",
+  "reproduced": true,
+  "baselineQuery": {
+    "answer_verifiability": {
+      "schema_version": "1",
+      "sources": [
+        {
+          "connectionId": "hive-1",
+          "schema": "weather",
+          "sourceName": "city",
+          "table": "weather.city",
+          "display": "hive-1.weather.city"
+        }
+      ],
+      "caliber": {
+        "measures": [
+          "row_count"
+        ],
+        "dimensions": [],
+        "segments": [],
+        "orderBy": [],
+        "userFilters": [],
+        "systemConstraints": [],
+        "caliberBinding": {
+          "status": "none"
+        },
+        "omissions": {}
+      },
+      "cutoff": {
+        "status": "not_checked",
+        "note": "数据截止期未校验"
+      },
+      "carriers": {
+        "structuredContent": "projected"
+      }
+    },
+    "connectionId": "hive-1",
+    "dialect": "mysql",
+    "headers": [
+      "row_count"
+    ],
+    "rows": [
+      [
+        1
+      ]
+    ],
+    "totalRows": 1,
+    "sql": "SELECT COUNT(city.id) AS row_count FROM weather.city AS city LIMIT 1"
+  },
+  "restoredQuery": {
+    "answer_verifiability": {
+      "schema_version": "1",
+      "sources": [
+        {
+          "connectionId": "hive-1",
+          "schema": "weather",
+          "sourceName": "city",
+          "table": "weather.city",
+          "display": "hive-1.weather.city"
+        }
+      ],
+      "caliber": {
+        "measures": [
+          "row_count"
+        ],
+        "dimensions": [],
+        "segments": [],
+        "orderBy": [],
+        "userFilters": [],
+        "systemConstraints": [],
+        "caliberBinding": {
+          "status": "none"
+        },
+        "omissions": {}
+      },
+      "cutoff": {
+        "status": "not_checked",
+        "note": "数据截止期未校验"
+      },
+      "carriers": {
+        "structuredContent": "projected"
+      }
+    },
+    "connectionId": "hive-1",
+    "dialect": "mysql",
+    "headers": [
+      "row_count"
+    ],
+    "rows": [
+      [
+        1
+      ]
+    ],
+    "totalRows": 1,
+    "sql": "SELECT COUNT(city.id) AS row_count FROM weather.city AS city LIMIT 1"
+  },
+  "restoredOdsQuery": {
+    "answer_verifiability": {
+      "schema_version": "1",
+      "sources": [
+        {
+          "connectionId": "hive-1",
+          "schema": "ods",
+          "sourceName": "ods_city",
+          "table": "ods.city",
+          "display": "hive-1.ods.ods_city"
+        }
+      ],
+      "caliber": {
+        "measures": [
+          "row_count"
+        ],
+        "dimensions": [],
+        "segments": [],
+        "orderBy": [],
+        "userFilters": [],
+        "systemConstraints": [],
+        "caliberBinding": {
+          "status": "none"
+        },
+        "omissions": {}
+      },
+      "cutoff": {
+        "status": "not_checked",
+        "note": "数据截止期未校验"
+      },
+      "carriers": {
+        "structuredContent": "projected"
+      }
+    },
+    "connectionId": "hive-1",
+    "dialect": "mysql",
+    "headers": [
+      "row_count"
+    ],
+    "rows": [
+      [
+        1
+      ]
+    ],
+    "totalRows": 1,
+    "sql": "SELECT COUNT(ods_city.id) AS row_count FROM ods.city AS ods_city LIMIT 1"
+  },
+  "cleanedUp": true,
+  "finishedAt": "2026-11-19T15:14:50.527724+00:00"
+}

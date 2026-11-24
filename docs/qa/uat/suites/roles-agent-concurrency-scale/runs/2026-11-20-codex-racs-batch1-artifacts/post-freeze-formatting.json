@@ -1,0 +1,14 @@
+[
+  {
+    "path": "webui/server/admin/agent-statistics-queries.ts",
+    "candidateSha256": "328d09c81ffde18b9ae7bfd2f3f7c3de837fe042d7c2a8d52b5982e5311e7c56",
+    "committedSha256": "b4d55afd142d8be1aa217a1b7553f5825a6333a47a9c52c8a4a9c3c5abfd992a",
+    "difference": "trailing whitespace / final blank lines only; normalized content identical"
+  },
+  {
+    "path": "webui/server/proxy/token-expiry.ts",
+    "candidateSha256": "9aa97fd6c7cfcb30d806dbb8a7186cb700445d3ff0345c127028adc8f16ee039",
+    "committedSha256": "b6c68714335f1214081c2d03ca4de6a31c2fcddebc350ea5e0b9d01d8f065b32",
+    "difference": "trailing whitespace / final blank lines only; normalized content identical"
+  }
+]

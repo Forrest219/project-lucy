@@ -25,12 +25,14 @@ in this repository is a **supported delivery artifact** — not a reference snap
 | `0.2.6` | `0.2.0` | `0.16.0` | same workload contract as 0.2.5 | Superseded by chart 0.2.7. Chart 0.2.6 verifies archive config/manifest/index identities, ships private CA files, and provides a single-instance upgrade entry with baseline backups and recovery instructions. The short-lived `0.2.0` product version was numerically lower than `0.17.0` |
 | `0.2.7` | `0.20.0` | `0.16.0` | same workload contract as 0.2.5 | Superseded by chart 0.2.8. Corrects the active product line to `0.20.0 > 0.17.0`; chart and product versions remain independent |
 | `0.2.8` | `0.20.0` | `0.16.0` | same workload contract as 0.2.5 | Optional SMTP notification wiring, off by default. Product version was still `0.20.0` when this chart package was cut |
-| `0.2.8` | `0.25.0` | `0.16.0` | same workload contract as 0.2.5 | **Current**. Product version aligned to branch `lucy-v0.25`. Chart package version was not bumped |
+| `0.2.8` | `0.25.0` | `0.16.0` | same workload contract as 0.2.5 | Product version aligned to branch `lucy-v0.25`. Chart package version was not bumped. Superseded as current product line by `0.30.0` |
+| `0.2.8` | `0.30.0` | `0.16.0` | same workload contract as 0.2.5 | Product version aligned to branch `lucy-v0.30`. Chart package version was not bumped. Superseded as the current chart by `0.2.9` |
+| `0.2.9` | `0.30.0` | `0.16.0` | startup and readiness use `/api/readyz`; liveness uses `/api/livez` | **Current**. Probe split only. Product version stays `0.30.0`. A 0.25 image does not serve `/api/livez`; keep the previous liveness values until that image includes the route |
 
 Image tags must be **immutable**. Recommended form:
 
 ```text
-project-lucy:customer-amd64-0.25.0-YYYYMMDD-<gitShortSha>
+project-lucy:customer-amd64-0.30.0-YYYYMMDD-<gitShortSha>
 ```
 
 Record the digest in `image/image-digest.txt` and pin via Helm `image.digest` when possible.
@@ -69,9 +71,9 @@ service:
 
 | Probe | Mechanism | Path / port |
 |---|---|---|
-| `startupProbe` | `httpGet` | `/api/health` on named port `webui` |
-| `readinessProbe` | `httpGet` | `/api/health` on named port `webui` |
-| `livenessProbe` | `httpGet` | `/api/health` on named port `webui` |
+| `startupProbe` | `httpGet` | `/api/readyz` on named port `webui` |
+| `readinessProbe` | `httpGet` | `/api/readyz` on named port `webui` |
+| `livenessProbe` | `httpGet` | `/api/livez` on named port `webui` |
 
 **Forbidden in probes:**
 
@@ -86,24 +88,24 @@ Recommended defaults (chart `0.2.x`):
 
 ```yaml
 startupProbe:
-  httpGet: { path: /api/health, port: webui }
+  httpGet: { path: /api/readyz, port: webui }
   initialDelaySeconds: 5
   periodSeconds: 5
   timeoutSeconds: 3
   failureThreshold: 60
 
 readinessProbe:
-  httpGet: { path: /api/health, port: webui }
+  httpGet: { path: /api/readyz, port: webui }
   periodSeconds: 5
   timeoutSeconds: 3
   failureThreshold: 6
 
 livenessProbe:
-  httpGet: { path: /api/health, port: webui }
-  initialDelaySeconds: 60
-  periodSeconds: 30
-  timeoutSeconds: 5
-  failureThreshold: 3
+  httpGet: { path: /api/livez, port: webui }
+  initialDelaySeconds: 0
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 6
 ```
 
 ## Init containers
@@ -145,7 +147,7 @@ Preflight belongs in post-deploy scripts or Helm test Jobs, not in the pod start
 |---|---|---|
 | `KTX_PROJECT_ROOT` | yes | `/data/lucy` |
 | `POSTHOG_DISABLED` | yes | `"1"` |
-| `LUCY_VERSION` | yes | Lucy product version; current baseline `0.20.0`. This is not the source commit. Commit identity is the image file `/app/BUILD_REVISION` (`gitSha` on `/api/health`). Do not add `LUCY_GIT_SHA` to the chart or Pod env. |
+| `LUCY_VERSION` | yes | Lucy product version; current baseline `0.30.0`. This is not the source commit. Commit identity is the image file `/app/BUILD_REVISION` (`gitSha` on `/api/health`). Do not add `LUCY_GIT_SHA` to the chart or Pod env. |
 | `LUCY_BUNDLED_KTX_VERSION` | yes | Bundled KTX identity; current baseline `0.16.0` |
 | `LUCY_PUBLIC_MCP_URL` | yes (non-local) | Externally reachable MCP URL; chart fails render if empty for customer registry |
 | `LUCY_ALLOW_PLACEHOLDER_KTX` | prod: empty | `"1"` only for demo seed |
@@ -237,7 +239,7 @@ Before any K8s delivery:
 5. `bash scripts/gates/k8s-release-gate.sh --with-cluster --test-upgrade …` (orchestrator)
 6. Post-deploy: `bash scripts/gates/k8s-acceptance.sh` (H5; in a package: `scripts/acceptance.sh`, with `--release`, `--deployment`, `--service` kept distinct and the token passed via `LUCY_MCP_TOKEN`)
 
-See [`docs/runbooks/customer-delivery-preflight-checklist.md`](../../docs/runbooks/customer-delivery-preflight-checklist.md).
+See [`docs/runbooks/customer-amd64-image-build-checklist.md`](../../docs/runbooks/customer-amd64-image-build-checklist.md)（操作）与 [`docs/lessons/`](../../docs/lessons/README.md)（交付事故经验；原 preflight 大清单已作废）。
 
 ## Candidate digest and real-user E2E (Spec 20261018 §8.3, Plan T14)
 

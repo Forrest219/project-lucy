@@ -1,0 +1,190 @@
+{
+  "at": "2026-11-20T13:28:59.008489+00:00",
+  "files": {
+    "core10-25.tar.gz": {
+      "bytes": 54638,
+      "sha256": "b6dc3188bc4f2972a1fe7cbc7c74440a1f5f7de55373cf257268b6e2bed4dfe0"
+    },
+    "direct-cli-v2-fail.tar.gz": {
+      "bytes": 131929,
+      "sha256": "5842748658d764451ceb14a052ba70b7e29c6ec81132adf98c3ebaad7d52a66a"
+    },
+    "direct-cli-v3-fail.tar.gz": {
+      "bytes": 142680,
+      "sha256": "790da1b8c9d64f1ec6ced07743e0a5555a1cf8f6d7cc750f7dda21da3696b2aa"
+    },
+    "direct-cli-v4-independent-review.md": {
+      "bytes": 2528,
+      "sha256": "aa29537b60f065ba4cd17244a9b4b1af2e254057fb31e2e9275d70519285caf3"
+    },
+    "direct-cli-v4.tar.gz": {
+      "bytes": 202923,
+      "sha256": "380e0cfb76420f08941b1eb6d0653236d37142bf5e1c6e2b7deec379461a377a"
+    },
+    "final-independent-archive-index.json": {
+      "bytes": 1555,
+      "sha256": "f8418d53ada6e2ad3b32f8469a8e6fecadf08be694803283dcf9aa8a76dbdb74"
+    },
+    "handoff-checks/diff.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "handoff-checks/e2e-ledger.log": {
+      "bytes": 12268,
+      "sha256": "6f4ae7755decd18fe35627557225eae4246a48ce93ee8ff5954aa85769d275af"
+    },
+    "handoff-checks/final-verification.json": {
+      "bytes": 598,
+      "sha256": "dda8911aa8c6a97f5fe09d800c5f3db705b97983fdffc058f6eecac134e75f03"
+    },
+    "handoff-checks/ia-boundary.log": {
+      "bytes": 113,
+      "sha256": "b77944ae545ff2c366816606581eef35666f91240506b9d3bcf2aeea255824e7"
+    },
+    "handoff-checks/owned-code-paths.json": {
+      "bytes": 1232,
+      "sha256": "0517ed6dcd5e0c37fcbb22d187ad6cd56886bff70b415eaa66a246cfca724248"
+    },
+    "handoff-checks/owned-code.patch": {
+      "bytes": 340296,
+      "sha256": "103de621948295ee8dc4b39a6fef9a9ddd56a79609d5ff57cc49896af2ef0429"
+    },
+    "handoff-checks/resource-final.json": {
+      "bytes": 408,
+      "sha256": "da6944068b9ca66f999c9b5e4f44b094cffcef014396ce1ae61c3aa748013ba1"
+    },
+    "handoff-checks/source-and-root-final.json": {
+      "bytes": 624,
+      "sha256": "f2292c808212f65b3e97497874b0d5f617ae4dc19f304d8c42d4a314c7cd2f20"
+    },
+    "handoff-checks/spec-docs.log": {
+      "bytes": 312,
+      "sha256": "c257fe3f9fff7b72d058fdce1e3884a7cf23b6f79235bfa886b5e44b9cb1157f"
+    },
+    "handoff-checks/spec.log": {
+      "bytes": 750,
+      "sha256": "7bfe55c0e45ed639980143af8e2166b5361440da69a487c6008501a8e6519884"
+    },
+    "handoff-checks/terminology.log": {
+      "bytes": 134,
+      "sha256": "c9cf049922c4e9bfe7138784ce6689bdb4fc6a65f097ec68c0aeaa6e9bdede64"
+    },
+    "independent-final-sql/README.md": {
+      "bytes": 2535,
+      "sha256": "bb5913cd59496ceb6a950745b91cd31e7ef359e90003ec6a39d550a2fa2c4aa2"
+    },
+    "independent-final-sql/actual-invocation-1.json": {
+      "bytes": 864,
+      "sha256": "df200e076af365119efbe2a2e33eea9d6a6fe2e81c4f940791e28612280368cc"
+    },
+    "independent-final-sql/artifact-manifest.json": {
+      "bytes": 966,
+      "sha256": "7c4dadec9249155fa40648f304cebdef3eabc4e599d6d845169afae4b864c672"
+    },
+    "independent-final-sql/attempt-1/result.json": {
+      "bytes": 37411,
+      "sha256": "03c4cbeb9d3c268205755a52005ad0e15ec06ff403e520117f45edb2a98e1be3"
+    },
+    "independent-final-sql/outlet-review.md": {
+      "bytes": 6973,
+      "sha256": "001b00126492412b760ecbae5d038ad778c7ea068205503f915193d1813b09a4"
+    },
+    "independent-final-sql/raw-sql-temporal-binding.json": {
+      "bytes": 2761,
+      "sha256": "a8d6d327812f8943d2af30421bba840940f8057c99e234a5a4acec4c4dce14f2"
+    },
+    "independent-final-sql/stderr-1.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "independent-final-sql/stdout-1.log": {
+      "bytes": 416,
+      "sha256": "33ec003683964893c2474d6f5159182c56fe7d6fd6d65e7043858eb09fcfe0ef"
+    },
+    "independent-final-sql/verify.py": {
+      "bytes": 18088,
+      "sha256": "1135260fc004302f198b6d1286824a8f1dccaba6e3947d011450506f62a2c5ed"
+    },
+    "initial-archive-index.json": {
+      "bytes": 1623,
+      "sha256": "402bd2c75965b81524f68fe164d53adb8c9d5bf4983b351cb861f9f50370d9e1"
+    },
+    "p170-and-prospective-archive-index.json": {
+      "bytes": 2684,
+      "sha256": "4e48bbc676756386f4d60bd766b77d54d782e182f3a47752663919cade1abe3d"
+    },
+    "p170-deadline-revision7.tar.gz": {
+      "bytes": 631101,
+      "sha256": "44fe8c557bc5d3125c022f6a99d354d1ee3e770b5f8ee6f946fd71d9030f7252"
+    },
+    "p170-failure-revision10.tar.gz": {
+      "bytes": 2524724,
+      "sha256": "f3b16ebbefac5a5ac59950f22bf253e85124fe9958541dba140915065ecd8e3f"
+    },
+    "p170-normal-revision2-fail.tar.gz": {
+      "bytes": 7356619,
+      "sha256": "3583f35ed746e718da4312fd33a4567ec6e68f67b520722edadb74dabd0053a7"
+    },
+    "p170-normal-revision7.tar.gz": {
+      "bytes": 622821,
+      "sha256": "c96567a64c9166296593f5d62d7c7bcf2622d6457918e8757b8d466cdef3ace9"
+    },
+    "p170-revoke-revision7-fail.tar.gz": {
+      "bytes": 158241,
+      "sha256": "d659c8f81c8e98f83831cf88e0da18a5f996b55aaff48c0df9b46df01c1ed939"
+    },
+    "p170-revoke-revision8.tar.gz": {
+      "bytes": 1617449,
+      "sha256": "6ddced84edec397eec7d1880b2ee184de7f9848fee363c34cb3a175b26d3c516"
+    },
+    "p170-term-revision10-fail.tar.gz": {
+      "bytes": 177999,
+      "sha256": "4ced4f9b7988fdf58d862e8ea5fa13369cca7fb88869beac5215b6637c7fac2b"
+    },
+    "p170-term-revision11.tar.gz": {
+      "bytes": 2091804,
+      "sha256": "53129d9d9eb435f8ec38d524b021ffa94fca1a051fa28ca871a2d708100c9679"
+    },
+    "p170-term-revision8-fail.tar.gz": {
+      "bytes": 161580,
+      "sha256": "31a808d73d07cffd9d19dff13d4e6a209f6ba31ffb9c1f39b7e943c6e72c4810"
+    },
+    "post-run-stdin-prospective.tar.gz": {
+      "bytes": 411585,
+      "sha256": "1831ac571bc58ed26c168aa414a891790a5b26dcf1d575de39a8ae52504cbcf7"
+    },
+    "r6-candidate-manifest.json": {
+      "bytes": 150726,
+      "sha256": "cc0833960b4c6a6ea8ec3e189231e0550cb0d03998f0485a42a3f3f7b0bb7b78"
+    },
+    "r6-core10-25-independent-review.md": {
+      "bytes": 3574,
+      "sha256": "065604f96a21ff4158ffc934aef251a830b08be8b005332642e9f818c5721309"
+    },
+    "r6-revision7-normal-independent-raw-review.md": {
+      "bytes": 3398,
+      "sha256": "80856b0a512a63793b4dbc8705be3937bb570689d3af13604020cf87acca44eb"
+    },
+    "remote-stdin-deadline-gap-review.md": {
+      "bytes": 3612,
+      "sha256": "d0b8b5c481bb3ebc376794274d61d7c89e4ffd1c079f3160184003fe2c6e7ae7"
+    },
+    "review-and-local-checks.tar.gz": {
+      "bytes": 1791620,
+      "sha256": "ff2046ea9456ddcb95d0a943d34d687f2a7a4ee0e955f50aad84245dafd4c4e3"
+    },
+    "revoke-event-contract-assessment.md": {
+      "bytes": 4790,
+      "sha256": "8ddb83d44dc1438b26462289fb06851dcd373d407351476f457302ff2b8c8a30"
+    },
+    "term-fixture-missing-target-assessment.md": {
+      "bytes": 3532,
+      "sha256": "f0077058f5e37cbdb96227586820b9b66a735b6069814062f1c7a8608f7bf5df"
+    },
+    "term-fixture-poststop-assessment.md": {
+      "bytes": 4475,
+      "sha256": "8d27d3c558b080195cd05e96464091aebe6ad3c174f6934524dec313474815ca"
+    }
+  },
+  "scope": "Directed proofs plus final checks; original archives and failed runs retained"
+}

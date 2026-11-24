@@ -1,0 +1,48 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 14,
+  "body": {
+    "ok": true,
+    "data": {
+      "status": "degraded",
+      "insecureTestProfile": true,
+      "lucyVersion": "0.30.0",
+      "gitSha": "902190734e1daf8b1e80ea3ffbf1db674c92edfe",
+      "gitDirty": true,
+      "bundledKtxVersion": "0.16.0",
+      "ktxRuntime": {
+        "ready": false,
+        "status": "missing",
+        "detail": "not_cached"
+      },
+      "policy": {
+        "policyVersion": "9d82eb96a40871e1d58cdbb32da7d94ace84c2875e6482676150ebcfb1ea39d6",
+        "degradedGlobal": false,
+        "degradedAgents": [
+          "repro_reader"
+        ],
+        "healthy": false
+      },
+      "execution": {
+        "status": "unknown",
+        "lastCheckedAt": "2026-11-20T04:40:29.140Z"
+      },
+      "dataQaInstructions": {
+        "source": "missing",
+        "length": 0,
+        "lastError": null,
+        "loadedAt": null
+      },
+      "eventLoop": {
+        "p99Ms": 195.953,
+        "maxMs": 195.953,
+        "windowSeconds": 60
+      }
+    },
+    "diagnostics": {
+      "observedAt": null,
+      "ageMs": null,
+      "freshness": "unknown"
+    }
+  }
+}

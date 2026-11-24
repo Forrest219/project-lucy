@@ -31,6 +31,31 @@ vi.mock("../ktx", async () => {
   };
 });
 
+const ktxMcpReload = vi.hoisted(() => ({
+  reloadKtxMcpAfterConfigWrite: vi.fn(async (): Promise<{ status: "reloaded" | "started" | "skipped" | "failed"; detail: string }> => ({ status: "reloaded", detail: "ok" }))
+}));
+
+const mcpRuntimeCanary = vi.hoisted(() => ({
+  runMcpRuntimeCanary: vi.fn(async () => ({
+    executionRuntimeAck: true,
+    decisionReason: "ok",
+    checks: [{ name: "execution_query", status: "pass" as const, detail: "connection loaded" }]
+  }))
+}));
+
+vi.mock("../ktx-mcp-reload.js", () => ({
+  reloadKtxMcpAfterConfigWrite: ktxMcpReload.reloadKtxMcpAfterConfigWrite,
+  reloadKtxMcpExecutionRuntime: ktxMcpReload.reloadKtxMcpAfterConfigWrite
+}));
+
+vi.mock("../admin/mcp-runtime.js", async () => {
+  const actual = await vi.importActual<typeof import("../admin/mcp-runtime.js")>("../admin/mcp-runtime.js");
+  return {
+    ...actual,
+    runMcpRuntimeCanary: mcpRuntimeCanary.runMcpRuntimeCanary
+  };
+});
+
 let projectRoot: string;
 let auditDbPath: string;
 let previousRoot: string | undefined;
@@ -175,11 +200,15 @@ describe("POST /api/connections/:connId/endpoint (lucy-20261101)", () => {
     await app.close();
   });
 
-  it("SC-21 success write returns executionRuntimePending true", async () => {
+  it("SC-21 success write + reloaded leaves executionRuntimePending false", async () => {
     await makeProject();
     process.env.KTX_PROJECT_ROOT = projectRoot;
     process.env.LUCY_CONTENT_ROOT = ".";
     process.env.LUCY_AUDIT_DB = auditDbPath;
+    ktxMcpReload.reloadKtxMcpAfterConfigWrite.mockResolvedValueOnce({
+      status: "reloaded" as const,
+      detail: "ok"
+    });
 
     const app = await buildFreshServer();
     await app.ready();
@@ -194,9 +223,45 @@ describe("POST /api/connections/:connId/endpoint (lucy-20261101)", () => {
       .expect(200);
     expect(response.body.ok).toBe(true);
     expect(response.body.data.written).toBe(true);
-    expect(response.body.data.executionRuntimePending).toBe(true);
+    expect(ktxMcpReload.reloadKtxMcpAfterConfigWrite).toHaveBeenCalledWith(projectRoot, "mysql-aliyun");
+    expect(response.body.data.executionRuntimePending).toBe(false);
+    expect(response.body.data.executionRuntimeAck).toBe(true);
+    expect(mcpRuntimeCanary.runMcpRuntimeCanary).toHaveBeenCalled();
     const yaml = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
     expect(yaml).toContain("host: db-test.internal");
+    await app.close();
+  });
+
+  it("SC-21 failed reload marks executionRuntimePending true", async () => {
+    await makeProject();
+    process.env.KTX_PROJECT_ROOT = projectRoot;
+    process.env.LUCY_CONTENT_ROOT = ".";
+    process.env.LUCY_AUDIT_DB = auditDbPath;
+    ktxMcpReload.reloadKtxMcpAfterConfigWrite.mockResolvedValueOnce({
+      status: "failed" as const,
+      detail: "daemon did not restart"
+    });
+
+    const app = await buildFreshServer();
+    await app.ready();
+    const response = await request(app.server)
+      .post("/api/connections/mysql-aliyun/endpoint")
+      .send({
+        host: "db-test.internal",
+        port: 3306,
+        username: "sc",
+        dryRun: false
+      })
+      .expect(503);
+    expect(response.body.ok).toBe(false);
+    expect(response.body.error.code).toBe("EXECUTION_RUNTIME_NOT_LOADED");
+    expect(response.body.error.message).toBe("配置已保存，但执行层未加载。");
+    const yaml = await readFile(path.join(projectRoot, "ktx.yaml"), "utf8");
+    expect(yaml).toContain("host: db-test.internal");
+    const state = JSON.parse(await readFile(path.join(projectRoot, ".ktx-ui", "ktx-reload.state.json"), "utf8")) as {
+      activation: string;
+    };
+    expect(state.activation).toBe("reload_required");
     await app.close();
   });
 });

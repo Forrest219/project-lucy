@@ -1,0 +1,17 @@
+{
+  "httpStatus": 200,
+  "elapsedMs": 8.911,
+  "body": {
+    "jsonrpc": "2.0",
+    "id": 185,
+    "result": {
+      "isError": true,
+      "content": [
+        {
+          "type": "text",
+          "text": "Access denied: source_map_compile_failed:duplicate_source_name:uat-mysql:unused_collision"
+        }
+      ]
+    }
+  }
+}

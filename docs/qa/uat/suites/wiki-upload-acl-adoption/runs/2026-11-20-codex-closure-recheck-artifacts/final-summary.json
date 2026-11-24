@@ -1,0 +1,772 @@
+{
+  "verdict": "PASS",
+  "runId": "wua-recheck-1795148673890",
+  "supplementRunId": "wua-recheck-1795148928656",
+  "startedAt": "2026-11-20T04:24:33.890Z",
+  "finishedAt": "2026-11-20T04:29:02.233Z",
+  "candidate": {
+    "image": "sha256:c1cd67a0df3dffd33b7c9d0c3914ca4a759bb5a6e4e8af3f9fe6b8c66323a218",
+    "startedAt": "2026-11-20T03:19:12.335405216Z"
+  },
+  "health": {
+    "lucyVersion": "0.30.0",
+    "gitSha": "7e8ee88442c006d839e4fe13334f7fc45056d85e",
+    "gitDirty": true
+  },
+  "scope": "four-gap closure recheck; main cleanup failure superseded only by actual successful supplemental cleanup",
+  "uniqueAcceptanceCases": 51,
+  "passed": 51,
+  "failed": 0,
+  "mcpRoleChecks": 153,
+  "separateWikiToolAssertions": 306,
+  "foreground": {
+    "headless": false,
+    "visibilityState": "visible",
+    "hasFocus": true,
+    "viewport": {
+      "width": 1920,
+      "height": 1080
+    },
+    "navigationSamples": 28,
+    "primaryReadyMs": {
+      "min": 190.35,
+      "max": 5966.84,
+      "median": 863.25
+    }
+  },
+  "apiTimingMs": {
+    "samples": 751,
+    "min": 1.63,
+    "max": 1056.4,
+    "median": 14.57
+  },
+  "cleanup": {
+    "mainDeletedPages": 229,
+    "mainDeletedAgents": 6,
+    "supplementDeletedPages": 4,
+    "supplementDeletedTokens": 13,
+    "supplementDeletedAgents": 3,
+    "remainingPages": [],
+    "remainingTokens": [],
+    "remainingAgents": [],
+    "containerFiles": [],
+    "errors": []
+  },
+  "results": [
+    {
+      "id": "R0-isolated-identities",
+      "ok": true,
+      "ms": 0,
+      "detail": {
+        "candidate": {
+          "image": "sha256:c1cd67a0df3dffd33b7c9d0c3914ca4a759bb5a6e4e8af3f9fe6b8c66323a218",
+          "startedAt": "2026-11-20T03:19:12.335405216Z"
+        },
+        "roles": [
+          "demo_readonly",
+          "lucy_admin",
+          "lucy_ops_reader"
+        ],
+        "agents": [
+          "wuar_mwohbmcz_0",
+          "wuar_mwohbmi0_1",
+          "wuar_mwohbmob_2"
+        ]
+      }
+    },
+    {
+      "id": "01-preserve",
+      "ok": true,
+      "ms": 2022,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-1-01-preserve.md"
+      }
+    },
+    {
+      "id": "02-widen",
+      "ok": true,
+      "ms": 2036,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-2-02-widen.md"
+      }
+    },
+    {
+      "id": "02-narrow",
+      "ok": true,
+      "ms": 1007,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-3-02-narrow.md"
+      }
+    },
+    {
+      "id": "08-set",
+      "ok": true,
+      "ms": 1114,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-4-08-set.md"
+      }
+    },
+    {
+      "id": "03-stale-digest-zero-write",
+      "ok": true,
+      "ms": 81,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-5-03.md",
+        "code": "wiki_upload_preview_stale",
+        "beforeHash": "4e89b49446dbd12ee5780102f3e806265f0f59fb3cee5bd38dc2538e8a4825d6"
+      }
+    },
+    {
+      "id": "04-missing-access-zero-write",
+      "ok": true,
+      "ms": 72,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-6-04.md",
+        "code": "wiki_upload_access_required"
+      }
+    },
+    {
+      "id": "09-create-roles",
+      "ok": true,
+      "ms": 1089,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-7-09.md"
+      }
+    },
+    {
+      "id": "09-create-missing",
+      "ok": true,
+      "ms": 2282,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-8-09.md"
+      }
+    },
+    {
+      "id": "09-create-empty",
+      "ok": true,
+      "ms": 1146,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-9-09.md"
+      }
+    },
+    {
+      "id": "09-create-all",
+      "ok": true,
+      "ms": 1062,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-10-09.md"
+      }
+    },
+    {
+      "id": "09-create-set",
+      "ok": true,
+      "ms": 712,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-11-09-set.md"
+      }
+    },
+    {
+      "id": "10-K1-preserve",
+      "ok": true,
+      "ms": 1800,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-12-k1-preserve.md"
+      }
+    },
+    {
+      "id": "10-K2-set",
+      "ok": true,
+      "ms": 1807,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-13-k2-set.md"
+      }
+    },
+    {
+      "id": "10-K4-preserve",
+      "ok": true,
+      "ms": 1136,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-14-k4-preserve.md"
+      }
+    },
+    {
+      "id": "10-K4-adopt",
+      "ok": true,
+      "ms": 849,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-15-k4-adopt.md"
+      }
+    },
+    {
+      "id": "10-K5-preserve",
+      "ok": true,
+      "ms": 885,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-16-k5-preserve.md"
+      }
+    },
+    {
+      "id": "10-K5-set",
+      "ok": true,
+      "ms": 1165,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-17-k5-set.md"
+      }
+    },
+    {
+      "id": "10-K3-create-corrupt",
+      "ok": true,
+      "ms": 1806,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-18-k3.md"
+      }
+    },
+    {
+      "id": "07-M1-adopt",
+      "ok": true,
+      "ms": 4308,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-19-m1.md",
+        "timing": {
+          "primaryReadyMs": 1384.22,
+          "visibilityState": "visible",
+          "hasFocus": true,
+          "width": 1920,
+          "height": 1080
+        },
+        "beforeCommitRequests": 0,
+        "version": "sha256:b69411db1017ab16557750c1e74eb2d8a535fd2ccad3dad64fb3cb184b4dd3e1",
+        "hash": "b69411db1017ab16557750c1e74eb2d8a535fd2ccad3dad64fb3cb184b4dd3e1"
+      }
+    },
+    {
+      "id": "07-M2-adopt",
+      "ok": true,
+      "ms": 1378,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-20-m2.md",
+        "timing": {
+          "primaryReadyMs": 328.18,
+          "visibilityState": "visible",
+          "hasFocus": true,
+          "width": 1920,
+          "height": 1080
+        },
+        "beforeCommitRequests": 0,
+        "version": "sha256:a052afa401d7d7fb9c0c1e14536fbf1a8e34d663d267915d681592fe92f16efd",
+        "hash": "a052afa401d7d7fb9c0c1e14536fbf1a8e34d663d267915d681592fe92f16efd"
+      }
+    },
+    {
+      "id": "07-M3-adopt",
+      "ok": true,
+      "ms": 1991,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-21-m3.md",
+        "timing": {
+          "primaryReadyMs": 328.46,
+          "visibilityState": "visible",
+          "hasFocus": true,
+          "width": 1920,
+          "height": 1080
+        },
+        "beforeCommitRequests": 0,
+        "version": "sha256:99f34f1e0d54ee8983e1f9ab72b7aed230dbe563a5e8ce585a4d15b2d0555554",
+        "hash": "99f34f1e0d54ee8983e1f9ab72b7aed230dbe563a5e8ce585a4d15b2d0555554"
+      }
+    },
+    {
+      "id": "07-M4-adopt",
+      "ok": true,
+      "ms": 1887,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-22-m4.md",
+        "timing": {
+          "primaryReadyMs": 824.1,
+          "visibilityState": "visible",
+          "hasFocus": true,
+          "width": 1920,
+          "height": 1080
+        },
+        "beforeCommitRequests": 0,
+        "version": "sha256:4438a208e665f7a6203fae4ab708925a6c70426f007c2a299402fcf329f896d2",
+        "hash": "4438a208e665f7a6203fae4ab708925a6c70426f007c2a299402fcf329f896d2"
+      }
+    },
+    {
+      "id": "07-M5-adopt",
+      "ok": true,
+      "ms": 2078,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-23-m5.md",
+        "timing": {
+          "primaryReadyMs": 825.82,
+          "visibilityState": "visible",
+          "hasFocus": true,
+          "width": 1920,
+          "height": 1080
+        },
+        "beforeCommitRequests": 0,
+        "version": "sha256:e1379b251914b5390ca63ec79ed76e9a0733965b2f955625823864146a2791c0",
+        "hash": "e1379b251914b5390ca63ec79ed76e9a0733965b2f955625823864146a2791c0"
+      }
+    },
+    {
+      "id": "07-M6-adopt",
+      "ok": true,
+      "ms": 2115,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-24-m6.md",
+        "timing": {
+          "primaryReadyMs": 315.78,
+          "visibilityState": "visible",
+          "hasFocus": true,
+          "width": 1920,
+          "height": 1080
+        },
+        "beforeCommitRequests": 0,
+        "version": "sha256:8e1d73327be10ca1e88a03371d211a6ad023db2ef9e35c106cb400a1a46d9d1c",
+        "hash": "8e1d73327be10ca1e88a03371d211a6ad023db2ef9e35c106cb400a1a46d9d1c"
+      }
+    },
+    {
+      "id": "07-M7-adopt",
+      "ok": true,
+      "ms": 3987,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-25-m7.md",
+        "timing": {
+          "primaryReadyMs": 831.6,
+          "visibilityState": "visible",
+          "hasFocus": true,
+          "width": 1920,
+          "height": 1080
+        },
+        "beforeCommitRequests": 0,
+        "version": "sha256:f075ef4d7c396a07e7dea8708fa495f23bd1c5aac23bbf23b747ed5d62aa18e1",
+        "hash": "f075ef4d7c396a07e7dea8708fa495f23bd1c5aac23bbf23b747ed5d62aa18e1"
+      }
+    },
+    {
+      "id": "07-M8-adopt",
+      "ok": true,
+      "ms": 6581,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-26-m8.md",
+        "timing": {
+          "primaryReadyMs": 896.29,
+          "visibilityState": "visible",
+          "hasFocus": true,
+          "width": 1920,
+          "height": 1080
+        },
+        "beforeCommitRequests": 0,
+        "version": "sha256:66ec0e373d41c707eeffbffcb8fee04acb6efb8fee03a45e19fb87a8be0a6f1f",
+        "hash": "66ec0e373d41c707eeffbffcb8fee04acb6efb8fee03a45e19fb87a8be0a6f1f"
+      }
+    },
+    {
+      "id": "07-M9-adopt",
+      "ok": true,
+      "ms": 7898,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-27-m9.md",
+        "timing": {
+          "primaryReadyMs": 2005.26,
+          "visibilityState": "visible",
+          "hasFocus": true,
+          "width": 1920,
+          "height": 1080
+        },
+        "beforeCommitRequests": 0,
+        "version": "sha256:622142435800f7989860eef50f17d8121223778372464fef37bf94135563f4de",
+        "hash": "622142435800f7989860eef50f17d8121223778372464fef37bf94135563f4de"
+      }
+    },
+    {
+      "id": "07-M1-preserve",
+      "ok": true,
+      "ms": 10901,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-28-preserve.md",
+        "timing": {
+          "primaryReadyMs": 2013.37,
+          "visibilityState": "visible",
+          "hasFocus": true,
+          "width": 1920,
+          "height": 1080
+        },
+        "version": "sha256:d9a308a941daf642344eddb9c6cc895bd69ed444aee6f3dbfcc09611121cb0f8",
+        "hash": "d9a308a941daf642344eddb9c6cc895bd69ed444aee6f3dbfcc09611121cb0f8"
+      }
+    },
+    {
+      "id": "07-M1-set",
+      "ok": true,
+      "ms": 8130,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-29-set.md",
+        "timing": {
+          "primaryReadyMs": 2002.62,
+          "visibilityState": "visible",
+          "hasFocus": true,
+          "width": 1920,
+          "height": 1080
+        },
+        "version": "sha256:4bc47bcb3d2b632671d50f2ce393a2b85c01743d538b034b517dca2f51308c3a",
+        "hash": "4bc47bcb3d2b632671d50f2ce393a2b85c01743d538b034b517dca2f51308c3a"
+      }
+    },
+    {
+      "id": "11-same-roles",
+      "ok": true,
+      "ms": 13837,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-30-same.md",
+        "timing": {
+          "primaryReadyMs": 3007.95,
+          "visibilityState": "visible",
+          "hasFocus": true,
+          "width": 1920,
+          "height": 1080
+        },
+        "version": "sha256:63a355c69cfd51b7e5bc87f48586cf5a4f26ecd15dd194e9f636ce7bb9d4eba9",
+        "hash": "63a355c69cfd51b7e5bc87f48586cf5a4f26ecd15dd194e9f636ce7bb9d4eba9"
+      }
+    },
+    {
+      "id": "11-same-all",
+      "ok": true,
+      "ms": 6288,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-31-same.md",
+        "timing": {
+          "primaryReadyMs": 2200.77,
+          "visibilityState": "visible",
+          "hasFocus": true,
+          "width": 1920,
+          "height": 1080
+        },
+        "version": "sha256:3da4aa3a7755077480197e42faf8c2fe62b2edea633e5655cfd22c48da56226d",
+        "hash": "3da4aa3a7755077480197e42faf8c2fe62b2edea633e5655cfd22c48da56226d"
+      }
+    },
+    {
+      "id": "11-same-empty",
+      "ok": true,
+      "ms": 8255,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-32-same.md",
+        "timing": {
+          "primaryReadyMs": 3119.48,
+          "visibilityState": "visible",
+          "hasFocus": true,
+          "width": 1920,
+          "height": 1080
+        },
+        "version": "sha256:71734a155509e07c96cbcfc8bc36a2b6584370cf50ad75533697b1c0c565e222",
+        "hash": "71734a155509e07c96cbcfc8bc36a2b6584370cf50ad75533697b1c0c565e222"
+      }
+    },
+    {
+      "id": "11-same-missing",
+      "ok": true,
+      "ms": 12599,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-33-same.md",
+        "timing": {
+          "primaryReadyMs": 2500.89,
+          "visibilityState": "visible",
+          "hasFocus": true,
+          "width": 1920,
+          "height": 1080
+        },
+        "version": "sha256:fa23b6146d46a300fb58d4a316e9160407e1dab36e26a8311d563a912d6e8449",
+        "hash": "fa23b6146d46a300fb58d4a316e9160407e1dab36e26a8311d563a912d6e8449"
+      }
+    },
+    {
+      "id": "05-12-T4-empty-manage-ui",
+      "ok": true,
+      "ms": 28740,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-34-manage-empty.md",
+        "timing": {
+          "primaryReadyMs": 5966.84,
+          "visibilityState": "visible",
+          "hasFocus": true,
+          "width": 1920,
+          "height": 1080
+        },
+        "before": "d553ded59e7f01c602f5ff1d8269b5e991116ba313ae668ea1639e903a7e874e",
+        "after": "c005ebb97a015f26207c4522ff2e8070fbd1f1a526c4707eb94749b65fc5c065"
+      }
+    },
+    {
+      "id": "05-12-T4-missing-manage-ui",
+      "ok": true,
+      "ms": 9981,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-35-manage-missing.md",
+        "timing": {
+          "primaryReadyMs": 866.73,
+          "visibilityState": "visible",
+          "hasFocus": true,
+          "width": 1920,
+          "height": 1080
+        },
+        "before": "2e7d42a1b669b07ab32bbd60797b555b13a214c52b014f43a6bf178eafe9e717",
+        "after": "bbba36f750a8bf6a78fa18707ce9268906d397cf322ef877bc170e49b6629dba"
+      }
+    },
+    {
+      "id": "05-12-T4-corrupt-manage-ui",
+      "ok": true,
+      "ms": 4327,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-36-manage-corrupt.md",
+        "timing": {
+          "primaryReadyMs": 826.37,
+          "visibilityState": "visible",
+          "hasFocus": true,
+          "width": 1920,
+          "height": 1080
+        },
+        "before": "f510c864d0c4106aaac3f05dd2daa8c7e388443f60e685efa4d32d7017577d2c",
+        "after": "95982e924db2b90e64071d57a6bac4fbc9cca32edc786ce2b972b044ac4f2ec9"
+      }
+    },
+    {
+      "id": "05-manage-B-to-W-ui",
+      "ok": true,
+      "ms": 3966,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-37-05.md",
+        "timing": {
+          "primaryReadyMs": 324.22,
+          "visibilityState": "visible",
+          "hasFocus": true,
+          "width": 1920,
+          "height": 1080
+        }
+      }
+    },
+    {
+      "id": "10-corrupt-ui-preserve",
+      "ok": true,
+      "ms": 5247,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-38-corrupt-ui.md",
+        "timing": {
+          "primaryReadyMs": 859.77,
+          "visibilityState": "visible",
+          "hasFocus": true,
+          "width": 1920,
+          "height": 1080
+        },
+        "version": "sha256:6ee628bdf9e18cb01cb255ef442875ea8441254400fbf41ffa1f0a0ebc41e9f6",
+        "hash": "6ee628bdf9e18cb01cb255ef442875ea8441254400fbf41ffa1f0a0ebc41e9f6"
+      }
+    },
+    {
+      "id": "10-corrupt-ui-set",
+      "ok": true,
+      "ms": 5317,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-39-corrupt-ui.md",
+        "timing": {
+          "primaryReadyMs": 972.96,
+          "visibilityState": "visible",
+          "hasFocus": true,
+          "width": 1920,
+          "height": 1080
+        },
+        "version": "sha256:0cf86186db0180725ae37b59f932faabb5bd6e7fb3a86f461658691f20e98f89",
+        "hash": "0cf86186db0180725ae37b59f932faabb5bd6e7fb3a86f461658691f20e98f89"
+      }
+    },
+    {
+      "id": "12-T1-reset-missing",
+      "ok": true,
+      "ms": 6208,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-40-t1-missing.md",
+        "timing": {
+          "primaryReadyMs": 1975.27,
+          "visibilityState": "visible",
+          "hasFocus": true,
+          "width": 1920,
+          "height": 1080
+        },
+        "version": "sha256:c76909d6355ee1c1ba6f980ca48b5eb969d663971593c69069782503f68c69b2",
+        "hash": "c76909d6355ee1c1ba6f980ca48b5eb969d663971593c69069782503f68c69b2"
+      }
+    },
+    {
+      "id": "12-T1-reset-empty",
+      "ok": true,
+      "ms": 3405,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-41-t1-empty.md",
+        "timing": {
+          "primaryReadyMs": 891.06,
+          "visibilityState": "visible",
+          "hasFocus": true,
+          "width": 1920,
+          "height": 1080
+        },
+        "version": "sha256:aeded54d7a14d8232420b59974d46ee2a59863b51640106b62d55a221ea3265d",
+        "hash": "aeded54d7a14d8232420b59974d46ee2a59863b51640106b62d55a221ea3265d"
+      }
+    },
+    {
+      "id": "12-T1-reset-all",
+      "ok": true,
+      "ms": 3217,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-42-t1-all.md",
+        "timing": {
+          "primaryReadyMs": 827.3,
+          "visibilityState": "visible",
+          "hasFocus": true,
+          "width": 1920,
+          "height": 1080
+        },
+        "version": "sha256:22076553f2b75ac65cf55a94f9cc6c1ca2e21ddbd0a1138c2a92501d72d19a0c",
+        "hash": "22076553f2b75ac65cf55a94f9cc6c1ca2e21ddbd0a1138c2a92501d72d19a0c"
+      }
+    },
+    {
+      "id": "12-T2-real-response-reordering",
+      "ok": true,
+      "ms": 3838,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-43-t2.md",
+        "timing": {
+          "primaryReadyMs": 837.56,
+          "visibilityState": "visible",
+          "hasFocus": true,
+          "width": 1920,
+          "height": 1080
+        },
+        "previewRequests": 3,
+        "oldDelivered": true,
+        "version": "sha256:0e5a46fce6f7f9a1f860074f0c3b93240e8106375e5cd665b81683c0e22702cf",
+        "hash": "0e5a46fce6f7f9a1f860074f0c3b93240e8106375e5cd665b81683c0e22702cf"
+      }
+    },
+    {
+      "id": "12-T3-version-conflict-ui-recovery",
+      "ok": true,
+      "ms": 3567,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-44-t3-conflict.md",
+        "timing": {
+          "primaryReadyMs": 843.77,
+          "visibilityState": "visible",
+          "hasFocus": true,
+          "width": 1920,
+          "height": 1080
+        },
+        "conflictStatus": 409,
+        "version": "sha256:4b58ef14b075bc27ad5f9d424c1c392517654f0e3b1f658ee34a85df1fe5681c",
+        "hash": "4b58ef14b075bc27ad5f9d424c1c392517654f0e3b1f658ee34a85df1fe5681c"
+      }
+    },
+    {
+      "id": "12-T3-network-failure-cancel-reopen",
+      "ok": true,
+      "ms": 3403,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148673890-45-t3-network.md",
+        "timing": {
+          "primaryReadyMs": 830.95,
+          "visibilityState": "visible",
+          "hasFocus": true,
+          "width": 1920,
+          "height": 1080
+        },
+        "version": "sha256:6340dd504f6fb4677fc4ff19ff4c3d6099b65437f9ce79d6fc5854a6874f0a0f",
+        "hash": "6340dd504f6fb4677fc4ff19ff4c3d6099b65437f9ce79d6fc5854a6874f0a0f"
+      }
+    },
+    {
+      "id": "CLEANUP-suite-fixtures-and-tokens",
+      "ok": true,
+      "ms": 1448,
+      "detail": {
+        "deletedPages": 4,
+        "deletedTokens": 13,
+        "deletedAgents": 3,
+        "residuals": 0
+      }
+    },
+    {
+      "id": "07-E2-real-preview-loading",
+      "ok": true,
+      "ms": 5182,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148928656-1-e2.md",
+        "timing": {
+          "primaryReadyMs": 190.35,
+          "visibilityState": "visible",
+          "hasFocus": true,
+          "width": 1920,
+          "height": 1080
+        },
+        "version": "sha256:3158fb8ff5c242ea1d810a8a243fabcfdf10d917e00aa86cf570e5a290191274",
+        "hash": "3158fb8ff5c242ea1d810a8a243fabcfdf10d917e00aa86cf570e5a290191274"
+      }
+    },
+    {
+      "id": "12-T1-API-missing",
+      "ok": true,
+      "ms": 1093,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148928656-2-t1-api-missing.md",
+        "deniedStatus": 400,
+        "deniedCode": "wiki_upload_access_required",
+        "zeroWriteHash": "5e6c04109dec6422bb9d3ad712b7302bf92cb49c0b18caad0b5b31a94646037d"
+      }
+    },
+    {
+      "id": "12-T1-API-empty",
+      "ok": true,
+      "ms": 1182,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148928656-3-t1-api-empty.md",
+        "deniedStatus": 400,
+        "deniedCode": "wiki_upload_access_required",
+        "zeroWriteHash": "5e6c04109dec6422bb9d3ad712b7302bf92cb49c0b18caad0b5b31a94646037d"
+      }
+    },
+    {
+      "id": "12-T1-API-all",
+      "ok": true,
+      "ms": 1427,
+      "detail": {
+        "key": "global/uat-wua-recheck-1795148928656-4-t1-api-all.md",
+        "deniedStatus": 400,
+        "deniedCode": "wiki_upload_access_required",
+        "zeroWriteHash": "5e6c04109dec6422bb9d3ad712b7302bf92cb49c0b18caad0b5b31a94646037d"
+      }
+    }
+  ],
+  "evidence": [
+    "results.json",
+    "supplement/results.json",
+    "candidate-source-hashes.json",
+    "attempt1/results.json"
+  ],
+  "supersededFailures": [
+    {
+      "artifact": "attempt1/results.json",
+      "cause": "runner incorrectly expected missing-page GET to return 404; corrected to list+container-file absence; canceled route handler handled safely"
+    },
+    {
+      "artifact": "results.json",
+      "id": "CLEANUP-suite-fixtures-and-tokens",
+      "cause": "token owner is agent.id; parser corrected; supplement cleanup independently succeeded with zero residuals"
+    }
+  ]
+}

@@ -1,7 +1,8 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { createServer, type Server } from "node:http";
+import { createServer, type Server, type ServerResponse } from "node:http";
+import { EventEmitter } from "node:events";
 import type { AddressInfo } from "node:net";
 import Database from "better-sqlite3";
 import Fastify from "fastify";
@@ -374,6 +375,142 @@ describe("Spec 191 — execution runtime reload controller", () => {
     // The second request is still waiting for ITS receipt: the late one was discarded.
     expect(second.reloadStatus).toBe("failed");
     expect(second.detail).toContain("超时");
+  });
+
+  it("waits for the accepted MCP response before publishing any destructive request", async () => {
+    await writeCapability(); await startUpstream(["zijin"]);
+    const work = await import("../runtime/mcp-process-work.js");
+    const drain = await import("../runtime/process-drain.js");
+    drain.markProcessServing();
+    const response = new EventEmitter() as ServerResponse;
+    const admitted = work.admitMcpProcessWork(response);
+    if (!admitted.ok) throw admitted.error;
+    let finish!: () => void;
+    const running = admitted.run(() => new Promise<void>((resolve) => { finish = resolve; }));
+    const { reloadExecutionRuntime } = await import("../admin/mcp-runtime-reload");
+    const pending = reloadExecutionRuntime({ projectRoot });
+    await vi.waitFor(() => expect(work.currentMcpReloadWindow()).not.toBeNull());
+    await expect(readFile(requestPath())).rejects.toThrow();
+    finish(); response.emit("finish"); await running;
+    const request = await consumeRequest(); await writeReceipt(request.requestId, "succeeded");
+    expect((await pending).reloadStatus).toBe("succeeded");
+    expect(work.currentMcpReloadWindow()).toBeNull(); drain.resetProcessDrainForTests();
+  });
+
+  it("fails drain before stop and never publishes a delayed restart", async () => {
+    await writeCapability(); await startUpstream(["zijin"]);
+    const work = await import("../runtime/mcp-process-work.js");
+    const drain = await import("../runtime/process-drain.js");
+    drain.markProcessServing();
+    const response = new EventEmitter() as ServerResponse;
+    const admitted = work.admitMcpProcessWork(response);
+    if (!admitted.ok) throw admitted.error;
+    let finish!: () => void;
+    const running = admitted.run(() => new Promise<void>((resolve) => { finish = resolve; }));
+    const old = process.env.LUCY_KTX_RELOAD_DRAIN_TIMEOUT_MS;
+    process.env.LUCY_KTX_RELOAD_DRAIN_TIMEOUT_MS = "25";
+    try {
+      const { reloadExecutionRuntime } = await import("../admin/mcp-runtime-reload");
+      const result = await reloadExecutionRuntime({ projectRoot });
+      expect(result.reloadStatus).toBe("failed");
+      expect(result.detail).toContain("未停止执行层");
+      await expect(readFile(requestPath())).rejects.toThrow();
+      expect(work.currentMcpReloadWindow()).toBeNull();
+      expect(work.mcpRpcInFlightCount()).toBe(1);
+    } finally {
+      if (old === undefined) delete process.env.LUCY_KTX_RELOAD_DRAIN_TIMEOUT_MS;
+      else process.env.LUCY_KTX_RELOAD_DRAIN_TIMEOUT_MS = old;
+      finish(); response.emit("finish"); await running; drain.resetProcessDrainForTests();
+    }
+  });
+
+  it("keeps a consumed owner after caller timeout and automatically reopens only after real terminal receipt", async () => {
+    process.env.LUCY_KTX_RELOAD_TIMEOUT_MS = "250";
+    await writeCapability(); await startUpstream(["zijin"]);
+    const work = await import("../runtime/mcp-process-work.js");
+    const { reloadExecutionRuntime } = await import("../admin/mcp-runtime-reload");
+    const pending = reloadExecutionRuntime({ projectRoot });
+    const request = await consumeRequest();
+    await writeCapability({ state: "reloading", currentRequestId: request.requestId });
+    const result = await pending;
+    expect(result.reloadStatus).toBe("failed");
+    expect(work.currentMcpReloadWindow()?.requestId).toBe(request.requestId);
+    const denied = work.admitMcpProcessWork(new EventEmitter() as ServerResponse);
+    expect(denied.ok).toBe(false);
+    if (!denied.ok) expect(denied.error.code).toBe("EXECUTION_RUNTIME_RELOADING");
+    await writeReceipt(request.requestId, "succeeded"); await writeCapability();
+    await vi.waitFor(() => expect(work.currentMcpReloadWindow()).toBeNull());
+  });
+
+  it("never infers terminal from consumption/idle heartbeat and requires its exact completed owner", async () => {
+    process.env.LUCY_KTX_RELOAD_TIMEOUT_MS = "250";
+    await writeCapability(); await startUpstream(["zijin"]);
+    const work = await import("../runtime/mcp-process-work.js");
+    const { reloadExecutionRuntime } = await import("../admin/mcp-runtime-reload");
+    const pending = reloadExecutionRuntime({ projectRoot });
+    const request = await consumeRequest();
+    // Deterministic consume -> heartbeat update -> not-yet-reloading interleaving.
+    await writeCapability({ state: "idle", heartbeatAt: new Date(Date.now() + 1000).toISOString() });
+    expect((await pending).reloadStatus).toBe("failed");
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(work.currentMcpReloadWindow()?.requestId).toBe(request.requestId);
+    expect((await reloadExecutionRuntime({ projectRoot })).reloadStatus).toBe("already_running");
+    await writeCapability({ state: "idle", completedRequestId: "different-owner" });
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(work.currentMcpReloadWindow()?.requestId).toBe(request.requestId);
+    await writeCapability({ state: "reloading", currentRequestId: request.requestId, completedRequestId: request.requestId });
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(work.currentMcpReloadWindow()?.requestId).toBe(request.requestId);
+    // Receipt write failed, but this atomic idle snapshot carries the EXACT real terminal identity.
+    await writeCapability({ state: "idle", completedRequestId: request.requestId });
+    await vi.waitFor(() => expect(work.currentMcpReloadWindow()).toBeNull());
+  });
+
+  it("does not publish across TERM while the private request write is deferred", async () => {
+    await writeCapability(); await startUpstream(["zijin"]);
+    const drain = await import("../runtime/process-drain.js"); drain.markProcessServing();
+    let resume!: () => void, entered!: () => void;
+    const reached = new Promise<void>((resolve) => { entered = resolve; });
+    const paused = new Promise<void>((resolve) => { resume = resolve; });
+    let published = 0;
+    vi.doMock("node:fs/promises", async () => {
+      const original = await vi.importActual<typeof import("node:fs/promises")>("node:fs/promises");
+      return { ...original,
+        writeFile: async (...args: Parameters<typeof original.writeFile>) => {
+          const value = await original.writeFile(...args);
+          if (String(args[0]).includes("ktx-reload.request.tmp")) { entered(); await paused; }
+          return value;
+        },
+        rename: async (...args: Parameters<typeof original.rename>) => {
+          if (String(args[1]).endsWith("ktx-reload.request")) published += 1;
+          return original.rename(...args);
+        }
+      };
+    });
+    try {
+      const { reloadExecutionRuntime } = await import("../admin/mcp-runtime-reload");
+      const pending = reloadExecutionRuntime({ projectRoot });
+      await reached; await drain.beginInstanceShutdown({ drainBudgetMs: 1 }); resume();
+      const result = await pending;
+      expect(result.reloadStatus).toBe("failed"); expect(published).toBe(0);
+      expect(result.detail).toContain("停止");
+      await expect(readFile(requestPath())).rejects.toThrow();
+    } finally { resume(); vi.doUnmock("node:fs/promises"); drain.resetProcessDrainForTests(); }
+  });
+
+  it("cancels its already-published unconsumed request when TERM arrives", async () => {
+    await writeCapability(); await startUpstream(["zijin"]);
+    const drain = await import("../runtime/process-drain.js"); drain.markProcessServing();
+    const { reloadExecutionRuntime } = await import("../admin/mcp-runtime-reload");
+    const pending = reloadExecutionRuntime({ projectRoot });
+    await vi.waitFor(async () => expect(JSON.parse(await readFile(requestPath(), "utf8")).requestId).toBeTruthy());
+    await drain.beginInstanceShutdown({ drainBudgetMs: 1 });
+    try {
+      const result = await pending;
+      expect(result.reloadStatus).toBe("failed"); expect(result.detail).toContain("停止");
+      await expect(readFile(requestPath())).rejects.toThrow();
+      expect(drain.getProcessLifecyclePhase()).not.toBe("SERVING");
+    } finally { drain.resetProcessDrainForTests(); }
   });
 
   it("refuses a target connection that is not in the configuration on disk", async () => {
