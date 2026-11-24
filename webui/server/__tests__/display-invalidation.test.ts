@@ -256,10 +256,17 @@ describe("Spec 174 T3 — invalidation matrix (DI-01..15/18)", () => {
     await request(app.server).get("/api/admin/agents").expect(200);
     const token = beginDisplayWrite(["P"]);
     const pendingList = request(app.server).get("/api/admin/agents");
-    setTimeout(() => {
-      void writeFile(path.join(projectRoot, "webui", "config", "access.yaml"), ACCESS.replace("name: Li Si", "name: Li Si 2"), "utf8")
-        .then(() => endDisplayWrite(token));
-    }, 30);
+    // Yield so the list request is in-flight and waiting on the write token
+    // before we mutate access.yaml. The previous fire-and-forget setTimeout +
+    // async writeFile raced under CI load: the wait budget expired (503 busy)
+    // before endDisplayWrite ran.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await writeFile(
+      path.join(projectRoot, "webui", "config", "access.yaml"),
+      ACCESS.replace("name: Li Si", "name: Li Si 2"),
+      "utf8"
+    );
+    endDisplayWrite(token);
     const res = await pendingList;
     expect(res.status).toBe(200);
     expect(res.body.data.agents.find((a: { id: string }) => a.id === "lisi").name).toBe("Li Si 2");
