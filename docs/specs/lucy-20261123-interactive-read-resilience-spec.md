@@ -9,7 +9,7 @@
 | 阶段 | S3 |
 | 状态 | S3｜实现进行中（既有 SC-01–08：A1／A2 单元＋复审 PASS；A3 判定器 24/24；demo 镜像已含改动）。正式 G1 R0–07／G2 与多页面必做回归尚未封存跑次。2026-11-24 委托人明示定稿扩容设计（Spec v1.4／Plan v1.3／UAT v1.3）：目标「WebUI 全部页面含二级 tab 无 503」，503 按原因登记表判定（附录 A），超宽限的只读展示降级为 200；定稿不含开发授权，SC-09–10 对应运行代码开发未授权，仅设计与登记，测试台 `UAT-READ-RES-09／10` NOT RUN；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。 |
 | 授权边界 | 2026-11-23 委托人批准修订 Spec、UAT 与并行任务；同日明示「完成落地和测试」＝运行代码＋测程开发授权，**范围仅 SC-01–08**。2026-11-24 委托人明示「定稿 Spec、Plan、UAT，不进行开发」：扩容部分按无 Codex 时的委托人明示确权口径登记**设计层终稿确权**，**不含 §2.5／SC-09–10 的开发授权**，须委托人另发。正式 UAT／INDEX 登记仍须实测回执。 |
-| 扩容修订 | 2026-11-24 v1.4：定稿 §2.5 与附录 A（503 原因登记表），关闭 v1.3-draft 的 OQ-1 至 OQ-4；修订 §2.4 构建等待口径；新增 SC-09／SC-10；修订 UAT-READ-RES-08-B 的「可重试 503」口径；登记对 [Spec 195](lucy-20261030-display-snapshot-invalidation-isolation-spec.md)、[Spec 174](../../webui/docs/174-webui-entry-performance-spec.md) 的边界修订指针，并联动修订 [P1-81](lucy-20261124-stuck-state-self-healing-spec.md) §3。2026-11-24 复核修订（同版）：`reconcile_failed` 持续越界转 C 类 503 的状态机；四种 200 状态与待定计时；B 类补上限、`ACCESS_RECOVERY_REQUIRED` 与 `question_budget_unavailable` 改归 C。评审处置见 [Kimi 评审处置](../reviews/2026-11-24-p1-75-v1-3-kimi-review-disposition.md)。**旧 08-B 证据只保留历史意义，不能证明 v1.4 的 08-B。** |
+| 扩容修订 | 2026-11-24 v1.4：定稿 §2.5 与附录 A（503 原因登记表），关闭 v1.3-draft 的 OQ-1 至 OQ-4；修订 §2.4 构建等待口径；新增 SC-09／SC-10；修订 UAT-READ-RES-08-B 的「可重试 503」口径；登记对 [Spec 195](lucy-20261030-display-snapshot-invalidation-isolation-spec.md)、[Spec 174](../../webui/docs/174-webui-entry-performance-spec.md) 的边界修订指针，并联动修订 [P1-81](lucy-20261124-stuck-state-self-healing-spec.md) §3。2026-11-24 复核修订（同版；委托人确认设计复核通过，进入「待开发授权」，暂定值与原因码命名已接受）：`reconcile_failed` 持续越界转 C 类 503 的状态机；四种 200 状态与待定计时；B 类补上限、`ACCESS_RECOVERY_REQUIRED` 与 `question_budget_unavailable` 改归 C。评审处置见 [Kimi 评审处置](../reviews/2026-11-24-p1-75-v1-3-kimi-review-disposition.md)。**旧 08-B 证据只保留历史意义，不能证明 v1.4 的 08-B。** |
 | 需求 / 验收 | [总账 P1-75](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [REQ-030-096](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md#req-030-096mcp-握手与-agent-名册读取长尾治理) · [UAT-SUITE-INTERACTIVE-READ-RESILIENCE](../qa/uat/suites/interactive-read-resilience/suite.md) |
 | 配对计划／评审 | [修复与复现 Plan](../plans/lucy-20261123-interactive-read-resilience-plan.md) · [初审](../reviews/2026-11-23-p1-75-interactive-read-resilience-adversarial-review.md) · [Codex 复审及定稿处理](../reviews/2026-11-23-p1-75-interactive-read-resilience-codex-review.md) · [v1.3 扩容 Kimi 评审](../reviews/2026-11-24-p1-75-v1-3-all-pages-no-503-kimi-review.md) · [评审处置](../reviews/2026-11-24-p1-75-v1-3-kimi-review-disposition.md) |
 
@@ -131,7 +131,7 @@ A 类读不再返回 503，而是返回下列四种 200 之一。`fresh` 是正�
 
 **与 P1-81 联动。** 降级响应不是健康证据。P1-81 的假活判定把超时、503、`stale`、`pending` 都记为展示读失败（`pending` 无年龄，任何 `pending` 都不是健康证据），见 P1-81 §3。A 类零目标不得让假活检测失明。
 
-**根因优先。** 降级是兜底，不替代根因修复。共享核验得不到服务、I/O 竞争、构建占槽都只是**候选机制**，唯一根因须按 [`f5e4b14d` 关闭清单](../qa/uat/suites/interactive-read-resilience/close-checklist-f5e4b14d.md) A3 给出证据后才可定论。验收必须包含「关闭降级」的同口径混压对照（09-F），证明零 503 不是只靠状态码转换取得。
+**根因优先。** 降级是兜底，不替代根因修复。共享核验得不到服务、I/O 竞争、构建占槽都只是**候选机制**，唯一根因须按 [`f5e4b14d` 关闭清单](../qa/uat/suites/interactive-read-resilience/close-checklist-f5e4b14d.md) A3 给出证据后才可定论。验收必须包含三臂对照（09-F）：改前臂复现 503；最终候选关闭降级臂 A 类 503 为零且内容正确，证明零 503 不是只靠状态码转换取得。
 
 **覆盖矩阵。** Plan X0 生成「页面 × 二级 tab × 首读接口 × 可能的 503 原因」清单，来源为 `webui/src/app/navigation.ts`、[`06-navigation-ia.md`](../../webui/docs/06-navigation-ia.md) 和既有 [`UAT-SUITE-PAGE-OPEN`](../qa/uat/suites/page-open-exceptions/suite.md) PO-01／PO-02 的覆盖范围。该套件已知缺口（详情页带参数路由 PO-03 未做、页签上限 6 个）不得继承，矩阵须补入带真实 id 的详情页路由，并取消页签个数上限。由委托人指定的**非作者复核者**在 X1 前对账：路由、页面组件、既有清单的差集逐条解释；缺格或未解释的多余格判 `BLOCKED`。已知差异：登录账户路由在 `navigation.ts` 为 `/admin/accounts`，在 `06-navigation-ia.md` 为 `/admin/admins`，以 `navigation.ts` 为准并修正文档（不改导航）。矩阵版本摘要随候选封存。导航本身不改。
 
@@ -202,7 +202,7 @@ initialize(request):
 | SC-06 | 同一候选 G1 局部负载中，直连及反代探针和普通鉴权读在冻结预算内正确响应，同时合法 MCP 继续成交。等待、取消和实际工作容量可核对，故障解除后读恢复；与 FUP-03 历史重档判定分列。 | UAT-READ-RES-06 |
 | SC-07 | 三个自然窗都达到规定的 50 路握手及 50 路独立真实问数，有效写入、名册请求和查询在途重叠。真实前台用同账号独立会话核对成功保存、冲突后成交、首响应与写后版本。按角色检查每个结果及授权变化。 | UAT-READ-RES-07 |
 | SC-08 | 在无配置写入的冷读及受控共享核验／构建慢窗，逐页核对概览、语义资产、Agent 名册、角色权限的首响应、正确业务内容及限时恢复。区分正常首读、具名受影响依赖的降级 200（v1.3 起不再接受 A 类 503）和独立控制；同窗探针及纯 MCP 仍守原预算。 | [UAT-READ-RES-08](../qa/uat/suites/interactive-read-resilience/cases.md#uat-read-res-08) |
-| SC-09 | 按冻结的「页面 × 二级 tab × 首读接口」矩阵，在无压冷读、局部核验／构建故障、`f5e4b14d` 同口径混压（500 Agent、200 角色、1,403 Source、百万审计、2 CPU／2 GiB、15 分钟）和停压恢复四种窗内，真实前台逐格测首读、tab 切换与写后首读。A 类 503 为 0；附录 A 登记表外 503 为 0；B、C 类按 §2.5 单独记账，压力窗 C 类为 0。`stale`／`pending` 响应次数、占比与数据年龄逐格记录，无压冷读为 0，连续降级不超 D_max，停压后 10 秒内回 `fresh`。另跑关闭降级的同口径对照（09-F）证明零 503 不是靠状态码转换取得。每窗分母与内容正确性逐格报告。同窗纯 MCP 合法 Agent 与探针守原预算。 | [UAT-READ-RES-09](../qa/uat/suites/interactive-read-resilience/cases.md#uat-read-res-09) |
+| SC-09 | 按冻结的「页面 × 二级 tab × 首读接口」矩阵，在无压冷读、局部核验／构建故障、`f5e4b14d` 同口径混压（500 Agent、200 角色、1,403 Source、百万审计、2 CPU／2 GiB、15 分钟）和停压恢复四种窗内，真实前台逐格测首读、tab 切换与写后首读。A 类 503 为 0；附录 A 登记表外 503 为 0；B、C 类按 §2.5 单独记账，压力窗 C 类为 0。`stale`／`pending` 响应次数、占比与数据年龄逐格记录，无压冷读为 0，连续降级不超 D_max，停压后 10 秒内回 `fresh`。另跑三臂对照（09-F）：改前臂证明负载能复现 503，最终候选关闭降级臂 A 类 503 为 `0/N` 证明根因已修复而非靠状态转换。每窗分母与内容正确性逐格报告。同窗纯 MCP 合法 Agent 与探针守原预算。 | [UAT-READ-RES-09](../qa/uat/suites/interactive-read-resilience/cases.md#uat-read-res-09) |
 | SC-10 | 降级边界安全：宽限外降级视图下，保存、dryRun、权限预览、撤权后读取和 MCP 授权仍走 fresh 核验；授权变化前降级视图被同步撤下，不出现新配置与旧权限拼接；无已核验视图时返回 `pending`，不返回空列表冒充；在途撤权与读取交叠时放弃降级；跨身份与权限版本不串视图；同一作用域持续核验失败越过 D_max 后返回 C 类 503、恢复后重新成交；真实注入安全存储或审计账本故障时 C 类仍 fail-closed，压力下 C 类为 0。约束生效与合法用户仍可用（含无 WebUI 会话的纯 MCP）同窗成立。 | [UAT-READ-RES-10](../qa/uat/suites/interactive-read-resilience/cases.md#uat-read-res-10) |
 
 ## 4. 阶段安排
@@ -215,7 +215,7 @@ initialize(request):
 
 ## 附录 A 503 原因登记表
 
-> 版本 v1.4（2026-11-24 复核修订），冻结于当日 `webui/server` 现状。B 类每项须有可验证上限；标「暂定」的数值由 X0 复核，委托人可改，冻结前按暂定值判定。X1 用自动化对账代码出口与本表，缺登记即失败；本表之外的 503 UAT 一律判失败。同一原因码在读取与动作路径并存时按调用路径归类（§2.5 判定规则 2）。
+> 版本 v1.4（2026-11-24 复核修订），冻结于当日 `webui/server` 现状。B 类每项须有可验证上限；标「暂定」的数值（`write_pending` 180 秒、`warming_up` 120 秒）已获委托人 2026-11-24 接受，作为 X0 实测复核起点和验收上限：超上限判失败，不得靠重开窗口或改分类规避；调整须留变更记录。原因码 `DISPLAY_RECONCILIATION_FAILED` 命名已获接受，X1 冻结后附录、实现、日志与 UAT 必须使用同一代码。X1 用自动化对账代码出口与本表，缺登记即失败；本表之外的 503 UAT 一律判失败。同一原因码在读取与动作路径并存时按调用路径归类（§2.5 判定规则 2）。
 
 | 原因 | 出处 | 类 | 处置或上限 |
 |---|---|---|---|

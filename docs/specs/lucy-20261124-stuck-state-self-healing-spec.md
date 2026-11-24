@@ -24,7 +24,7 @@
 | v0.2 | 2026-11-24 **终稿确权＋开发授权（委托人明示）并实现**：OQ-1＝进程内看门狗（A 原位重启 reconciler→B 排空退出 75）＋探针转红＋Docker 监管器替换的组合；OQ-2 采纳默认 W=60s、T_A=120s（重试 T_A 后 B）；OQ-3 demo compose `lucy` 增 `restart: on-failure`；OQ-4 走 P1-63 有序排空，超时再退出。新增重启断路器（30 分钟内 3 次）与证据 JSONL `.ktx-ui/self-heal-events.jsonl`。UAT 仍 NOT RUN |
 | v0.1-draft | 2026-11-24 措辞修订（委托人批准）：非目标与「不在本条出口」中，压力下消除 503 的实现归 P1-75，P1-78 仅度量与判定。不改状态、范围与验收 |
 | v0.2-r2 | 2026-11-24 评审反馈修订（委托人转述评审意见，实现与证据已落地）：**MCP/KTX 探针可独立触发**——上游探针（`kind:"upstream"`，KTX 无响应）单独连续失败满 W 即判假活（`stuckDomain=mcp`），不再要求展示读同时失败；本进程 I/O 积压（`kind:"io"`）单独**不**触发；KTX 在 30 秒内完成过任一工具调用即视为存活（`upstream-liveness`），防止饱和误杀。判定后 `readyz` 转 503；先原位重启 KTX 子进程（经 supervisor reload 通道），T_A 后仍未恢复再有序排空退出 75；自发起的 KTX reload 不计入「计划内重载」豁免（避免 stuck→reload→豁免 循环）。**compose 不加 `on-failure:N` 封顶**：实测 Docker 的 N 计数从不复位，封顶会使自愈永久失效；改以 Docker 退避（≤1 分钟）＋看门狗重启断路器（30 分钟 3 次，持久化）约束启动死循环。证据见 `inbox/p181-p182-docker-verify/p181-single-path-ktx-heal.json`（原位恢复＋退出 75 两条路径；16 路持续饱和 130 秒无误杀）。状态、UAT 与出口不变：UAT 仍 NOT RUN；SC-06（属 P1-82）仍移下期 |
-| v0.2-r1 | 2026-11-24 联动修订（P1-75 v1.4）：§3 失败定义纳入越宽限 `stale`／`pending` 降级 200，避免 A 类零 503 让假活检测失明；`readyz` 的 `stuck` 属 P1-75 附录 A 的 B 类。**只改文档，不改状态与既有验收；已落地的 `stuck-watchdog.ts` 与展示读探针对齐须委托人另行授权，授权前该实现按旧定义（超时或 503）运行。** |
+| v0.2-r1 | 2026-11-24 联动修订（P1-75 v1.4）：§3 失败定义纳入越宽限 `stale`／`pending` 降级 200，避免 A 类零 503 让假活检测失明；`readyz` 的 `stuck` 属 P1-75 附录 A 的 B 类。**只改文档，不改状态与既有验收；P1-75 X3 以看门狗代码对齐并验证为前置；已落地的 `stuck-watchdog.ts` 与展示读探针对齐须委托人另行授权，授权前该实现按旧定义（超时或 503）运行。** |
 
 ## 闭口层级
 
@@ -94,7 +94,7 @@ Docker 配置核对（2026-11-24）：
 
 满足全部条件即为「假活」：
 
-- 观察窗口 W（默认 60 秒）内，对同一进程发起的**合法、已鉴权**业务探针失败率达 100%，且满足下列任一路径（v0.2-r2）：**(a) 单路 MCP/KTX**：MCP 数据路径探针判定为上游无响应（KTX 超时／不可用／陈旧），无需展示读同时失败；**(b) 双路**：展示读与 MCP 数据路径探针同时失败。仅本进程 I/O 积压（探针慢但 KTX 仍在应答）不构成 (a)。失败＝超时、503，或 [P1-75 v1.4](lucy-20261123-interactive-read-resilience-spec.md) §2.5.1 定义的越宽限 `stale`／`pending` 降级 200。降级 200 不是健康证据，展示读探针必须判定响应状态，不得只看状态码。
+- 观察窗口 W（默认 60 秒）内，对同一进程发起的**合法、已鉴权**业务探针失败率达 100%，且满足下列任一路径（v0.2-r2）：**(a) 单路 MCP/KTX**：MCP 数据路径探针判定为上游无响应（KTX 超时／不可用／陈旧），无需展示读同时失败；**(b) 双路**：展示读与 MCP 数据路径探针同时失败。仅本进程 I/O 积压（探针慢但 KTX 仍在应答）不构成 (a)。失败＝超时、503，或 [P1-75 v1.4](lucy-20261123-interactive-read-resilience-spec.md) §2.5.1 定义的 `stale`、`pending` 降级 200（`pending` 无数据年龄，任何 `pending` 都不是健康证据）。降级 200 不是健康证据，展示读探针必须判定响应状态，不得只看状态码。
 - 同窗 `readyz` 与 `livez` 仍为 200。
 - 同窗没有处于启动窗口、排空（P1-63）或已登记的计划内重载。
 
@@ -107,7 +107,7 @@ observe(window W):
   r = authenticated_business_probes(display_read, mcp_legal_query)
   l = readyz_status, livez_status
   if in_startup or in_drain or in_planned_reload: return NORMAL
-  # failure = timeout | 503 | degraded stale/pending beyond grace (P1-75 v1.4)
+  # failure = timeout | 503 | degraded stale | pending (P1-75 v1.4; pending has no age)
   if r.fail_rate == 100% and l == 200: return STUCK        # 假活
   return NORMAL
 
