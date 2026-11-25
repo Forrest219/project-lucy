@@ -11,7 +11,8 @@
 | P1-66 本轮变更 | v0.123（2026-11-20）：新增 REQ-030-087／P1-66，授权优化方案、Spec／Plan、保留现场权限展开规模的 Docker 浏览器验证设计；不授权实现或执行。 |
 | P1-73 本轮变更 | v0.140（2026-11-22）：P1-73＋P1-35 → **S5 功能合同已收口**（编排 Plan 执行完成）。v0.139：P1-73 开发授权；S2→S3。v0.137：终稿确权 S2。v0.136：伞含 `status-vocab`。v0.135：入池 REQ-030-094。 |
 | P1-74 本轮变更 | v0.141（2026-11-22）：Spec／Plan v1.1 终审闭环修订，D1–D9 不变；UAT 设计 v1.0，BESC-R0／01–12 全必做；开发未授权，仍 NOT RUN。v0.140：终稿确权；v0.139：挂测试台；v0.138：入池。 |
-| 版本 / 日期 | v0.164 / 2026-11-24 |
+| 版本 / 日期 | v0.181 / 2026-11-25 |
+| P1-90 本轮变更 | v0.181（2026-11-25）：新增 REQ-030-111（清单 P1-90）Schema Manifest 按表追加与覆盖门禁逃生修复；源自客户新表接入死锁 Bug 报告（v0.25.0 实测四路径死锁）与当日逐条代码核查；仅登记与起草，S1，终稿未确权，开发未授权；测试台 not_registered。镜像总账 v2.89。 |
 | P1-75 扩容 | v0.164（2026-11-24）：REQ-030-096 扩容设计定稿（Spec v1.4／Plan v1.3／UAT v1.3），目标为 WebUI 全部页面（含二级 tab）无 503；503 按原因登记表（Spec 附录 A）判定；超宽限只读展示 200＋降级标记，无视图时 200＋`pending`；关闭 OQ-1 至 OQ-4；新增 09-F 对照臂与 10-F／G／H／I；联动 P1-81 §3。开发未授权；`UAT-READ-RES-09／10` NOT RUN。镜像总账 v2.64。v0.163：扩容立项。 |
 | P1-82 本轮变更 | v0.162（2026-11-24）：新增 REQ-030-103 MCP 数据面执行舱壁与跨 Agent 故障隔离；S1 设计；挂测试台 `UAT-SUITE-MCP-DATA-PLANE-HA`（NOT RUN）；镜像总账 v2.61。 |
 | P1-81 本轮变更 | v0.161（2026-11-24）：新增 REQ-030-102 假活状态自愈与探针一致性；S1 设计；挂测试台 `UAT-SUITE-SELF-HEAL`（NOT RUN）；镜像总账 v2.59。 |
@@ -81,6 +82,7 @@
 
 | REQ | 需求 | 来源 | 优先级 | 跟进状态 |
 |---|---|---|---|---|
+| REQ-030-111 | Schema Manifest 按表追加与覆盖门禁逃生修复 | 2026-11-25 客户 Bug 报告：v0.25.0 向既有 100 表 `BIDW` Schema 新增 1 表，overlay publish／import／enabled-tables／manifest publish 四路径死锁，仅 SSH 改服务器文件可解 | P1（清单 P1-90；治理主路径可用性／事故修复；不入核心分母） | S1｜v0.1-draft。登记立项；终稿未确权（OQ-1～OQ-3 待裁定）；开发未授权；测试台 not_registered。 |
 | REQ-030-103 | MCP 数据面执行舱壁与跨 Agent 故障隔离 | 2026-11-24 架构探查：WebUI／MCP 共用进程与同步 SQLite；单 Token 限流缺少全局／分连接舱壁；既有混压中 Web 503 与独立 MCP 查询超时共存 | P1（清单 P1-82；事故修复／可用性；不入核心分母） | S4｜v0.2。终稿已确权（委托人 2026-11-24）；开发授权已获得；实现已落地，SC-06 未实现；待验收；测试台 NOT RUN；≠ 可上线。 |
 | REQ-030-102 | 假活状态自愈与探针一致性 | 2026-11-24 P1-75 `f5e4b14d` 压力跑次：停压后同实例不恢复、`readyz` 全绿，仅重启恢复；Docker 健康检查不含业务能力且无自动重启 | P1（清单 P1-81；事故修复；不入核心分母） | S4｜v0.2。终稿已确权（委托人 2026-11-24）；开发授权已获得；实现已落地待验收；测试台 NOT RUN；≠ 可上线。 |
 | REQ-030-101 | 启用表范围表清单三态诚实展示 | 2026-11-23 管理站超时调查差集＋本机 demo 三态复现：`/tables` pending／error 与成功空表同文误报「缺少 Manifest／无效启用」 | P1（清单 P1-80；事故修复；不入核心分母） | S5｜v1.0；功能合同已收口（2026-11-23）。测试台 PASS；[收口记录](../reviews/2026-11-23-p180-s5-closure-record.md)。≠ 可上线。 |
@@ -1566,6 +1568,20 @@ v1.0。Codex CLI终稿确权及代码终审通过；增量开发授权已获得�
 - 文档：[Spec](../specs/lucy-20261122-spec-status-funnel-gate-spec.md) · [Plan](lucy-20261122-spec-status-funnel-gate-plan.md) · [状态词建议书](lucy-20261122-spec-status-vocabulary-chinese-plan.md) · `inbox/20261122-1123-spec-funnel.md` · [伞评审](../reviews/2026-11-22-p1-73-status-governance-umbrella-review.md)。
 - 状态：**S5｜v1.0。功能合同已收口（2026-11-22）。SC-01–SC-15＋实现 CR PASS；全仓 MIG 另授权。本条收口不表示可上线。**
 - 授权边界：开发授权已获得（2026-11-22）；落地范围限伞 Spec §8 白名单；阶段全仓迁移（MIG）另授权。
+
+## REQ-030-111：Schema Manifest 按表追加与覆盖门禁逃生修复
+
+- **来源**：2026-11-25 客户现场 Bug 报告 [`inbox/Lucy语义层新表接入_覆盖门禁死锁_Bug报告.md`](../../inbox/Lucy语义层新表接入_覆盖门禁死锁_Bug报告.md)（平台 v0.25.0，`sql_server`／`BIDW` 已有 100 表，新增 `v_token_income_unified` 一表：publish overlay 落盘但 catalog 不扫、import `SOURCE_NOT_FOUND` 循环依赖、enabled-tables `TABLE_NOT_SCANNED`、manifest publish 被覆盖门禁阻断且 plans 报 `VALIDATION_SNAPSHOT_NOT_FOUND`，最终只能 SSH 改服务器文件）；当日逐条代码核查确认四项产品缺陷与一项报告存疑点（`confirmOverwrite` 自 v0.25.0 已被路由与门禁分支识别，「参数被忽略」列 OQ-5 待取证）。
+- **期望**：
+  - 新增 create-only 按表追加端点 `POST /api/schema-manifests/:conn/:schema/tables`：按表 key 合并（不整文件替换、既有表零影响）、dryRun diff 预览、schema 名大小写归一化（无匹配 404、多义 409）、column `expr`／`role` 等 overlay-only 键显式拒绝、写盘复用 L25-16 锁＋发布窗口＋恢复日志＋审计、写后 catalog reload 使新表对 catalog／Agent 可见；
+  - import 对未登记表返回 `SOURCE_NOT_FOUND` 时携带追加端点指引；schema 归一化与端点共用；Manifest 缺失返回 404 而非 500；
+  - publish 覆盖门禁阻断（未写盘）不再删除 validation snapshot，同一 validationId 可 `confirmOverwrite:true` 重试成交；
+  - plans 对「snapshot 存在但非 batch」返回 `PLAN_PREVIEW_NOT_AVAILABLE`（409），与 404 `VALIDATION_SNAPSHOT_NOT_FOUND` 区分；
+  - `03-api-spec.md` 与 `docs/SYSTEM_HANDBOOK.md` 补「追加／import 更新／upload 整文件替换」分工。
+- **范围**：`webui/server/semantic-layer.ts`、`webui/server/semantic-assets.ts`、`webui/server/semantic-batch-routes.ts`、`webui/server/index.ts`、新增 `webui/server/schema-manifest-append.ts`、`webui/docs/03-api-spec.md`、`docs/SYSTEM_HANDBOOK.md`；不改 KTX 源码；不改 WebUI 运行导航；不改维护包 Manifest readonly 语义与 publish 文件级替换语义；物理新表自动发现另案（Spec 190 非目标）。
+- **优先级**：P1 治理主路径可用性／事故修复；不入核心分母。
+- **状态**：S1｜v0.1-draft。登记立项（2026-11-25）；终稿未确权（OQ-1 端点形态／OQ-2 snapshot 清理／OQ-3 错误码状态待裁定）；开发未授权；测试台 not_registered；≠ 功能合同收口；≠ 可上线。
+- **挂接**：[总账 P1-90](lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [Spec](../specs/lucy-20261125-schema-manifest-table-append-spec.md) · [Plan](lucy-20261125-schema-manifest-table-append-plan.md)。
 
 ## REQ-030-109：敏感元数据工具可见性对齐与拒绝修复引导
 
