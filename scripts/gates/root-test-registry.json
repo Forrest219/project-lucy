@@ -1382,6 +1382,76 @@
       "gate": "workflow-contracts",
       "gateCommand": "npm run test:root-contracts",
       "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/mcp-inquiry-performance.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "reads the scenario contract and the question pack; writes nothing",
+      "command": "node --test scripts/e2e/__tests__/mcp-inquiry-performance.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/mcp-inquiry-performance-evidence.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/mcp-inquiry-performance-evidence.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/run-mcp-inquiry-performance.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/run-mcp-inquiry-performance.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/mcp-inquiry-performance-agent.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/mcp-inquiry-performance-agent.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/mcp-inquiry-performance-soak.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "reads the scenario contract and the scale baseline; writes nothing",
+      "command": "node --test scripts/e2e/__tests__/mcp-inquiry-performance-soak.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/e2e/__tests__/mcp-inquiry-question-pack.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "writes only under a temporary directory",
+      "command": "node --test scripts/e2e/__tests__/mcp-inquiry-question-pack.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
+      "path": "scripts/uat/__tests__/check-uat-scale-baseline.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "reads the synthetic scale-baseline fixtures only; writes nothing",
+      "command": "node --test scripts/uat/__tests__/check-uat-scale-baseline.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
     }
   ]
 }

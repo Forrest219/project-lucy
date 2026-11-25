@@ -2,7 +2,7 @@
 
 | 元数据 | 内容 |
 |---|---|
-| Suite ID / 版本 | `UAT-SUITE-MCP-INQUIRY-PERF` / v0.2-draft |
+| Suite ID / 版本 | `UAT-SUITE-MCP-INQUIRY-PERF` / v1.0（设计随 Spec v1.0 定稿） |
 | 日期 | 2026-11-23 |
 | 总账 / 需求 | **P1-78／REQ-030-099**；P0 核心体验／发布底线，独立门禁，不改变 0.30 既有核心分母 |
 | 合同 | [Spec](../../../../specs/lucy-20261123-mcp-inquiry-performance-baseline-spec.md) · [Plan](../../../../plans/lucy-20261123-mcp-inquiry-performance-baseline-plan.md) |
@@ -28,8 +28,8 @@
 | 选择器 | 必做范围 | 允许主张 |
 |---|---|---|
 | `pr` | R0／01–06／08–09 的 PR 子集；SIMPLE／FOLLOW／JOIN／DENIAL＋合法对照；MCP≥20、Agent≥3／场景 | 绝对上限与中位数；不得声称 Agent 正式 P95 或完整发布性能 PASS |
-| `nightly` | R0／01–12、14／15，全性能场景、冷／热、20 路、`SOAK` 持续压力与 `LONG_FOLLOW` 长追问；MCP≥100、Agent≥20／场景 | 正式分位、趋势和相对判定；连续两次无人值守后才能证明持续运行 |
-| `release` | R0／01–15，全性能场景、20／50 路、`SOAK`、`LONG_FOLLOW` 和全部负控；消费已接受基线 | 出包性能门禁；SEED_ONLY／FAIL／BLOCKED／NOT RUN 均不得放行 |
+| `nightly` | R0／01–09／12／14／15（10／11 归 release；顺序以 [cases](cases.md#执行顺序与触发档映射)为准），全性能场景、冷／热、20 路、`SOAK` 持续压力与 `LONG_FOLLOW` 长追问；MCP≥100、Agent≥20／场景 | 正式分位、趋势和相对判定；连续两次无人值守后才能证明持续运行 |
+| `release` | R0／01–15，全性能场景、20／50 路、`SOAK`、`LONG_FOLLOW` 和全部负控；消费已接受基线 | 出包性能门禁；正常放行仅 PASS，SEED_ONLY／FAIL／BLOCKED／NOT RUN 不得放行；唯一例外是 Spec D22 经校验的 `waived`（≠ PASS，只放行其绑定候选） |
 | `upgrade-pre/post` | 与 release 同场景、同身份、同环境、同题库、同客户端／模型，含 `SOAK` 与 `LONG_FOLLOW`；PRE→POST→必要时 ROLLBACK | 实例升级性能门禁；缺 PRE 或指纹漂移即 BLOCKED |
 | `optimization-ab` | 同夹具、同测程、单变量改前／改后；R0／03–09／11–12 | 供其他优化 Spec 消费，不在本套件修改产品或提高预算 |
 
@@ -40,6 +40,9 @@
 - 任一产品错误、错误答复、意外拒绝、预算越线、相对回退、证据篡改或负控未检出＝**FAIL**。
 - 缺真实宿主、样本、基线、可比指纹或必要观测＝**BLOCKED**；题库缺长链、基线未登记压测 profile 同样 BLOCKED。
 - 首次有效基线尚未具名接受＝**SEED_ONLY**，不是 PASS。
+- 供应商／宿主错误只按 Spec D21 归类：证据＋审计对账后的瞬态错误有界重试，超限＝BLOCKED（`providerUnavailable`）；慢而无错误或 Lucy 侧错误＝FAIL。
+- `waived`（Spec D22）只来自委托人具名、限时、绑定候选 digest 的事故修复豁免；它不是 PASS，不写基线、不晋级 `LATEST.json`，INDEX 不因此写 PASS。无豁免时 BLOCKED／SEED_ONLY 仍拦截。
+- 长链按**链实例**（模板×身份×`runId`）计；同一链实例二次执行无效，不同身份执行同一模板合法（D20）。
 - **长链只跑一次**：同一跑次内 `LONG_FOLLOW` 复用 `SOAK` 已产生的长链证据，不重复发起第二轮 ≥20 轮追问；跨 `runId` 的链单独计数、不与 `SOAK` 混算。
 - 必做项不接受 PASS WITH GAP；INDEX 是唯一结果 SOT，Spec 状态不由此文件倒推。
 

@@ -2,13 +2,13 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 发布取证 Spec / **v0.4-draft** |
+| 文档类型 / 版本 | 发布取证 Spec / **v1.0** |
 | 日期 / 目标版本 | 2026-11-23 / 产品线 `0.30.0`（分支 `lucy-v0.30`） |
 | 功能编号 / 优先级 | **P1-78／REQ-030-099**；**P0（核心体验／发布底线）**；独立出包／升级门禁，不改变 0.30 既有核心分母 |
 | 台账号 | 无 |
-| 阶段 | S1 |
-| 状态 | S1｜v0.4-draft。委托人2026-11-23授权新建独立性能测试 Spec／Plan／UAT 设计；终稿未确权；开发未授权；仅设计，不执行性能跑次；不改产品优化代码；≠ 发布取证收口；≠ 可上线。 |
-| 授权边界 | 仅新建 Spec／Plan／UAT 设计并登记台账。不得新增或修改 runner、workflow、CI job、测试命令、产品运行代码、配置或依赖；不得执行性能跑次、Docker 重建、出包或现场升级。后续终稿确权、测试基建开发和跑次执行分别另授。 |
+| 阶段 | S3 |
+| 状态 | S3｜v1.0。委托人2026-11-23授权新建独立性能测试 Spec／Plan／UAT 设计；2026-11-24 过程评审（[终审意见](../reviews/2026-11-24-p1-78-mcp-inquiry-performance-final-review.md)）退回 B1–B4，v0.5 已修；同日 Codex CLI（`gpt-5.6-sol`）终审退回 R1–R3 并已修；**终稿已确权（委托人 2026-11-24 明示「批准修复建议」，按委托人明示确权先例；Codex 第二轮复审因账号额度未做）**；**2026-11-26 委托人授权测试基建开发（Plan Task 1–4／8＋MCP-PERF 断言扩展，多 agent 并行）**；**测试基建产出已入工作树**（判定器、证据与独立 verifier、确定性 MCP 测程、真实 Agent 测程、SOAK／LONG_FOLLOW 编排、消费方只读守卫与 runner 接线、MCP-PERF 断言扩展；新增 7 个测试文件 345 例全绿；未提交、未接 CI、无真实跑次）；真实跑次（Task 5／7）与 CI／发布接线（Task 6）仍未授权，不执行性能跑次；不改产品优化代码；≠ 发布取证收口；≠ UAT PASS；≠ 可上线。 |
+| 授权边界 | 终稿已确权（见状态）。2026-11-26 委托人授权测试基建开发：限 Plan Task 1–4／8（`scripts/e2e/` 判定器、证据／verifier、确定性 MCP 测程、真实 Agent 测程、SOAK／LONG_FOLLOW 测程）及 `scripts/uat/check-uat-scale-baseline.mjs` 的 MCP-PERF 断言扩展。仍不得：执行真实性能跑次（Task 5／7）、CI／发布接线（Task 6，含 `package.json`／workflow 改动）、Docker 重建、出包或现场升级；不得修改产品运行代码、配置、依赖、KTX、P1-53／P1-54 文件与既有证据。 |
 | 需求 / 总账 | [REQ-030-099](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md#req-030-099mcp-问询端到端性能基准与持续门禁) · [P1-78](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) |
 | 计划 / 测试台 | [Plan](../plans/lucy-20261123-mcp-inquiry-performance-baseline-plan.md) · [`UAT-SUITE-MCP-INQUIRY-PERF`](../qa/uat/suites/mcp-inquiry-performance/suite.md)（设计已登记，NOT RUN） |
 | 实施主体 | `scripts/e2e/` 性能测程、判定器和证据校验器；`scripts/uat/` 隔离 Docker 测程；`.github/workflows/` 持续调度；测试台。不得修改 KTX 源码或 Lucy 产品运行路径。 |
@@ -65,7 +65,7 @@
 |---|---|---|
 | D1 | 独立性能 SOT | 本条是 MCP 问询端到端性能的唯一合同。测试与优化分离；优化条目只能消费本条的测程和判定。 |
 | D2 | 双测程 | **Agent 旅程**＝真实宿主自然问题→Public MCP→Lucy→真实库→最终答复；**MCP 对照**＝确定性 `initialize→notifications/initialized→tools/list→目录／发现→（begin）→query→（continue）`。禁 mock、预置答案、`:7878` 绕过和直连脚本冒充 Agent。 |
-| D3 | 正确性是性能前置 | 每次计划尝试均进入分母。错误答复、意外拒绝、空信封、超时、崩溃和缺失证据均保留；快速错误不能 PASS。性能套件只做既定 oracle 的有效性护栏，不扩张为完整语义质量评测。 |
+| D3 | 正确性是性能前置 | 每次计划尝试均进入分母。错误答复、意外拒绝、空信封、超时、崩溃和缺失证据均保留；快速错误不能 PASS（经 D21 归类并对账通过的供应商瞬态错误是唯一例外，见 D21⑧）。性能套件只做既定 oracle 的有效性护栏，不扩张为完整语义质量评测。 |
 | D4 | 用户与阶段时钟分列 | 记录提问→首个可观测响应、→首 token（宿主支持时）、→首条正确查询结果、→正确完整答复；客户端墙钟、MCP RTT、服务端 `duration_ms`、模型与阶段耗时分列。 |
 | D5 | 场景独立 | 每个 `scenarioId×cacheState×client/model×environment×concurrencyGroup` 独立采样和判定。冷／热、简单／复杂／拒绝、单用户／并发不得混合成分位。 |
 | D6 | 样本与分位 | PR：MCP≥20／场景、Agent≥3／场景，仅作绝对上限与中位数预警，不声称 Agent P95 正式判定。夜间／出包／升级：MCP≥100／场景、Agent≥20／场景／宿主。分位采用最近秩 `sorted[ceil(p×N)-1]`；N<20 不输出正式 P95，N<100 的 P99 填 `not_estimable`。 |
@@ -77,12 +77,15 @@
 | D12 | 负控先行 | 人为 2× 延迟、只握手无答复、快速错误、丢弃失败、样本不足、基线为 `null`、全部场景映射 `simple`、环境／模型漂移、伪造顶层 PASS 均必须被判定器拒绝。负控只在隔离测试环境，不进入生产。 |
 | D13 | 口径变更独立审批 | 题库语义、性能场景、样本量、计时、预算、基线格式或相对阈值的修改必须与产品优化提交分离，并有具名评审和委托人接受记录。优化提交同时改这些文件＝性能证据无效。 |
 | D14 | 归因不得虚构 | 不可观测阶段写 `not_available`，覆盖不足写 `unknown`，不得写 0。重叠 span 不得相加；`unattributedMs` 只表示未归因墙钟，不能推断为模型或数据库耗时。 |
-| D15 | 判定失败关闭 | 必做场景不接受 PASS WITH GAP。缺样本、缺证据、环境不可比或宿主不可用＝BLOCKED；产品错误、预算越线、正确性失败或回退＝FAIL；两者均不是 PASS。 |
+| D15 | 判定失败关闭 | 必做场景不接受 PASS WITH GAP。缺样本、缺证据、环境不可比或宿主不可用＝BLOCKED；产品错误、预算越线、正确性失败或回退＝FAIL；两者均不是 PASS。供应商／宿主错误的归类见 D21；BLOCKED 与事故修复的出口见 D22。 |
 | D16 | 门禁不碰用户主路径 | 本条只阻止候选出包／升级，不拦截在线用户请求。每个拒绝性能场景必须配同身份或同级身份的合法成交对照，证明测程没有把合法路径误判为拒绝。 |
 | D17 | 只消费既有 owner，不自制 | 题目、oracle、身份、凭据、Wiki／Skill／审计行和表夹具一律来自 P1-54（语义）、P1-79（长链题组）与全局规模基线／P1-34（数据）。本条新增的自然语言文本、造数脚本和规模数字一律禁止；需要新题或新 profile 时，先在 owner 侧登记并取得独立授权，本条以缺失即 BLOCKED 处理。 |
 | D18 | 持续压力与长追问独立成场景 | `SOAK`＝≥1800 秒有效窗口、50 个独立 Agent 身份与真实宿主会话、截断正态到达模型；`LONG_FOLLOW`＝同一宿主进程与会话、≥20 轮后续追问、占场景实例 ≥10%。两者与 20／50 路突发并发分开判定，不得互相替代。 |
 | D19 | 依赖缺失失败关闭 | 题库缺长链、基线未登记压测 profile、宿主不支持多轮或真实宿主不可用时，相关用例记 BLOCKED；不得由本条私造题目、降级为直连脚本或删减比例凑绿。 |
-| D20 | 长链证据复用与跑次隔离 | `LONG_FOLLOW` 复用 `SOAK` 同一 `runId` 内已产生的长链证据（链 ID、逐轮 oracle、`processId／hostSessionId／turnIndex` 一一对应），**不得为同一批链再发起第二轮 ≥20 轮追问**。需要独立考察长链（专项跑次、升级 POST）时另起独立 `runId`，其链不与 `SOAK` 样本混算，链比例按各自场景实例数分别计算。复用仅在同一候选、同一题组 `packDigest`、同一客户端／模型／环境指纹下成立，任一指纹不同即视为独立跑次。 |
+| D20 | 长链证据复用与跑次隔离 | `LONG_FOLLOW` 复用 `SOAK` 同一 `runId` 内已产生的长链证据（链 ID、逐轮 oracle、`processId／hostSessionId／turnIndex` 一一对应），**不得为同一批链再发起第二轮 ≥20 轮追问**。需要独立考察长链（专项跑次、升级 POST）时另起独立 `runId`，其链不与 `SOAK` 样本混算，链比例按各自场景实例数分别计算。复用仅在同一候选、同一题组 `packDigest`、同一客户端／模型／环境指纹下成立，任一指纹不同即视为独立跑次。**链实例＝链模板 ID×身份×`runId`**：「只执行一次」只约束同一链实例；不同身份执行同一模板各记一个独立链实例、属合法；同一（模板，身份，`runId`）被二次执行才是被禁止的重复。链比例的分子与分母均按链实例数计：`N`＝该跑次**计划**的链实例总数（含后来失败或无效的实例，不得剔除坏链抬高比例）。 |
+| D21 | 供应商与宿主错误归类 | 真实 Agent lane 的宿主／模型供应商错误只按下表归类，不得临场裁量；归类证据必须来自宿主适配器原始回执，并与 Lucy 审计对账（该 trace 无本轮失败调用）。①**瞬态供应商错误**（回执带 429／5xx／连接重置／供应商超时的状态码与时间戳）：该尝试标 `providerError`，原记录保留并入分母计数；同一计划项最多重试 2 次（`retryOf` 关联、独立 attemptId、延迟从重试自身起点计）；重试后的有效样本进入分位。②**供应商不稳定**：某场景 `providerError` 尝试数 >10% 计划项（设计值），或同场景连续 3 次 `providerError`，或重试 2 次仍失败＝该场景 **BLOCKED（`providerUnavailable`）**，无论重试是否最终成功；不得转 PASS。③**慢但无错误**：宿主未报错而墙钟超过题档预算或 120 秒＝**FAIL**，供应商慢只归因、不豁免（SC-12）。④**Lucy／MCP 侧错误**（Lucy 返回错误、拒绝、超时，或审计显示本轮失败调用）＝**FAIL**，不得改标 `providerError`。⑤回执缺状态码／时间戳或无法对账＝不得标 `providerError`，按缺证据 BLOCKED。⑥同候选同指纹对同一 BLOCKED 场景至多整跑重跑 3 次（新 `runId`，前次全部保留）；仍 BLOCKED 则停止自动重跑并转 D22。⑦`SOAK` 开跑前须登记所选宿主的并发上限与限流额度（来源：供应商账号文档或实测）；额度不足 50 路时 `SOAK` BLOCKED，不得降身份数。⑧**最终判定规则（全函数）**：证据分母与判定分母分列。`attempts.ndjson` 保留全部尝试（含 `providerError` 原记录），每个计划项的**判定样本**取其最后一次未被归为 `providerError` 的尝试；该计划项重试耗尽仍无判定样本，计入②的 `providerUnavailable`。分位、正确率、超时率只按判定样本计算，`providerErrorCount／retryCount／rerunCount` 另行披露。**若②的三个触发条件均未出现，且判定样本满足预算、正确性与相对门禁，该场景可为 PASS**（例如：单次 429、重试成功、占比 ≤10%）；此时经归类并对账通过的 `providerError` 不视为产品错误。D3「错误不能 PASS」仍完整适用于 Lucy 侧错误与未归类／缺证据错误。 |
+| D22 | 事故修复放行（门禁逃生） | 本门禁只阻止候选出包／升级，不拦在线用户；为避免门禁自身让客户事故修复无法交付，允许委托人具名放行：①前提：总账已有对应事故修复授权行；豁免记录落 `docs/qa/uat/suites/mcp-inquiry-performance/waivers/<yyyymmdd>-<id>.md`，含候选 digest、被豁免场景与 verdict、原因、到期时间（≤7 日）、补跑计划。②默认只可豁免 `BLOCKED`、`SEED_ONLY`、`NOT RUN`；**`FAIL` 不默认可豁免**——确需豁免真实退化，须在记录中逐场景写出实测数值与预算／基线差，并由委托人对该清单单独具名。③`releaseReady` 取值 `true`／`false`／`waived`：`true` 仅当总判定 PASS；`waived` 不是 PASS，不写入 `baselines/`、不更新 `LATEST.json`，跑次报告与出包清单置顶标注，只绑定该候选 digest，到期或候选变化即失效。④豁免后必须对同候选或其后继补跑正式门禁并 PASS 才算关闭；未补跑时下一候选不得沿用。⑤无豁免记录时 D15 失败关闭不变；独立 verifier 重读豁免文件，校验 digest、到期与范围，伪造、过期或超范围的豁免＝FAIL。 |
+| D23 | SOAK 窗口判定口径 | ①分组键＝`windowIndex×budgetClass`（simple／complex）；角色公平性在全有效窗口层面判（§5.3），不再按窗口×角色切分。②窗口内某档 N≥20：输出 P95 并对该档绝对预算；N<20：P95 记 `not_estimable`，该窗口该档改判「中位数≤该档 P95 预算、无超时、无错误」，不得跳过。③**样本可达性**：开跑前判定器按到达模型参数与身份数计算各窗口各档的期望到达量，任一窗口任一档 <20，或长链身份的期望到达 <21＝**BLOCKED（`sample_unreachable`）**，不得降窗口数／身份数或改均匀到达。④趋势：相邻窗口比较中位数；首尾段取连续 ⌈窗口数/3⌉ 个窗口各自合并（12 窗口＝首 4／尾 4），按档比较 P95（合并后 N<20 则比中位数）；两者均适用 D8 双阈值。⑤窗末在途轮次允许至多 120 秒排空；排空期轮次仍入分母，归入其发出时所在窗口。⑥到达模型的 μ、σ、截断上下界、思考时间种子、题档占比的**唯一来源**是[规模基线 §1.1 MCP-PERF](../qa/uat/scale-baseline.md)；本条只引用，不复制数值（D17）。 |
 
 ## 4. 场景、计时与数据模型
 
@@ -103,6 +106,19 @@
 | 并发公平 | 20／50 个独立 Agent 与角色组同窗问数 | simple／complex，按并发档独立 | Agent＋MCP |
 | 持续压力 | 50 个独立 Agent 身份与真实宿主会话，≥1800 秒有效窗口，截断正态到达 | 按被测题档 | Agent（真实宿主）＋MCP 阶段对照 |
 | 长追问链 | 同一宿主进程与会话内 ≥20 轮后续追问，语义承接 | 按被测题档 | Agent；MCP 对照只做阶段分解 |
+
+### 4.1.1 owner 题档到性能预算档的映射
+
+性能预算只有 `simple／complex／denial` 三档。凡场景的题档取自 P1-54／P1-79 的 `budgetClass`（`FOLLOW`、`SOAK`、`LONG_FOLLOW` 及其窗口分组），按下表**穷尽映射**；表外取值一律 **BLOCKED（`budgetClass_unmapped`）**，不得默认落入 simple。`simple／complex／denial` 直接取自 fixtures 的场景定义时不经过本表。
+
+| 性能档 | owner `budgetClass` 取值 |
+|---|---|
+| `simple` | `simple`、`simple-metric`、`group-metric`、`empty-result`、`time-window`、`filter-metric`、`follow-up` |
+| `complex` | `complex`、`multi-source-join`、`multi-db`、`follow-up-join` |
+| `denial` | `denial` |
+
+- 链模板与逐轮的性能档＝其 `budgetClass` 经本表映射后的值；D23 窗口分组与 §5.4 链内逐轮预算使用映射后的档。
+- 本表只登记已被本条引用的取值；P1-54 的 `incident-watch`、`privacy`、`ops-w*` 等取值**未映射**，待 P1-54 owner 与本条另行评审后增补，增补属口径变更（D13）。
 
 ### 4.2 计时里程碑
 
@@ -172,11 +188,11 @@
 | 场景 | 预算与判定 |
 |---|---|
 | `SOAK` 有效窗口 | **≥1800 秒**，建议 12 个 150 秒窗口；准备、预热、恢复与清理时间另列，不计入有效窗口 |
-| `SOAK` 到达模型 | 固定 seed 的**截断正态**思考时间；记录 μ、σ、截断上下界与实际分布。均匀同发或固定 1Hz 不算正态行为；系统变慢时计划到达不得静默降载 |
+| `SOAK` 到达模型 | 固定 seed 的**截断正态**思考时间；参数（μ、σ、截断上下界、种子、题档占比）唯一取自[规模基线 §1.1](../qa/uat/scale-baseline.md)，证据记录参数与实际分布。均匀同发或固定 1Hz 不算正态行为；系统变慢时计划到达不得静默降载 |
 | `SOAK` 分母 | 50 个独立 Agent 身份与真实宿主会话全程在窗；每身份至少完成 1 轮且留有可核对轨迹。计划到达与终态必须一一对应，未派发、未终结、超时与失败全部计入分母 |
-| `SOAK` 时延 | 每窗口沿用对应题档绝对预算；相邻窗口与首窗／尾窗的比较适用 D8 双阈值（MCP P95 >20% 且 >50ms；Agent 中位数或 P95 >20% 且 >2s＝FAIL） |
+| `SOAK` 时延 | 按 **D23** 的窗口口径判定：窗口×题档分组；N≥20 出 P95 对绝对预算，N<20 改判中位数与无超时无错误；相邻窗口比中位数、首尾段合并比 P95，均适用 D8 双阈值（MCP P95 >20% 且 >50ms；Agent 中位数或 P95 >20% 且 >2s＝FAIL）；期望样本不可达＝BLOCKED |
 | `SOAK` 正确性与公平 | 全窗正确率、无意外拒绝、无角色饥饿；各角色组分别判定，仍适用 §5.3 公平性 |
-| `LONG_FOLLOW` 比例 | 按**场景实例数**计：`longFollowUpChains / allScenarioChains ≥10%`，按 `ceil(0.1×N)` 取整，不按总轮次计；`SOAK` 档 50 个身份即至少 **5 条**长链 |
+| `LONG_FOLLOW` 比例 | 按**场景实例数**计：`longFollowUpChains / allScenarioChains ≥10%`，按 `ceil(0.1×N)` 取整，不按总轮次计；`SOAK` 档 50 个身份即至少 **5 个链实例**（D20；模板由 P1-79 提供，每个模板声明所绑角色类，同角色类身份可各执行一次同一模板） |
 | `LONG_FOLLOW` 轮次 | 每链首轮之后**不少于 20 次后续追问**（链内总轮次≥21），语义承接且逐轮核对 oracle |
 | `LONG_FOLLOW` 单进程 | 全链保持同一宿主进程与同一宿主会话；进程重启、换会话、拆成独立问题或链内轮次缺失即该链无效 |
 | `LONG_FOLLOW` 时延 | 每轮沿用对应题档预算与 120 秒单轮硬线；链内前 5 轮与后 5 轮的中位数比较适用 D8 双阈值；任一轮正确性失败即整链 FAIL |
@@ -204,7 +220,7 @@ candidateFingerprint, environmentFingerprint, clientFingerprint,
 modelFingerprint, evidenceBodyDigest, acceptedBy, acceptedAt
 ```
 
-持续压力与长追问场景另记：`windowIndex／windowSeconds／offeredCount／dispatchedCount／arrivalModel{seed,mu,sigma,clipMin,clipMax}／firstWindowStats／lastWindowStats`，以及链级 `chainCount／minTurns／medianTurns／firstFiveMedianMs／lastFiveMedianMs／chainVerdict`。长链证据带 `runId／chainId／packDigest`，供 `LONG_FOLLOW` 复用核验；跨 `runId` 不混算。缺少任一必需字段时该场景基线不可用，比较记 BLOCKED。
+持续压力与长追问场景另记：`windowIndex／windowSeconds／offeredCount／dispatchedCount／arrivalModel{seed,mu,sigma,clipMin,clipMax,classShare}／perClassWindowStats／firstSegmentStats／lastSegmentStats`（首尾段按 D23④），以及链级 `chainInstanceCount／minTurns／medianTurns／firstFiveMedianMs／lastFiveMedianMs／chainVerdict`；真实 Agent 场景另记 `providerErrorCount／retryCount／rerunCount`（D21）。长链证据带 `runId／chainId／templateId／identityId／packDigest`，供 `LONG_FOLLOW` 复用核验；跨 `runId` 不混算。缺少任一必需字段时该场景基线不可用，比较记 BLOCKED。
 
 `p50Ms／p95Ms／medianMs／sampleCount` 是正式相对比较必填数值；`p99Ms` 仅在 N≥100 时为数值。不得保存 `p95Ms:null` 后继续参与相对判定。基线只由原始尝试重算生成，不能手工填写一个无原始证据的数。
 
@@ -215,6 +231,8 @@ modelFingerprint, evidenceBodyDigest, acceptedBy, acceptedAt
 - `BLOCKED`：缺前置、宿主、样本、基线、可比指纹或必要观测，无法作出真实判定。
 - `SEED_ONLY`：首次基线样本有效但尚未被具名接受；只可用于基线评审，不得作为 releaseReady。
 - `NOT RUN`：尚未执行；不产生任何通过含义。
+
+`releaseReady`：`true` 仅当总判定为 `PASS`；`waived` 仅由 D22 的有效豁免产生，且不是 PASS；其余一律 `false`。出包／升级聚合器**放行 `true` 与 `waived`，拒绝 `false`**；`waived` 放行只对其绑定的候选 digest 成立，且在报告与出包清单中永不显示为 PASS。
 
 ## 核心流程（伪代码）
 
@@ -238,11 +256,16 @@ runMcpInquiryPerformance(trigger, candidate, baselinePointer):
 
   if trigger includes soak:
     require effectiveWindowSeconds >= 1800 && identitiesInWindow == 50
+    require arrivalParamsFrom(scaleBaseline.§1.1)                      # D23⑥
+    require expectedArrivalsPerWindowPerClass >= 20 else return BLOCKED(sample_unreachable)  # D23③
+    require hostConcurrencyQuota >= 50 else return BLOCKED(providerUnavailable)             # D21⑦
     require offeredArrivalsUseTruncatedNormalSeedAndAreNeverSilentlyReduced
     require everyOfferedArrivalHasTerminalOutcome
   if trigger includes long_follow:
-    require chainRatio >= 0.10 && everyChainTurns >= 21 && chainProcessAndSessionStable
+    require chainInstanceRatio >= 0.10 && everyChainTurns >= 21 && chainProcessAndSessionStable
+    require noChainInstanceExecutedTwice(template, identity, runId)    # D20
 
+  attempts = classifyProviderErrors(attempts)                        # D21：证据＋审计对账；超限→BLOCKED
   require independentOracleCheck(attempts)
   require evidenceCoverage(attempts) else return BLOCKED
   summaries = groupByScenarioCacheClientModelEnvironmentConcurrency(attempts)
@@ -253,7 +276,7 @@ runMcpInquiryPerformance(trigger, candidate, baselinePointer):
     verdict.correctness = checkFastWrongAndDenials(summary, attempts)
     verdict.absolute = checkBudget(summary, budgetFor(summary.scenarioId))
     if summary.scenarioId == SOAK:
-      verdict.windowTrend = compareAdjacentAndFirstLastWindows(summary)
+      verdict.windowTrend = judgeWindowsByClass(summary)             # D23：N<20 回落＋相邻中位数＋首尾段合并
     if summary.scenarioId == LONG_FOLLOW:
       verdict.chainTrend = compareFirstFiveAndLastFiveTurns(summary)
     if baselinePointer.exists:
@@ -267,7 +290,10 @@ runMcpInquiryPerformance(trigger, candidate, baselinePointer):
   evidence = writeRedactedRawAttemptsAndSummaries(attempts, summaries, verdict)
   recomputed = independentVerifierRereadAndRecompute(evidence)
   require recomputed == verdict else return FAIL(EVIDENCE_MISMATCH)
-  return aggregateFailClosed(verdict, evidence.digest)
+  result = aggregateFailClosed(verdict, evidence.digest)
+  if result != PASS and validWaiver(candidate, result):              # D22：只产出 waived，不写基线
+    return withReleaseReady(result, "waived")
+  return result
 ```
 
 ## 7. 持续运行与发布接线
@@ -276,11 +302,13 @@ runMcpInquiryPerformance(trigger, candidate, baselinePointer):
 |---|---|---|
 | PR | 简单单表、连续追问、多表、权限合法对照；双测程；D6 PR 样本 | 阻断明显绝对退化；Agent 小样本不得伪称正式 P95 |
 | 每日 | 全性能场景、冷／热、20 路并发、`SOAK` 持续压力、`LONG_FOLLOW` 长追问、完整正式样本 | 趋势、基线候选和回退告警；同一候选可累计到 P99 所需样本 |
-| 出包 | 全性能场景、20／50 路、`SOAK`、`LONG_FOLLOW`、正式样本、绑定候选 digest | 必需 PASS；SEED_ONLY／FAIL／BLOCKED／NOT RUN 均不得放行 |
-| 升级 | 同实例／同身份／同题／同环境／同客户端模型 PRE／POST，含 `SOAK` 与 `LONG_FOLLOW` | 必需 PASS；缺 PRE 基线＝BLOCKED；回滚后另验基线恢复 |
+| 出包 | 全性能场景、20／50 路、`SOAK`、`LONG_FOLLOW`、正式样本、绑定候选 digest | 正常放行仅 PASS；SEED_ONLY／FAIL／BLOCKED／NOT RUN 不得放行。**唯一例外**：经 D22 校验的有效 `waived`（≠ PASS）可放行其绑定的候选 |
+| 升级 | 同实例／同身份／同题／同环境／同客户端模型 PRE／POST，含 `SOAK` 与 `LONG_FOLLOW` | 同上：仅 PASS，或 D22 有效 `waived`；缺 PRE 基线＝BLOCKED；回滚后另验基线恢复 |
+| 优化 A/B | 同夹具、同候选族、单变量改前／改后 | 优化 Spec 的必要证据；不得由优化者单独信顶层自报 PASS |
 
 触发档到用例的执行顺序与样本映射见 [`UAT-MIP-R0／01–15`](../qa/uat/suites/mcp-inquiry-performance/cases.md#执行顺序与触发档映射)。`LONG_FOLLOW` 复用 `SOAK` 同跑次的长链证据（D20），不重复发起第二轮长链。
-| 优化 A/B | 同夹具、同候选族、单变量改前／改后 | 优化 Spec 的必要证据；不得由优化者单独信顶层自报 PASS |
+
+预算冻结前（D7）：PR 档只报告、不阻断合入；每日与出包档在冻结记录缺失时只产生 `SEED_ONLY`，不得作为放行依据。冻结记录就绪后，PR 才按 §5 绝对线阻断。
 
 新增命令与 CI job 实现时必须登记 `docs/governance/test-layers-and-release-gates.md` 的 Current Commands 与 CI Mapping。每日任务至少连续两次无人值守产生有效记录，第二次能引用第一次已接受基线，才能声称“持续运行”。
 
@@ -302,6 +330,8 @@ runMcpInquiryPerformance(trigger, candidate, baselinePointer):
 2. 权限拒绝测速必须与同级合法查询同窗执行，合法查询错误或不完整时本条 FAIL。
 3. 真实 Agent 与纯 MCP 均无 WebUI 会话依赖；不得用 WebUI 管理身份代替普通问数身份。
 4. 外部模型或宿主不可用记 BLOCKED，不把跳过、降级脚本或 mock 记成真实用户性能 PASS。
+5. **出包／升级的逃生**：门禁失败关闭不得让客户事故修复无法交付。D22 提供委托人具名、限时、可审计的 `waived` 放行；它不是 PASS，不污染基线，补跑后才关闭。无豁免时仍拦截。
+6. **供应商波动不得变成长期封锁**：D21 对瞬态错误给有界重试与有界整跑重跑；仍 BLOCKED 时交委托人按 D22 处置，而不是无限等待或放宽判定。
 
 ## 10. 验收
 
@@ -309,19 +339,19 @@ runMcpInquiryPerformance(trigger, candidate, baselinePointer):
 |---|---|---|
 | SC-01 | 隔离 Docker 中真实 Agent 经 Public MCP、Lucy 和真实库完成全部分母；直连 MCP 仅对照，mock／预置答案／`:7878`／高权替代均无效 | UAT-MIP-R0／01 |
 | SC-02 | 提问、首可观测响应、首 token（支持时）、首正确结果、最终正确答复及 MCP／服务端／阶段时钟可关联；未知不填 0 | UAT-MIP-02 |
-| SC-03 | 每场景、缓存、客户端／模型、环境和并发组独立满足样本量；不足不出正式分位，复杂与拒绝不得统一落入 simple | UAT-MIP-03 |
-| SC-04 | 全部尝试进入分母；快速错误、意外拒绝、空信封、超时、只留成功重试均不能 PASS；合法对照仍成交 | UAT-MIP-04 |
+| SC-03 | 每场景、缓存、客户端／模型、环境和并发组独立满足样本量；不足不出正式分位，复杂与拒绝不得统一落入 simple；owner `budgetClass` 按 §4.1.1 穷尽映射，表外取值（含 `follow-up`／`follow-up-join` 的映射正确性）BLOCKED 而不是默认 simple | UAT-MIP-03 |
+| SC-04 | 全部尝试进入分母；快速错误、意外拒绝、空信封、超时、只留成功重试均不能 PASS；合法对照仍成交；供应商错误严格按 D21 归类（证据缺失或 Lucy 侧错误不得改标 `providerError`，超限转 BLOCKED，慢而无错＝FAIL；**正向边界**：单次瞬态错误、重试成功且未触发 D21② 时按 D21⑧ 可为 PASS，原记录与 `providerErrorCount` 仍披露） | UAT-MIP-04 |
 | SC-05 | §5 每档绝对预算由判定器逐场景执行；首版数值调整有独立具名冻结，不能随失败自动抬线 | UAT-MIP-05 |
 | SC-06 | 正式基线含真实数值与原始证据；`null`／缺字段／手填无证据／指纹不匹配均 BLOCKED；MCP 与 Agent 相对回退均被真实执行 | UAT-MIP-06 |
 | SC-07 | 冷／热不混，20／50 路实际在途达标；各角色无饥饿、无越权且公平性达线 | UAT-MIP-07 |
 | SC-08 | verifier 重读原始证据并重算分母、分位、相对差和总判定；摘要篡改或 digest 不符即 FAIL；泄露扫描通过 | UAT-MIP-08 |
 | SC-09 | D12 全部负控被检出，尤其 2× 延迟、`null` 基线、整套聚合统一 simple、仅 initialize、丢失败及伪造 PASS | UAT-MIP-09 |
-| SC-10 | PR／每日／出包／升级接线真实生效；跳过或无证据不能 releaseReady；连续两次无人值守每日跑次形成可比链 | UAT-MIP-10 |
+| SC-10 | PR／每日／出包／升级接线真实生效；跳过或无证据不能 releaseReady；连续两次无人值守每日跑次形成可比链；**D22 双向**：无豁免时 BLOCKED／SEED_ONLY 仍拦截；有效豁免只产出 `waived`，真实聚合器据此**放行其绑定候选**（且不显示为 PASS），不写基线、不晋级 `LATEST.json`；过期、越范围、候选不符或伪造的豁免被 verifier 拒绝、聚合器不放行 | UAT-MIP-10 |
 | SC-11 | 优化 A/B 只改一个产品变量；同口径复算；优化与预算／样本／测程改动未分离时证据无效 | UAT-MIP-11 |
 | SC-12 | 报告能定位首个越线里程碑、阶段与未归因区间；重叠 span 不相加，供应商延迟只归因不豁免 | UAT-MIP-12 |
 | SC-13 | P1-67 不再保留并行 MCP runner 范围；P1-53 性能轴消费本条证据；P1-54 题库与 P1-13 微基准边界清楚，无第二套口径 | UAT-MIP-13 |
-| SC-14 | 持续压力：50 个独立 Agent 身份与真实宿主会话，有效窗口 ≥1800 秒、截断正态到达、计划到达与终态一一对应；每窗口及首尾窗口的分位、正确性、公平性达标，无静默降载 | UAT-MIP-14 |
-| SC-15 | 长追问：≥10% 场景实例为单进程同会话长链，每链 ≥20 次后续追问、逐轮 oracle 成立、链内轮次与进程／会话证据完整，前 5 轮与后 5 轮比较达标 | UAT-MIP-15 |
+| SC-14 | 持续压力：50 个独立 Agent 身份与真实宿主会话，有效窗口 ≥1800 秒、截断正态到达、计划到达与终态一一对应；每窗口（按 D23 的窗口×题档口径，含 N<20 回落与样本可达性前置）及首尾段的分位、正确性、公平性达标，无静默降载；到达模型参数取自规模基线 §1.1 | UAT-MIP-14 |
+| SC-15 | 长追问：≥10% 场景实例为单进程同会话长链，每链 ≥20 次后续追问、逐轮 oracle 成立、链内轮次与进程／会话证据完整，前 5 轮与后 5 轮比较达标；链实例数（模板×身份×`runId`）≥`ceil(0.1×N)`，每实例的 `identityId` 与其模板所绑角色类及逐轮 oracle 对应，同一链实例无二次执行 | UAT-MIP-15 |
 
 ## 受影响画像
 
@@ -352,10 +382,19 @@ New terms: 「MCP 问询端到端性能」「首条正确查询结果」「正�
 - 首 token 依赖宿主能力。首版至少选择一个能提供最终答复事件的宿主；流式 token 不支持时如实缺省，完整答复墙钟仍是硬指标。
 - 题目依赖已立项、实现未闭合：长链题组由 P1-79 承载（独立题组包与独立 digest，不改 P1-54 与 P1-53 证据）。在 P1-79 完成题组编写、校验与自检前，`LONG_FOLLOW` 及其在 `SOAK` 中的比例要求记 BLOCKED，不得由本条代写题目。
 - 初始化数据依赖已登记、断言未闭合：全局规模基线 §1.1 已登记 MCP-PERF profile（50 路压测身份、精确向量下限、Wiki／Skill 实读、`lucy_admin` 运行时绑定），但其机器断言扩展尚需开发授权；断言生效前相关用例记 BLOCKED，不得在本套件私造数字或脚本。
+- 到达模型数值（μ、σ、截断上下界、种子、题档占比）已作为**设计值**登记在规模基线 §1.1；与 D7 同规则，由委托人在 baseline-seed 后具名冻结，冻结前只能产生 `SEED_ONLY`。该开放项只影响数值，不影响 D23 的判定结构。
+- 真实宿主的并发与限流额度未知（D21⑦）：额度不足 50 路时 `SOAK` BLOCKED，不得降身份数；选宿主时优先选额度足、支持流式的。
+- 全矩阵（样本下限×冷热×20／50 路×`SOAK`）的真实模型调用量与墙钟尚无估算，须在 Plan 前置条件登记后才可接每日调度。
 - 本条落地需要测试基建开发与真实跑次授权；当前设计完成不代表门禁已经运行。
 
 ## 修订记录
 
+- 2026-11-26 **开发授权已获得＋测试基建落地记录（S3；性能口径未改）**：委托人授权多 agent 并行完成测试基建开发（Plan Task 1–4／8＋`check-uat-scale-baseline.mjs` 的 MCP-PERF 断言扩展）。产出：判定器与场景合同、证据与独立 verifier、确定性 MCP 测程与 runner CLI、真实 Agent 测程与 20／50 路计划器、SOAK／LONG_FOLLOW 编排、P1-79 题组只读守卫（缺题／digest 不符／链数或轮数不足 → BLOCKED）。新增 7 个测试文件 345 例全绿，题组校验器连续两次 exit 0（`packDigest: sha256:41ce9d18…`）。**仍未授权**：真实跑次（Task 5／7）与 CI／发布接线（Task 6）。本轮未改性能口径、预算数值与题库语义；§5 预算、D21 的 10% 阈值与规模基线 §1.1 到达模型仍为设计值，待 baseline-seed 后由委托人具名冻结。
+
+- 2026-11-24 **v1.0（终稿确权，S2）**：委托人明示「批准修复建议」，批准 Codex CLI 终审 R1–R3 修订及同批 M1–M3 并据此定稿。决策表 D1–D23、SC-01–SC-15、§4.1.1 映射表冻结；**不冻结**数值设计值（§5 预算、D21 的 10% 阈值、规模基线 §1.1 到达模型），它们仍待 baseline-seed 后由委托人具名冻结。Codex 第二轮复审因 ChatGPT 账号用量上限未运行（恢复时间 2026-11-27），不影响本次确权依据；复审可在额度恢复后补做，若发现阻断按口径变更（D13）处理。**开发未授权**。
+- 2026-11-24 v0.5-draft（Codex CLI 终审后修订，仍为 v0.5-draft 文本）：2026-11-24 Codex CLI（`gpt-5.6-sol`）终审退回 R1–R3，已修。**R1**：D21 新增⑧，证据分母与判定分母分列，写明单次瞬态错误重试成功且未触发②时可 PASS，D3 加例外指向 D21⑧；**R2**：§7、§6.3、`suite.md`、UAT-MIP-10 统一为「正常放行仅 PASS，唯一例外 D22 有效 `waived`（≠ PASS，只放行绑定候选），聚合器放行 `true`／`waived`、拒绝 `false`」；**R3**：新增 §4.1.1 owner `budgetClass`→性能预算档穷尽映射（表外 BLOCKED `budgetClass_unmapped`）。同批处理 M1（release 顺序补 11、nightly 范围对齐 cases）、M2（`N`＝计划链实例数）、M3（长链身份 ≥21 按完整 1800 秒）。
+
+- 2026-11-24 v0.5-draft：按[终审意见](../reviews/2026-11-24-p1-78-mcp-inquiry-performance-final-review.md)（过程评审，非 Codex CLI）修订阻断项与建议项。**B1**：新增 D23（SOAK 窗口×题档口径、N<20 回落、样本可达性 BLOCKED、首尾段合并比较、窗末排空），到达模型参数改由规模基线 §1.1 唯一持有；**B2**：新增 D21（供应商／宿主错误归类表、有界重试与整跑重跑、限流额度前置）；**B3**：新增 D22（委托人具名、限时、不晋级基线的事故修复放行，`releaseReady=waived`），§9 补第 5／6 条；**B4**：D20 定义链实例＝模板×身份×`runId`，§5.4／SC-15 改按链实例计，P1-79 最低链数同步改为 5。**N3**：§7 补预算冻结前 PR 只报告；风险补三项。SC 数量不变（SC-04／10／14／15 加严）；决策表 D1–D20 保持，新增 D21–D23。终稿未确权；开发未授权。
 - 2026-11-23 v0.4-draft：委托人批准补齐执行顺序的可执行性——新增 **D20 长链证据复用与跑次隔离**（`LONG_FOLLOW` 复用 `SOAK` 同 `runId` 的链证据，不重复发起第二轮 ≥20 轮追问；独立考察另起 `runId` 且不混算），并在 §7 指向 UAT 的“触发档 → 用例执行顺序”映射表；链级基线字段补 `runId／chainId／packDigest`。
 - 2026-11-23 v0.3-draft：依赖补登完成——长链题目由新立项的 [P1-79 长追问题组](lucy-20261123-long-followup-question-pack-spec.md) 承载（独立题组包与独立 digest，不动 P1-54 与 P1-53 已收口证据）；初始化数据的 50 路压测身份与持续压力下限登记进[全局规模基线 §1.1 MCP-PERF profile](../qa/uat/scale-baseline.md)。两项实现证据到位前，相关用例仍记 BLOCKED。
 - 2026-11-23 v0.2-draft：按委托人要求改为只消费既有 owner——自然问题与 oracle 取自 P1-54 题库 Spec，初始化数据取自全局规模基线（含三个 seed 入口）与 P1-34 表夹具，本条不自制题目、造数脚本或第二套规模数字。新增 `SOAK` 持续压力与 `LONG_FOLLOW` 长追问场景及 SC-14／SC-15；依赖缺失一律 BLOCKED。

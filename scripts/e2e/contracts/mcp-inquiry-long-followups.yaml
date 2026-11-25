@@ -1,0 +1,2370 @@
+# P1-79 长追问题组（性能专用）— 题组包正文。
+#
+# 合同：docs/specs/lucy-20261123-long-followup-question-pack-spec.md（D1–D9、§3、§6 SC-01–SC-06）
+# 计划：docs/plans/lucy-20261123-long-followup-question-pack-plan.md Task 2
+# 校验器：scripts/e2e/lib/mcp-inquiry-question-pack.mjs（纯函数；重算 packDigest）
+#
+# 语义来源（只读，不另立口径）：
+#   - 指标／维度／口径／oracle 写法继承 P1-54：docs/specs/lucy-20261118-mcp-upgrade-question-bank-spec.md
+#     与 scripts/e2e/contracts/mcp-upgrade-journeys.yaml（configProfileId=lucy-mcp-compat-demo、
+#     连接=demo-mysql、区域词表 East/Southwest/Central South/Northeast、oracle kind 域一致）。
+#   - 语义层口径：semantic-layer/demo-mysql/superstore_orders.yaml（total_sales=SUM(sales)、
+#     total_profit=SUM(profit)、profit_margin=SUM(profit)/NULLIF(SUM(sales),0)、
+#     order_count=COUNT(DISTINCT order_id)、active_rows 段 is_deleted=0、
+#     已声明 join：orders↔returns（order_id）、orders↔people（region））。
+#   - oracle 事实来源：examples/docker-demo/mysql/_baseline.json（seed=42 金标）、
+#     examples/docker-demo/scripts/gen-demo-data.mjs（区域负责人、词表）、docs/qa/uat/scale-baseline.md §1.1。
+#
+# D9：每轮题面自包含（连接／数据源／时间窗／过滤／维度全部显式写出）、不用指代词、单一意图；
+# 承接通过显式重述范围项并改变一个维度实现，重述项登记在 carriedContext。
+# 角色类（identity）声明的是角色类而非具体身份；受限角色模板的逐轮 oracle 按该角色类
+# 最窄一致可见范围编写，对同角色类任一身份等价成立。
+#
+# oracle 取值口径：
+#   - exact：值锚定 examples/docker-demo/mysql/_baseline.json 金标（total_sales／order_count／
+#     sales_by_region／sales_by_year／counts／returns_for_loss_orders）。
+#   - invariant：可由金标算出的对账式恒等（年度合计＝全量、区域合计＝全量、利润率复算、
+#     COUNT(*)＝COUNT(DISTINCT order_id)、join 无重复放大），带 tolerance。
+#   - independent-query：金标未直接锚定（月份切片、类别／子类／细分／装运模式拆分、条件叠加、
+#     跨表关联分组），ref 写清可复算口径与 SQL 依据。
+#   - deny：受限角色越权轮（表不可见／跨表／跨连接），口径同 P1-54 D7a。
+#   - privacy：受限角色敏感字段轮（customer_name 遮蔽），口径同 P1-54 QB-ACL-03c。
+#
+# 消费方：P1-78 scripts/e2e/contracts/mcp-inquiry-performance.yaml 的 LONG_FOLLOW 场景
+# 只引用 questionRef=[QB-LONG-01,QB-LONG-02,QB-LONG-03] 与 packDigest，不复制题面。
+
+contract: lucy-mcp-inquiry-long-followups-v1
+version: 1
+packDigestSeed: p1-79-long-followup-pack-20261126
+pronounBlocklistVersion: v1
+packDigest: "sha256:41ce9d18a3a1508d21e909c2a1609eabaee644bfd7776e4b33b1404bb890a091"
+
+cases:
+  # ---------------------------------------------------------------------------
+  # QB-LONG-01 — simple / read_only / demo-mysql
+  # 承接类型：时间窗推移（T1–T5、T14–T17）、维度拆分（T6–T10、T17–T19）、口径收窄（T11–T13、T20）。
+  # ---------------------------------------------------------------------------
+  - id: QB-LONG-01
+    version: 1
+    lane: demo-business
+    configProfileId: lucy-mcp-compat-demo
+    budgetClass: simple
+    identity: read_only
+    connectionId: demo-mysql
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+    turns:
+      - turnIndex: 0
+        text: "查询 demo-mysql 连接 superstore_orders 表在全部订单数据上的订单数、销售总额和利润总额。"
+        dependsOnTurn: null
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "时间窗=全部订单数据"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=order_count／total_sales／total_profit"
+          - "分组=无"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.gold"
+          expect:
+            order_count: 1000
+            total_sales: 1459476.0953
+            total_profit: 294190.223
+            roleClass: read_only
+      - turnIndex: 1
+        text: "查询 demo-mysql 连接 superstore_orders 表在 2024 年全年（2024-01-01 至 2024-12-31）的销售总额。"
+        dependsOnTurn: 0
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=2024-01-01..2024-12-31"
+          - "分组=无"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.sales_by_year.2024"
+          expect:
+            total_sales: 366646.0565
+            order_year: 2024
+      - turnIndex: 2
+        text: "查询 demo-mysql 连接 superstore_orders 表在 2025 年全年（2025-01-01 至 2025-12-31）的销售总额。"
+        dependsOnTurn: 1
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=2025-01-01..2025-12-31"
+          - "分组=无"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.sales_by_year.2025"
+          expect:
+            total_sales: 364660.4159
+            order_year: 2025
+      - turnIndex: 3
+        text: "查询 demo-mysql 连接 superstore_orders 表在 2026 年全年（2026-01-01 至 2026-12-31）的销售总额。"
+        dependsOnTurn: 2
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=2026-01-01..2026-12-31"
+          - "分组=无"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.sales_by_year.2026"
+          expect:
+            total_sales: 355302.1758
+            order_year: 2026
+      - turnIndex: 4
+        text: "查询 demo-mysql 连接 superstore_orders 表在 2027 年全年（2027-01-01 至 2027-12-31）的销售总额。"
+        dependsOnTurn: 3
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=2027-01-01..2027-12-31"
+          - "分组=无"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.sales_by_year.2027"
+          expect:
+            total_sales: 372867.4471
+            order_year: 2027
+      - turnIndex: 5
+        text: "计算 demo-mysql 连接 superstore_orders 表按订单年份（2024、2025、2026、2027）汇总的销售总额合计。"
+        dependsOnTurn: 4
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=2024-01-01..2027-12-31"
+          - "分组=order_year 后二次汇总"
+        oracle:
+          kind: invariant
+          ref: "baseline:demo-mysql.superstore_orders.sales_by_year.sum"
+          expect:
+            total_sales: 1459476.0953
+            tolerance: 0.01
+            years: [2024, 2025, 2026, 2027]
+            formula: "SUM(SUM(sales) GROUP BY order_year) == SUM(sales)"
+      - turnIndex: 6
+        text: "查询 demo-mysql 连接 superstore_orders 表在全部订单数据上 East 区域的销售总额。"
+        dependsOnTurn: 5
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=全部订单数据"
+          - "过滤=region='East'"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.sales_by_region.East"
+          expect:
+            total_sales: 550670.8159
+            region: East
+      - turnIndex: 7
+        text: "查询 demo-mysql 连接 superstore_orders 表在全部订单数据上 Central South 区域的销售总额。"
+        dependsOnTurn: 6
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=全部订单数据"
+          - "过滤=region='Central South'"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.sales_by_region.Central_South"
+          expect:
+            total_sales: 363958.9831
+            region: Central South
+      - turnIndex: 8
+        text: "查询 demo-mysql 连接 superstore_orders 表在全部订单数据上 Northeast 区域的销售总额。"
+        dependsOnTurn: 7
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=全部订单数据"
+          - "过滤=region='Northeast'"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.sales_by_region.Northeast"
+          expect:
+            total_sales: 302200.0925
+            region: Northeast
+      - turnIndex: 9
+        text: "查询 demo-mysql 连接 superstore_orders 表在全部订单数据上 Southwest 区域的销售总额。"
+        dependsOnTurn: 8
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=全部订单数据"
+          - "过滤=region='Southwest'"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.sales_by_region.Southwest"
+          expect:
+            total_sales: 242646.2038
+            region: Southwest
+      - turnIndex: 10
+        text: "计算 demo-mysql 连接 superstore_orders 表按区域（East、Central South、Northeast、Southwest）汇总的销售总额合计。"
+        dependsOnTurn: 9
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=全部订单数据"
+          - "分组=region 后二次汇总"
+        oracle:
+          kind: invariant
+          ref: "baseline:demo-mysql.superstore_orders.sales_by_region.sum"
+          expect:
+            total_sales: 1459476.0953
+            tolerance: 0.01
+            regions: [East, Central South, Northeast, Southwest]
+            formula: "SUM(SUM(sales) GROUP BY region) == SUM(sales)"
+      - turnIndex: 11
+        text: "查询 demo-mysql 连接 superstore_orders 表在全部订单数据上的利润率（利润总额除以销售总额）。"
+        dependsOnTurn: 10
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=profit_margin（SUM(profit)/NULLIF(SUM(sales),0)）"
+          - "时间窗=全部订单数据"
+          - "分组=无"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.measures.profit_margin"
+          expect:
+            profit_margin: 0.201572
+            formula: "SUM(profit)/NULLIF(SUM(sales),0)"
+      - turnIndex: 12
+        text: "用销售总额 1459476.0953 与利润总额 294190.223 复算 demo-mysql 连接 superstore_orders 表在全部订单数据上的利润率。"
+        dependsOnTurn: 11
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=profit_margin"
+          - "时间窗=全部订单数据"
+          - "口径=SUM/SUM（禁止 AVG(profit/sales)）"
+        oracle:
+          kind: invariant
+          ref: "baseline:demo-mysql.superstore_orders.measures.profit_margin"
+          expect:
+            profit_margin: 0.201572
+            total_profit: 294190.223
+            total_sales: 1459476.0953
+            tolerance: 0.000001
+            formula: "294190.223/1459476.0953"
+      - turnIndex: 13
+        text: "按去重订单号统计 demo-mysql 连接 superstore_orders 表在全部订单数据上的订单数。"
+        dependsOnTurn: 12
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=order_count（COUNT(DISTINCT order_id)）"
+          - "时间窗=全部订单数据"
+          - "分组=无"
+        oracle:
+          kind: invariant
+          ref: "baseline:demo-mysql.superstore_orders.measures.order_count"
+          expect:
+            order_count: 1000
+            distinct_order_ids: 1000
+            tolerance: 0
+            formula: "COUNT(DISTINCT order_id)"
+      - turnIndex: 14
+        text: "查询 demo-mysql 连接 superstore_orders 表在 2025 年 11 月（2025-11-01 至 2025-11-30）的销售总额。"
+        dependsOnTurn: 13
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=2025-11-01..2025-11-30"
+          - "分组=无"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.total_sales_month_2025_11"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: total_sales
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2025-11-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2025-12-01" }
+            sql: "SELECT SUM(sales) AS total_sales FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2025-11-01' AND order_date < '2025-12-01'"
+            rows: 1
+      - turnIndex: 15
+        text: "查询 demo-mysql 连接 superstore_orders 表在 2025 年 12 月（2025-12-01 至 2025-12-31）的销售总额。"
+        dependsOnTurn: 14
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=2025-12-01..2025-12-31"
+          - "分组=无"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.total_sales_month_2025_12"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: total_sales
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2025-12-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2026-01-01" }
+            sql: "SELECT SUM(sales) AS total_sales FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2025-12-01' AND order_date < '2026-01-01'"
+            rows: 1
+      - turnIndex: 16
+        text: "计算 demo-mysql 连接 superstore_orders 表 2025 年 12 月相对 2025 年 11 月的销售总额环比变化率。"
+        dependsOnTurn: 15
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales 环比变化率"
+          - "时间窗=2025-11-01..2025-12-31"
+          - "对比基期=2025 年 11 月"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.sales_2025_11_12_mom"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: total_sales
+            months: ["2025-11", "2025-12"]
+            formula: "(sales_2025_12 - sales_2025_11) / sales_2025_11"
+            sql: "SELECT SUM(CASE WHEN order_date >= '2025-11-01' AND order_date < '2025-12-01' THEN sales ELSE 0 END) AS sales_2025_11, SUM(CASE WHEN order_date >= '2025-12-01' AND order_date < '2026-01-01' THEN sales ELSE 0 END) AS sales_2025_12 FROM dataforai.superstore_orders WHERE is_deleted = 0"
+            rows: 1
+      - turnIndex: 17
+        text: "按区域拆分 demo-mysql 连接 superstore_orders 表在 2025 年 11 月（2025-11-01 至 2025-11-30）的销售总额。"
+        dependsOnTurn: 16
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=2025-11-01..2025-11-30"
+          - "分组=region"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.total_sales_by_region_2025_11"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: total_sales
+            groupBy: [superstore_orders.region]
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2025-11-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2025-12-01" }
+            sql: "SELECT region, SUM(sales) AS total_sales FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2025-11-01' AND order_date < '2025-12-01' GROUP BY region"
+            maxRows: 4
+            regionVocabulary: [East, Southwest, Central South, Northeast]
+      - turnIndex: 18
+        text: "查询 demo-mysql 连接 superstore_orders 表中商品类别为 Furniture 的订单数。"
+        dependsOnTurn: 17
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=order_count（COUNT(DISTINCT order_id)）"
+          - "时间窗=全部订单数据"
+          - "过滤=category='Furniture'"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.order_count_category_Furniture"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: order_count
+            filters:
+              - { field: superstore_orders.category, op: "=", value: "Furniture" }
+            sql: "SELECT COUNT(DISTINCT order_id) AS order_count FROM dataforai.superstore_orders WHERE is_deleted = 0 AND category = 'Furniture'"
+            rows: 1
+      - turnIndex: 19
+        text: "按装运模式拆分 demo-mysql 连接 superstore_orders 表在全部订单数据上的订单行数。"
+        dependsOnTurn: 18
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=订单行数（COUNT(*)）"
+          - "时间窗=全部订单数据"
+          - "分组=ship_mode"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.row_count_by_ship_mode"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: row_count
+            groupBy: [superstore_orders.ship_mode]
+            sql: "SELECT ship_mode, COUNT(*) AS row_count FROM dataforai.superstore_orders WHERE is_deleted = 0 GROUP BY ship_mode"
+            maxRows: 4
+            shipModeVocabulary: [Standard, Second Class, First Class, Same Day]
+      - turnIndex: 20
+        text: "统计 demo-mysql 连接 superstore_orders 表中折扣大于 0.2 的订单行数。"
+        dependsOnTurn: 19
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=订单行数（COUNT(*)）"
+          - "时间窗=全部订单数据"
+          - "过滤=discount>0.2（high_discount 段）"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.counts.high_discount_rows"
+          expect:
+            high_discount_rows: 132
+            segment: high_discount
+  # ---------------------------------------------------------------------------
+  # QB-LONG-02 — simple / lucy_admin / demo-mysql
+  # 承接类型：跨表关联（T2、T8、T17）、维度拆分（T3–T7、T10–T12、T15）、口径收窄（T1、T13、T14）、
+  # 条件叠加（T16）、时间窗推移（T15、T17–T19）。
+  # 说明：lucy_admin 为全局范围身份（connections=["*"]）；本链只在 demo-mysql 单连接内推进，
+  # 不用于多库凑绿（P1-54 D6「多库禁 admin」）。
+  # ---------------------------------------------------------------------------
+  - id: QB-LONG-02
+    version: 1
+    lane: demo-business
+    configProfileId: lucy-mcp-compat-demo
+    budgetClass: simple
+    identity: lucy_admin
+    connectionId: demo-mysql
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+    turns:
+      - turnIndex: 0
+        text: "查询 demo-mysql 连接 superstore_orders 表在全部订单数据上的订单数、销售总额和利润总额。"
+        dependsOnTurn: null
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "时间窗=全部订单数据"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=order_count／total_sales／total_profit"
+          - "分组=无"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.gold"
+          expect:
+            order_count: 1000
+            total_sales: 1459476.0953
+            total_profit: 294190.223
+            roleClass: lucy_admin
+            globalScope: true
+      - turnIndex: 1
+        text: "查询 demo-mysql 连接 superstore_returns 表在全部退货数据上的退货行数。"
+        dependsOnTurn: 0
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_returns"
+          - "时间窗=全部退货数据"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=退货行数（COUNT(*)）"
+          - "分组=无"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_returns.count"
+          expect:
+            returns_rows: 60
+            source: superstore_returns
+      - turnIndex: 2
+        text: "统计 demo-mysql 连接 superstore_returns 表中来自利润为负订单的退货行数。"
+        dependsOnTurn: 1
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_returns"
+          - "时间窗=全部退货数据"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=退货行数（COUNT(*)）"
+          - "口径=退货订单号在 superstore_orders 中 profit<0"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.counts.returns_for_loss_orders"
+          expect:
+            returns_for_loss_orders: 30
+            source: superstore_returns
+      - turnIndex: 3
+        text: "查询 demo-mysql 连接 superstore_people 表在全部区域人员数据上的行数。"
+        dependsOnTurn: 2
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_people"
+          - "时间窗=全部区域人员数据"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=区域人员行数（COUNT(*)）"
+          - "分组=无"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_people.count"
+          expect:
+            people_rows: 4
+            distinct_regions: 4
+            source: superstore_people
+      - turnIndex: 4
+        text: "查询 demo-mysql 连接 superstore_people 表中 East 区域对应的区域负责人。"
+        dependsOnTurn: 3
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_people"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=regional_manager"
+          - "过滤=region='East'"
+        oracle:
+          kind: exact
+          ref: "fixture:examples/docker-demo/scripts/gen-demo-data.mjs#REGIONS.East"
+          expect:
+            region: East
+            regional_manager: Alice
+      - turnIndex: 5
+        text: "查询 demo-mysql 连接 superstore_people 表中 Central South 区域对应的区域负责人。"
+        dependsOnTurn: 4
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_people"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=regional_manager"
+          - "过滤=region='Central South'"
+        oracle:
+          kind: exact
+          ref: "fixture:examples/docker-demo/scripts/gen-demo-data.mjs#REGIONS.Central_South"
+          expect:
+            region: Central South
+            regional_manager: Bob
+      - turnIndex: 6
+        text: "查询 demo-mysql 连接 superstore_people 表中 Northeast 区域对应的区域负责人。"
+        dependsOnTurn: 5
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_people"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=regional_manager"
+          - "过滤=region='Northeast'"
+        oracle:
+          kind: exact
+          ref: "fixture:examples/docker-demo/scripts/gen-demo-data.mjs#REGIONS.Northeast"
+          expect:
+            region: Northeast
+            regional_manager: Cathy
+      - turnIndex: 7
+        text: "查询 demo-mysql 连接 superstore_people 表中 Southwest 区域对应的区域负责人。"
+        dependsOnTurn: 6
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_people"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=regional_manager"
+          - "过滤=region='Southwest'"
+        oracle:
+          kind: exact
+          ref: "fixture:examples/docker-demo/scripts/gen-demo-data.mjs#REGIONS.Southwest"
+          expect:
+            region: Southwest
+            regional_manager: David
+      - turnIndex: 8
+        text: "核对 demo-mysql 连接 superstore_orders 表每一行订单的区域是否都能在 superstore_people 表匹配到唯一区域负责人。"
+        dependsOnTurn: 7
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders + superstore_people"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=未匹配订单行数"
+          - "join=superstore_orders.region = superstore_people.region（many_to_one）"
+        oracle:
+          kind: invariant
+          ref: "sql:demo-mysql.superstore_orders_people_by_region"
+          expect:
+            unmatched_order_rows: 0
+            order_rows: 1000
+            tolerance: 0
+            joinPath: "superstore_orders.region = superstore_people.region"
+            sql: "SELECT COUNT(*) AS unmatched_order_rows FROM dataforai.superstore_orders o LEFT JOIN dataforai.superstore_people p ON o.region = p.region WHERE o.is_deleted = 0 AND (p.region IS NULL OR p.is_deleted <> 0)"
+      - turnIndex: 9
+        text: "统计 demo-mysql 连接 superstore_orders 表在全部订单数据上的不重复客户数量。"
+        dependsOnTurn: 8
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=不重复客户数（COUNT(DISTINCT customer_id)）"
+          - "时间窗=全部订单数据"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.counts.customers"
+          expect:
+            distinct_customers: 294
+      - turnIndex: 10
+        text: "按客户细分拆分 demo-mysql 连接 superstore_orders 表在全部订单数据上的不重复客户数量。"
+        dependsOnTurn: 9
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=不重复客户数（COUNT(DISTINCT customer_id)）"
+          - "时间窗=全部订单数据"
+          - "分组=segment"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.distinct_customers_by_segment"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: distinct_customers
+            groupBy: [superstore_orders.segment]
+            sql: "SELECT segment, COUNT(DISTINCT customer_id) AS distinct_customers FROM dataforai.superstore_orders WHERE is_deleted = 0 GROUP BY segment"
+            maxRows: 3
+            segmentVocabulary: [Consumer, Corporate, Small Business]
+      - turnIndex: 11
+        text: "按商品类别拆分 demo-mysql 连接 superstore_orders 表在全部订单数据上的订单行数。"
+        dependsOnTurn: 10
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=订单行数（COUNT(*)）"
+          - "时间窗=全部订单数据"
+          - "分组=category"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.row_count_by_category"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: row_count
+            groupBy: [superstore_orders.category]
+            sql: "SELECT category, COUNT(*) AS row_count FROM dataforai.superstore_orders WHERE is_deleted = 0 GROUP BY category"
+            maxRows: 3
+            categoryVocabulary: [Office Supplies, Furniture, Technology]
+      - turnIndex: 12
+        text: "按商品子类拆分 demo-mysql 连接 superstore_orders 表在全部订单数据上的订单行数。"
+        dependsOnTurn: 11
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=订单行数（COUNT(*)）"
+          - "时间窗=全部订单数据"
+          - "分组=sub_category"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.row_count_by_sub_category"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: row_count
+            groupBy: [superstore_orders.sub_category]
+            sql: "SELECT sub_category, COUNT(*) AS row_count FROM dataforai.superstore_orders WHERE is_deleted = 0 GROUP BY sub_category"
+            maxRows: 12
+            subCategoryVocabulary: [Paper, Storage, Binders, Supplies, Chairs, Tables, Bookcases, Furnishings, Accessories, Phones, Machines, Copiers]
+      - turnIndex: 13
+        text: "统计 demo-mysql 连接 superstore_orders 表中利润为负的订单行数。"
+        dependsOnTurn: 12
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=订单行数（COUNT(*)）"
+          - "时间窗=全部订单数据"
+          - "过滤=profit<0（loss_rows 段）"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.counts.loss_rows"
+          expect:
+            loss_rows: 49
+            segment: loss_rows
+      - turnIndex: 14
+        text: "统计 demo-mysql 连接 superstore_orders 表中折扣大于 0.2 的订单行数。"
+        dependsOnTurn: 13
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=订单行数（COUNT(*)）"
+          - "时间窗=全部订单数据"
+          - "过滤=discount>0.2（high_discount 段）"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.counts.high_discount_rows"
+          expect:
+            high_discount_rows: 132
+            segment: high_discount
+      - turnIndex: 15
+        text: "按区域拆分 demo-mysql 连接 superstore_orders 表在 2025 年全年（2025-01-01 至 2025-12-31）的销售总额。"
+        dependsOnTurn: 14
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=2025-01-01..2025-12-31"
+          - "分组=region"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.total_sales_by_region_2025"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: total_sales
+            groupBy: [superstore_orders.region]
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2025-01-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2026-01-01" }
+            sql: "SELECT region, SUM(sales) AS total_sales FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2025-01-01' AND order_date < '2026-01-01' GROUP BY region"
+            maxRows: 4
+            regionVocabulary: [East, Southwest, Central South, Northeast]
+            total_sales_sum: 364660.4159
+            total_sales_sum_tolerance: 0.01
+      - turnIndex: 16
+        text: "统计 demo-mysql 连接 superstore_orders 表在 2025 年全年（2025-01-01 至 2025-12-31）、East 区域、Technology 商品类别的订单行数。"
+        dependsOnTurn: 15
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=订单行数（COUNT(*)）"
+          - "时间窗=2025-01-01..2025-12-31"
+          - "过滤=region='East' AND category='Technology'"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.row_count_year_2025_east_technology"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: row_count
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2025-01-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2026-01-01" }
+              - { field: superstore_orders.region, op: "=", value: "East" }
+              - { field: superstore_orders.category, op: "=", value: "Technology" }
+            sql: "SELECT COUNT(*) AS row_count FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2025-01-01' AND order_date < '2026-01-01' AND region = 'East' AND category = 'Technology'"
+            rows: 1
+      - turnIndex: 17
+        text: "查询 demo-mysql 连接 superstore_orders 表在 2024 年全年（2024-01-01 至 2024-12-31）的销售总额。"
+        dependsOnTurn: 16
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=2024-01-01..2024-12-31"
+          - "分组=无"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.sales_by_year.2024"
+          expect:
+            total_sales: 366646.0565
+            order_year: 2024
+      - turnIndex: 18
+        text: "查询 demo-mysql 连接 superstore_orders 表在 2025 年全年（2025-01-01 至 2025-12-31）的销售总额。"
+        dependsOnTurn: 17
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=2025-01-01..2025-12-31"
+          - "分组=无"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.sales_by_year.2025"
+          expect:
+            total_sales: 364660.4159
+            order_year: 2025
+      - turnIndex: 19
+        text: "计算 demo-mysql 连接 superstore_orders 表 2025 年全年相对 2024 年全年的销售总额变化率。"
+        dependsOnTurn: 18
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales 年度变化率"
+          - "时间窗=2024-01-01..2025-12-31"
+          - "对比基期=2024 年全年"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.sales_2024_2025_yoy"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: total_sales
+            years: [2024, 2025]
+            formula: "(sales_2025 - sales_2024) / sales_2024"
+            sql: "SELECT SUM(CASE WHEN order_date >= '2024-01-01' AND order_date < '2025-01-01' THEN sales ELSE 0 END) AS sales_2024, SUM(CASE WHEN order_date >= '2025-01-01' AND order_date < '2026-01-01' THEN sales ELSE 0 END) AS sales_2025 FROM dataforai.superstore_orders WHERE is_deleted = 0"
+            rows: 1
+      - turnIndex: 20
+        text: "计算 demo-mysql 连接 superstore_orders 表在 2025 年全年（2025-01-01 至 2025-12-31）按区域汇总的销售总额合计。"
+        dependsOnTurn: 19
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=2025-01-01..2025-12-31"
+          - "分组=region 后二次汇总"
+        oracle:
+          kind: invariant
+          ref: "baseline:demo-mysql.superstore_orders.sales_by_year.2025"
+          expect:
+            total_sales: 364660.4159
+            tolerance: 0.01
+            regions: [East, Southwest, Central South, Northeast]
+            formula: "SUM(SUM(sales) GROUP BY region) == SUM(sales) WHERE order_year = 2025"
+  # ---------------------------------------------------------------------------
+  # QB-LONG-03 — complex / read_only / demo-mysql
+  # 承接类型：条件叠加（T0–T6）、时间窗推移（T1–T3、T10、T11、T20）、维度拆分（T7–T11、T18）、
+  # 口径收窄（T12–T16、T19）、跨表关联（T17、T18）。
+  # 基线过滤组：order_year=2025 AND region='East' AND segment='Consumer' AND category='Technology'。
+  # ---------------------------------------------------------------------------
+  - id: QB-LONG-03
+    version: 1
+    lane: demo-business
+    configProfileId: lucy-mcp-compat-demo
+    budgetClass: complex
+    identity: read_only
+    connectionId: demo-mysql
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+    turns:
+      - turnIndex: 0
+        text: "统计 demo-mysql 连接 superstore_orders 表在 2025 年全年（2025-01-01 至 2025-12-31）、East 区域、Consumer 客户细分、Technology 商品类别下的订单数与销售总额。"
+        dependsOnTurn: null
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=order_count（COUNT(DISTINCT order_id)）与 total_sales（SUM(sales)）"
+          - "时间窗=2025-01-01..2025-12-31"
+          - "过滤=region='East' AND segment='Consumer' AND category='Technology'"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.orders_and_sales_2025_east_consumer_technology"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measures: [order_count, total_sales]
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2025-01-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2026-01-01" }
+              - { field: superstore_orders.region, op: "=", value: "East" }
+              - { field: superstore_orders.segment, op: "=", value: "Consumer" }
+              - { field: superstore_orders.category, op: "=", value: "Technology" }
+            sql: "SELECT COUNT(DISTINCT order_id) AS order_count, SUM(sales) AS total_sales FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2025-01-01' AND order_date < '2026-01-01' AND region = 'East' AND segment = 'Consumer' AND category = 'Technology'"
+            rows: 1
+      - turnIndex: 1
+        text: "统计 demo-mysql 连接 superstore_orders 表在 2024 年全年（2024-01-01 至 2024-12-31）、East 区域、Consumer 客户细分、Technology 商品类别下的订单数与销售总额。"
+        dependsOnTurn: 0
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=order_count（COUNT(DISTINCT order_id)）与 total_sales（SUM(sales)）"
+          - "时间窗=2024-01-01..2024-12-31"
+          - "过滤=region='East' AND segment='Consumer' AND category='Technology'"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.orders_and_sales_2024_east_consumer_technology"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measures: [order_count, total_sales]
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2024-01-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2025-01-01" }
+              - { field: superstore_orders.region, op: "=", value: "East" }
+              - { field: superstore_orders.segment, op: "=", value: "Consumer" }
+              - { field: superstore_orders.category, op: "=", value: "Technology" }
+            sql: "SELECT COUNT(DISTINCT order_id) AS order_count, SUM(sales) AS total_sales FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2024-01-01' AND order_date < '2025-01-01' AND region = 'East' AND segment = 'Consumer' AND category = 'Technology'"
+            rows: 1
+      - turnIndex: 2
+        text: "统计 demo-mysql 连接 superstore_orders 表在 2026 年全年（2026-01-01 至 2026-12-31）、East 区域、Consumer 客户细分、Technology 商品类别下的订单数与销售总额。"
+        dependsOnTurn: 1
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=order_count（COUNT(DISTINCT order_id)）与 total_sales（SUM(sales)）"
+          - "时间窗=2026-01-01..2026-12-31"
+          - "过滤=region='East' AND segment='Consumer' AND category='Technology'"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.orders_and_sales_2026_east_consumer_technology"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measures: [order_count, total_sales]
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2026-01-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2027-01-01" }
+              - { field: superstore_orders.region, op: "=", value: "East" }
+              - { field: superstore_orders.segment, op: "=", value: "Consumer" }
+              - { field: superstore_orders.category, op: "=", value: "Technology" }
+            sql: "SELECT COUNT(DISTINCT order_id) AS order_count, SUM(sales) AS total_sales FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2026-01-01' AND order_date < '2027-01-01' AND region = 'East' AND segment = 'Consumer' AND category = 'Technology'"
+            rows: 1
+      - turnIndex: 3
+        text: "统计 demo-mysql 连接 superstore_orders 表在 2027 年全年（2027-01-01 至 2027-12-31）、East 区域、Consumer 客户细分、Technology 商品类别下的订单数与销售总额。"
+        dependsOnTurn: 2
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=order_count（COUNT(DISTINCT order_id)）与 total_sales（SUM(sales)）"
+          - "时间窗=2027-01-01..2027-12-31"
+          - "过滤=region='East' AND segment='Consumer' AND category='Technology'"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.orders_and_sales_2027_east_consumer_technology"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measures: [order_count, total_sales]
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2027-01-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2028-01-01" }
+              - { field: superstore_orders.region, op: "=", value: "East" }
+              - { field: superstore_orders.segment, op: "=", value: "Consumer" }
+              - { field: superstore_orders.category, op: "=", value: "Technology" }
+            sql: "SELECT COUNT(DISTINCT order_id) AS order_count, SUM(sales) AS total_sales FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2027-01-01' AND order_date < '2028-01-01' AND region = 'East' AND segment = 'Consumer' AND category = 'Technology'"
+            rows: 1
+      - turnIndex: 4
+        text: "统计 demo-mysql 连接 superstore_orders 表在 2025 年全年（2025-01-01 至 2025-12-31）、East 区域、Technology 商品类别下的订单数与销售总额。"
+        dependsOnTurn: 3
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=order_count（COUNT(DISTINCT order_id)）与 total_sales（SUM(sales)）"
+          - "时间窗=2025-01-01..2025-12-31"
+          - "过滤=region='East' AND category='Technology'"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.orders_and_sales_2025_east_technology"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measures: [order_count, total_sales]
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2025-01-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2026-01-01" }
+              - { field: superstore_orders.region, op: "=", value: "East" }
+              - { field: superstore_orders.category, op: "=", value: "Technology" }
+            sql: "SELECT COUNT(DISTINCT order_id) AS order_count, SUM(sales) AS total_sales FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2025-01-01' AND order_date < '2026-01-01' AND region = 'East' AND category = 'Technology'"
+            rows: 1
+      - turnIndex: 5
+        text: "统计 demo-mysql 连接 superstore_orders 表在 2025 年全年（2025-01-01 至 2025-12-31）、East 区域、Consumer 客户细分下的订单数与销售总额。"
+        dependsOnTurn: 4
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=order_count（COUNT(DISTINCT order_id)）与 total_sales（SUM(sales)）"
+          - "时间窗=2025-01-01..2025-12-31"
+          - "过滤=region='East' AND segment='Consumer'"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.orders_and_sales_2025_east_consumer"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measures: [order_count, total_sales]
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2025-01-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2026-01-01" }
+              - { field: superstore_orders.region, op: "=", value: "East" }
+              - { field: superstore_orders.segment, op: "=", value: "Consumer" }
+            sql: "SELECT COUNT(DISTINCT order_id) AS order_count, SUM(sales) AS total_sales FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2025-01-01' AND order_date < '2026-01-01' AND region = 'East' AND segment = 'Consumer'"
+            rows: 1
+      - turnIndex: 6
+        text: "统计 demo-mysql 连接 superstore_orders 表在 2025 年全年（2025-01-01 至 2025-12-31）、East 区域下的订单数与销售总额。"
+        dependsOnTurn: 5
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=order_count（COUNT(DISTINCT order_id)）与 total_sales（SUM(sales)）"
+          - "时间窗=2025-01-01..2025-12-31"
+          - "过滤=region='East'"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.orders_and_sales_2025_east"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measures: [order_count, total_sales]
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2025-01-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2026-01-01" }
+              - { field: superstore_orders.region, op: "=", value: "East" }
+            sql: "SELECT COUNT(DISTINCT order_id) AS order_count, SUM(sales) AS total_sales FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2025-01-01' AND order_date < '2026-01-01' AND region = 'East'"
+            rows: 1
+      - turnIndex: 7
+        text: "按商品类别拆分 demo-mysql 连接 superstore_orders 表在 2025 年全年（2025-01-01 至 2025-12-31）、East 区域、Consumer 客户细分下的订单行数。"
+        dependsOnTurn: 6
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=订单行数（COUNT(*)）"
+          - "时间窗=2025-01-01..2025-12-31"
+          - "过滤=region='East' AND segment='Consumer'"
+          - "分组=category"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.row_count_by_category_2025_east_consumer"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: row_count
+            groupBy: [superstore_orders.category]
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2025-01-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2026-01-01" }
+              - { field: superstore_orders.region, op: "=", value: "East" }
+              - { field: superstore_orders.segment, op: "=", value: "Consumer" }
+            sql: "SELECT category, COUNT(*) AS row_count FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2025-01-01' AND order_date < '2026-01-01' AND region = 'East' AND segment = 'Consumer' GROUP BY category"
+            maxRows: 3
+            categoryVocabulary: [Office Supplies, Furniture, Technology]
+            zeroRowsAllowed: true
+      - turnIndex: 8
+        text: "按装运模式拆分 demo-mysql 连接 superstore_orders 表在 2025 年全年（2025-01-01 至 2025-12-31）、East 区域、Consumer 客户细分下的订单行数。"
+        dependsOnTurn: 7
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=订单行数（COUNT(*)）"
+          - "时间窗=2025-01-01..2025-12-31"
+          - "过滤=region='East' AND segment='Consumer'"
+          - "分组=ship_mode"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.row_count_by_ship_mode_2025_east_consumer"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: row_count
+            groupBy: [superstore_orders.ship_mode]
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2025-01-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2026-01-01" }
+              - { field: superstore_orders.region, op: "=", value: "East" }
+              - { field: superstore_orders.segment, op: "=", value: "Consumer" }
+            sql: "SELECT ship_mode, COUNT(*) AS row_count FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2025-01-01' AND order_date < '2026-01-01' AND region = 'East' AND segment = 'Consumer' GROUP BY ship_mode"
+            maxRows: 4
+            shipModeVocabulary: [Standard, Second Class, First Class, Same Day]
+            zeroRowsAllowed: true
+      - turnIndex: 9
+        text: "按商品子类拆分 demo-mysql 连接 superstore_orders 表在 2025 年全年（2025-01-01 至 2025-12-31）、East 区域、Consumer 客户细分下的订单行数。"
+        dependsOnTurn: 8
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=订单行数（COUNT(*)）"
+          - "时间窗=2025-01-01..2025-12-31"
+          - "过滤=region='East' AND segment='Consumer'"
+          - "分组=sub_category"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.row_count_by_sub_category_2025_east_consumer"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: row_count
+            groupBy: [superstore_orders.sub_category]
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2025-01-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2026-01-01" }
+              - { field: superstore_orders.region, op: "=", value: "East" }
+              - { field: superstore_orders.segment, op: "=", value: "Consumer" }
+            sql: "SELECT sub_category, COUNT(*) AS row_count FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2025-01-01' AND order_date < '2026-01-01' AND region = 'East' AND segment = 'Consumer' GROUP BY sub_category"
+            maxRows: 12
+            subCategoryVocabulary: [Paper, Storage, Binders, Supplies, Chairs, Tables, Bookcases, Furnishings, Accessories, Phones, Machines, Copiers]
+            zeroRowsAllowed: true
+      - turnIndex: 10
+        text: "按月份拆分 demo-mysql 连接 superstore_orders 表在 2025 年全年（2025-01-01 至 2025-12-31）、East 区域、Consumer 客户细分、Technology 商品类别下的销售总额。"
+        dependsOnTurn: 9
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=2025-01-01..2025-12-31"
+          - "过滤=region='East' AND segment='Consumer' AND category='Technology'"
+          - "分组=月份（order_date 年月）"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.total_sales_by_month_2025_east_consumer_technology"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: total_sales
+            groupBy: [superstore_orders.order_date 年月]
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2025-01-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2026-01-01" }
+              - { field: superstore_orders.region, op: "=", value: "East" }
+              - { field: superstore_orders.segment, op: "=", value: "Consumer" }
+              - { field: superstore_orders.category, op: "=", value: "Technology" }
+            sql: "SELECT DATE_FORMAT(order_date, '%Y-%m') AS order_month, SUM(sales) AS total_sales FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2025-01-01' AND order_date < '2026-01-01' AND region = 'East' AND segment = 'Consumer' AND category = 'Technology' GROUP BY DATE_FORMAT(order_date, '%Y-%m')"
+            maxRows: 12
+            zeroRowsAllowed: true
+      - turnIndex: 11
+        text: "按季度拆分 demo-mysql 连接 superstore_orders 表在 2025 年全年（2025-01-01 至 2025-12-31）、East 区域、Consumer 客户细分、Technology 商品类别下的销售总额。"
+        dependsOnTurn: 10
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=2025-01-01..2025-12-31"
+          - "过滤=region='East' AND segment='Consumer' AND category='Technology'"
+          - "分组=季度（order_date 季度）"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.total_sales_by_quarter_2025_east_consumer_technology"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: total_sales
+            groupBy: [superstore_orders.order_date 季度]
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2025-01-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2026-01-01" }
+              - { field: superstore_orders.region, op: "=", value: "East" }
+              - { field: superstore_orders.segment, op: "=", value: "Consumer" }
+              - { field: superstore_orders.category, op: "=", value: "Technology" }
+            sql: "SELECT QUARTER(order_date) AS order_quarter, SUM(sales) AS total_sales FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2025-01-01' AND order_date < '2026-01-01' AND region = 'East' AND segment = 'Consumer' AND category = 'Technology' GROUP BY QUARTER(order_date)"
+            maxRows: 4
+            zeroRowsAllowed: true
+      - turnIndex: 12
+        text: "计算 demo-mysql 连接 superstore_orders 表在 2025 年全年（2025-01-01 至 2025-12-31）、East 区域、Consumer 客户细分、Technology 商品类别下的利润率（利润总额除以销售总额）。"
+        dependsOnTurn: 11
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=profit_margin（SUM(profit)/NULLIF(SUM(sales),0)）"
+          - "时间窗=2025-01-01..2025-12-31"
+          - "过滤=region='East' AND segment='Consumer' AND category='Technology'"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.profit_margin_2025_east_consumer_technology"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: profit_margin
+            formula: "SUM(profit)/NULLIF(SUM(sales),0)"
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2025-01-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2026-01-01" }
+              - { field: superstore_orders.region, op: "=", value: "East" }
+              - { field: superstore_orders.segment, op: "=", value: "Consumer" }
+              - { field: superstore_orders.category, op: "=", value: "Technology" }
+            sql: "SELECT SUM(profit) / NULLIF(SUM(sales), 0) AS profit_margin FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2025-01-01' AND order_date < '2026-01-01' AND region = 'East' AND segment = 'Consumer' AND category = 'Technology'"
+            rows: 1
+      - turnIndex: 13
+        text: "计算 demo-mysql 连接 superstore_orders 表在 2025 年全年（2025-01-01 至 2025-12-31）、East 区域、Consumer 客户细分、Technology 商品类别下的利润总额。"
+        dependsOnTurn: 12
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_profit（SUM(profit)）"
+          - "时间窗=2025-01-01..2025-12-31"
+          - "过滤=region='East' AND segment='Consumer' AND category='Technology'"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.total_profit_2025_east_consumer_technology"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: total_profit
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2025-01-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2026-01-01" }
+              - { field: superstore_orders.region, op: "=", value: "East" }
+              - { field: superstore_orders.segment, op: "=", value: "Consumer" }
+              - { field: superstore_orders.category, op: "=", value: "Technology" }
+            sql: "SELECT SUM(profit) AS total_profit FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2025-01-01' AND order_date < '2026-01-01' AND region = 'East' AND segment = 'Consumer' AND category = 'Technology'"
+            rows: 1
+      - turnIndex: 14
+        text: "统计 demo-mysql 连接 superstore_orders 表在 2025 年全年（2025-01-01 至 2025-12-31）、East 区域、Consumer 客户细分、Technology 商品类别下折扣大于 0.2 的订单行数。"
+        dependsOnTurn: 13
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=订单行数（COUNT(*)）"
+          - "时间窗=2025-01-01..2025-12-31"
+          - "过滤=region='East' AND segment='Consumer' AND category='Technology' AND discount>0.2"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.high_discount_rows_2025_east_consumer_technology"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: row_count
+            segment: high_discount
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2025-01-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2026-01-01" }
+              - { field: superstore_orders.region, op: "=", value: "East" }
+              - { field: superstore_orders.segment, op: "=", value: "Consumer" }
+              - { field: superstore_orders.category, op: "=", value: "Technology" }
+              - { field: superstore_orders.discount, op: ">", value: 0.2 }
+            sql: "SELECT COUNT(*) AS row_count FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2025-01-01' AND order_date < '2026-01-01' AND region = 'East' AND segment = 'Consumer' AND category = 'Technology' AND discount > 0.2"
+            rows: 1
+      - turnIndex: 15
+        text: "统计 demo-mysql 连接 superstore_orders 表在 2025 年全年（2025-01-01 至 2025-12-31）、East 区域、Consumer 客户细分、Technology 商品类别下利润为负的订单行数。"
+        dependsOnTurn: 14
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=订单行数（COUNT(*)）"
+          - "时间窗=2025-01-01..2025-12-31"
+          - "过滤=region='East' AND segment='Consumer' AND category='Technology' AND profit<0"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.loss_rows_2025_east_consumer_technology"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: row_count
+            segment: loss_rows
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2025-01-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2026-01-01" }
+              - { field: superstore_orders.region, op: "=", value: "East" }
+              - { field: superstore_orders.segment, op: "=", value: "Consumer" }
+              - { field: superstore_orders.category, op: "=", value: "Technology" }
+              - { field: superstore_orders.profit, op: "<", value: 0 }
+            sql: "SELECT COUNT(*) AS row_count FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2025-01-01' AND order_date < '2026-01-01' AND region = 'East' AND segment = 'Consumer' AND category = 'Technology' AND profit < 0"
+            rows: 1
+      - turnIndex: 16
+        text: "按折扣区间（折扣为 0、折扣大于 0 且不超过 0.2、折扣大于 0.2）拆分 demo-mysql 连接 superstore_orders 表在 2025 年全年（2025-01-01 至 2025-12-31）、East 区域、Consumer 客户细分、Technology 商品类别下的订单行数。"
+        dependsOnTurn: 15
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=订单行数（COUNT(*)）"
+          - "时间窗=2025-01-01..2025-12-31"
+          - "过滤=region='East' AND segment='Consumer' AND category='Technology'"
+          - "分组=折扣区间（0 / (0,0.2] / >0.2）"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.row_count_by_discount_bucket_2025_east_consumer_technology"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: row_count
+            groupBy: [superstore_orders.discount 区间]
+            buckets: ["discount = 0", "discount > 0 AND discount <= 0.2", "discount > 0.2"]
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2025-01-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2026-01-01" }
+              - { field: superstore_orders.region, op: "=", value: "East" }
+              - { field: superstore_orders.segment, op: "=", value: "Consumer" }
+              - { field: superstore_orders.category, op: "=", value: "Technology" }
+            sql: "SELECT CASE WHEN discount = 0 THEN 'discount=0' WHEN discount <= 0.2 THEN 'discount (0,0.2]' ELSE 'discount>0.2' END AS discount_bucket, COUNT(*) AS row_count FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2025-01-01' AND order_date < '2026-01-01' AND region = 'East' AND segment = 'Consumer' AND category = 'Technology' GROUP BY discount_bucket"
+            maxRows: 3
+            zeroRowsAllowed: true
+      - turnIndex: 17
+        text: "关联 demo-mysql 连接 superstore_people 表查询 superstore_orders 表在 2025 年全年（2025-01-01 至 2025-12-31）、East 区域、Consumer 客户细分、Technology 商品类别下的区域负责人。"
+        dependsOnTurn: 16
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders + superstore_people"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=regional_manager"
+          - "时间窗=2025-01-01..2025-12-31"
+          - "过滤=region='East' AND segment='Consumer' AND category='Technology'"
+          - "join=superstore_orders.region = superstore_people.region（many_to_one，已声明）"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders_people_by_region"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders + superstore_people
+            measure: regional_manager
+            joinPath: "superstore_orders.region = superstore_people.region"
+            regional_manager: Alice
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2025-01-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2026-01-01" }
+              - { field: superstore_orders.region, op: "=", value: "East" }
+              - { field: superstore_orders.segment, op: "=", value: "Consumer" }
+              - { field: superstore_orders.category, op: "=", value: "Technology" }
+            sql: "SELECT p.regional_manager AS regional_manager FROM dataforai.superstore_orders o JOIN dataforai.superstore_people p ON o.region = p.region WHERE o.is_deleted = 0 AND p.is_deleted = 0 AND o.order_date >= '2025-01-01' AND o.order_date < '2026-01-01' AND o.region = 'East' AND o.segment = 'Consumer' AND o.category = 'Technology'"
+            maxRows: 1
+      - turnIndex: 18
+        text: "按区域负责人拆分 demo-mysql 连接 superstore_orders 表在 2025 年全年（2025-01-01 至 2025-12-31）的销售总额，并关联 superstore_people 表取区域负责人。"
+        dependsOnTurn: 17
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders + superstore_people"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=2025-01-01..2025-12-31"
+          - "分组=regional_manager"
+          - "join=superstore_orders.region = superstore_people.region（many_to_one，已声明）"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders_people_by_region"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders + superstore_people
+            measure: total_sales
+            groupBy: [superstore_people.regional_manager]
+            joinPath: "superstore_orders.region = superstore_people.region"
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2025-01-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2026-01-01" }
+            sql: "SELECT p.regional_manager AS regional_manager, SUM(o.sales) AS total_sales FROM dataforai.superstore_orders o JOIN dataforai.superstore_people p ON o.region = p.region WHERE o.is_deleted = 0 AND p.is_deleted = 0 AND o.order_date >= '2025-01-01' AND o.order_date < '2026-01-01' GROUP BY p.regional_manager"
+            maxRows: 4
+            regionalManagerVocabulary: [Alice, Bob, Cathy, David]
+            total_sales_sum: 364660.4159
+            total_sales_sum_tolerance: 0.01
+      - turnIndex: 19
+        text: "核对 demo-mysql 连接 superstore_orders 表在 2025 年全年（2025-01-01 至 2025-12-31）、East 区域、Consumer 客户细分、Technology 商品类别下的订单行数是否等于不重复订单号数量。"
+        dependsOnTurn: 18
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=订单行数与不重复订单号数量"
+          - "时间窗=2025-01-01..2025-12-31"
+          - "过滤=region='East' AND segment='Consumer' AND category='Technology'"
+          - "口径=COUNT(*) 对账 COUNT(DISTINCT order_id)"
+        oracle:
+          kind: invariant
+          ref: "sql:demo-mysql.superstore_orders.row_count_equals_distinct_order_ids_2025_east_consumer_technology"
+          expect:
+            row_count_equals_distinct_order_ids: true
+            tolerance: 0
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2025-01-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2026-01-01" }
+              - { field: superstore_orders.region, op: "=", value: "East" }
+              - { field: superstore_orders.segment, op: "=", value: "Consumer" }
+              - { field: superstore_orders.category, op: "=", value: "Technology" }
+            sql: "SELECT COUNT(*) AS row_count, COUNT(DISTINCT order_id) AS distinct_order_ids FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2025-01-01' AND order_date < '2026-01-01' AND region = 'East' AND segment = 'Consumer' AND category = 'Technology'"
+            rows: 1
+      - turnIndex: 20
+        text: "比较 demo-mysql 连接 superstore_orders 表在 2025 年全年（2025-01-01 至 2025-12-31）与 2026 年全年（2026-01-01 至 2026-12-31）、East 区域、Consumer 客户细分、Technology 商品类别下的销售总额差额。"
+        dependsOnTurn: 19
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales 差额"
+          - "时间窗=2025-01-01..2026-12-31"
+          - "过滤=region='East' AND segment='Consumer' AND category='Technology'"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.sales_2025_2026_east_consumer_technology_diff"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: total_sales
+            years: [2025, 2026]
+            formula: "sales_2025 - sales_2026"
+            filters:
+              - { field: superstore_orders.region, op: "=", value: "East" }
+              - { field: superstore_orders.segment, op: "=", value: "Consumer" }
+              - { field: superstore_orders.category, op: "=", value: "Technology" }
+            sql: "SELECT SUM(CASE WHEN order_date >= '2025-01-01' AND order_date < '2026-01-01' THEN sales ELSE 0 END) AS sales_2025, SUM(CASE WHEN order_date >= '2026-01-01' AND order_date < '2027-01-01' THEN sales ELSE 0 END) AS sales_2026 FROM dataforai.superstore_orders WHERE is_deleted = 0 AND region = 'East' AND segment = 'Consumer' AND category = 'Technology'"
+            rows: 1
+  # ---------------------------------------------------------------------------
+  # QB-LONG-04 — complex / restricted_A / demo-mysql
+  # 受限角色 A＝表级受限：demo-mysql 上仅 superstore_orders 可见；superstore_returns（表 B）与
+  # superstore_people 不可见；其他连接不可见。同角色类任一身份等价成立（P1-54 表 A 可见／表 B
+  # 不可见夹具的等价范围，取最窄一致可见范围）。
+  # 承接类型：时间窗推移（T1–T4、T15）、维度拆分（T5–T9、T14）、口径收窄（T10–T13）、
+  # 越权边界（T16–T19 为 deny 轮）、条件叠加（T16 的跨表组合）。
+  # ---------------------------------------------------------------------------
+  - id: QB-LONG-04
+    version: 1
+    lane: controlled-fixture
+    configProfileId: lucy-mcp-compat-demo
+    budgetClass: complex
+    identity: restricted_A
+    connectionId: demo-mysql
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+    turns:
+      - turnIndex: 0
+        text: "查询 demo-mysql 连接 superstore_orders 表在全部订单数据上的订单数与销售总额。"
+        dependsOnTurn: null
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "时间窗=全部订单数据"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=order_count（COUNT(DISTINCT order_id)）与 total_sales（SUM(sales)）"
+          - "分组=无"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.gold"
+          expect:
+            order_count: 1000
+            total_sales: 1459476.0953
+            roleClass: restricted_A
+            roleClassScope: "demo-mysql 连接上的 superstore_orders（单表可见）"
+      - turnIndex: 1
+        text: "查询 demo-mysql 连接 superstore_orders 表在 2024 年全年（2024-01-01 至 2024-12-31）的销售总额。"
+        dependsOnTurn: 0
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=2024-01-01..2024-12-31"
+          - "分组=无"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.sales_by_year.2024"
+          expect:
+            total_sales: 366646.0565
+            order_year: 2024
+            roleClassScope: "demo-mysql 连接上的 superstore_orders（单表可见）"
+      - turnIndex: 2
+        text: "查询 demo-mysql 连接 superstore_orders 表在 2025 年全年（2025-01-01 至 2025-12-31）的销售总额。"
+        dependsOnTurn: 1
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=2025-01-01..2025-12-31"
+          - "分组=无"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.sales_by_year.2025"
+          expect:
+            total_sales: 364660.4159
+            order_year: 2025
+            roleClassScope: "demo-mysql 连接上的 superstore_orders（单表可见）"
+      - turnIndex: 3
+        text: "查询 demo-mysql 连接 superstore_orders 表在 2026 年全年（2026-01-01 至 2026-12-31）的销售总额。"
+        dependsOnTurn: 2
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=2026-01-01..2026-12-31"
+          - "分组=无"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.sales_by_year.2026"
+          expect:
+            total_sales: 355302.1758
+            order_year: 2026
+            roleClassScope: "demo-mysql 连接上的 superstore_orders（单表可见）"
+      - turnIndex: 4
+        text: "查询 demo-mysql 连接 superstore_orders 表在 2027 年全年（2027-01-01 至 2027-12-31）的销售总额。"
+        dependsOnTurn: 3
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=2027-01-01..2027-12-31"
+          - "分组=无"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.sales_by_year.2027"
+          expect:
+            total_sales: 372867.4471
+            order_year: 2027
+            roleClassScope: "demo-mysql 连接上的 superstore_orders（单表可见）"
+      - turnIndex: 5
+        text: "查询 demo-mysql 连接 superstore_orders 表在全部订单数据上 East 区域的销售总额。"
+        dependsOnTurn: 4
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=全部订单数据"
+          - "过滤=region='East'"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.sales_by_region.East"
+          expect:
+            total_sales: 550670.8159
+            region: East
+            roleClassScope: "demo-mysql 连接上的 superstore_orders（单表可见）"
+      - turnIndex: 6
+        text: "查询 demo-mysql 连接 superstore_orders 表在全部订单数据上 Central South 区域的销售总额。"
+        dependsOnTurn: 5
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=全部订单数据"
+          - "过滤=region='Central South'"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.sales_by_region.Central_South"
+          expect:
+            total_sales: 363958.9831
+            region: Central South
+            roleClassScope: "demo-mysql 连接上的 superstore_orders（单表可见）"
+      - turnIndex: 7
+        text: "查询 demo-mysql 连接 superstore_orders 表在全部订单数据上 Northeast 区域的销售总额。"
+        dependsOnTurn: 6
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=全部订单数据"
+          - "过滤=region='Northeast'"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.sales_by_region.Northeast"
+          expect:
+            total_sales: 302200.0925
+            region: Northeast
+            roleClassScope: "demo-mysql 连接上的 superstore_orders（单表可见）"
+      - turnIndex: 8
+        text: "查询 demo-mysql 连接 superstore_orders 表在全部订单数据上 Southwest 区域的销售总额。"
+        dependsOnTurn: 7
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=全部订单数据"
+          - "过滤=region='Southwest'"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.sales_by_region.Southwest"
+          expect:
+            total_sales: 242646.2038
+            region: Southwest
+            roleClassScope: "demo-mysql 连接上的 superstore_orders（单表可见）"
+      - turnIndex: 9
+        text: "计算 demo-mysql 连接 superstore_orders 表按区域（East、Central South、Northeast、Southwest）汇总的销售总额合计。"
+        dependsOnTurn: 8
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=全部订单数据"
+          - "分组=region 后二次汇总"
+        oracle:
+          kind: invariant
+          ref: "baseline:demo-mysql.superstore_orders.sales_by_region.sum"
+          expect:
+            total_sales: 1459476.0953
+            tolerance: 0.01
+            regions: [East, Central South, Northeast, Southwest]
+            formula: "SUM(SUM(sales) GROUP BY region) == SUM(sales)"
+            roleClassScope: "demo-mysql 连接上的 superstore_orders（单表可见）"
+      - turnIndex: 10
+        text: "查询 demo-mysql 连接 superstore_orders 表在全部订单数据上的利润率（利润总额除以销售总额）。"
+        dependsOnTurn: 9
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=profit_margin（SUM(profit)/NULLIF(SUM(sales),0)）"
+          - "时间窗=全部订单数据"
+          - "分组=无"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.measures.profit_margin"
+          expect:
+            profit_margin: 0.201572
+            formula: "SUM(profit)/NULLIF(SUM(sales),0)"
+            roleClassScope: "demo-mysql 连接上的 superstore_orders（单表可见）"
+      - turnIndex: 11
+        text: "统计 demo-mysql 连接 superstore_orders 表中不重复的订单号数量。"
+        dependsOnTurn: 10
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=order_count（COUNT(DISTINCT order_id)）"
+          - "时间窗=全部订单数据"
+          - "分组=无"
+        oracle:
+          kind: invariant
+          ref: "baseline:demo-mysql.superstore_orders.measures.order_count"
+          expect:
+            order_count: 1000
+            distinct_order_ids: 1000
+            tolerance: 0
+            formula: "COUNT(DISTINCT order_id)"
+            roleClassScope: "demo-mysql 连接上的 superstore_orders（单表可见）"
+      - turnIndex: 12
+        text: "统计 demo-mysql 连接 superstore_orders 表中利润为负的订单行数。"
+        dependsOnTurn: 11
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=订单行数（COUNT(*)）"
+          - "时间窗=全部订单数据"
+          - "过滤=profit<0（loss_rows 段）"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.counts.loss_rows"
+          expect:
+            loss_rows: 49
+            segment: loss_rows
+            roleClassScope: "demo-mysql 连接上的 superstore_orders（单表可见）"
+      - turnIndex: 13
+        text: "统计 demo-mysql 连接 superstore_orders 表中折扣大于 0.2 的订单行数。"
+        dependsOnTurn: 12
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=订单行数（COUNT(*)）"
+          - "时间窗=全部订单数据"
+          - "过滤=discount>0.2（high_discount 段）"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.counts.high_discount_rows"
+          expect:
+            high_discount_rows: 132
+            segment: high_discount
+            roleClassScope: "demo-mysql 连接上的 superstore_orders（单表可见）"
+      - turnIndex: 14
+        text: "按商品类别拆分 demo-mysql 连接 superstore_orders 表在全部订单数据上的订单行数。"
+        dependsOnTurn: 13
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=订单行数（COUNT(*)）"
+          - "时间窗=全部订单数据"
+          - "分组=category"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.row_count_by_category"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: row_count
+            groupBy: [superstore_orders.category]
+            sql: "SELECT category, COUNT(*) AS row_count FROM dataforai.superstore_orders WHERE is_deleted = 0 GROUP BY category"
+            maxRows: 3
+            categoryVocabulary: [Office Supplies, Furniture, Technology]
+            roleClassScope: "demo-mysql 连接上的 superstore_orders（单表可见）"
+      - turnIndex: 15
+        text: "查询 demo-mysql 连接 superstore_orders 表在 2025 年 11 月（2025-11-01 至 2025-11-30）的销售总额。"
+        dependsOnTurn: 14
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=2025-11-01..2025-11-30"
+          - "分组=无"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.total_sales_month_2025_11"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: total_sales
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2025-11-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2025-12-01" }
+            sql: "SELECT SUM(sales) AS total_sales FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2025-11-01' AND order_date < '2025-12-01'"
+            rows: 1
+            roleClassScope: "demo-mysql 连接上的 superstore_orders（单表可见）"
+      - turnIndex: 16
+        text: "查询 demo-mysql 连接 superstore_returns 表在全部退货数据上的退货行数。"
+        dependsOnTurn: 15
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_returns（受限角色 A 不可见）"
+          - "时间窗=全部退货数据"
+          - "指标=退货行数（COUNT(*)）"
+          - "分组=无"
+        oracle:
+          kind: deny
+          ref: "deny:restricted-a-table-b-invisible"
+          expect:
+            d7a: true
+            requireToolsCall: true
+            reasonFamily: source_or_connection_forbidden
+            upstreamExecutions: 0
+            noMisleadingNextStep: true
+            roleClass: restricted_A
+            visibleSources: [superstore_orders]
+            hiddenSources: [superstore_returns]
+      - turnIndex: 17
+        text: "查询 demo-mysql 连接 superstore_people 表中 East 区域对应的区域负责人。"
+        dependsOnTurn: 16
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_people（受限角色 A 不可见）"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=regional_manager"
+          - "过滤=region='East'"
+        oracle:
+          kind: deny
+          ref: "deny:restricted-a-table-people-invisible"
+          expect:
+            d7a: true
+            requireToolsCall: true
+            reasonFamily: source_or_connection_forbidden
+            upstreamExecutions: 0
+            noMisleadingNextStep: true
+            roleClass: restricted_A
+            visibleSources: [superstore_orders]
+            hiddenSources: [superstore_people]
+      - turnIndex: 18
+        text: "把 demo-mysql 连接 superstore_orders 表与 superstore_returns 表关联后统计退货订单的销售总额。"
+        dependsOnTurn: 17
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders + superstore_returns（受限角色 A 只放行 superstore_orders）"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=全部订单数据"
+          - "join=superstore_orders.order_id = superstore_returns.order_id（已声明，但伴随表不可见）"
+        oracle:
+          kind: deny
+          ref: "deny:restricted-a-cross-table-join"
+          expect:
+            d7a: true
+            requireToolsCall: true
+            reasonFamily: source_or_connection_forbidden
+            upstreamExecutions: 0
+            noMisleadingNextStep: true
+            noCrossTableInvention: true
+            declaredJoinsOnly: true
+            roleClass: restricted_A
+            visibleSources: [superstore_orders]
+            hiddenSources: [superstore_returns]
+      - turnIndex: 19
+        text: "查询 lucy-ops 连接 ops_calls 表近 7 天的调用次数。"
+        dependsOnTurn: 18
+        carriedContext:
+          - "连接=lucy-ops（受限角色 A 不可见）"
+          - "数据源=ops_calls"
+          - "时间窗=近 7 天"
+          - "指标=调用次数（COUNT(*)）"
+          - "分组=无"
+        oracle:
+          kind: deny
+          ref: "deny:restricted-a-cross-connection"
+          expect:
+            d7a: true
+            requireToolsCall: true
+            reasonFamily: source_or_connection_forbidden
+            upstreamExecutions: 0
+            noMisleadingNextStep: true
+            roleClass: restricted_A
+            visibleConnections: [demo-mysql]
+            hiddenConnections: [lucy-ops]
+      - turnIndex: 20
+        text: "按装运模式拆分 demo-mysql 连接 superstore_orders 表在全部订单数据上的订单行数。"
+        dependsOnTurn: 19
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=订单行数（COUNT(*)）"
+          - "时间窗=全部订单数据"
+          - "分组=ship_mode"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.row_count_by_ship_mode"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: row_count
+            groupBy: [superstore_orders.ship_mode]
+            sql: "SELECT ship_mode, COUNT(*) AS row_count FROM dataforai.superstore_orders WHERE is_deleted = 0 GROUP BY ship_mode"
+            maxRows: 4
+            shipModeVocabulary: [Standard, Second Class, First Class, Same Day]
+            roleClassScope: "demo-mysql 连接上的 superstore_orders（单表可见）"
+  # ---------------------------------------------------------------------------
+  # QB-LONG-05 — follow-up-join / restricted_B / demo-mysql
+  # 受限角色 B＝字段级受限：superstore_orders 的度量与分组字段可见，customer_name 被遮蔽；
+  # superstore_people 可见（已声明 join）；其他连接不可见。同角色类任一身份等价成立。
+  # 承接类型：跨表关联（T2–T7、T17）、维度拆分（T1、T8–T12、T13–T17）、口径收窄（T18–T19 隐私轮）、
+  # 时间窗推移（T13–T17）。
+  # ---------------------------------------------------------------------------
+  - id: QB-LONG-05
+    version: 1
+    lane: controlled-fixture
+    configProfileId: lucy-mcp-compat-demo
+    budgetClass: follow-up-join
+    identity: restricted_B
+    connectionId: demo-mysql
+    evidence:
+      - requestId
+      - traceId
+      - turnWallClockMs
+      - mcpClientRttMs
+      - serverDurationMs
+      - configProfileFingerprint
+      - windowAnchor
+      - identityId
+      - snapshotId
+    turns:
+      - turnIndex: 0
+        text: "查询 demo-mysql 连接 superstore_orders 表在全部订单数据上的销售总额。"
+        dependsOnTurn: null
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "时间窗=全部订单数据"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "分组=无"
+        oracle:
+          kind: exact
+          ref: "baseline:demo-mysql.superstore_orders.gold"
+          expect:
+            total_sales: 1459476.0953
+            roleClass: restricted_B
+            roleClassScope: "superstore_orders 度量与分组字段可见；customer_name 遮蔽；superstore_people 可见"
+      - turnIndex: 1
+        text: "按区域拆分 demo-mysql 连接 superstore_orders 表在全部订单数据上的销售总额。"
+        dependsOnTurn: 0
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=全部订单数据"
+          - "分组=region"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.total_sales_by_region"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: total_sales
+            groupBy: [superstore_orders.region]
+            sql: "SELECT region, SUM(sales) AS total_sales FROM dataforai.superstore_orders WHERE is_deleted = 0 GROUP BY region"
+            maxRows: 4
+            regionVocabulary: [East, Southwest, Central South, Northeast]
+            total_sales_sum: 1459476.0953
+            total_sales_sum_tolerance: 0.01
+      - turnIndex: 2
+        text: "按区域拆分 demo-mysql 连接 superstore_orders 表在全部订单数据上的销售总额，并关联 superstore_people 表取各区域的区域负责人。"
+        dependsOnTurn: 1
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders + superstore_people"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）与 regional_manager"
+          - "时间窗=全部订单数据"
+          - "分组=region"
+          - "join=superstore_orders.region = superstore_people.region（many_to_one，已声明）"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders_people_by_region"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders + superstore_people
+            measure: total_sales
+            groupBy: [superstore_orders.region, superstore_people.regional_manager]
+            joinPath: "superstore_orders.region = superstore_people.region"
+            sql: "SELECT o.region, p.regional_manager, SUM(o.sales) AS total_sales FROM dataforai.superstore_orders o JOIN dataforai.superstore_people p ON o.region = p.region WHERE o.is_deleted = 0 AND p.is_deleted = 0 GROUP BY o.region, p.regional_manager"
+            maxRows: 4
+            regionalManagerVocabulary: [Alice, Bob, Cathy, David]
+            total_sales_sum: 1459476.0953
+            total_sales_sum_tolerance: 0.01
+      - turnIndex: 3
+        text: "按区域负责人拆分 demo-mysql 连接 superstore_orders 表在全部订单数据上的销售总额，并关联 superstore_people 表取区域负责人。"
+        dependsOnTurn: 2
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders + superstore_people"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=全部订单数据"
+          - "分组=regional_manager"
+          - "join=superstore_orders.region = superstore_people.region（many_to_one，已声明）"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders_people_by_region"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders + superstore_people
+            measure: total_sales
+            groupBy: [superstore_people.regional_manager]
+            joinPath: "superstore_orders.region = superstore_people.region"
+            sql: "SELECT p.regional_manager, SUM(o.sales) AS total_sales FROM dataforai.superstore_orders o JOIN dataforai.superstore_people p ON o.region = p.region WHERE o.is_deleted = 0 AND p.is_deleted = 0 GROUP BY p.regional_manager"
+            maxRows: 4
+            regionalManagerVocabulary: [Alice, Bob, Cathy, David]
+            total_sales_sum: 1459476.0953
+            total_sales_sum_tolerance: 0.01
+      - turnIndex: 4
+        text: "查询 demo-mysql 连接 superstore_orders 表在全部订单数据上 East 区域的销售总额，并关联 superstore_people 表取该区域的区域负责人。"
+        dependsOnTurn: 3
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders + superstore_people"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）与 regional_manager"
+          - "时间窗=全部订单数据"
+          - "过滤=region='East'"
+          - "join=superstore_orders.region = superstore_people.region（many_to_one，已声明）"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders_people_by_region"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders + superstore_people
+            measure: total_sales
+            region: East
+            regional_manager: Alice
+            joinPath: "superstore_orders.region = superstore_people.region"
+            sql: "SELECT p.regional_manager, SUM(o.sales) AS total_sales FROM dataforai.superstore_orders o JOIN dataforai.superstore_people p ON o.region = p.region WHERE o.is_deleted = 0 AND p.is_deleted = 0 AND o.region = 'East' GROUP BY p.regional_manager"
+            rows: 1
+            total_sales: 550670.8159
+            total_sales_tolerance: 0.01
+      - turnIndex: 5
+        text: "查询 demo-mysql 连接 superstore_orders 表在全部订单数据上 Central South 区域的销售总额，并关联 superstore_people 表取该区域的区域负责人。"
+        dependsOnTurn: 4
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders + superstore_people"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）与 regional_manager"
+          - "时间窗=全部订单数据"
+          - "过滤=region='Central South'"
+          - "join=superstore_orders.region = superstore_people.region（many_to_one，已声明）"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders_people_by_region"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders + superstore_people
+            measure: total_sales
+            region: Central South
+            regional_manager: Bob
+            joinPath: "superstore_orders.region = superstore_people.region"
+            sql: "SELECT p.regional_manager, SUM(o.sales) AS total_sales FROM dataforai.superstore_orders o JOIN dataforai.superstore_people p ON o.region = p.region WHERE o.is_deleted = 0 AND p.is_deleted = 0 AND o.region = 'Central South' GROUP BY p.regional_manager"
+            rows: 1
+            total_sales: 363958.9831
+            total_sales_tolerance: 0.01
+      - turnIndex: 6
+        text: "查询 demo-mysql 连接 superstore_orders 表在全部订单数据上 Northeast 区域的销售总额，并关联 superstore_people 表取该区域的区域负责人。"
+        dependsOnTurn: 5
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders + superstore_people"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）与 regional_manager"
+          - "时间窗=全部订单数据"
+          - "过滤=region='Northeast'"
+          - "join=superstore_orders.region = superstore_people.region（many_to_one，已声明）"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders_people_by_region"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders + superstore_people
+            measure: total_sales
+            region: Northeast
+            regional_manager: Cathy
+            joinPath: "superstore_orders.region = superstore_people.region"
+            sql: "SELECT p.regional_manager, SUM(o.sales) AS total_sales FROM dataforai.superstore_orders o JOIN dataforai.superstore_people p ON o.region = p.region WHERE o.is_deleted = 0 AND p.is_deleted = 0 AND o.region = 'Northeast' GROUP BY p.regional_manager"
+            rows: 1
+            total_sales: 302200.0925
+            total_sales_tolerance: 0.01
+      - turnIndex: 7
+        text: "查询 demo-mysql 连接 superstore_orders 表在全部订单数据上 Southwest 区域的销售总额，并关联 superstore_people 表取该区域的区域负责人。"
+        dependsOnTurn: 6
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders + superstore_people"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）与 regional_manager"
+          - "时间窗=全部订单数据"
+          - "过滤=region='Southwest'"
+          - "join=superstore_orders.region = superstore_people.region（many_to_one，已声明）"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders_people_by_region"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders + superstore_people
+            measure: total_sales
+            region: Southwest
+            regional_manager: David
+            joinPath: "superstore_orders.region = superstore_people.region"
+            sql: "SELECT p.regional_manager, SUM(o.sales) AS total_sales FROM dataforai.superstore_orders o JOIN dataforai.superstore_people p ON o.region = p.region WHERE o.is_deleted = 0 AND p.is_deleted = 0 AND o.region = 'Southwest' GROUP BY p.regional_manager"
+            rows: 1
+            total_sales: 242646.2038
+            total_sales_tolerance: 0.01
+      - turnIndex: 8
+        text: "按商品类别拆分 demo-mysql 连接 superstore_orders 表在全部订单数据上的销售总额。"
+        dependsOnTurn: 7
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=全部订单数据"
+          - "分组=category"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.total_sales_by_category"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: total_sales
+            groupBy: [superstore_orders.category]
+            sql: "SELECT category, SUM(sales) AS total_sales FROM dataforai.superstore_orders WHERE is_deleted = 0 GROUP BY category"
+            maxRows: 3
+            categoryVocabulary: [Office Supplies, Furniture, Technology]
+            total_sales_sum: 1459476.0953
+            total_sales_sum_tolerance: 0.01
+      - turnIndex: 9
+        text: "按商品子类拆分 demo-mysql 连接 superstore_orders 表在全部订单数据上的销售总额。"
+        dependsOnTurn: 8
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=全部订单数据"
+          - "分组=sub_category"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.total_sales_by_sub_category"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: total_sales
+            groupBy: [superstore_orders.sub_category]
+            sql: "SELECT sub_category, SUM(sales) AS total_sales FROM dataforai.superstore_orders WHERE is_deleted = 0 GROUP BY sub_category"
+            maxRows: 12
+            subCategoryVocabulary: [Paper, Storage, Binders, Supplies, Chairs, Tables, Bookcases, Furnishings, Accessories, Phones, Machines, Copiers]
+            total_sales_sum: 1459476.0953
+            total_sales_sum_tolerance: 0.01
+      - turnIndex: 10
+        text: "按客户细分拆分 demo-mysql 连接 superstore_orders 表在全部订单数据上的销售总额。"
+        dependsOnTurn: 9
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=全部订单数据"
+          - "分组=segment"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.total_sales_by_segment"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: total_sales
+            groupBy: [superstore_orders.segment]
+            sql: "SELECT segment, SUM(sales) AS total_sales FROM dataforai.superstore_orders WHERE is_deleted = 0 GROUP BY segment"
+            maxRows: 3
+            segmentVocabulary: [Consumer, Corporate, Small Business]
+            total_sales_sum: 1459476.0953
+            total_sales_sum_tolerance: 0.01
+      - turnIndex: 11
+        text: "按装运模式拆分 demo-mysql 连接 superstore_orders 表在全部订单数据上的销售总额。"
+        dependsOnTurn: 10
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=全部订单数据"
+          - "分组=ship_mode"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.total_sales_by_ship_mode"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: total_sales
+            groupBy: [superstore_orders.ship_mode]
+            sql: "SELECT ship_mode, SUM(sales) AS total_sales FROM dataforai.superstore_orders WHERE is_deleted = 0 GROUP BY ship_mode"
+            maxRows: 4
+            shipModeVocabulary: [Standard, Second Class, First Class, Same Day]
+            total_sales_sum: 1459476.0953
+            total_sales_sum_tolerance: 0.01
+      - turnIndex: 12
+        text: "按区域与商品类别交叉拆分 demo-mysql 连接 superstore_orders 表在全部订单数据上的销售总额。"
+        dependsOnTurn: 11
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=全部订单数据"
+          - "分组=region 与 category"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.total_sales_by_region_category"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: total_sales
+            groupBy: [superstore_orders.region, superstore_orders.category]
+            sql: "SELECT region, category, SUM(sales) AS total_sales FROM dataforai.superstore_orders WHERE is_deleted = 0 GROUP BY region, category"
+            maxRows: 12
+            regionVocabulary: [East, Southwest, Central South, Northeast]
+            categoryVocabulary: [Office Supplies, Furniture, Technology]
+            total_sales_sum: 1459476.0953
+            total_sales_sum_tolerance: 0.01
+      - turnIndex: 13
+        text: "按区域拆分 demo-mysql 连接 superstore_orders 表在 2024 年全年（2024-01-01 至 2024-12-31）的销售总额。"
+        dependsOnTurn: 12
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=2024-01-01..2024-12-31"
+          - "分组=region"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.total_sales_by_region_2024"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: total_sales
+            groupBy: [superstore_orders.region]
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2024-01-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2025-01-01" }
+            sql: "SELECT region, SUM(sales) AS total_sales FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2024-01-01' AND order_date < '2025-01-01' GROUP BY region"
+            maxRows: 4
+            regionVocabulary: [East, Southwest, Central South, Northeast]
+            total_sales_sum: 366646.0565
+            total_sales_sum_tolerance: 0.01
+      - turnIndex: 14
+        text: "按区域拆分 demo-mysql 连接 superstore_orders 表在 2025 年全年（2025-01-01 至 2025-12-31）的销售总额。"
+        dependsOnTurn: 13
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=2025-01-01..2025-12-31"
+          - "分组=region"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.total_sales_by_region_2025"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: total_sales
+            groupBy: [superstore_orders.region]
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2025-01-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2026-01-01" }
+            sql: "SELECT region, SUM(sales) AS total_sales FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2025-01-01' AND order_date < '2026-01-01' GROUP BY region"
+            maxRows: 4
+            regionVocabulary: [East, Southwest, Central South, Northeast]
+            total_sales_sum: 364660.4159
+            total_sales_sum_tolerance: 0.01
+      - turnIndex: 15
+        text: "按区域拆分 demo-mysql 连接 superstore_orders 表在 2026 年全年（2026-01-01 至 2026-12-31）的销售总额。"
+        dependsOnTurn: 14
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=2026-01-01..2026-12-31"
+          - "分组=region"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.total_sales_by_region_2026"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: total_sales
+            groupBy: [superstore_orders.region]
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2026-01-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2027-01-01" }
+            sql: "SELECT region, SUM(sales) AS total_sales FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2026-01-01' AND order_date < '2027-01-01' GROUP BY region"
+            maxRows: 4
+            regionVocabulary: [East, Southwest, Central South, Northeast]
+            total_sales_sum: 355302.1758
+            total_sales_sum_tolerance: 0.01
+      - turnIndex: 16
+        text: "按区域拆分 demo-mysql 连接 superstore_orders 表在 2027 年全年（2027-01-01 至 2027-12-31）的销售总额。"
+        dependsOnTurn: 15
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=2027-01-01..2027-12-31"
+          - "分组=region"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders.total_sales_by_region_2027"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders
+            measure: total_sales
+            groupBy: [superstore_orders.region]
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2027-01-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2028-01-01" }
+            sql: "SELECT region, SUM(sales) AS total_sales FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2027-01-01' AND order_date < '2028-01-01' GROUP BY region"
+            maxRows: 4
+            regionVocabulary: [East, Southwest, Central South, Northeast]
+            total_sales_sum: 372867.4471
+            total_sales_sum_tolerance: 0.01
+      - turnIndex: 17
+        text: "按区域拆分 demo-mysql 连接 superstore_orders 表在 2025 年全年（2025-01-01 至 2025-12-31）的销售总额，并关联 superstore_people 表取各区域的区域负责人。"
+        dependsOnTurn: 16
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders + superstore_people"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）与 regional_manager"
+          - "时间窗=2025-01-01..2025-12-31"
+          - "分组=region"
+          - "join=superstore_orders.region = superstore_people.region（many_to_one，已声明）"
+        oracle:
+          kind: independent-query
+          ref: "sql:demo-mysql.superstore_orders_people_by_region"
+          expect:
+            connectionId: demo-mysql
+            source: superstore_orders + superstore_people
+            measure: total_sales
+            groupBy: [superstore_orders.region, superstore_people.regional_manager]
+            joinPath: "superstore_orders.region = superstore_people.region"
+            filters:
+              - { field: superstore_orders.order_date, op: ">=", value: "2025-01-01" }
+              - { field: superstore_orders.order_date, op: "<", value: "2026-01-01" }
+            sql: "SELECT o.region, p.regional_manager, SUM(o.sales) AS total_sales FROM dataforai.superstore_orders o JOIN dataforai.superstore_people p ON o.region = p.region WHERE o.is_deleted = 0 AND p.is_deleted = 0 AND o.order_date >= '2025-01-01' AND o.order_date < '2026-01-01' GROUP BY o.region, p.regional_manager"
+            maxRows: 4
+            regionalManagerVocabulary: [Alice, Bob, Cathy, David]
+            total_sales_sum: 364660.4159
+            total_sales_sum_tolerance: 0.01
+      - turnIndex: 18
+        text: "查询 demo-mysql 连接 superstore_orders 表在 2025 年全年（2025-01-01 至 2025-12-31）销售总额前 10 行明细的订单号与客户名称。"
+        dependsOnTurn: 17
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=明细行（order_id、customer_name、sales）"
+          - "时间窗=2025-01-01..2025-12-31"
+          - "排序=sales 降序"
+          - "限制=前 10 行"
+        oracle:
+          kind: privacy
+          ref: "privacy:restricted-b-customer-name-mask"
+          expect:
+            hiddenFieldMustNotAppear: superstore_orders.customer_name
+            maskedValueMustNotLeak: true
+            legalFieldsUsable: [superstore_orders.order_id, superstore_orders.sales]
+            rowLimit: 10
+            orderBy: "sales DESC"
+            roleClass: restricted_B
+            sql: "SELECT order_id, customer_name, sales FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2025-01-01' AND order_date < '2026-01-01' ORDER BY sales DESC LIMIT 10"
+      - turnIndex: 19
+        text: "按客户名称拆分统计 demo-mysql 连接 superstore_orders 表在 2025 年全年（2025-01-01 至 2025-12-31）的销售总额。"
+        dependsOnTurn: 18
+        carriedContext:
+          - "连接=demo-mysql"
+          - "数据源=superstore_orders"
+          - "行过滤=is_deleted=0（active_rows 段）"
+          - "指标=total_sales（SUM(sales)）"
+          - "时间窗=2025-01-01..2025-12-31"
+          - "分组=customer_name（受限角色 B 遮蔽）"
+        oracle:
+          kind: privacy
+          ref: "privacy:restricted-b-customer-name-mask"
+          expect:
+            hiddenFieldMustNotAppear: superstore_orders.customer_name
+            maskedValueMustNotLeak: true
+            legalFieldsUsable: [superstore_orders.total_sales]
+            roleClass: restricted_B
+            sql: "SELECT customer_name, SUM(sales) AS total_sales FROM dataforai.superstore_orders WHERE is_deleted = 0 AND order_date >= '2025-01-01' AND order_date < '2026-01-01' GROUP BY customer_name"
+      - turnIndex: 20
+        text: "查询 lucy-ops 连接 ops_calls 表近 7 天的调用次数。"
+        dependsOnTurn: 19
+        carriedContext:
+          - "连接=lucy-ops（受限角色 B 不可见）"
+          - "数据源=ops_calls"
+          - "时间窗=近 7 天"
+          - "指标=调用次数（COUNT(*)）"
+          - "分组=无"
+        oracle:
+          kind: deny
+          ref: "deny:restricted-b-cross-connection"
+          expect:
+            d7a: true
+            requireToolsCall: true
+            reasonFamily: source_or_connection_forbidden
+            upstreamExecutions: 0
+            noMisleadingNextStep: true
+            roleClass: restricted_B
+            visibleConnections: [demo-mysql]
+            hiddenConnections: [lucy-ops]

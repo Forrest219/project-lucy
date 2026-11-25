@@ -1,0 +1,400 @@
+# P1-78 MCP inquiry end-to-end performance contract — scenario definitions only.
+# Spec: docs/specs/lucy-20261123-mcp-inquiry-performance-baseline-spec.md (§4.1, §4.1.1, §5)
+# Plan: docs/plans/lucy-20261123-mcp-inquiry-performance-baseline-plan.md Task 1
+#
+# This file holds REFERENCES ONLY (questionRef / oracleRef / legalControlRef).
+# Natural-language question text, oracle payloads and answer expectations are
+# forbidden here (lint-enforced); question semantics and oracles are owned by
+# the P1-54 question bank, long chains by the P1-79 question pack, and the
+# arrival model by scale-baseline §1.1. A scenario whose reference cannot be
+# resolved is marked blocked instead of inventing a local question.
+
+kind: mcp-inquiry-performance-contract
+schemaVersion: 1
+specRef: docs/specs/lucy-20261123-mcp-inquiry-performance-baseline-spec.md
+planRef: docs/plans/lucy-20261123-mcp-inquiry-performance-baseline-plan.md
+questionBankRef: scripts/e2e/contracts/mcp-upgrade-journeys.yaml
+scaleBaselineRef: docs/qa/uat/scale-baseline.md
+longFollowUpPackRef:
+  spec: docs/specs/lucy-20261123-long-followup-question-pack-spec.md
+  packDigest: sha256:41ce9d18a3a1508d21e909c2a1609eabaee644bfd7776e4b33b1404bb890a091
+
+scenarios:
+  # --- simple single-table (Spec §4.1 row 1) ---------------------------------
+  - scenarioId: SIMPLE_WARM
+    family: simple-single-table
+    questionRef: QB-BIZ-01
+    lane: agent+mcp
+    budgetClass: simple
+    ownerBudgetClass: simple-metric
+    cacheState: warm
+    concurrencyGroup: single
+    sampleFloors:
+      pr: { mcp: 20, agent: 3 }
+      formal: { mcp: 100, agent: 20 }
+    oracleRef: "baseline:demo-mysql.superstore_orders.gold"
+
+  # --- filter / time window (Spec §4.1 row 2) --------------------------------
+  - scenarioId: FILTER_GROUP_WARM
+    family: filter-time
+    questionRef: QB-BIZ-02a
+    lane: agent+mcp
+    budgetClass: simple
+    ownerBudgetClass: group-metric
+    cacheState: warm
+    concurrencyGroup: single
+    sampleFloors:
+      pr: { mcp: 20, agent: 3 }
+      formal: { mcp: 100, agent: 20 }
+    oracleRef: "sql:demo-mysql.region_order_count_profit_margin"
+
+  - scenarioId: FILTER_TIME_WARM
+    family: filter-time
+    questionRef: QB-BIZ-02c
+    lane: agent+mcp
+    budgetClass: simple
+    ownerBudgetClass: time-window
+    cacheState: warm
+    concurrencyGroup: single
+    sampleFloors:
+      pr: { mcp: 20, agent: 3 }
+      formal: { mcp: 100, agent: 20 }
+    oracleRef: "sql:demo-mysql.superstore_orders.sales_by_year_2025"
+
+  - scenarioId: FILTER_VALUE_WARM
+    family: filter-time
+    questionRef: QB-BIZ-02d
+    lane: agent+mcp
+    budgetClass: simple
+    ownerBudgetClass: filter-metric
+    cacheState: warm
+    concurrencyGroup: single
+    sampleFloors:
+      pr: { mcp: 20, agent: 3 }
+      formal: { mcp: 100, agent: 20 }
+    oracleRef: "sql:demo-mysql.superstore_orders.order_count_category_Furniture"
+
+  # --- same-session follow-ups (Spec §4.1 row 3) ------------------------------
+  - scenarioId: FOLLOW_WARM
+    family: follow-up
+    questionRef: QB-FOLLOW-01
+    lane: agent+mcp
+    budgetClass: simple
+    ownerBudgetClass: follow-up
+    cacheState: warm
+    concurrencyGroup: single
+    sameSession: true
+    sampleFloors:
+      pr: { mcp: 20, agent: 3 }
+      formal: { mcp: 100, agent: 20 }
+    oracleRef: "sql:demo-mysql.superstore_orders.sales_2025_11_12_mom"
+
+  - scenarioId: FOLLOW_REGION_WARM
+    family: follow-up
+    questionRef: QB-FOLLOW-02
+    lane: agent+mcp
+    budgetClass: simple
+    ownerBudgetClass: follow-up
+    cacheState: warm
+    concurrencyGroup: single
+    sameSession: true
+    sampleFloors:
+      pr: { mcp: 20, agent: 3 }
+      formal: { mcp: 100, agent: 20 }
+    oracleRef: "sql:demo-mysql.superstore_orders.sales_2025_11_by_region_margin"
+
+  - scenarioId: FOLLOW_JOIN_WARM
+    family: follow-up
+    questionRef: QB-FOLLOW-03
+    lane: agent+mcp
+    budgetClass: complex
+    ownerBudgetClass: follow-up-join
+    cacheState: warm
+    concurrencyGroup: single
+    sameSession: true
+    sampleFloors:
+      pr: { mcp: 20, agent: 3 }
+      formal: { mcp: 100, agent: 20 }
+    oracleRef: "sql:demo-mysql.superstore_declared_joins_path"
+
+  # --- declared multi-table join (Spec §4.1 row 4) ----------------------------
+  - scenarioId: JOIN_WARM
+    family: multi-table-join
+    questionRef: QB-JOIN-01
+    lane: agent+mcp
+    budgetClass: complex
+    ownerBudgetClass: multi-source-join
+    cacheState: warm
+    concurrencyGroup: single
+    sampleFloors:
+      pr: { mcp: 20, agent: 3 }
+      formal: { mcp: 100, agent: 20 }
+    oracleRef: "sql:demo-mysql.superstore_orders_people_by_region"
+
+  # --- multi-database (Spec §4.1 row 5) ---------------------------------------
+  - scenarioId: MULTI_DB_WARM
+    family: multi-db
+    questionRef: QB-DB-01
+    lane: agent+mcp
+    budgetClass: complex
+    ownerBudgetClass: multi-db
+    cacheState: warm
+    concurrencyGroup: single
+    sameSession: true
+    sampleFloors:
+      pr: { mcp: 20, agent: 3 }
+      formal: { mcp: 100, agent: 20 }
+    oracleRef: "sql:dual-conn.demo-mysql-and-lucy-ops-separate"
+
+  # --- denial + legal control (Spec §4.1 row 6, D16) --------------------------
+  - scenarioId: DENIAL_NO_QUERY_WARM
+    family: denial-with-legal-control
+    questionRef: QB-ACL-01
+    lane: mcp
+    budgetClass: denial
+    ownerBudgetClass: denial
+    cacheState: warm
+    concurrencyGroup: single
+    legalControlRef: QB-BIZ-01
+    sampleFloors:
+      pr: { mcp: 20, agent: 3 }
+      formal: { mcp: 100, agent: 20 }
+    oracleRef: "deny:tool-forbidden-paired-allow"
+
+  - scenarioId: DENIAL_READONLY_OPS_WARM
+    family: denial-with-legal-control
+    questionRef: QB-ACL-02a
+    lane: mcp
+    budgetClass: denial
+    ownerBudgetClass: denial
+    cacheState: warm
+    concurrencyGroup: single
+    legalControlRef: QB-OPS-01
+    sampleFloors:
+      pr: { mcp: 20, agent: 3 }
+      formal: { mcp: 100, agent: 20 }
+    oracleRef: "deny:demo-readonly-vs-lucy-ops"
+
+  - scenarioId: DENIAL_OPS_SUPERSTORE_WARM
+    family: denial-with-legal-control
+    questionRef: QB-ACL-02b
+    lane: mcp
+    budgetClass: denial
+    ownerBudgetClass: denial
+    cacheState: warm
+    concurrencyGroup: single
+    legalControlRef: QB-BIZ-01
+    sampleFloors:
+      pr: { mcp: 20, agent: 3 }
+      formal: { mcp: 100, agent: 20 }
+    oracleRef: "deny:demo-ops-vs-superstore"
+
+  - scenarioId: DENIAL_FROZEN_W0_WARM
+    family: denial-with-legal-control
+    questionRef: QB-ACL-02c
+    lane: mcp
+    budgetClass: denial
+    ownerBudgetClass: denial
+    cacheState: warm
+    concurrencyGroup: single
+    legalControlRef: QB-OPS-06
+    sampleFloors:
+      pr: { mcp: 20, agent: 3 }
+      formal: { mcp: 100, agent: 20 }
+    oracleRef: "deny:frozen-w0-ops-agents"
+
+  - scenarioId: DENIAL_UNKNOWN_JOIN_WARM
+    family: denial-with-legal-control
+    questionRef: QB-JOIN-02
+    lane: mcp
+    budgetClass: denial
+    ownerBudgetClass: denial
+    cacheState: warm
+    concurrencyGroup: single
+    legalControlRef: QB-BIZ-01
+    sampleFloors:
+      pr: { mcp: 20, agent: 3 }
+      formal: { mcp: 100, agent: 20 }
+    oracleRef: "deny:unknown-join-reference"
+
+  - scenarioId: DENIAL_CROSS_CONN_WARM
+    family: denial-with-legal-control
+    questionRef: QB-DB-02
+    lane: mcp
+    budgetClass: denial
+    ownerBudgetClass: denial
+    cacheState: warm
+    concurrencyGroup: single
+    legalControlRef: QB-DB-01
+    sampleFloors:
+      pr: { mcp: 20, agent: 3 }
+      formal: { mcp: 100, agent: 20 }
+    oracleRef: "deny:cross-connection-join"
+
+  # --- cold start / generation invalidation (Spec §4.1 row 7) -----------------
+  - scenarioId: COLD_SIMPLE
+    family: cold-start
+    questionRef: QB-BIZ-01
+    lane: agent+mcp
+    budgetClass: simple
+    ownerBudgetClass: simple-metric
+    cacheState: cold
+    concurrencyGroup: single
+    sampleFloors:
+      pr: { mcp: 20, agent: 3 }
+      formal: { mcp: 100, agent: 20 }
+    oracleRef: "baseline:demo-mysql.superstore_orders.gold"
+
+  - scenarioId: COLD_COMPLEX
+    family: cold-start
+    questionRef: QB-JOIN-01
+    lane: agent+mcp
+    budgetClass: complex
+    ownerBudgetClass: multi-source-join
+    cacheState: cold
+    concurrencyGroup: single
+    sampleFloors:
+      pr: { mcp: 20, agent: 3 }
+      formal: { mcp: 100, agent: 20 }
+    oracleRef: "sql:demo-mysql.superstore_orders_people_by_region"
+
+  # --- wide catalog on the global scale profile (Spec §4.1 row 8) -------------
+  - scenarioId: WIDE_SIMPLE
+    family: wide-catalog
+    questionRef: QB-BIZ-01
+    lane: agent+mcp
+    budgetClass: simple
+    ownerBudgetClass: simple-metric
+    cacheState: warm
+    concurrencyGroup: single
+    wideCatalog: true
+    requiresScaleProfile: mcp-perf
+    sampleFloors:
+      pr: { mcp: 20, agent: 3 }
+      formal: { mcp: 100, agent: 20 }
+    oracleRef: "baseline:demo-mysql.superstore_orders.gold"
+
+  - scenarioId: WIDE_COMPLEX
+    family: wide-catalog
+    questionRef: QB-JOIN-01
+    lane: agent+mcp
+    budgetClass: complex
+    ownerBudgetClass: multi-source-join
+    cacheState: warm
+    concurrencyGroup: single
+    wideCatalog: true
+    requiresScaleProfile: mcp-perf
+    sampleFloors:
+      pr: { mcp: 20, agent: 3 }
+      formal: { mcp: 100, agent: 20 }
+    oracleRef: "sql:demo-mysql.superstore_orders_people_by_region"
+
+  # --- concurrent fairness, 20/50 lanes judged separately (Spec §4.1 row 9) ---
+  - scenarioId: CONCURRENT_C20_SIMPLE
+    family: concurrent-fairness
+    questionRef: QB-BIZ-01
+    lane: agent+mcp
+    budgetClass: simple
+    ownerBudgetClass: simple-metric
+    cacheState: warm
+    concurrencyGroup: c20
+    roleFairness: true
+    waves: 3
+    sampleFloors:
+      pr: { mcp: 20, agent: 3 }
+      formal: { mcp: 100, agent: 20 }
+    oracleRef: "baseline:demo-mysql.superstore_orders.gold"
+
+  - scenarioId: CONCURRENT_C20_COMPLEX
+    family: concurrent-fairness
+    questionRef: QB-JOIN-01
+    lane: agent+mcp
+    budgetClass: complex
+    ownerBudgetClass: multi-source-join
+    cacheState: warm
+    concurrencyGroup: c20
+    roleFairness: true
+    waves: 3
+    sampleFloors:
+      pr: { mcp: 20, agent: 3 }
+      formal: { mcp: 100, agent: 20 }
+    oracleRef: "sql:demo-mysql.superstore_orders_people_by_region"
+
+  - scenarioId: CONCURRENT_C50_SIMPLE
+    family: concurrent-fairness
+    questionRef: QB-BIZ-01
+    lane: agent+mcp
+    budgetClass: simple
+    ownerBudgetClass: simple-metric
+    cacheState: warm
+    concurrencyGroup: c50
+    roleFairness: true
+    waves: 3
+    sampleFloors:
+      pr: { mcp: 20, agent: 3 }
+      formal: { mcp: 100, agent: 20 }
+    oracleRef: "baseline:demo-mysql.superstore_orders.gold"
+
+  - scenarioId: CONCURRENT_C50_COMPLEX
+    family: concurrent-fairness
+    questionRef: QB-JOIN-01
+    lane: agent+mcp
+    budgetClass: complex
+    ownerBudgetClass: multi-source-join
+    cacheState: warm
+    concurrencyGroup: c50
+    roleFairness: true
+    waves: 3
+    sampleFloors:
+      pr: { mcp: 20, agent: 3 }
+      formal: { mcp: 100, agent: 20 }
+    oracleRef: "sql:demo-mysql.superstore_orders_people_by_region"
+
+  # --- sustained pressure (Spec §4.1 row 10, D23) ------------------------------
+  # The MCP lane runs stage-control decomposition only; the Agent lane is the
+  # real-host judgment lane. Arrival-model parameters live only in
+  # scale-baseline §1.1 (arrivalModelRef) and are never copied here (D17/D23⑥).
+  - scenarioId: SOAK
+    family: soak
+    questionRef: [QB-BIZ-01, QB-JOIN-01]
+    lane: agent+mcp
+    budgetClass: per-turn
+    ownerBudgetClass: [simple-metric, multi-source-join]
+    cacheState: warm
+    concurrencyGroup: soak50
+    identityCount: 50
+    roleFairness: true
+    windows: { count: 12, seconds: 150, minEffectiveSeconds: 1800 }
+    drainMs: 120000
+    arrivalModelRef: "scale-baseline:section-1.1/mcp-perf"
+    longFollowUpChainRatio: 0.1
+    sampleFloors:
+      pr: { mcp: 20, agent: 3 }
+      formal: { mcp: 100, agent: 20 }
+    oracleRef:
+      - "baseline:demo-mysql.superstore_orders.gold"
+      - "sql:demo-mysql.superstore_orders_people_by_region"
+
+  # --- long follow-up chains (Spec §4.1 row 11, D20) ---------------------------
+  # Chain templates come from the P1-79 question pack (separate packDigest).
+  # The pack has landed: its digest is frozen below, so the scenario is no
+  # longer statically blocked. Whether it may run is decided at runtime by the
+  # consumer-side guard (pack present + digest match + chain coverage); a
+  # missing or mismatched pack yields BLOCKED, never a self-made question.
+  - scenarioId: LONG_FOLLOW
+    family: long-follow
+    questionRef: [QB-LONG-01, QB-LONG-02, QB-LONG-03]
+    lane: agent
+    budgetClass: per-turn
+    ownerBudgetClass: null
+    cacheState: warm
+    concurrencyGroup: soak50
+    sameProcessAndSession: true
+    minFollowUpTurns: 20
+    minTotalTurns: 21
+    chainInstanceRatio: 0.1
+    packDigest: sha256:41ce9d18a3a1508d21e909c2a1609eabaee644bfd7776e4b33b1404bb890a091
+    sampleFloors:
+      pr: { mcp: 20, agent: 3 }
+      formal: { mcp: 100, agent: 20 }
+    oracleRef: null
