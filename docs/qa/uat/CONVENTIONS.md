@@ -87,6 +87,7 @@
 | `UAT-COMPAT-*` | MCP 升级兼容底线与全真用户旅程（P1-53；含真实 Agent、实例基线与耗时双门禁） |
 | `UAT-MIP-*` | MCP 问询端到端性能基准与持续门禁（P1-78；真实 Agent＋MCP 双测程、按场景基线、全分母、持续压力 `SOAK` 与长追问 `LONG_FOLLOW`） |
 | `UAT-MCPHA-*` | MCP 数据面执行舱壁与跨 Agent 故障隔离（P1-82；跨 Token／Session、同连接与全局容量、真实释放、内存背压、WebUI 局部 503 与混压恢复） |
+| `UAT-MCCC-*` | 敏感元数据工具可见性对齐与拒绝修复引导（P1-88；`tools/list` 隐藏、`sensitive_metadata_forbidden` 修复提示与 `nextTools` 身份过滤、逃生链成交、安全回归） |
 | `UAT-R0` | 环境门禁（各套件共用可引用） |
 
 自动化脚本 ID（`E2E-*`／`VERIFY-*`／`UT-*`）可写在用例「自动化指针」栏，但 UAT 编号保持稳定，便于跨 Agent 引用。

@@ -1567,6 +1567,15 @@ v1.0。Codex CLI终稿确权及代码终审通过；增量开发授权已获得�
 - 状态：**S5｜v1.0。功能合同已收口（2026-11-22）。SC-01–SC-15＋实现 CR PASS；全仓 MIG 另授权。本条收口不表示可上线。**
 - 授权边界：开发授权已获得（2026-11-22）；落地范围限伞 Spec §8 白名单；阶段全仓迁移（MIG）另授权。
 
+## REQ-030-109：敏感元数据工具可见性对齐与拒绝修复引导
+
+- **来源**：2026-11-25 现场 Debug 日志 `inbox/lucy-ksc-finreport-error-log.md`（`discover_data`／`entity_details` 4 次误调均触发 `sensitive_metadata_forbidden:kx`，拒绝后无逃生引导）；对抗性评审 `inbox/20261125-1733-mccc-spec-adversarial-review.md`。
+- **期望**：`tools/list` 与 `initialize` 阶段 `visibleTools` 对 `policy.sensitiveMetadataTools` 执行与 `authorizeAndRewrite()`（`acl.ts:3436`）一致的 fail-closed 门禁；`sensitive_metadata_forbidden:*` 拒绝修复载荷区分「全局搜索受限 vs 已授权来源可查」、按 `allowedToolNames` 过滤 `nextTools`、保留 B15 闭环、零来源无死路文案、来源列表不重复拼接。
+- **范围**：仅 `webui/server/proxy/acl.ts` 与 `webui/server/proxy/mcp-proxy.ts`；不改 KTX 源码、不改第三方客户端、不改 Tool `inputSchema`（OQ-1 剥离待取证）。
+- **优先级**：P1 纯 MCP 主路径可用性；不入核心分母。
+- **状态**：S2｜v1.0。终稿已确权（委托人 2026-11-25 明示「审阅通过……授权定稿」）；开发未授权；测试台 NOT RUN；≠ 功能合同收口；≠ 可上线。
+- **挂接**：[总账 P1-88](lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [Spec](../specs/lucy-20261125-mcp-client-compat-and-sensitive-meta-visibility-spec.md) · [Plan](lucy-20261125-mcp-client-compat-and-sensitive-meta-visibility-plan.md) · [UAT](../qa/uat/suites/mcp-client-compat-sensitive-meta/suite.md)。
+
 ## REQ-030-103：MCP 数据面执行舱壁与跨 Agent 故障隔离
 
 - **来源**：2026-11-24 架构探查及 P1-75 `f5e4b14d` 压力跑次。WebUI 与 MCP Proxy 共用 Node.js 进程、事件循环和同步 SQLite；`lucy_query` 的现有限流按 Agent＋Token 计数，缺少整个 Agent 跨 Token／Session、全局与分连接的执行舱壁；混压中 Web 展示读 503 与独立 MCP 查询 30 秒截止共存。

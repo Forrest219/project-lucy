@@ -4,6 +4,7 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [敏感元数据工具可见性对齐与拒绝修复引导 Plan](lucy-20261125-mcp-client-compat-and-sensitive-meta-visibility-plan.md) | P1-88／REQ-030-109。S2｜v1.0。终稿已确权（委托人 2026-11-25 明示「审阅通过……授权定稿」）；开发未授权；测试台 NOT RUN；不入核心分母；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。配对 [Spec](../specs/lucy-20261125-mcp-client-compat-and-sensitive-meta-visibility-spec.md) · [UAT](../qa/uat/suites/mcp-client-compat-sensitive-meta/suite.md)。 |
 | [MCP 数据面执行舱壁与跨 Agent 故障隔离 Plan](lucy-20261124-mcp-data-plane-isolation-ha-plan.md) | P1-82／REQ-030-103。S4｜v0.2；终稿已确权（委托人 2026-11-24）；开发授权已获得；实现已落地（SC-06 未实现）待验收，测试台 NOT RUN。≠ 可上线。配对 [Spec](../specs/lucy-20261124-mcp-data-plane-isolation-ha-spec.md) · [UAT](../qa/uat/suites/mcp-data-plane-ha/suite.md)。 |
 | [假活状态自愈与探针一致性 Plan](lucy-20261124-stuck-state-self-healing-plan.md) | P1-81／REQ-030-102。S4｜v0.2；终稿已确权（委托人 2026-11-24）；开发授权已获得；实现已落地待验收，测试台 NOT RUN。≠ 可上线。配对 [Spec](../specs/lucy-20261124-stuck-state-self-healing-spec.md) · [UAT](../qa/uat/suites/self-healing/suite.md)。 |
 | [启用表范围表清单三态诚实展示 Plan](lucy-20261123-enabled-tables-load-state-honesty-plan.md) | P1-80／REQ-030-101。S5｜v1.0；功能合同已收口（2026-11-23）。测试台 PASS；[收口记录](../reviews/2026-11-23-p180-s5-closure-record.md)。≠ 可上线。配对 [Spec](../specs/lucy-20261123-enabled-tables-load-state-honesty-spec.md) · [UAT](../qa/uat/suites/enabled-tables-load-state/suite.md)。 |
