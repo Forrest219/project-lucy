@@ -138,7 +138,7 @@ Every Lucy release should record:
 
 ```yaml
 lucy:
-  version: "0.30.0"
+  version: "0.35.0"
   git_commit: <git-sha>
   docker_image: <registry/image:tag>
 ktx:

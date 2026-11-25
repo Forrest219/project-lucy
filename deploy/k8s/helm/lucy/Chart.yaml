@@ -38,6 +38,8 @@ annotations:
   category: DataAgent
   licenses: Apache-2.0
   artifacthub.io/changes: |
+    - kind: changed
+      description: Lucy product version (appVersion) is 0.35.0, aligned with branch lucy-v0.35. Chart package version stays 0.2.10 because this is a product-version alignment, not a new install package. Bundled KTX stays 0.16.0.
     - kind: added
       description: Chart 0.2.10 whitelists optional env.LUCY_INFERRED_MAINTAINER (empty = omit; set "off" to pause background inferred-turn rebuild for P1-47 delivery mitigation). appVersion stays 0.30.0. Bundled KTX stays 0.16.0.
     - kind: changed

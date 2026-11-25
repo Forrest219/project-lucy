@@ -35,7 +35,7 @@ description: >-
 
 1. 显式 `A..B` / `A...B` / PR URL → 用该范围
 2. 「这次」「刚改的」且工作区有未提交变更 → 未提交 + 最近相关提交（分开标注）
-3. 当前分支相对默认基线（`main` / `master` / `lucy-v0.30` 等，以仓库实际为准）→ `merge-base...HEAD`
+3. 当前分支相对默认基线（`main` / `master` / `lucy-v0.35` 等，以仓库实际为准）→ `merge-base...HEAD`
 4. 无法唯一确定 → 先问一句范围，再继续
 
 至少跑：`git status -sb`、`git log --oneline -n 15`、`git diff --stat`（及选定范围的 `git diff`）。需要时再读周边文件。

@@ -272,8 +272,8 @@ S5 的状态行不得含「未收口」显式短语表（含 `≠功能已收口
 
 | 角色 | 文件 | 回答什么 |
 |---|---|---|
-| **执行总账（SOT）** | 该产品线的功能清单池（现行 `0.30.0`／`lucy-v0.30` → [`docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md`](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)） | 本产品线工作项**全集**与跟进序 |
-| **需求正文** | 该产品线需求池（现行 → [`docs/plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md`](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)） | 缺口来源与正文；与总账 REQ 双向可追 |
+| **执行总账（SOT）** | 该产品线的功能清单池（现行 `0.35.0`／`lucy-v0.35` 暂沿用 → [`docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md`](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)，待单独立项 `0.35` 总账） | 本产品线工作项**全集**与跟进序 |
+| **需求正文** | 该产品线需求池（现行 `0.35.0`／`lucy-v0.35` 暂沿用 → [`docs/plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md`](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)） | 缺口来源与正文；与总账 REQ 双向可追 |
 | **单条功能合同现值** | 该功能 Spec 头部「状态」行 | 这一条承诺现在到哪一步（见上一小节）；总账「跟进状态」是它的**镜像**，须同句 |
 
 下一产品线开线时，必须另立同角色总账（可新文件，但职责不变）。未开线的想法仍先入对应需求池／总账草稿，不得无行改运行代码。
@@ -439,7 +439,7 @@ S5 的状态行不得含「未收口」显式短语表（含 `≠功能已收口
 | 11 | **功能 Spec 含「闭口层级」**。层级只能是「功能合同」或「发布取证」，并写明本条承诺、本条出口、不在本条出口、上线关系。功能合同写「本条收口不表示可上线」；发布取证写「本条通过不表示各模块无问题」 | 本文件「功能闭口与发布取证」 | `lint:spec-docs`（规则 `close-layer`） |
 | 12 | **已作废的状态句不得裸写**。「未执行且不排期」「未执行且未排期」「不可交付 UAT」若出现，作废标记必须紧贴该句。「未作废」和同一行里另一件事的「作废」不算。本规则不走基线豁免 | 本文件「功能闭口与发布取证」 | `lint:spec-docs`（规则 `stale-status`） |
 | 13 | **触发的 Spec 写交互合同或豁免**。触发、豁免、文法以本 Spec 为准；机器门禁是 `lint:spec-docs` | [`lucy-20261107-ui-interaction-contract-gate-spec.md`](../specs/lucy-20261107-ui-interaction-contract-gate-spec.md) | `lint:spec-docs`（规则 `interaction-contract`） |
-| 14 | **挂在已开线产品线上的新功能／修复：先入该产品线执行总账（SOT）并回写需求池**。无总账行不得改运行代码，也不得写进 `user-facing`／Fixes 主张交付。「不入核心分母」须写在总账行属性上，不得省略入账 | 本文件「产品线执行总账（SOT）」；现行 `0.30` 总账见 [`lucy-20261107-lucy-0-30-feature-inventory-pool.md`](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) | 无（人工／出门差集补录） |
+| 14 | **挂在已开线产品线上的新功能／修复：先入该产品线执行总账（SOT）并回写需求池**。无总账行不得改运行代码，也不得写进 `user-facing`／Fixes 主张交付。「不入核心分母」须写在总账行属性上，不得省略入账 | 本文件「产品线执行总账（SOT）」；现行 `0.35.0`／`lucy-v0.35` 暂沿用总账见 [`lucy-20261107-lucy-0-30-feature-inventory-pool.md`](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) | 无（人工／出门差集补录） |
 | 15 | **端到端三台账**：需求台＝总账；开发台＝Spec 头部状态；测试台＝`docs/qa/uat/INDEX.md`。主张 UAT／客户场景复现必须挂测试台；勾连与缺口见 [`e2e-ledger.md`](e2e-ledger.md)；可选 `node scripts/uat/check-e2e-ledger.mjs` | 本文件「端到端三台账」 | `scripts/uat/check-e2e-ledger.mjs`（文件／Suite 存在性） |
 | 16 | **主路径可用性优先**：新功能／门禁不得把最终用户主路径变成无逃生不可用；Spec／UAT 须同时覆盖「约束生效」与「合法用户仍可用」（含纯 MCP 部署实况）。只验「拦住」不得收口 | 本文件「第一性原理：主路径可用性优先」 | 无（评审／出门人工；错题举一反三） |
 | 17 | **新功能 Spec 必含「受影响画像」小节**：4 画像（问数方／治理方／运维方／管理层）逐行判定 `↑`／`＝`／`↓`，写明变更前后体验与**可核对依据**；判 `↓` 必须写补偿路径并挂验收编号，否则不得收口。事实源与模板见 [`user-personas.md`](user-personas.md) | 本文件「Review 要求」＋ [`user-personas.md`](user-personas.md) §4／§5 | 无（评审／出门人工；`lint:spec-docs` 的 `persona-impact` 规则属第二阶段，**未实现**） |
