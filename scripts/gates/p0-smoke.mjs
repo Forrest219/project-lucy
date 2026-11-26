@@ -262,6 +262,8 @@ async function dockerSmoke() {
   const lucyGitSha = resolveLucyGitSha();
   const lucyGitDirty = String(process.env.LUCY_GIT_DIRTY ?? "0").trim() === "1" ? "1" : "0";
   const composeEnv = {
+    LUCY_GIT_SHA: gitSha,
+    LUCY_GIT_DIRTY: gitDirty,
     LUCY_WEBUI_HOST_PORT: dockerWebPort,
     LUCY_PROXY_HOST_PORT: dockerProxyPort,
     LUCY_ALLOW_PLACEHOLDER_KTX: "1",

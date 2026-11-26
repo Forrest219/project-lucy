@@ -55,7 +55,30 @@ kubectl, helm, and git.
 EOF
 }
 
+# On failure, dump cluster state into the evidence dir BEFORE the cluster is deleted.
+# Without this a helm --wait timeout leaves no trace of why the pod never became ready.
+collect_failure_diagnostics() {
+  local out="${EVIDENCE_ROOT:-}/failure-diagnostics"
+  [[ -n "${EVIDENCE_ROOT:-}" ]] || return 0
+  kubectl cluster-info >/dev/null 2>&1 || return 0
+  mkdir -p "${out}"
+  log "gate failed: collecting cluster diagnostics into ${out}"
+  kubectl get pods,pvc,events -A -o wide >"${out}/cluster-state.txt" 2>&1 || true
+  local ns pod
+  for ns in $(kubectl get ns -o name 2>/dev/null | sed 's|namespace/||' | grep "^${NAMESPACE_PREFIX:-lucy-gate}" || true); do
+    kubectl -n "${ns}" describe pods >"${out}/${ns}-describe-pods.txt" 2>&1 || true
+    kubectl -n "${ns}" get events --sort-by=.lastTimestamp >"${out}/${ns}-events.txt" 2>&1 || true
+    for pod in $(kubectl -n "${ns}" get pods -o name 2>/dev/null || true); do
+      pod="${pod#pod/}"
+      kubectl -n "${ns}" logs "${pod}" --all-containers --tail=500 >"${out}/${ns}-${pod}.log" 2>&1 || true
+      kubectl -n "${ns}" logs "${pod}" --all-containers --previous --tail=500 >"${out}/${ns}-${pod}.previous.log" 2>&1 || true
+    done
+  done
+}
+
 cleanup() {
+  local rc=$?
+  if [[ "${rc}" -ne 0 ]]; then collect_failure_diagnostics || true; fi
   if [[ -n "${UPGRADE_VALUES}" && -f "${UPGRADE_VALUES}" ]]; then
     rm -f "${UPGRADE_VALUES}"
   fi

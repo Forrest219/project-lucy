@@ -5,6 +5,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { ensureWebuiBootstrapToken } from "./ensure-webui-bootstrap-token.mjs";
+import { runMcpMainpathSmoke } from "./p0-mcp-mainpath-smoke.mjs";
 
 const project = process.env.LUCY_DEMO_COMPOSE_PROJECT ?? "lucy-p0-demo";
 const webPort = process.env.LUCY_DEMO_WEBUI_HOST_PORT ?? "55176";
@@ -449,6 +450,25 @@ async function main() {
     assertRegionSales("cli sl query", parsedQuery.headers, parsedQuery.rows, baseline);
     console.log("[p0-demo-smoke] cli sl query region totals match baseline");
     await verifyProxyAgentPath(baseline);
+    const mainpathEvidence = await runMcpMainpathSmoke({
+      proxyUrl: `http://127.0.0.1:${proxyPort}/mcp`,
+      token: demoToken,
+      connectionId: "demo-mysql",
+      sourceName: "superstore_orders",
+      baseline,
+      budgets: {
+        maxWarmupMs: 5_000,
+        maxHandshakeP50Ms: 1_000,
+        maxHandshakeP95Ms: 2_500,
+        maxCatalogMs: 3_000
+      },
+      out: "inbox/p0-demo-mcp-mainpath-evidence.json"
+    });
+    console.log(
+      `[p0-demo-smoke] MCP main-path gate PASS: checks=${mainpathEvidence.checks.length}`
+      + ` handshakeP50=${mainpathEvidence.latencies.concurrentHandshake.p50Ms}ms`
+      + ` catalog=${mainpathEvidence.latencies.catalogMs}ms`
+    );
     await probeOpsDemoAgent();
     await run("docker", composeArgs(["ps"]));
     console.log("\n[p0-demo-smoke] PASS");

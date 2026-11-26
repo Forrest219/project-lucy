@@ -18,7 +18,7 @@ const REGISTRY_PATH = path.join(REPO_ROOT, "scripts/gates/root-test-registry.jso
 const registry = JSON.parse(readFileSync(REGISTRY_PATH, "utf8"));
 const entries = registry.entries;
 
-const workflowText = ["lucy-ci.yml", "lucy-release.yml", "lucy-typecheck.yml"]
+const workflowText = ["lucy-ci.yml", "lucy-release.yml"]
   .map((name) => readFileSync(path.join(REPO_ROOT, ".github/workflows", name), "utf8"))
   .join("\n");
 

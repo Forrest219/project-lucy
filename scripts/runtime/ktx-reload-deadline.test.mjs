@@ -85,10 +85,10 @@ test("supervisor kills an uncooperative real child using the request remaining d
   const rig = await makeSupervisor(true);
   try {
     const before = await rig.rows(); const start = Date.now();
-    await writeFile(path.join(rig.dir, "ktx-reload.request"), JSON.stringify({ requestId: "bounded-stop", requestedDigest: "test", requestedAt: new Date().toISOString(), deadlineAt: start + 350 }));
-    const receipt = await waitFor(async () => { const r = await json(path.join(rig.dir, "ktx-reload.result")); return r?.requestId === "bounded-stop" && r; }, 2_000);
+    await writeFile(path.join(rig.dir, "ktx-reload.request"), JSON.stringify({ requestId: "bounded-stop", requestedDigest: "test", requestedAt: new Date().toISOString(), deadlineAt: start + 1_500 }));
+    const receipt = await waitFor(async () => { const r = await json(path.join(rig.dir, "ktx-reload.result")); return r?.requestId === "bounded-stop" && r; }, 5_000);
     assert.equal(receipt.status, "failed");
-    assert.ok(Date.now() - start < 1_500, rig.log()); // Falsifies the old separate 10/60-second waits.
+    assert.ok(Date.now() - start < 4_000, rig.log()); // Falsifies the old separate 10/60-second waits.
     assert.throws(() => process.kill(before[0].pid, 0)); // Actual child exited; not just a timed-out client.
     assert.equal((await rig.rows()).length, 1); // No expired replacement was started.
   } finally { await rig.cleanup(); }

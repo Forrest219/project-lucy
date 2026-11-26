@@ -54,3 +54,5 @@ webui/playwright.real.config.ts
 **/.env.*.local
 webui/config/access.yaml
 webui/config/admins.yaml
+.githooks
+

@@ -1,13 +1,13 @@
-// Contract tests for the split of the CI workflows (Spec §1.1, §4.1, §4.2, §5, §6).
+// Contract tests for the CI workflows (Spec v1.1 §1.1, §4.1, §4.2, §5, §6).
 //
-// These assertions are the machine-checkable form of the split contract:
+// These assertions are the machine-checkable form of the workflow contract:
 //   - the daily workflow keeps the job ids the branch protection names,
 //   - the daily aggregate only reads needs.<job>.result and always runs,
 //   - the release workflow no longer has a daily trigger and owns packages:write alone,
-//   - the type check lives in its own workflow and never decides the daily workflow,
+//   - the type check (`webui-typecheck`) runs in the daily workflow and is gated by ci-required,
 //   - a pull request run and a push run of the same sha never cancel each other.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, it } from "node:test";
 import { parse } from "yaml";
@@ -32,11 +32,9 @@ const stripYamlComments = (text) =>
 
 const daily = readWorkflow("lucy-ci.yml");
 const release = readWorkflow("lucy-release.yml");
-const typecheck = readWorkflow("lucy-typecheck.yml");
 
 const dailyText = stripYamlComments(daily.text);
 const releaseText = stripYamlComments(release.text);
-const typecheckText = stripYamlComments(typecheck.text);
 
 const needsOf = (workflow, name) => {
   const needs = workflow.jobs[name]?.needs ?? [];
@@ -154,10 +152,37 @@ describe("daily workflow (lucy-ci.yml)", () => {
     assert.match(body, /git fetch[^\n]*KTX_UPSTREAM_SHA/);
   });
 
-  it("does not contain the type check, and does not decide it", () => {
-    assert.ok(!/tsc --noEmit/.test(dailyText), "the type check must live in its own workflow");
-    assert.ok(!/typecheck/.test(dailyText), "the daily workflow must not reference the type check");
-    assert.ok(!Object.keys(daily.workflow.jobs).some((name) => /typecheck/.test(name)));
+  it("runs webui-typecheck inside lucy-ci.yml and gates it in ci-required", () => {
+    const typeJob = daily.workflow.jobs["webui-typecheck"];
+    assert.ok(typeJob, "the daily workflow must define webui-typecheck");
+    assert.ok(needsOf(daily.workflow, "ci-required").includes("webui-typecheck"), "ci-required must depend on webui-typecheck");
+    assert.ok(!existsSync(path.join(REPO_ROOT, ".github/workflows/lucy-typecheck.yml")), "standalone lucy-typecheck.yml must be removed after folding into lucy-ci.yml");
+  });
+
+  it("runs event-loop-gate inside lucy-ci.yml and gates it in ci-required", () => {
+    const loopJob = daily.workflow.jobs["event-loop-gate"];
+    assert.ok(loopJob, "the daily workflow must define event-loop-gate");
+    assert.ok(needsOf(daily.workflow, "ci-required").includes("event-loop-gate"), "ci-required must depend on event-loop-gate");
+    assert.match(jobRuns(loopJob), /npm run gate:event-loop/);
+  });
+
+  it("audits production dependencies for high/critical vulnerabilities and forbids dual lockfiles", () => {
+    const specJobRuns = jobRuns(daily.workflow.jobs["spec-and-webui"]);
+    const auditMatches = specJobRuns.match(/npm audit --omit=dev --audit-level=high/g) ?? [];
+    assert.equal(auditMatches.length, 2, "spec-and-webui must run npm audit for both root and webui");
+    assert.ok(!existsSync(path.join(REPO_ROOT, "pnpm-lock.yaml")), "stale pnpm-lock.yaml must not coexist with package-lock.json");
+  });
+
+  it("runs webui-pr-smoke inside lucy-ci.yml and gates it in ci-required", () => {
+    const smokeJob = daily.workflow.jobs["webui-pr-smoke"];
+    assert.ok(smokeJob, "the daily workflow must define webui-pr-smoke");
+    assert.ok(needsOf(daily.workflow, "ci-required").includes("webui-pr-smoke"), "ci-required must depend on webui-pr-smoke");
+    assert.match(jobRuns(smokeJob), /npx playwright test --grep @pr-smoke --project=chromium/);
+  });
+
+  it("runs server-sync-io gate and shellcheck inside lucy-ci.yml", () => {
+    assert.match(jobRuns(daily.workflow.jobs["spec-and-webui"]), /npm run lint:server-sync-io/);
+    assert.match(jobRuns(daily.workflow.jobs["workflow-contracts"]), /shellcheck -S error/);
   });
 });
 
@@ -230,44 +255,28 @@ describe("release workflow (lucy-release.yml)", () => {
   });
 });
 
-describe("type check workflow (lucy-typecheck.yml)", () => {
-  it("is a separate workflow with the same triggers as the daily workflow", () => {
-    const dailyOn = daily.workflow.on ?? daily.workflow[true];
-    const typeOn = typecheck.workflow.on ?? typecheck.workflow[true];
-    assert.deepEqual(typeOn.push.branches, dailyOn.push.branches);
-    assert.ok(typeOn.pull_request !== undefined);
-    assert.ok(typeOn.workflow_dispatch !== undefined);
-  });
+describe("type check job (lucy-ci.yml webui-typecheck)", () => {
+  const typeJob = daily.workflow.jobs["webui-typecheck"];
+  const typeJobText = jobRuns(typeJob ?? {});
 
   it("runs an explicit tsc --noEmit and reports the diagnostic count", () => {
-    assert.match(typecheckText, /tsc --noEmit --incremental false -p webui\/tsconfig\.json/);
-    assert.match(typecheckText, /diagnostics:/);
-    for (const [name, job] of Object.entries(typecheck.workflow.jobs)) {
-      assert.ok(!("continue-on-error" in job), `${name} must not be allowed to continue on error`);
-      for (const step of job.steps ?? []) {
-        assert.ok(!("continue-on-error" in step), `${name}: a step must not be allowed to continue on error`);
-      }
+    assert.match(typeJobText, /tsc --noEmit --incremental false -p webui\/tsconfig\.json/);
+    assert.match(typeJobText, /diagnostics:/);
+    assert.ok(!("continue-on-error" in typeJob), "webui-typecheck must not be allowed to continue on error");
+    for (const step of typeJob.steps ?? []) {
+      assert.ok(!("continue-on-error" in step), "webui-typecheck: a step must not be allowed to continue on error");
     }
-    assert.ok(!/allowlist|baseline-ignore/i.test(typecheckText), "there is no diagnostic allowlist");
-  });
-
-  it("cannot change the daily workflow's conclusion", () => {
-    assert.ok(!/needs:.*typecheck/.test(dailyText));
-    assert.ok(!Object.keys(daily.workflow.jobs).some((name) => /typecheck/.test(name)));
-    assert.equal(typecheck.workflow.permissions.contents, "read");
-    assert.ok(!/packages:\s*write/.test(typecheckText));
+    assert.ok(!/allowlist|baseline-ignore/i.test(typeJobText), "there is no diagnostic allowlist");
   });
 
   it("runs the same flags as the local npm entry point", () => {
     const webuiPackage = JSON.parse(readFileSync(path.join(REPO_ROOT, "webui/package.json"), "utf8"));
     const script = webuiPackage.scripts.typecheck;
     assert.ok(script, "webui/package.json has no typecheck script");
-    // The npm script runs with cwd=webui, the workflow with the repo root. Only the flags
-    // themselves have to agree.
     const flagsOf = (text) =>
       [...text.matchAll(/--noEmit|--incremental\s+false|-p\s+\S+/g)].map((match) => match[0].replace(/\s+/g, " "));
-    const workflowCommand = /webui\/node_modules\/\.bin\/tsc[^\n]*/.exec(typecheckText)?.[0];
-    assert.ok(workflowCommand, "the workflow does not run the webui tsc binary");
+    const workflowCommand = /webui\/node_modules\/\.bin\/tsc[^\n]*/.exec(typeJobText)?.[0];
+    assert.ok(workflowCommand, "webui-typecheck does not run the webui tsc binary");
     const workflowFlags = flagsOf(workflowCommand).filter((flag) => !flag.startsWith("-p "));
     const scriptFlags = flagsOf(script).filter((flag) => !flag.startsWith("-p "));
     assert.deepEqual(workflowFlags, scriptFlags, "the workflow command and the npm script drifted apart");

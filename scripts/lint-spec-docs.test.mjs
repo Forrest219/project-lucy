@@ -875,6 +875,80 @@ test("inventory-stage：缺前缀／与 Spec 阶段不一致失败；对齐通�
   );
 });
 
+test("inventory-stage：常青需求池格式（稳定 ID REQ-0113+／概念类型／加粗 ID 不再跳过）", () => {
+  const backlog = [
+    "| 稳定 ID | 历史别名 | 类型 | 优先级 | 标题 | 漏斗阶段 | 目标版本 | 关联文档 |",
+    "|---|---|---|---|---|---|---|---|",
+    "| REQ-0113 | — | 需求 | P1 | 新稳定 ID 示例 | S2｜ | v0.35.0 | [Spec](../specs/lucy-fixture-new-spec.md) |",
+    "| **REQ-0114** | — | 概念 | P2 | 加粗 ID 仍须校验 | S4｜ | — | [Spec](../specs/lucy-fixture-bold-spec.md) |"
+  ].join("\n");
+  const files = {
+    "docs/backlog/fixture.md": backlog,
+    "docs/specs/lucy-fixture-new-spec.md": "| 阶段 | S2 |\n| 状态 | S2｜终稿已确权 |\n",
+    "docs/specs/lucy-fixture-bold-spec.md": "| 阶段 | S1 |\n| 状态 | S1｜草案 |\n"
+  };
+  const result = checkInventoryStageMirror({
+    inventoryFiles: ["docs/backlog/fixture.md"],
+    readText: (rel) => files[rel],
+    exists: (rel) => Object.prototype.hasOwnProperty.call(files, rel)
+  });
+  assert.equal(result.length, 1);
+  assert.match(result[0].message, /REQ-0114.*S4 ≠ Spec .* S1/);
+
+  files["docs/specs/lucy-fixture-bold-spec.md"] = "| 阶段 | S4 |\n| 状态 | S4｜待验收 |\n";
+  assert.deepEqual(
+    checkInventoryStageMirror({
+      inventoryFiles: ["docs/backlog/fixture.md"],
+      readText: (rel) => files[rel],
+      exists: (rel) => Object.prototype.hasOwnProperty.call(files, rel)
+    }),
+    []
+  );
+});
+
+test("inventory-stage：按表头列名定位列号，增删重排列不错位；缺失必需列立即报错", () => {
+  const reordered = [
+    "| 稳定 ID | 标题 | 关联文档 | 新增备注 | 漏斗阶段 |",
+    "|---|---|---|---|---|",
+    "| REQ-0115 | 列重排仍可精准校验 | [Spec](../specs/lucy-fixture-reordered-spec.md) | 备注 | S3｜ |"
+  ].join("\n");
+  const files = {
+    "docs/backlog/reordered.md": reordered,
+    "docs/specs/lucy-fixture-reordered-spec.md": "| 阶段 | S1 |\n| 状态 | S1｜草案 |\n"
+  };
+  const mismatch = checkInventoryStageMirror({
+    inventoryFiles: ["docs/backlog/reordered.md"],
+    readText: (rel) => files[rel],
+    exists: (rel) => Object.prototype.hasOwnProperty.call(files, rel)
+  });
+  assert.equal(mismatch.length, 1);
+  assert.match(mismatch[0].message, /REQ-0115.*S3 ≠ Spec .* S1/);
+
+  files["docs/specs/lucy-fixture-reordered-spec.md"] = "| 阶段 | S3 |\n| 状态 | S3｜开发中 |\n";
+  assert.deepEqual(
+    checkInventoryStageMirror({
+      inventoryFiles: ["docs/backlog/reordered.md"],
+      readText: (rel) => files[rel],
+      exists: (rel) => Object.prototype.hasOwnProperty.call(files, rel)
+    }),
+    []
+  );
+
+  const missingCol = [
+    "| 稳定 ID | 标题 | 优先级 | 关联文档 |",
+    "|---|---|---|---|",
+    "| REQ-0116 | 缺少漏斗阶段列 | P1 | [Spec](../specs/lucy-fixture-reordered-spec.md) |"
+  ].join("\n");
+  files["docs/backlog/missing-col.md"] = missingCol;
+  const headerFail = checkInventoryStageMirror({
+    inventoryFiles: ["docs/backlog/missing-col.md"],
+    readText: (rel) => files[rel],
+    exists: (rel) => Object.prototype.hasOwnProperty.call(files, rel)
+  });
+  assert.equal(headerFail.length, 1);
+  assert.match(headerFail[0].message, /表头缺少必需列.*漏斗阶段/);
+});
+
 test("SC-09／SC-10 生产名单：grandfather 内无口令无标记不被误伤；失败只限授权缺阶段类", () => {
   const listed = new Set(
     JSON.parse(readFileSync(new URL("../docs/governance/spec-status-funnel-grandfather.json", import.meta.url), "utf8")).files

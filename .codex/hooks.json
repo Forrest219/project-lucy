@@ -6,7 +6,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.tool_input.file_path // empty' | { read -r f; case \"$f\" in */CLAUDE.md|*/AGENTS.md|*/ktx.yaml|*/semantic-layer/*) jq -n --arg msg \"⚠️ 修改 $f 属于治理文件（CLAUDE.md/AGENTS.md/ktx.yaml/semantic-layer），按 docs/governance/DEVELOPMENT.md 应先走 Plan Mode（EnterPlanMode）。\" '{systemMessage: $msg}' ;; esac; } 2>/dev/null"
+            "command": "bash \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)/scripts/hooks/agent-edit-guard.sh\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$(git rev-parse --show-toplevel 2>/dev/null || pwd)/scripts/hooks/agent-post-edit-check.sh\""
           }
         ]
       }

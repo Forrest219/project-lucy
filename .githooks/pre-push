@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# Repository pre-push hook (stock macOS bash 3.2 compatible).
+# Installed via: npm run hooks:install  (git config core.hooksPath .githooks)
+# Emergency bypass: LUCY_SKIP_HOOKS=1 git push ...
+
+set -euo pipefail
+
+if [ "${LUCY_SKIP_HOOKS:-0}" = "1" ]; then
+  echo "[pre-push] LUCY_SKIP_HOOKS=1 — skipping pre-push checks."
+  exit 0
+fi
+
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# Collect changed files relative to upstream (fallback to HEAD~1 if no upstream)
+if git rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+  CHANGED_FILES="$(git diff --name-only '@{u}..HEAD' || true)"
+elif git rev-parse HEAD~1 >/dev/null 2>&1; then
+  CHANGED_FILES="$(git diff --name-only HEAD~1..HEAD || true)"
+else
+  CHANGED_FILES="$(git ls-files || true)"
+fi
+
+if [ -z "$CHANGED_FILES" ]; then
+  exit 0
+fi
+
+echo "[pre-push] checking outgoing changes..."
+
+run_typecheck=0
+run_workflow_contracts=0
+run_skip_tests=0
+run_handbook_lints=0
+
+while IFS= read -r f; do
+  [ -z "$f" ] && continue
+  case "$f" in
+    webui/src/*|webui/server/*|webui/tsconfig*.json|webui/package.json)
+      run_typecheck=1
+      ;;
+  esac
+  case "$f" in
+    .github/workflows/*|scripts/gates/*)
+      run_workflow_contracts=1
+      ;;
+  esac
+  case "$f" in
+    scripts/lint/*)
+      run_skip_tests=1
+      ;;
+  esac
+  case "$f" in
+    docs/SYSTEM_HANDBOOK.md|webui/docs/06-navigation-ia.md|VERSION)
+      run_handbook_lints=1
+      ;;
+  esac
+done <<EOF
+$CHANGED_FILES
+EOF
+
+if [ "$run_typecheck" = "1" ]; then
+  echo "[pre-push] running npm run typecheck..."
+  npm run --silent typecheck
+fi
+
+if [ "$run_workflow_contracts" = "1" ]; then
+  echo "[pre-push] running npm run test:ci-workflow-contracts..."
+  npm run --silent test:ci-workflow-contracts
+  if command -v actionlint >/dev/null 2>&1; then
+    echo "[pre-push] running actionlint..."
+    actionlint -config-file .github/actionlint.yaml .github/workflows/*.yml
+  else
+    echo "[pre-push] info: actionlint not installed locally (will still run in CI)."
+  fi
+fi
+
+if [ "$run_skip_tests" = "1" ]; then
+  npm run --silent lint:skip-ledger:test
+  npm run --silent lint:skip-ledger
+fi
+
+if [ "$run_handbook_lints" = "1" ]; then
+  npm run --silent lint:handbook-baseline
+  npm run --silent lint:handbook-coverage
+  npm run --silent lint:handbook-tool-surface
+  npm run --silent lint:handbook-anchors
+fi
+
+echo "[pre-push] PASS"

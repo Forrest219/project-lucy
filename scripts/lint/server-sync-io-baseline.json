@@ -1,0 +1,17 @@
+{
+  "_comment": "Ratchet baseline for blocking Node.js synchronous FS/process I/O in webui/server/ (non-test .ts). Counts may only shrink; any new file or increase fails CI. Note: better-sqlite3 synchronous queries are guarded by event-loop-gate.",
+  "counts": {
+    "webui/server/admin/audit-export-v2.ts": 3,
+    "webui/server/admin/trust-boundary-inventory.ts": 4,
+    "webui/server/eval/db.ts": 1,
+    "webui/server/eval/runner.ts": 1,
+    "webui/server/lucy-version.ts": 1,
+    "webui/server/ops/concepts-adapter.ts": 7,
+    "webui/server/proxy/audit.ts": 2,
+    "webui/server/runtime/ops-step-journal.ts": 19,
+    "webui/server/runtime/self-heal.ts": 4,
+    "webui/server/security/audit-secret-scrub.ts": 7,
+    "webui/server/security/instance.ts": 1,
+    "webui/server/security/store.ts": 11
+  }
+}

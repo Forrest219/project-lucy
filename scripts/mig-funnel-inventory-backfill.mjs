@@ -1,5 +1,11 @@
 #!/usr/bin/env node
 /**
+ * [HISTORICAL / ARCHIVED — 0.30 一次性迁移脚本]
+ * 本脚本仅用于 2026-11-22 对旧 `docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md`
+ * 做 P1-73 MIG 一次性回填。自 2026-11-25 起需求台 SOT 已切至常青需求池
+ * `docs/backlog/README.md` 与 `docs/backlog/archive.md`，旧 0.30 清单池已只读冻结，
+ * 请勿再次执行本脚本。保留文件仅作历史追溯。
+ *
  * P1-73 MIG + 总账阶段前缀回填（委托人 2026-11-22 授权）。
  *
  * 范围：0.30 执行总账主表行 + 其主 Spec（docs/specs）及配对 Plan。

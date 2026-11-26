@@ -587,6 +587,26 @@ export function scanRepo() {
     }
   }
   violations.push(...checkInventoryStageMirror());
+  const governanceBacklogFiles = ["docs/backlog/README.md", "docs/backlog/archive.md"];
+  const releasesDir = path.join(repoRoot, "docs/releases");
+  if (existsSync(releasesDir)) {
+    for (const name of readdirSync(releasesDir).filter((item) => /^v.+-scope\.md$/.test(item)).sort()) {
+      governanceBacklogFiles.push(path.posix.join("docs/releases", name));
+    }
+  }
+  for (const relPath of governanceBacklogFiles) {
+    if (!existsSync(path.join(repoRoot, relPath))) continue;
+    const text = read(relPath);
+    if (!headerHas(text, "文档类型|版本") || !headerHas(text, "状态") || !headerHas(text, "授权边界")) {
+      violations.push({
+        file: relPath,
+        rule: "metadata",
+        message: "常青需求池／发版范围单头部元数据缺少「文档类型 / 版本」「状态」或「授权边界」"
+      });
+    }
+    violations.push(...collectStatusVocabViolations(relPath, text));
+    violations.push(...collectStaleStatusViolations(relPath, text));
+  }
   violations.push(...collectDesignSystemViolations());
   for (const relPath of STALE_STATUS_EXTRA) {
     if (!existsSync(path.join(repoRoot, relPath))) continue;
@@ -893,10 +913,11 @@ export function checkStatusFunnel(specRel, specText, planText, options = {}) {
 }
 
 const INVENTORY_STAGE_FILES = [
-  "docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md"
+  "docs/backlog/README.md",
+  "docs/backlog/archive.md"
 ];
-const INVENTORY_ID_RE = /^P(?:0-[A-Z]|[012]-\d+)$/;
-const INVENTORY_STAGE_PREFIX = /^(S[1-5]|X_DEF|X_SUP|X_REL)[｜|]/;
+const INVENTORY_ID_RE = /^(?:REQ-\d{4,}|REQ-030-\d{3}(?:[／/]\d{3})?|REQ-(?:TE|CAL)-\d{3}|P(?:0-[A-Z]|[012]-\d+))$/;
+const INVENTORY_STAGE_PREFIX = /^(S[1-5]|X_DEF|X_SUP|X_REL)(?:[｜|]|$)/;
 
 /** 总账「跟进状态」单元格的阶段码前缀；无前缀返回 null。 */
 export function inventoryStagePrefix(statusCellText) {
@@ -935,27 +956,51 @@ export function inventoryPrimarySpecRels(linksCell) {
   return [...new Set(fallback.map((item) => item.rel))];
 }
 
+const INVENTORY_STATUS_HEADER_RE = /^(?:漏斗阶段|阶段|跟进状态)$/;
+const INVENTORY_LINKS_HEADER_RE = /^(?:关联文档|Spec[／/]Plan)$/;
+
+function splitTableRow(line) {
+  const parts = line.trim().split("|");
+  if (parts[0].trim() === "") parts.shift();
+  if (parts.length && parts[parts.length - 1].trim() === "") parts.pop();
+  return parts.map((cell) => cell.trim());
+}
+
 function inventoryTableRows(text) {
   const lines = text.split("\n");
-  let started = false;
+  let mode = null;
+  let statusCol = -1;
+  let linksCol = -1;
   const rows = [];
   for (const line of lines) {
-    if (!started) {
-      if (line.startsWith("| 清单 ID")) started = true;
+    if (!mode) {
+      if (line.startsWith("| 稳定 ID")) mode = "backlog";
+      else if (line.startsWith("| 清单 ID")) mode = "legacy";
+      else continue;
+      const headers = splitTableRow(line).map((cell) => cell.replace(/\*/g, "").trim());
+      statusCol = headers.findIndex((h) => INVENTORY_STATUS_HEADER_RE.test(h));
+      linksCol = headers.findIndex((h) => INVENTORY_LINKS_HEADER_RE.test(h));
+      if (statusCol < 0 || linksCol < 0) {
+        const missing = [];
+        if (statusCol < 0) missing.push("「漏斗阶段 / 跟进状态」");
+        if (linksCol < 0) missing.push("「关联文档 / Spec／Plan」");
+        return {
+          rows: [],
+          headerError: `需求表表头缺少必需列 ${missing.join("、")}（禁止静默按硬编码列号错位解析）`
+        };
+      }
       continue;
     }
     if (line.startsWith("#")) break;
     if (!line.trimStart().startsWith("|")) continue;
-    const parts = line.trim().split("|");
-    if (parts[0].trim() === "") parts.shift();
-    if (parts.length && parts[parts.length - 1].trim() === "") parts.pop();
-    const cells = parts.map((cell) => cell.trim());
-    if (cells.length < 8) continue;
-    if (cells[0].startsWith("---") || cells[0] === "清单 ID") continue;
-    if (!INVENTORY_ID_RE.test(cells[0])) continue;
-    rows.push({ id: cells[0], status: cells[6], links: cells[7] ?? "" });
+    const cells = splitTableRow(line);
+    if (cells.length <= Math.max(statusCol, linksCol)) continue;
+    const rawId = cells[0].replace(/\*/g, "").trim();
+    if (rawId.startsWith("---") || rawId === "清单 ID" || rawId === "稳定 ID") continue;
+    if (!INVENTORY_ID_RE.test(rawId)) continue;
+    rows.push({ id: rawId, status: cells[statusCol], links: cells[linksCol] ?? "" });
   }
-  return rows;
+  return { rows, headerError: null };
 }
 
 /**
@@ -972,9 +1017,13 @@ export function checkInventoryStageMirror(options = {}) {
       violations.push({ file: invRel, rule: "inventory-stage", message: "执行总账文件不存在" });
       continue;
     }
-    const rows = inventoryTableRows(readText(invRel));
+    const { rows, headerError } = inventoryTableRows(readText(invRel));
+    if (headerError) {
+      violations.push({ file: invRel, rule: "inventory-stage", message: headerError });
+      continue;
+    }
     if (rows.length === 0) {
-      violations.push({ file: invRel, rule: "inventory-stage", message: "未解析到清单表行（须含「| 清单 ID」表头与 P*- 行）" });
+      violations.push({ file: invRel, rule: "inventory-stage", message: "未解析到需求表行（须含「| 稳定 ID」或「| 清单 ID」表头与合法 ID 行）" });
       continue;
     }
     for (const row of rows) {

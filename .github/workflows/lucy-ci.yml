@@ -1,15 +1,14 @@
 # Lucy CI — the daily verification workflow.
 #
-# Contract: docs/specs/lucy-ci-restoration-spec.md v1.0 §4.1 and §6.
+# Contract: docs/specs/lucy-ci-restoration-spec.md v1.1 §4.1 and §6.
 #
 # Scope boundaries:
 #   - This workflow is DAILY verification only. It carries no customer publish path, no
 #     registry write, no self-hosted runner and no model call.
 #   - The customer release path stays in .github/workflows/lucy-release.yml and is entered
 #     only by a `v*` tag or an explicit manual dispatch with mode=customer-candidate.
-#   - The type check is a THIRD workflow (.github/workflows/lucy-typecheck.yml). Its failure
-#     never changes this workflow's conclusion and it is not part of ci-required
-#     (Spec §1.1 item 2).
+#   - The type check (`webui-typecheck`) runs as a required parallel job in this workflow
+#     and is aggregated into ci-required now that the tsc diagnostic baseline is zero.
 #
 # TEMPORARY ENTRY — the `lucy-v0.35` push trigger below exists only while lucy-v0.35 is the
 # integration branch. DELETE this push trigger when lucy-v0.35 is merged into main or stops
@@ -58,9 +57,18 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
       - run: npm run smoke:p0:upgrade-lucy:test
       - run: npm run lint:version
       - run: npm run lint:release-ledger
+      - run: npm run lint:yaml-alias
+      - run: npm run lint:skip-ledger
+      - run: npm run lint:server-sync-io
+      - run: npm run lint:e2e-ledger
+      - run: npm run lint:handbook-baseline
+      - run: npm run lint:handbook-coverage
+      - run: npm run lint:handbook-tool-surface
+      - run: npm run lint:handbook-anchors
       - run: npm run smoke:p0:delivery-isolation
       - name: Materialize private access.yaml stub for lint
         run: |
@@ -83,7 +91,11 @@ jobs:
       - run: cp ktx.yaml.example ktx.yaml
       - run: npm ci
         working-directory: webui
+      - run: npm audit --omit=dev --audit-level=high
+        working-directory: webui
       - run: npm run lint:terminology
+        working-directory: webui
+      - run: npm run lint:url-driven-input
         working-directory: webui
       - run: npm test
         working-directory: webui
@@ -116,6 +128,8 @@ jobs:
           echo "${ACTIONLINT_SHA256}  /tmp/${ARCHIVE}" | sha256sum --check --strict
           tar -xzf "/tmp/${ARCHIVE}" -C /tmp actionlint
           /tmp/actionlint -color -config-file .github/actionlint.yaml .github/workflows/*.yml
+      - name: ShellCheck (error severity on hooks and runtime scripts)
+        run: shellcheck -S error .githooks/pre-commit .githooks/pre-push scripts/hooks/*.sh scripts/runtime/docker-entrypoint.sh scripts/runtime/docker-healthcheck.sh
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
@@ -325,6 +339,97 @@ jobs:
       - run: npm ci
       - run: npm run smoke:p0:postgres-demo
 
+  webui-typecheck:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: webui/package-lock.json
+      - run: npm ci
+        working-directory: webui
+      - name: Type check (tsc --noEmit)
+        run: |
+          set -uo pipefail
+          rc=0
+          webui/node_modules/.bin/tsc --noEmit --incremental false -p webui/tsconfig.json > typecheck-report.txt 2>&1 || rc=$?
+          echo "tsc exit code: ${rc}"
+          echo "diagnostics: $(grep -c ': error TS' typecheck-report.txt || true)"
+          echo "files with diagnostics: $(grep ': error TS' typecheck-report.txt | sed 's/: error TS.*//' | sed 's/(.*//' | sort -u | wc -l)"
+          cat typecheck-report.txt
+          exit "${rc}"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: typecheck-report
+          path: typecheck-report.txt
+          retention-days: 14
+          if-no-files-found: warn
+
+  event-loop-gate:
+    # Tier-1 daily event-loop & DISPLAY_SNAPSHOT_BUSY regression gate (SC-13/SC-14).
+    # Self-contained in-process SQLite scale fixture (~70-90s, no Docker/Playwright/privileged drop_caches).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: webui/package-lock.json
+      - run: npm ci
+        working-directory: webui
+      - name: Event-loop relief & livez p99/max gate
+        run: npm run gate:event-loop
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: event-loop-relief-report
+          path: inbox/event-loop-relief-perf.json
+          retention-days: 14
+          if-no-files-found: warn
+
+  webui-pr-smoke:
+    # L1 browser smoke (@pr-smoke, Chromium): zero Docker / zero real KTX.
+    # Verifies core routes open with zero pageerror and no route-chunk-error fallback.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: webui/package-lock.json
+      - run: npm ci
+        working-directory: webui
+      - name: Install Chromium for Playwright PR smoke
+        run: npx playwright install --with-deps chromium
+        working-directory: webui
+      - name: Prepare disposable E2E fixture
+        run: npm run e2e:fixture
+        working-directory: webui
+      - name: Run WebUI @pr-smoke browser suite
+        run: npx playwright test --grep @pr-smoke --project=chromium
+        working-directory: webui
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: failure()
+        with:
+          name: webui-pr-smoke-report
+          path: webui/playwright-report
+          retention-days: 7
+          if-no-files-found: ignore
+
   mcp-inquiry-performance-pr:
     # P1-78 Task 6 step 1 — PR tier of the MCP inquiry performance gate (Spec §7).
     # Budget freeze is in force (baseline-freeze brief 2026-11-26, option 2), so PR
@@ -366,6 +471,9 @@ jobs:
     runs-on: ubuntu-24.04
     needs:
       - spec-and-webui
+      - webui-typecheck
+      - event-loop-gate
+      - webui-pr-smoke
       - workflow-contracts
       - k8s-static
       - docker-smoke
@@ -388,5 +496,5 @@ jobs:
       - name: Every daily job must have succeeded
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
-          EXPECTED_JOBS: "spec-and-webui,workflow-contracts,k8s-static,docker-smoke,k8s-upgrade-gate,business-eval-catalog,headless-config,ktx-diff-audit,demo-db-smoke,postgres-demo-db-smoke"
+          EXPECTED_JOBS: "spec-and-webui,webui-typecheck,event-loop-gate,webui-pr-smoke,workflow-contracts,k8s-static,docker-smoke,k8s-upgrade-gate,business-eval-catalog,headless-config,ktx-diff-audit,demo-db-smoke,postgres-demo-db-smoke,mcp-inquiry-performance-pr"
         run: node scripts/gates/ci-required-gate.mjs --needs-json "$NEEDS_JSON" --expect "$EXPECTED_JOBS"
