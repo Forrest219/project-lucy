@@ -604,10 +604,14 @@ def parse_args(argv=None):
                         help='Explicit stop-path calibration; can never qualify a formal run')
     parser.add_argument('--keep-resources', action='store_true',
                         help='Retain task resources for diagnosis; never a completed cleanup claim')
+    parser.add_argument('--sentinel', action='store_true',
+                        help='Run scripts/uat/stability-sentinel.mjs --mode=gate as companion gate during soak')
+    parser.add_argument('--sentinel-interval-ms', type=int, default=15000,
+                        help='Sampling interval in ms for stability-sentinel companion gate')
     args = parser.parse_args(argv)
     numeric = ['seconds', 'cycle_seconds', 'mcp_concurrency', 'mcp_timeout',
                'mutation_timeout', 'drain_seconds', 'collect_seconds',
-               'audit_settle_seconds', 'io_seconds', 'recovery_seconds', 'cleanup_seconds','contract_recovery_seconds','contract_recovery_concurrency']
+               'audit_settle_seconds', 'io_seconds', 'recovery_seconds', 'cleanup_seconds','contract_recovery_seconds','contract_recovery_concurrency','sentinel_interval_ms']
     for name in numeric:
         if not math.isfinite(getattr(args, name)) or getattr(args, name) <= 0:
             parser.error(name + ' must be finite and positive')
@@ -989,6 +993,25 @@ def main(argv=None):
     rig.mcp_timeout, rig.mutation_timeout = args.mcp_timeout, args.mutation_timeout
     scheduler = ArrivalLedger(emit, stop)
     started = None
+    sentinel_proc = None
+    sentinel_out = root / 'stability-sentinel-summary.json'
+    sentinel_log = root / 'stability-sentinel.jsonl'
+    def stop_sentinel():
+        nonlocal sentinel_proc
+        if sentinel_proc is None:
+            return
+        proc = sentinel_proc
+        sentinel_proc = None
+        try:
+            if proc.poll() is None:
+                proc.send_signal(signal.SIGINT)
+            proc.wait(timeout=30)
+        except Exception:
+            proc.kill()
+            proc.wait(timeout=5)
+        sentinel_summary = json.loads(sentinel_out.read_text()) if sentinel_out.exists() else None
+        summary['stabilitySentinel'] = sentinel_summary
+        summary['stabilitySentinelPassed'] = (proc.returncode == 0 and bool(sentinel_summary and sentinel_summary.get('verdict') == 'PASS'))
     summary = {'startedAt': fx.now(), 'status': 'RUNNING', 'mode': args.mode,
                'runnerSha256': hashlib.sha256(pathlib.Path(__file__).read_bytes()).hexdigest(),
                'baseSha256': hashlib.sha256(BASE.read_bytes()).hexdigest(),
@@ -1126,6 +1149,26 @@ for p in pathlib.Path('/proc').iterdir():
                        naturalStartedMonotonic=started, naturalDeadlineMonotonic=natural_end, mainPid=pid)
         summary['windows'].append({'name': 'natural', 'start': summary['soakStartedAt'], 'plannedEnd': summary['naturalPlannedFinishedAt'], 'cpuProfiler': False})
         save_summary()
+        if args.sentinel:
+            # B7: 复用隔离栈管理员口令（0600 临时文件，随 rig.private 一起清理），覆盖 /api/auth/login 红线。
+            sentinel_pw = rig.private / 'sentinel-admin-password'
+            sentinel_pw.write_text(rig.password)
+            os.chmod(sentinel_pw, 0o600)
+            # N8: 无 gateway 时直接探 rig.mcp，而非 rig.web。
+            mcp_target = (rig.gateway.url if rig.gateway else rig.mcp).rstrip('/') + '/mcp'
+            sentinel_cmd = [
+                'node', str(ROOT / 'scripts/uat/stability-sentinel.mjs'),
+                '--mode=gate',
+                '--base-url=' + (rig.gateway.url if rig.gateway else rig.web),
+                '--mcp-url=' + mcp_target,
+                '--admin-id=uat_owner',
+                '--password-file=' + str(sentinel_pw),
+                '--interval-ms=' + str(args.sentinel_interval_ms),
+                '--out=' + str(sentinel_out),
+                '--log=' + str(sentinel_log),
+                '--quiet',
+            ]
+            sentinel_proc = subprocess.Popen(sentinel_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
         scheduler.start(started, args.seconds)
         minute = -1
         while time.monotonic() < natural_end:
@@ -1145,6 +1188,7 @@ for p in pathlib.Path('/proc').iterdir():
         summary['naturalObservedSeconds'] = min(args.seconds, time.monotonic()-started)
         summary['soakFinishedAt'] = datetime.datetime.fromtimestamp(natural_epoch+summary['naturalObservedSeconds'],datetime.timezone.utc).isoformat()
         summary['windows'][0]['end'] = summary['soakFinishedAt']
+        stop_sentinel()
         scheduler.end=min(scheduler.end,time.monotonic())
         stop.set()
         event('natural-stop-arrivals', elapsedSeconds=time.monotonic()-started)
@@ -1296,7 +1340,8 @@ for p in pathlib.Path('/proc').iterdir():
         passed = (not summary.get('controlledStop') and enough and accounted and not main_failures and
                   summary['budgetPassed'] and summary['auditFixtureScalePassed'] and bool(audit and audit.get('complete')) and
                   (not args.io_control or summary.get('ioControlPassed')) and
-                  (not args.audit_evidence_copy or summary.get('auditEvidence',{}).get('copied')))
+                  (not args.audit_evidence_copy or summary.get('auditEvidence',{}).get('copied')) and
+                  (not args.sentinel or bool(summary.get('stabilitySentinelPassed'))))
         summary['status'] = qualification_status(args.mode, passed)
         summary['uncovered'] = ['full F61 matrix', 'F62 three-category saturation', 'full F63 lifecycle', 'original high-tier R-CAV', 'customer root cause']
         if not args.io_control:
@@ -1326,6 +1371,8 @@ for p in pathlib.Path('/proc').iterdir():
         cleanup_started=time.monotonic();cleanup_deadline=cleanup_started+args.cleanup_seconds
         summary['cleanupStartedAt']=fx.now()
         stop.set()
+        # B6: 异常/超时中断路径同样收敛伴随哨兵，杜绝孤儿进程与证据缺失。
+        stop_sentinel()
         summary['workersAtCleanup']=scheduler.finish(min(5,max(0,cleanup_deadline-time.monotonic())))
         if args.keep_resources:
             summary['cleanup']={'complete':False,'reason':'explicit keep-resources','app':rig.app,'db':rig.db,'network':rig.network,'volume':rig.data_volume}

@@ -658,3 +658,46 @@ test("profile：默认档不受 profile 失败项影响——去掉 perf 身份�
   assert.equal(code, 0, out);
   assert.ok(!out.includes("MCP-PERF"), out);
 });
+
+// ---- customer-stability profile（§1.2 客户超标稳定性基线档） -------------------
+
+test("customer-stability profile：满足 >=10 连接 / >=30 Schema / >=3500 表 / <=2C 2Gi 时 exit 0", async () => {
+  const deps = greenDeps({
+    env: {},
+    running: () => true,
+    mysql: (sql) => {
+      if (sql.includes("information_schema.tables")) return "2900";
+      if (sql.includes("information_schema.columns")) return "1000";
+      if (sql.includes("dataforai.superstore_orders")) return "1000";
+      if (sql.includes("dataforai.superstore_returns")) return "60";
+      if (sql.includes("dataforai.superstore_people")) return "4";
+      throw new Error(`unexpected mysql: ${sql}`);
+    },
+    readKtxConnectionIds: () => Array.from({ length: 10 }, (_, i) => `conn-${i + 1}`),
+    countConfiguredSchemas: () => 30,
+    containerResourceLimits: () => ({ memoryBytes: 2 * 1024 * 1024 * 1024, nanoCpus: 2 * 1e9 }),
+  });
+  const { code, out } = await runMain(["--profile", "customer-stability"], deps);
+  assert.equal(code, 0, out);
+  assert.match(rowOf(out, "CUST-STAB 数据连接数"), /\| PASS/);
+  assert.match(rowOf(out, "CUST-STAB Schema 数"), /\| PASS/);
+  assert.match(rowOf(out, "CUST-STAB 跨源表合计"), /\| PASS/);
+  assert.match(rowOf(out, "CUST-STAB 容器内存上限"), /\| PASS/);
+  assert.match(rowOf(out, "CUST-STAB 容器 CPU 上限"), /\| PASS/);
+});
+
+test("customer-stability profile：连接/Schema/表数不足或未限制容器内存 CPU 时 exit 1", async () => {
+  const deps = greenDeps({
+    env: {},
+    readKtxConnectionIds: () => ["conn-1", "conn-2"],
+    countConfiguredSchemas: () => 25,
+    containerResourceLimits: () => ({ memoryBytes: 0, nanoCpus: 0 }),
+  });
+  const { code, out } = await runMain(["--profile=customer-stability"], deps);
+  assert.equal(code, 1, out);
+  assert.match(rowOf(out, "CUST-STAB 数据连接数"), /\| FAIL/);
+  assert.match(rowOf(out, "CUST-STAB Schema 数"), /\| FAIL/);
+  assert.match(rowOf(out, "CUST-STAB 跨源表合计"), /\| FAIL/);
+  assert.match(rowOf(out, "CUST-STAB 容器内存上限"), /\| FAIL/);
+  assert.match(rowOf(out, "CUST-STAB 容器 CPU 上限"), /\| FAIL/);
+});

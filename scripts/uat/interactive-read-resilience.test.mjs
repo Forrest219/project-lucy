@@ -6,11 +6,15 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+  A_CLASS_BUSY_REASONS,
   CALIBRATION_CASES,
+  DEFAULT_PLAN,
   buildFakeRun,
   calibrateJudges,
   createRecorder,
+  displayFromHeaders,
   fireSyncPoint,
+  judgeDisplay,
   judgeRun,
   nearestRank,
   peakInFlight,
@@ -272,4 +276,183 @@ test("CLI: calibrate exits 0; judge maps verdict to exit code", () => {
   assert.equal(spawnSync(process.execPath, [SCRIPT, "judge", badFile]).status, 1);
 
   assert.equal(spawnSync(process.execPath, [SCRIPT]).status, 64);
+});
+
+// ---------- v1.4 扩容（X1）：降级读取 200、等待预算 10 s、08-B 新口径 ----------
+
+test("v1.4: good run counts grace/stale/pending from the receipts; fresh 200s are counted separately", () => {
+  const res = judgeRun(buildFakeRun());
+  assert.equal(res.verdict, "PASS", JSON.stringify(res.findings));
+  const d = res.stats.display;
+  assert.equal(d.stale, 1);
+  assert.equal(d.pending, 1);
+  assert.equal(d.grace, 0);
+  assert.equal(d.degraded, 2);
+  assert.equal(d.fresh, 100, "50 agents × 2 sync points; the 403 denial is not a served read");
+  assert.equal(d.byStep.roster_summary.stale, 1);
+  assert.equal(d.byStep.sources.pending, 1);
+});
+
+test("v1.4: display markers are read from the frozen response headers (plain object or Headers)", () => {
+  const fromObject = displayFromHeaders({
+    "X-Lucy-Display-State": "Stale", "X-Lucy-Display-Age-Ms": "125000", "X-Lucy-Display-Generation": "L3", "X-Lucy-Display-Prolonged": "1"
+  });
+  assert.deepEqual(fromObject, { state: "stale", ageMs: 125000, generation: "L3", pendingMs: undefined, prolonged: true });
+  const fromHeaders = displayFromHeaders(new Headers({ "x-lucy-display-state": "pending", "x-lucy-display-pending-ms": "3000" }));
+  assert.equal(fromHeaders.state, "pending");
+  assert.equal(fromHeaders.pendingMs, 3000);
+  assert.equal(displayFromHeaders({}), null);
+  assert.equal(displayFromHeaders(undefined), null);
+});
+
+test("v1.4: the recorder derives the display marker from raw headers", () => {
+  let t = 0;
+  const rec = createRecorder({ now: () => (t += 10), runId: "h" });
+  const h = rec.begin({ step: "sources", agentId: "ui" });
+  h.sent();
+  const done = h.finish({ httpStatus: 200, headers: { "x-lucy-display-state": "grace", "x-lucy-display-age-ms": "30000" } });
+  assert.equal(done.display.state, "grace");
+  const res = judgeDisplay(rec.receipts);
+  assert.equal(res.stats.grace, 1);
+  assert.deepEqual(res.findings, []);
+});
+
+test("v1.4: an A-class 503 as first response is a FAIL and is attributed to class A (08-B old 503-is-fine criterion is gone)", () => {
+  const run = buildFakeRun();
+  Object.assign(run.receipts.find((x) => x.id === "D-pending"), { httpStatus: 503, busyReason: "build_wait_timeout", display: undefined });
+  const res = judgeRun(run);
+  assert.equal(res.verdict, "FAIL");
+  const first = find(res, "first_attempt_503");
+  assert.equal(first.length, 1);
+  assert.equal(first[0].class, "A");
+  assert.equal(find(res, "case_08b_busy_503").length, 1);
+  assert.ok(A_CLASS_BUSY_REASONS.includes("build_wait_timeout"));
+});
+
+test("v1.4: an A-class 503 that is retried to success is still a FAIL (retry does not offset)", () => {
+  const run = buildFakeRun();
+  Object.assign(run.receipts.find((x) => x.id === "D-pending"), { httpStatus: 503, busyReason: "reconcile_failed", display: undefined });
+  run.receipts.push({
+    id: "D-pending-r2", logicalId: "D-pending", attempt: 2, step: "sources", agentId: "ui-admin", sentMs: 9000, clientDoneMs: 9300, httpStatus: 200
+  });
+  const res = judgeRun(run);
+  assert.equal(res.verdict, "FAIL");
+  assert.equal(find(res, "initial_503_retry_success").length, 1);
+});
+
+test("v1.4: 08-B expects fresh/grace or marked stale/pending 200 — each of those passes", () => {
+  for (const display of [null, { state: "grace", ageMs: 30_000 }, { state: "stale", ageMs: 150_000 }, { state: "pending", pendingMs: 4_000 }]) {
+    const run = buildFakeRun();
+    const r = run.receipts.find((x) => x.id === "D-pending");
+    r.hasData = false;
+    if (display) r.display = display; else delete r.display;
+    assert.equal(judgeRun(run).verdict, "PASS", JSON.stringify(display));
+  }
+});
+
+test("v1.4: build wait budget is 10 s (was 4 s): 4.006 s passes, exactly 10 s passes, above 10 s fails", () => {
+  assert.equal(DEFAULT_PLAN.buildWaitBudgetMs, 10_000);
+  const withMs = (ms) => {
+    const run = buildFakeRun();
+    const r = run.receipts.find((x) => x.id === "D-pending");
+    r.clientDoneMs = r.sentMs + ms;
+    return judgeRun(run);
+  };
+  assert.equal(withMs(4_006).verdict, "PASS");
+  assert.equal(withMs(10_000).verdict, "PASS");
+  const over = withMs(10_001);
+  assert.equal(over.verdict, "FAIL");
+  assert.deepEqual(find(over, "build_wait_exceeded").map((f) => f.limitMs), [10_000]);
+  // a plan may still tighten the budget explicitly
+  const tight = buildFakeRun();
+  tight.plan.buildWaitBudgetMs = 4_000;
+  assert.equal(find(judgeRun(tight), "build_wait_exceeded").length, 1);
+});
+
+test("v1.4: pending must carry no data; stale/grace must carry an age; D_max needs Prolonged", () => {
+  const withData = buildFakeRun();
+  withData.receipts.find((x) => x.id === "D-pending").observed = { sqlValue: 0 };
+  delete withData.receipts.find((x) => x.id === "D-pending").hasData;
+  assert.equal(find(judgeRun(withData), "pending_with_data").length, 1);
+
+  const noAge = buildFakeRun();
+  delete noAge.receipts.find((x) => x.id === "D-stale").display.ageMs;
+  const blocked = judgeRun(noAge);
+  assert.equal(blocked.verdict, "BLOCKED");
+  assert.ok(find(blocked, "missing_evidence").some((f) => f.field === "display.ageMs"));
+
+  // I-4: pending without hasData (and no sqlValue) is missing evidence, never a pass
+  const noHasData = buildFakeRun();
+  delete noHasData.receipts.find((x) => x.id === "D-pending").hasData;
+  const noHasDataRes = judgeRun(noHasData);
+  assert.equal(noHasDataRes.verdict, "BLOCKED");
+  assert.ok(find(noHasDataRes, "missing_evidence").some((f) => f.field === "hasData"));
+});
+
+test("I-3: Prolonged is judged by continuous degraded serve time, not by data age", () => {
+  // first stale response already has a huge data age (post-grace): no Prolonged needed
+  const aged = buildFakeRun();
+  aged.receipts.find((x) => x.id === "D-stale").display.ageMs = 200_000;
+  assert.equal(judgeRun(aged).verdict, "PASS");
+
+  const stale = (id, doneMs, display) => ({
+    id, logicalId: id, attempt: 1, step: "roster_summary", agentId: "ui-admin",
+    sentMs: doneMs - 400, clientDoneMs: doneMs, httpStatus: 200, display: { state: "stale", ageMs: 150_000, ...display }
+  });
+  // streak 7.4 s → 187.4 s (> D_max + tolerance) without Prolonged → FAIL; with it → PASS
+  const late = buildFakeRun();
+  late.receipts.push(stale("D-stale-late", 7_400 + 180_000 + 3_000, { prolonged: false }));
+  assert.equal(find(judgeRun(late), "prolonged_flag_missing").length, 1);
+  late.receipts.find((x) => x.id === "D-stale-late").display.prolonged = true;
+  const ok = judgeRun(late);
+  assert.equal(ok.verdict, "PASS");
+  assert.equal(ok.stats.display.prolonged, 1);
+
+  // inside D_max + tolerance: not required
+  const near = buildFakeRun();
+  near.receipts.push(stale("D-stale-near", 7_400 + 181_500, { prolonged: false }));
+  assert.equal(judgeRun(near).verdict, "PASS");
+
+  // a fresh response resets the streak
+  const reset = buildFakeRun();
+  reset.receipts.push({ id: "D-fresh", logicalId: "D-fresh", attempt: 1, step: "roster_summary", agentId: "ui-admin", sentMs: 100_000, clientDoneMs: 100_300, httpStatus: 200 });
+  reset.receipts.push(stale("D-stale-after-fresh", 290_000, { prolonged: false }));
+  assert.equal(judgeRun(reset).verdict, "PASS");
+
+  // header-derived receipts: X-Lucy-Display-Prolonged: 1 is what counts
+  const viaHeaders = buildFakeRun();
+  viaHeaders.receipts.find((x) => x.id === "D-stale").display = undefined;
+  viaHeaders.receipts.find((x) => x.id === "D-stale").headers = { "X-Lucy-Display-State": "stale", "X-Lucy-Display-Age-Ms": "130000" };
+  viaHeaders.receipts.push({
+    id: "D-stale-h2", logicalId: "D-stale-h2", attempt: 1, step: "roster_summary", agentId: "ui-admin", sentMs: 191_000, clientDoneMs: 191_400, httpStatus: 200,
+    headers: { "X-Lucy-Display-State": "stale", "X-Lucy-Display-Age-Ms": "310000", "X-Lucy-Display-Prolonged": "1" }
+  });
+  assert.equal(judgeRun(viaHeaders).verdict, "PASS");
+});
+
+test("v1.4: a no-pressure window (08-A) accepts zero degradation, a pressure window accepts it", () => {
+  const run = buildFakeRun();
+  assert.equal(judgeRun(run).verdict, "PASS");
+  run.plan.noDegradation = true;
+  const res = judgeRun(run);
+  assert.equal(res.verdict, "FAIL");
+  assert.equal(find(res, "degraded_in_no_pressure_window").length, 2);
+  const clean = buildFakeRun();
+  clean.receipts = clean.receipts.filter((r) => !r.id.startsWith("D-"));
+  clean.plan.noDegradation = true;
+  assert.equal(judgeRun(clean).verdict, "PASS");
+});
+
+test("v1.4: unknown display state values fail instead of being counted as fresh", () => {
+  const run = buildFakeRun();
+  run.receipts.find((x) => x.id === "D-stale").display.state = "busy";
+  const res = judgeRun(run);
+  assert.equal(res.verdict, "FAIL");
+  assert.equal(find(res, "unknown_display_state")[0].state, "busy");
+});
+
+test("v1.4: non-200 and timed-out receipts are not counted as served reads", () => {
+  const run = buildFakeRun();
+  Object.assign(run.receipts.find((x) => x.id === "D-stale"), { httpStatus: 403, display: undefined });
+  assert.equal(judgeRun(run).stats.display.stale, 0);
 });

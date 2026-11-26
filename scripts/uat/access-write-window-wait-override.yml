@@ -1,0 +1,8 @@
+# REQ-0117 UAT-AWW-03 专用 override：注入极短发布等待上限与单等待者上限，
+# 仅隔离栈使用；验证诚实拒绝路径后以基础 compose 重建还原。
+services:
+  lucy:
+    environment:
+      LUCY_PUBLISH_WAIT_BUDGET_MS: "200"
+      LUCY_PUBLISH_MAX_WAITERS: "1"
+      LUCY_PUBLISH_RETRY_AFTER_SECONDS: "5"

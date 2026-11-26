@@ -1,0 +1,14 @@
+# customer-stability 资源约束覆盖层（对齐 Helm values.yaml 默认 2C / 2Gi）
+#
+# 用法：
+#   docker compose \
+#     -f deploy/compose/docker-compose.demo.yml \
+#     -f deploy/compose/docker-compose.customer-stability.yml \
+#     up -d
+#
+# 验证：
+#   npm run uat:customer-stability:check
+services:
+  lucy:
+    cpus: "2.0"
+    mem_limit: 2g
