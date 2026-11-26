@@ -2701,6 +2701,16 @@ export async function allowedToolNames(identity: Identity): Promise<string[]> {
     if (!policy.knownTools.has(tool) || policy.denyTools.has(tool)) return false;
     // Spec 98 §8.5 — global degrade hides DataPlane / data Meta from listTools; Wiki may remain.
     if (runtime.degradedGlobal && isDegradedBlockedTool(tool)) return false;
+    // P1-88 / REQ-030-109 — `tools/list` 与 `tools/call`（authorizeAndRewrite）的敏感元数据
+    // 门禁对齐：`runtime.sourceMap` 存在时，`policy.sensitiveMetadataTools` 仅在 Agent 显式
+    // 拥有全部匹配敏感表（`tables: ["*"]` 通配不算）时可见，否则隐藏（fail-closed，含空匹配）。
+    if (
+      policy.sensitiveMetadataTools.has(tool)
+      && runtime.sourceMap
+      && !hasExplicitAccessToAllSensitiveTables(resolved.permissions.tables, runtime.sourceMap, policy.sensitiveTablePrefixes)
+    ) {
+      return false;
+    }
     // ⚠️ 控制面分支必须**先于** `lucy_` 前缀分支：控制面工具名以 `lucy_ops_` 开头，
     //    若先落到前缀分支会被误要求数据面能力（Spec §3.1 规则 2 / G12）。
     if (CONTROL_PLANE_TOOL_SET.has(tool)) return opsTools.includes(tool);

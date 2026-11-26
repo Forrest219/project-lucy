@@ -5563,6 +5563,36 @@ async function buildDenialRepairPayload(
     candidates: evidence,
     availableCandidates: allow.sources
   });
+  // P1-88 / REQ-030-109 — `sensitive_metadata_forbidden:*` 的逃生引导：区分「全局敏感
+  // 元数据搜索受限」与「已授权数据源可查」，`nextTools` 按该身份实际 `allowedToolNames`
+  // 过滤（未授 `lucy_read_source` 不得推荐）；来源清单只拼接一次；零来源走 B15 事实性
+  // 兜底，不输出「请查询下方可用来源」的死路文案。
+  if (reason.startsWith("sensitive_metadata_forbidden")) {
+    const actualAllowed = new Set(await allowedToolNames(identity).catch(() => [] as string[]));
+    const nextTools = ["lucy_catalog", "lucy_read_source", "lucy_query"].filter((tool) => actualAllowed.has(tool));
+    const parts: string[] = [];
+    if (allow.connections.length > 0) parts.push(`可用连接：${allow.connections.join("、")}。`);
+    if (allow.sources.length > 0) {
+      parts.push(`可用来源：${allow.sources.join("、")}。`);
+      parts.push(
+        "全局敏感元数据搜索工具受限，但这不影响查询已授权数据源。请勿继续重试敏感元数据搜索工具"
+        + (nextTools.length > 0 ? `，可改用 ${nextTools.join(" → ")} 完成查询。` : "。")
+      );
+    } else {
+      if (closure.factualError) parts.push(closure.factualError);
+      parts.push("全局敏感元数据搜索工具受限，且当前身份暂无已授权来源，请联系管理员授权数据源。");
+    }
+    return {
+      text: parts.length > 0 ? ` ${parts.join(" ")}` : "",
+      payload: {
+        reason,
+        failureDimension: "权限拒绝",
+        connections: allow.connections,
+        sources: allow.sources,
+        nextTools
+      }
+    };
+  }
   const hint =
     closure.usableTargets.length > 0
       ? repairHint(

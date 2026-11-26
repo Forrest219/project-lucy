@@ -3,12 +3,12 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档名称 | 敏感元数据工具可见性对齐与拒绝修复引导 Spec |
-| 文档类型 / 版本 | Spec（纯 MCP 可用性加固）／**v1.0** |
+| 文档类型 / 版本 | Spec（纯 MCP 可用性加固）／**v1.1** |
 | 日期 / 目标版本 | 2026-11-25／产品线 `0.35.0`（`lucy-v0.35`；总账与需求池暂挂 `0.30` 池） |
 | 功能编号 / 优先级 | **P1-88**／REQ-030-109／**P1（纯 MCP 主路径可用性）**。**不入核心分母** |
 | 台账号 | 无。挂现行 `0.30` 执行总账（P1-88） |
-| 阶段 | S2 |
-| 状态 | S2｜v1.0。**终稿已确权**（委托人 2026-11-25 明示「审阅通过……授权定稿」；无 Codex CLI 复审，按委托人明示确权先例，额度恢复后可补审，若有阻断按版本升级处理）；**开发未授权**；测试台 NOT RUN；不入核心分母；≠ 功能合同收口；≠ UAT PASS；≠ 可上线 |
+| 阶段 | S4 |
+| 状态 | S4｜v1.1。**终稿已确权**（委托人 2026-11-25 明示「审阅通过……授权定稿」；无 Codex CLI 复审，按委托人明示确权先例，额度恢复后可补审，若有阻断按版本升级处理）；**开发授权已获得**（委托人 2026-11-26 明示）；实现已落地（`allowedToolNames` 门禁对齐＋`buildDenialRepairPayload` 修复载荷）；[UAT-SUITE-MCP-CLIENT-COMPAT PASS](../qa/uat/suites/mcp-client-compat-sensitive-meta/runs/2026-11-26-claude-p1-88-mcp-client-compat.md)（R0／MCCC-01 Case A＋B／02／03／04 全绿，逃生链假设取证成立）；待委托人验收；不入核心分母；≠ 功能合同收口；≠ 可上线 |
 | 需求来源 | 2026-11-25 现场 Debug 日志 [`inbox/lucy-ksc-finreport-error-log.md`](../../inbox/lucy-ksc-finreport-error-log.md)（会话 `5ce61b8c-f8f4-4bcc-b2c8-f6166ce62203`、`turnId: lucy_a4c95631-7951-4752-bd5d-1e9e41df75a1`）：Agent 4 次调用敏感元数据路径（步骤 3/7/8 `discover_data`、步骤 4 `entity_details`）均触发 `Access denied: sensitive_metadata_forbidden:kx`，随后因缺少有效列名获取引导在 `lucy_query` 上试错（步骤 10–15 含 6 次失败调用并触发 `question_budget_exhausted`）。日志中未调用 `lucy_read_source`，故「经 `lucy_read_source` 逃生」属**待 UAT-MCCC-03 验证的关键假设** |
 | 实施主体 | Lucy 服务端（`webui/server/proxy/acl.ts`、`webui/server/proxy/mcp-proxy.ts`）；不依赖修改第三方 MCP 客户端源码，不改 KTX 源码 |
 | 配对计划 | [`docs/plans/lucy-20261125-mcp-client-compat-and-sensitive-meta-visibility-plan.md`](../plans/lucy-20261125-mcp-client-compat-and-sensitive-meta-visibility-plan.md) |
@@ -18,6 +18,7 @@
 
 | 版本 | 变更 |
 |---|---|
+| v1.1 | 2026-11-26 **实现落地与 UAT 通过**（开发授权已获得，委托人 2026-11-26 明示；合同正文不变）：`allowedToolNames()` 对 `policy.sensitiveMetadataTools` 增加与 `acl.ts:3436` 一致的 fail-closed 门禁（OQ-2 空匹配覆盖）；`buildDenialRepairPayload()` 新增 `sensitive_metadata_forbidden:*` 逃生分支（紧凑文案／来源清单单次拼接／`nextTools` 按 `allowedToolNames` 过滤／零来源 B15 事实性兜底）；定向单测 89 项全绿＋tsc 零错误；[UAT-SUITE-MCP-CLIENT-COMPAT PASS](../qa/uat/suites/mcp-client-compat-sensitive-meta/runs/2026-11-26-claude-p1-88-mcp-client-compat.md)（R0／MCCC-01 Case A＋B／02／03／04；`lucy_catalog→lucy_read_source→lucy_query` 逃生链假设取证成立）。→ 阶段 S4，待委托人验收；≠ 功能合同收口；≠ 可上线。 |
 | v1.0 | 2026-11-25 **终稿确权**（委托人明示「审阅通过……授权定稿」）；入总账 **P1-88／REQ-030-109**；cases.md 重写对齐 SC-01–SC-05、fixtures.md 补齐（对抗评审 B1／B2 关闭）；Spec／Plan → v1.0、阶段 S2。开发未授权；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。 |
 | v0.3-draft | 2026-11-25 按对抗性评审修正：1) 澄清 `DEFAULT_SENSITIVE_METADATA_TOOLS` 默认仅含 `dictionary_search`/`discover_data`，`entity_details` 属 DataPlane（除非现场 `access.yaml` 配入 `sensitive_metadata_tools`），`tools/list` 仅对 `policy.sensitiveMetadataTools` 生效；2) 修正 M1（重复来源清单改标为依代码审查确认）与 M2（精确区分 4 次敏感元数据拒调与后续 6 次 `lucy_query` 失败，逃生链标为待验证假设）；3) 修正 M3（伪代码与 `acl.ts:3436` 对齐，仅在 `runtime.sourceMap` 存在时检查）；4) 新增 OQ-3/OQ-4 登记日志暴露的同主题问题，明确本修复不收缩列名暴露面。 |
 | v0.2-draft | 2026-11-25 拆分收口：剥离未取证的 `MCP_INVALID_OPERATION` / `inputSchema` 改造；裁定无匹配敏感表保持 fail-closed；修正锚点、B15 闭环、版本号 `0.35.0` 与复合画像。 |

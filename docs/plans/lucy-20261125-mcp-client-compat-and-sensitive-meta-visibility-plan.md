@@ -2,10 +2,10 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 分阶段实施计划 / **v1.0** |
+| 文档类型 / 版本 | 分阶段实施计划 / **v1.1** |
 | 日期 / 功能编号 | 2026-11-25／**P1-88**／REQ-030-109 |
-| 状态 | S2｜v1.0。**终稿已确权**（委托人 2026-11-25 明示「审阅通过……授权定稿」）；**开发未授权**；测试台 NOT RUN；≠ 功能合同收口；≠ UAT PASS；≠ 可上线 |
-| 授权边界 | 本文件仅为规划草案；**取得委托人终稿确权与开发授权前，禁止修改任何运行代码** |
+| 状态 | S4｜v1.1。**终稿已确权**（委托人 2026-11-25 明示）；**开发授权已获得**（委托人 2026-11-26 明示）；Task 1–3 实施与单测全绿；[UAT-SUITE-MCP-CLIENT-COMPAT PASS](../qa/uat/suites/mcp-client-compat-sensitive-meta/runs/2026-11-26-claude-p1-88-mcp-client-compat.md)；待委托人验收；≠ 功能合同收口；≠ 可上线 |
+| 授权边界 | 开发授权已获得（2026-11-26）；运行代码改动限于 `webui/server/proxy/acl.ts` 与 `webui/server/proxy/mcp-proxy.ts` |
 | 验收 | Spec SC-01–SC-05；`UAT-R0`、`UAT-MCCC-01～04` |
 | 关联 | [Spec](../specs/lucy-20261125-mcp-client-compat-and-sensitive-meta-visibility-spec.md) · [UAT](../qa/uat/suites/mcp-client-compat-sensitive-meta/suite.md) |
 
@@ -26,7 +26,7 @@
    - `0.30` 执行总账（SOT）v2.87 行＋P1-88 条目与需求池 REQ-030-109（并同步 `lint:spec-docs` 镜像状态）；
    - [`docs/README.md`](../README.md) 与 [`docs/plans/README.md`](README.md)；
    - [`docs/qa/uat/INDEX.md`](../qa/uat/INDEX.md)、[`docs/qa/uat/CONVENTIONS.md`](../qa/uat/CONVENTIONS.md)（`UAT-MCCC-*` 编号前缀）及 [`docs/governance/e2e-ledger.md`](../governance/e2e-ledger.md)（三台账勾连行）。
-3. 取得委托人明示**开发授权**后，方可修改 `webui/server/proxy/` 下的运行代码。
+3. ~~取得委托人明示**开发授权**后，方可修改 `webui/server/proxy/` 下的运行代码~~ **已完成**（委托人 2026-11-26 明示「授权进入开发……及 UAT 的测试，必要时可重建 docker」）。
 
 ## 任务分解
 
