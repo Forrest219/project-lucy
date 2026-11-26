@@ -1462,6 +1462,86 @@
       "gate": "workflow-contracts",
       "gateCommand": "npm run test:root-contracts",
       "reason": null
+    },
+    {
+      "path": "scripts/lint/server-sync-io-gate.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "builds fixtures under a temporary directory and removes them; writes nothing else",
+      "command": "node --test scripts/lint/server-sync-io-gate.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/lint/skip-ledger-id-gate.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "builds fixture trees under a temporary directory and removes them; writes nothing else",
+      "command": "node --test scripts/lint/skip-ledger-id-gate.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/smoke/p0-mcp-mainpath-smoke.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "asserts the smoke script's static contract against fixture files under a temporary directory; writes nothing else",
+      "command": "node --test scripts/smoke/p0-mcp-mainpath-smoke.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/uat/__tests__/public-entry-static-lib.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "none",
+      "command": "node --test scripts/uat/__tests__/public-entry-static-lib.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/uat/__tests__/seed-customer-stability.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "none",
+      "command": "node --test scripts/uat/__tests__/seed-customer-stability.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/uat/__tests__/stability-sentinel.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "none",
+      "command": "node --test scripts/uat/__tests__/stability-sentinel.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/uat/check-503-registry.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "asserts the checker against tracked fixture files; writes nothing",
+      "command": "node --test scripts/uat/check-503-registry.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/uat/ensure-scale-baseline.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "none",
+      "command": "node --test scripts/uat/ensure-scale-baseline.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
     }
   ]
 }
