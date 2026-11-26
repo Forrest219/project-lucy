@@ -1,4 +1,4 @@
-import { readFile, readdir } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { parse, stringify } from "yaml";
@@ -7,6 +7,7 @@ import { ForbiddenPathError, assertReadable, safeRemove, safeWriteBinary } from 
 import { auditedWriteFile } from "./admin/config-audit-write.js";
 import { readRasterImageSize, sniffRasterImageMime } from "./image-raster.js";
 import { loadContentPaths } from "./paths.js";
+import { runAsPublicEntry } from "./public-entry-surface.js";
 
 export const BRANDING_YAML_REL = "webui/config/branding.yaml";
 export const BRANDING_DIR_REL = "webui/config/branding";
@@ -136,6 +137,139 @@ function serializeConfig(config: BrandingConfig): string {
     };
   }
   return stringify(doc);
+}
+
+// ─── P1-84 §3.4 — 公开读的品牌缓存 ─────────────────────────────────────────
+// 只缓存「已提交」状态：进程内写屏障（写前 bump 代次）＋每次读以 mtime/size
+// 校验（外部修改的下一次首读即生效）。`LUCY_PUBLIC_ENTRY_FASTPATH=0` 关闭缓存
+// （feature-off 对照臂）。禁对 `/api/auth/*` 做任何共享缓存（见 guard.ts）。
+
+type StatKey = { mtimeMs: number; size: number };
+
+let brandingGeneration = 0;
+
+/** 写屏障：任何品牌写入（含删除）在开始时推进代次，写前／写中／写后首读一律 miss。 */
+function bumpBrandingGeneration(): void {
+  brandingGeneration += 1;
+}
+
+function fastPathEnabled(): boolean {
+  return process.env.LUCY_PUBLIC_ENTRY_FASTPATH !== "0";
+}
+
+async function statKeyOf(absPath: string): Promise<StatKey | null> {
+  try {
+    const info = await stat(absPath);
+    return info.isFile() ? { mtimeMs: info.mtimeMs, size: info.size } : null;
+  } catch {
+    return null;
+  }
+}
+
+type BrandingConfigCache = {
+  projectRoot: string;
+  generation: number;
+  yamlStat: StatKey;
+  config: BrandingConfig;
+};
+
+let configCache: BrandingConfigCache | null = null;
+
+/** 带代次与首读 mtime/size 校验的配置读（公开 GET /api/branding 用；写路径直接读盘）。 */
+export async function loadBrandingConfigCached(projectRoot: string): Promise<BrandingConfig> {
+  if (!fastPathEnabled()) return loadBrandingConfig(projectRoot);
+  const paths = await loadContentPaths();
+  let abs: string;
+  try {
+    abs = await assertReadable(paths, projectRoot, BRANDING_YAML_REL);
+  } catch {
+    configCache = null;
+    return loadBrandingConfig(projectRoot);
+  }
+  const yamlStat = await statKeyOf(abs);
+  if (
+    configCache &&
+    configCache.projectRoot === projectRoot &&
+    configCache.generation === brandingGeneration &&
+    yamlStat &&
+    configCache.yamlStat.mtimeMs === yamlStat.mtimeMs &&
+    configCache.yamlStat.size === yamlStat.size
+  ) {
+    return configCache.config;
+  }
+  const config = await loadBrandingConfig(projectRoot);
+  if (yamlStat) configCache = { projectRoot, generation: brandingGeneration, yamlStat, config };
+  else configCache = null;
+  return config;
+}
+
+type LogoCache = {
+  projectRoot: string;
+  generation: number;
+  yamlStat: StatKey;
+  logoStat: StatKey;
+  logoFilename: string;
+  buffer: Buffer;
+  contentType: string;
+  updatedAt: string;
+};
+
+let logoCache: LogoCache | null = null;
+
+/** 带代次与首读 mtime/size 校验的 Logo 字节读（公开 GET /api/branding/logo 用）。 */
+export async function readBrandingLogoBytesCached(
+  projectRoot: string
+): Promise<{ buffer: Buffer; contentType: string; updatedAt: string } | null> {
+  if (!fastPathEnabled()) return readBrandingLogoBytes(projectRoot);
+  const paths = await loadContentPaths();
+  let yamlAbs: string;
+  try {
+    yamlAbs = await assertReadable(paths, projectRoot, BRANDING_YAML_REL);
+  } catch {
+    logoCache = null;
+    return readBrandingLogoBytes(projectRoot);
+  }
+  const yamlStat = await statKeyOf(yamlAbs);
+  if (
+    logoCache &&
+    logoCache.projectRoot === projectRoot &&
+    logoCache.generation === brandingGeneration &&
+    yamlStat &&
+    logoCache.yamlStat.mtimeMs === yamlStat.mtimeMs &&
+    logoCache.yamlStat.size === yamlStat.size
+  ) {
+    // 代次与 YAML 均未变；Logo 文件的外部修改仍按首读 mtime/size 校验。
+    try {
+      const logoAbs = await assertReadable(paths, projectRoot, logoRelPath(logoCache.logoFilename));
+      const logoStat = await statKeyOf(logoAbs);
+      if (logoStat && logoCache.logoStat.mtimeMs === logoStat.mtimeMs && logoCache.logoStat.size === logoStat.size) {
+        return { buffer: logoCache.buffer, contentType: logoCache.contentType, updatedAt: logoCache.updatedAt };
+      }
+    } catch { /* fall through to uncached read */ }
+    logoCache = null;
+  }
+  const logo = await readBrandingLogoBytes(projectRoot);
+  logoCache = null;
+  if (!logo || !yamlStat) return logo;
+  const config = await loadBrandingConfig(projectRoot);
+  if (!config.logo) return logo;
+  try {
+    const logoAbs = await assertReadable(paths, projectRoot, logoRelPath(config.logo.filename));
+    const logoStat = await statKeyOf(logoAbs);
+    if (logoStat) {
+      logoCache = {
+        projectRoot,
+        generation: brandingGeneration,
+        yamlStat,
+        logoStat,
+        logoFilename: config.logo.filename,
+        buffer: logo.buffer,
+        contentType: logo.contentType,
+        updatedAt: logo.updatedAt
+      };
+    }
+  } catch { /* uncacheable */ }
+  return logo;
 }
 
 export async function loadBrandingConfig(projectRoot?: string): Promise<BrandingConfig> {
@@ -292,6 +426,7 @@ export async function updateBrandingText(
   input: { productTitle?: string; tagline?: string },
   request: FastifyRequest
 ): Promise<BrandingPublicView> {
+  bumpBrandingGeneration();
   const current = await loadBrandingConfig(projectRoot);
   const next: BrandingConfig = {
     ...current,
@@ -322,6 +457,7 @@ export async function uploadBrandingLogo(
   if (typeof input.filename !== "string" || !input.filename.trim()) {
     throw new BrandingValidationError("缺少 Logo 文件名");
   }
+  bumpBrandingGeneration();
   const buffer = decodeLogoBase64(input.contentBase64);
   const validated = validateLogoBuffer(buffer, input.filename.trim());
   const filename = `logo${validated.ext}`;
@@ -361,6 +497,7 @@ export async function deleteBrandingLogo(
   projectRoot: string,
   request: FastifyRequest
 ): Promise<BrandingPublicView> {
+  bumpBrandingGeneration();
   const current = await loadBrandingConfig(projectRoot);
   await removeAllLogoFiles(projectRoot);
   const next: BrandingConfig = { ...current, logo: null };
@@ -412,23 +549,28 @@ function sendBrandingError(reply: { status: (code: number) => { send: (body: unk
 
 export function registerBrandingRoutes(app: FastifyInstance): void {
   app.get("/api/branding", async () => {
-    const projectRoot = await resolveProjectRoot();
-    const config = await loadBrandingConfig(projectRoot);
-    return { ok: true, data: toPublicView(config) };
+    // P1-84 类 A：公开读走代次缓存；无 MCP／展示构建／重扫描。
+    return runAsPublicEntry(async () => {
+      const projectRoot = await resolveProjectRoot();
+      const config = await loadBrandingConfigCached(projectRoot);
+      return { ok: true, data: toPublicView(config) };
+    });
   });
 
   app.get("/api/branding/logo", async (_request, reply) => {
-    const projectRoot = await resolveProjectRoot();
-    const logo = await readBrandingLogoBytes(projectRoot);
-    if (!logo) {
-      return reply.status(404).send({
-        ok: false,
-        error: { code: "BRANDING_LOGO_NOT_FOUND", message: "尚未配置客户 Logo" }
-      });
-    }
-    reply.header("Cache-Control", "private, max-age=60");
-    reply.header("Content-Type", logo.contentType);
-    return reply.send(logo.buffer);
+    return runAsPublicEntry(async () => {
+      const projectRoot = await resolveProjectRoot();
+      const logo = await readBrandingLogoBytesCached(projectRoot);
+      if (!logo) {
+        return reply.status(404).send({
+          ok: false,
+          error: { code: "BRANDING_LOGO_NOT_FOUND", message: "尚未配置客户 Logo" }
+        });
+      }
+      reply.header("Cache-Control", "private, max-age=60");
+      reply.header("Content-Type", logo.contentType);
+      return reply.send(logo.buffer);
+    });
   });
 
   app.put<{

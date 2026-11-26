@@ -220,6 +220,7 @@ import { registerAuthRoutes, registerAdminAccountRoutes } from "./auth/routes.js
 import { buildAdminOpenApiDocument } from "./admin/openapi-document.js";
 import { registerOidcRoutes } from "./auth/oidc-routes.js";
 import { registerBrandingRoutes } from "./branding.js";
+import { classifyPublicEntrySurface, publicEntryHeavyWorkCounters, runAsPublicEntry } from "./public-entry-surface.js";
 import { actorIdFromRequest, requireWebuiAuthHook } from "./auth/guard.js";
 import { ActorUnresolvedError, auditActorFields, trustedActorFromRequest } from "./security/request-actor.js";
 import { assertStartupPolicy, resolveCookieSecure } from "./auth/deployment-mode.js";
@@ -1122,7 +1123,7 @@ export function buildServer() {
     const { data, diagnostics } = probeDataFromMemory(processIdentity, diagnosticSnapshot);
     return {
       ok: true,
-      data: { ...data, eventLoop: eventLoopDelaySnapshot(), displayBusy: displayBusySummary(), selfHeal: selfHealSnapshot(), mcpCapacity: getMcpExecutionCapacity().publicSummary() },
+      data: { ...data, eventLoop: eventLoopDelaySnapshot(), displayBusy: displayBusySummary(), selfHeal: selfHealSnapshot(), mcpCapacity: getMcpExecutionCapacity().publicSummary(), publicEntryHeavyWork: publicEntryHeavyWorkCounters() },
       diagnostics
     };
   });
@@ -3572,6 +3573,11 @@ export function buildServer() {
           message: `Route ${request.method} ${request.url} not found`
         }
       } satisfies ErrorEnvelope);
+    }
+    // P1-84 — 公共入口 A 类（静态只读）在标记上下文内服务：SC-07 计数只在此上下文累计，
+    // 证明公开快路径未触发 MCP 上游／展示全量构建／重审计扫描。
+    if (classifyPublicEntrySurface(request.method, request.url) === "A_static") {
+      return runAsPublicEntry(() => serveStaticAsset(request, reply, distDir()));
     }
     return serveStaticAsset(request, reply, distDir());
   });

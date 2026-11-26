@@ -23,9 +23,17 @@ import { watch, type FSWatcher } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { getAccessRecoveryStateSync } from "./access-recovery";
-import { countEntryPerf, markDisplayBuild, markDisplayCache, markDisplayDegraded } from "./entry-performance-timing";
+import {
+  countEntryPerf,
+  markDisplayBuild,
+  markDisplayCache,
+  markDisplayDegraded,
+  type DisplayDegradeMark,
+  type DisplayDegradeState
+} from "./entry-performance-timing";
 import { createSharedPriorityScheduler } from "./runtime/shared-priority-scheduler";
 import { eventLoopDelaySnapshot } from "./runtime/event-loop-delay";
+import { notePublicEntryHeavyWork } from "./public-entry-surface";
 import {
   bumpDisplayGeneration,
   canonicalFileId,
@@ -735,6 +743,8 @@ function invalidBuildReason(name: string, entry: Entry, scopes: readonly Display
 
 /** Shared work owns validation and publication even after all readers have timed out. */
 function startDisplayBuild(name: string, entry: Entry, key: string, scopes: readonly DisplayScope[], extraKey: string, build: DisplayBuild): BuildTask {
+  // P1-84 SC-07：公开快路径若触发展示全量构建，计数即非 0（无白名单例外）。
+  notePublicEntryHeavyWork("displayFullBuilds");
   const task: BuildTask = { readers: new Set() };
   entry.inflight.set(key, task);
   inflightBuilds += 1;

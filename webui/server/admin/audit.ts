@@ -89,6 +89,7 @@ import {
   emptyPrimaryStatusCounts,
   type PrimaryStatus
 } from "../proxy/audit-derivation.js";
+import { notePublicEntryHeavyWork } from "../public-entry-surface.js";
 
 // Per-user lazy-rebuild debounce: GET /turns can be polled frequently (UI refresh, multiple
 // users in one window); skip re-running the full delete+reinsert rebuild if we just did it.
@@ -3241,6 +3242,8 @@ function runAuditExportHeavy<T>(
   run: () => Promise<T>,
   options: { deadlineMs?: number } = {}
 ): Promise<T> {
+  // P1-84 SC-07：公开快路径若触发重审计扫描，计数即非 0（无白名单例外）。
+  notePublicEntryHeavyWork("heavyAuditScans");
   return withHeavyWorkPermit({
     class: "audit_export",
     identity: trustedActorFromRequest(request).actorId,
@@ -3681,6 +3684,8 @@ export function registerAuditRoutes(app: FastifyInstance) {
       includeAuthFailures?: string;
     };
   }>("/api/admin/audit", async (request) => {
+    // P1-84 SC-07：列表读含全表扫描（scale 下单同步段秒级），同样属重审计扫描。
+    notePublicEntryHeavyWork("heavyAuditScans");
     const q = request.query;
     const limit = Math.min(parseInt(q.limit ?? "50", 10) || 50, 500);
     const offset = parseInt(q.offset ?? "0", 10) || 0;

@@ -83,6 +83,8 @@
     "upgrade-uat:verify": "node scripts/upgrade/upgrade-uat-verify.mjs",
     "uat:mcp-session": "node scripts/uat/mcp-session-regression.mjs",
     "uat:mcp-session:test": "node --test scripts/uat/mcp-session-regression.test.mjs",
+    "uat:public-entry-static": "node scripts/uat/public-entry-static.mjs",
+    "uat:public-entry-static:test": "node --test scripts/uat/__tests__/public-entry-static-lib.test.mjs",
     "uat:copy-probe": "node scripts/uat/copy-button-fake-success-probe.mjs",
     "uat:button-feedback": "node scripts/uat/button-feedback-download-probe.mjs",
     "uat:cold-start": "node scripts/uat/cold-start-slow-disk.mjs",

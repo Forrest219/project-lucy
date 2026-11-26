@@ -45,6 +45,7 @@ import {
   revokeRequestSession
 } from "./account-state.js";
 import { getStartupOidcRuntimeView } from "./oidc-runtime.js";
+import { runAsPublicEntry } from "../public-entry-surface.js";
 
 // Verified against when the account is unknown/disabled so both paths cost one scrypt (no existence oracle).
 let dummyHash: Promise<string> | null = null;
@@ -61,7 +62,8 @@ const AUTH_CONFIG_UNAVAILABLE = {
 } as const;
 
 export function registerAuthRoutes(app: FastifyInstance): void {
-  app.get("/api/auth/status", async (request) => {
+  // P1-84 类 B：Session 感知读在标记上下文内服务（每请求鉴权结论；禁共享缓存）。
+  app.get("/api/auth/status", async (request) => runAsPublicEntry(async () => {
     const mode = await resolveAuthMode();
     const me = request.lucyAdmin?.admin
       ? publicAdminView(request.lucyAdmin.admin)
@@ -78,7 +80,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
         methods
       }
     };
-  });
+  }));
 
   app.get("/api/auth/me", async (request, reply) => {
     const mode = await resolveAuthMode();
@@ -109,9 +111,10 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     };
   });
 
+  // P1-84 类 C：认证写入在标记上下文内服务；限流／scrypt／CSRF／审计／Cookie 语义全部保持。
   app.post<{
     Body: { adminId?: string; password?: string };
-  }>("/api/auth/login", async (request, reply) => {
+  }>("/api/auth/login", (request, reply) => runAsPublicEntry(async () => {
     const mode = await resolveAuthMode();
     if (mode === "open") {
       return reply.status(400).send({
@@ -180,7 +183,7 @@ export function registerAuthRoutes(app: FastifyInstance): void {
     }
     setSessionCookie(reply, session.token, session.exp);
     return { ok: true, data: { me: publicAdminView(account) } };
-  });
+  }));
 
   app.post("/api/auth/logout", async (request, reply) => {
     // Durable revocation first; the cookie is only cleared once it holds (Spec §3.2).

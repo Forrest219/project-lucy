@@ -208,6 +208,7 @@ import {
   type SourceIdentity,
 } from "./source-ambiguity-gate.js";
 import { SOURCE_COUNT_CAP, toSelectionDisclosure, type SourceSelectionDisclosure } from "./source-selection-tolerance.js";
+import { notePublicEntryHeavyWork } from "../public-entry-surface.js";
 
 export { registerPublishedVersion };
 export {
@@ -360,6 +361,8 @@ function forwardToUpstream(
   onRequest?: (request: ClientRequest) => void
 ): Promise<IncomingMessage> {
   return new Promise((resolve, reject) => {
+    // P1-84 SC-07：公开快路径若发起 MCP 上游调用，计数即非 0（无白名单例外）。
+    notePublicEntryHeavyWork("mcpUpstreamAttempts");
     // T04-3: no upstream call is started for a request a narrowing already covers.
     const barrier = currentBarrierHandle();
     if (barrier && !barrier.isCurrent()) {
