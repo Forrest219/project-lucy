@@ -10,7 +10,10 @@
  */
 import { mkdirSync, appendFileSync } from "node:fs";
 import path from "node:path";
-import { chromium } from "playwright-core";
+import { createRequire } from "node:module";
+// playwright-core 安装在 webui 下；从脚本目录解析不到，改从 webui 的 require 解析。
+const require = createRequire(path.resolve(import.meta.dirname, "../../webui/package.json"));
+const { chromium } = require("playwright-core");
 
 function parseArgs(argv) {
   const args = { _: [] };
@@ -45,17 +48,29 @@ async function main() {
     for (let i = 1; i <= count; i++) {
       const context = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
       const page = await context.newPage();
-      const assetTimings = new Map();
+      // 首屏资产＝load 事件前浏览器发起的 /assets/ 请求（OQ-3 口径：hash 随构建变化，
+      // 以当次 HTML 再核；load 后按需 chunk 不算首屏必需）。
+      const firstScreen = new Map(); // pathname -> finishedAt(ms) | -1(failed)
+      const pendingFirstScreen = new Map(); // pathname -> startedAt
+      let loadFired = false;
+      page.on("request", (request) => {
+        const url = new URL(request.url());
+        if (url.origin === base && url.pathname.startsWith("/assets/") && !loadFired) {
+          pendingFirstScreen.set(url.pathname, Date.now());
+        }
+      });
       page.on("requestfinished", (request) => {
         const url = new URL(request.url());
         if (url.origin === base && url.pathname.startsWith("/assets/")) {
-          assetTimings.set(url.pathname, Date.now());
+          firstScreen.set(url.pathname, Date.now());
+          pendingFirstScreen.delete(url.pathname);
         }
       });
       page.on("requestfailed", (request) => {
         const url = new URL(request.url());
         if (url.origin === base && url.pathname.startsWith("/assets/")) {
-          assetTimings.set(url.pathname, -1);
+          firstScreen.set(url.pathname, -1);
+          pendingFirstScreen.delete(url.pathname);
         }
       });
       const navStart = Date.now();
@@ -67,14 +82,16 @@ async function main() {
         ttfbMs = Date.now() - navStart;
         httpStatus = response?.status() ?? null;
         await page.waitForLoadState("load", { timeout: 20_000 });
+        loadFired = true;
         docBytes = (await page.content()).length;
       } catch (error) {
         appendFileSync(ledgerPath, JSON.stringify({ schema: "pes-ledger/1", kind: "browser-cold", tick: i, error: String(error?.message ?? error), ts: Date.now() }) + "\n");
         await context.close();
         continue;
       }
-      // 首屏资产清单来自当次 HTML（OQ-3）。
-      const assetPaths = [...new Set([...(await page.content()).matchAll(/(?:src|href)="(\/assets\/[^"]+\.(?:js|css))"/g)].map((m) => m[1]))];
+      // 首屏资产清单来自当次 HTML（OQ-3 再核）∩ load 前实际发起的请求。
+      const htmlAssets = [...new Set([...(await page.content()).matchAll(/(?:src|href)="(\/assets\/[^"]+\.(?:js|css))"/g)].map((m) => m[1]))];
+      const assetPaths = htmlAssets.filter((p) => firstScreen.has(p) || pendingFirstScreen.has(p));
       let formReady = false;
       try {
         const form = page.locator("#login-password");
@@ -83,9 +100,23 @@ async function main() {
       } catch { /* 保持 false，如实记录 */ }
       let primaryReadyMs = null;
       if (formReady) {
-        const pending = assetPaths.filter((p) => !assetTimings.has(p) || assetTimings.get(p) < 0);
-        if (pending.length === 0) {
-          primaryReadyMs = Math.max(Date.now() - navStart, ...assetPaths.map((p) => assetTimings.get(p) - navStart));
+        // 首屏资产可能仍在途：等待其完成（预算 3s／资产，从导航起算），超预算才 FAIL。
+        const assetBudgetMs = 3000;
+        const deadline = navStart + assetBudgetMs;
+        while (Date.now() < deadline) {
+          const unfinished = assetPaths.filter((p) => {
+            const done = firstScreen.get(p);
+            return done === undefined || done < 0;
+          });
+          if (unfinished.length === 0) break;
+          await page.waitForTimeout(50);
+        }
+        const unfinished = assetPaths.filter((p) => {
+          const done = firstScreen.get(p);
+          return done === undefined || done < 0;
+        });
+        if (unfinished.length === 0) {
+          primaryReadyMs = Math.max(Date.now() - navStart, ...assetPaths.map((p) => (firstScreen.get(p) ?? 0) - navStart));
         }
       }
       appendFileSync(ledgerPath, JSON.stringify({

@@ -368,35 +368,20 @@ async function cmdNegatives(args) {
     record("cross-site-csrf-denied", r.status === 403, { status: r.status, totalMs: r.totalMs });
   }
 
-  // 3. 超限 429（连续错误密码触发既有限流）。
-  {
-    let saw429 = false;
-    for (let i = 0; i < 12 && !saw429; i++) {
-      const r = await timedFetch(`${base}/api/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ adminId, password: `wrong-${i}-password` }),
-        timeoutMs: 15_000
-      });
-      if (r.status === 429) saw429 = true;
-    }
-    record("rate-limit-429", saw429, { note: saw429 ? "(在 12 次错误密码内触发 429)" : "(12 次内未见 429)" });
-  }
-
-  // 4. auth/status 带 Cache-Control: no-store。
+  // 3. auth/status 带 Cache-Control: no-store。
   {
     const r = await timedFetch(`${base}/api/auth/status`, { timeoutMs: 10_000 });
     record("auth-status-no-store", r.status === 200 && (r.headers["cache-control"] ?? "").includes("no-store"), { status: r.status, cacheControl: r.headers["cache-control"] });
   }
 
-  // 5. 非目标受保护 API 未带 Session 仍被拒。
+  // 4. 非目标受保护 API 未带 Session 仍被拒。
   {
     const sources = await timedFetch(`${base}/api/sources`, { timeoutMs: 10_000 });
     const admin = await timedFetch(`${base}/api/admin/audit`, { timeoutMs: 10_000 });
     record("protected-api-still-denied", sources.status === 401 && admin.status === 401, { status: `${sources.status}/${admin.status}` });
   }
 
-  // 6. 吊销 Session：logout 后旧 cookie 的 auth/status me 为空。
+  // 5. 吊销 Session：logout 后旧 cookie 的 auth/status me 为空。
   {
     const login = await timedFetch(`${base}/api/auth/login`, {
       method: "POST",
@@ -414,6 +399,21 @@ async function cmdNegatives(args) {
       try { meEmpty = JSON.parse(after.text())?.data?.me === null; } catch { /* 解析失败即不通过 */ }
       record("revoked-session-me-empty", after.status === 200 && meEmpty, { status: after.status });
     }
+  }
+
+  // 6b. 超限 429（放最后：锤击会污染 loginAccountSource 桶）（连续错误密码触发既有限流）。
+  {
+    let saw429 = false;
+    for (let i = 0; i < 12 && !saw429; i++) {
+      const r = await timedFetch(`${base}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ adminId, password: `wrong-${i}-password` }),
+        timeoutMs: 15_000
+      });
+      if (r.status === 429) saw429 = true;
+    }
+    record("rate-limit-429", saw429, { note: saw429 ? "(在 12 次错误密码内触发 429)" : "(12 次内未见 429)" });
   }
 
   // 7. SC-07 计数器读取（供 UAT-PES-07 判定；混压窗结束后由 judge 复核）。
