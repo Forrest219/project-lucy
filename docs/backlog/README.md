@@ -22,6 +22,7 @@
 
 | 稳定 ID | 历史别名 | 类型 | 优先级 | 标题 | 漏斗阶段 | 目标版本 | 关联文档 |
 |---|---|---|---|---|---|---|---|
+| REQ-0119 | — | 需求 | P1 | 系统间 MCP 查数容量保留、大明细背压与开发者水位 | S2｜ | v0.35.0 | [正文](entries/REQ-0119-integration-mcp-capacity-backpressure.md) · [Spec](../specs/lucy-20261127-integration-mcp-capacity-backpressure-spec.md) · [Plan](../plans/lucy-20261127-integration-mcp-capacity-backpressure-plan.md) · [设计](../plans/lucy-20261127-integration-mcp-capacity-backpressure-design.md) · [UAT](../qa/uat/suites/integration-mcp-capacity/suite.md) |
 | REQ-0120 | — | 需求 | P1 | 资产列表 Zoom 交互（连接／启用表／Catalog／角色·Agent） | S2｜ | v0.35.0 | [正文](entries/REQ-0120-asset-list-zoom-ux.md) · [Spec](../specs/lucy-20261127-asset-list-zoom-ux-spec.md) · [Plan](../plans/lucy-20261127-asset-list-zoom-ux-plan.md) · [UAT](../qa/uat/suites/asset-list-zoom/suite.md) · [评审](../reviews/2026-11-27-asset-list-zoom-ux-adversarial-review.md) |
 | REQ-0117 | — | 需求 | P1 | 大目录下创建 2000+ 表角色时 WebUI 报 503（已复现，待立项） | S4｜ | — | [正文](entries/REQ-0117-create-2000-table-roles-webui-503.md) · [Spec](../specs/lucy-20261126-access-write-window-resilience-spec.md) · [Plan](../plans/lucy-20261126-access-write-window-resilience-plan.md) · [错题本](../lessons/2026-11-26-large-catalog-role-write-blocks-display-reads.md) |
 | REQ-0116 | — | 需求 | P1 | 自动 Join Graph 推断与辅助标注 | S1｜ | v0.35.0 | [Spec](../specs/lucy-20261126-auto-join-graph-inference-spec.md) · [Plan](../plans/lucy-20261126-auto-join-graph-inference-plan.md) |

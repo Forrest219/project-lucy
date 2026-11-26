@@ -8,7 +8,7 @@
 | 功能编号 / 优先级 | **P1-82**／REQ-030-103／**P1（事故修复／可用性）**。**不入核心分母** |
 | 台账号 | 无。挂现行 `0.30` 执行总账 |
 | 阶段 | S4 |
-| 状态 | S4｜v0.3。终稿已确权（委托人 2026-11-24 明示）；开发授权已获得（2026-11-24）；实现已落地（四层容量协调器覆盖全部上游语义工具、真实结束后释放、聚合观测、热点扫描合并），单测与本机 Docker 前后对照已验证；**SC-06（流式体积上限／内存背压）未实现；委托人 2026-11-24 裁定移出本期出口、授权下期实现**，UAT-MCPHA-05 相应移出本期必做；本期出口＝SC-01–05／SC-07／SC-08 与 UAT-MCPHA-R0／01–04／06–08；待验收；测试台 NOT RUN（无正式 UAT 跑次）；不入核心分母；≠ 功能合同收口；≠ UAT PASS；≠ 可上线 |
+| 状态 | S4｜v0.3。终稿已确权（委托人 2026-11-24 明示）；开发授权已获得（2026-11-24）；实现已落地（四层容量协调器覆盖全部上游语义工具、真实结束后释放、聚合观测、热点扫描合并），单测与本机 Docker 前后对照已验证；**SC-06（流式体积上限／内存背压）未在本条实现**；委托人 2026-11-24 曾裁定移下期；**委托人 2026-11-27 裁定改由 [REQ-0119](lucy-20261127-integration-mcp-capacity-backpressure-spec.md) 实现并验收**（UAT-MCPHA-05 → `UAT-SUITE-INTEGRATION-MCP-CAP`）；本期出口仍＝SC-01–05／SC-07／SC-08 与 UAT-MCPHA-R0／01–04／06／08；测试台 PASS WITH GAP；不入核心分母；≠ 功能合同收口；≠ UAT PASS；≠ 可上线 |
 | 需求来源 | [P1-75 增量压力跑次 `f5e4b14d`](../qa/uat/suites/interactive-read-resilience/runs/2026-11-24-codex-f5e4b14d-pressure.md)；当前 `webui/server/index.ts`、`webui/server/proxy/mcp-proxy.ts`、`webui/server/security/store.ts` 架构探查 |
 | 实施主体 | Lucy。首阶段不改 KTX 源码，不改变 Agent／Role／Token 的数据权限语义 |
 | 配对计划 | [`docs/plans/lucy-20261124-mcp-data-plane-isolation-ha-plan.md`](../plans/lucy-20261124-mcp-data-plane-isolation-ha-plan.md) |
@@ -18,6 +18,7 @@
 
 | 版本 | 变更 |
 |---|---|
+| v0.3-r3 | 2026-11-27 指针：SC-06／UAT-MCPHA-05 改由 [REQ-0119](lucy-20261127-integration-mcp-capacity-backpressure-spec.md)／`UAT-SUITE-INTEGRATION-MCP-CAP` 实现并验收（委托人 Spec 定稿授权）。本条已实现出口与四层容量合同不变 |
 | v0.3-r2 | 2026-11-24 指针：公共首页／静态公开接口在混压下不被饿死的同进程合同，已另立 [P1-84／REQ-030-105](lucy-20261124-public-entry-static-isolation-spec.md)（承接 §9 B1 控制面入口差集；**不分进程**）。本条范围、状态与出口不变 |
 | v0.3 | 2026-11-24 范围裁定（委托人明示）：**SC-06（流式体积上限／全局内存背压）移出本期出口，授权下期实现**；`UAT-MCPHA-05` 移出本期必做，随下期 SC-06 验收。本期出口相应修订（§闭口层级）；§2.1 第 5 条与 SC 表同步标注。不改运行代码；状态行与总账镜像同步 |
 | v0.2 | 2026-11-24 **终稿确权＋开发授权（委托人明示）并实现**：容量默认值 Token 4／Agent 8／连接 16／全局 24（满足 `agent < connection <= global`，`LUCY_MCP_*_MAX_INFLIGHT` 可覆盖，非法顺序自动修正并告警）；拒绝立即返回并带 `capacityScope`／`retryAfterMs`；首期无等待队列（OQ-2）；租约在真实上游工作结束后释放。**SC-06 未实现**（OQ-3 单响应上限与全局内存背压）。另落地展示扫描合并与公平调度、覆盖层缓存（P1-75 根因侧，根因见 `f5e4b14d`）。UAT 仍 NOT RUN |
