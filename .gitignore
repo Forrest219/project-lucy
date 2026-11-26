@@ -90,3 +90,11 @@ inbox/20260809-gate-c-uat/.tokens.local
 
 # P1-68 运维步骤账本地文件（内容根下的 .lucy/ops-steps.jsonl）
 .lucy/
+
+# Agent 临时草稿区与编辑器插件产物，禁止入库
+.scratch/
+.wpscomate/
+
+# mcp-inquiry-performance 原始证据（单文件可达 100MB+，只保留 SHA 台账）
+docs/qa/uat/suites/mcp-inquiry-performance/evidence/**/attempts.ndjson
+docs/qa/uat/suites/mcp-inquiry-performance/evidence/**/attempts.ndjson.gz
