@@ -28,6 +28,7 @@
 | 版本 | 变更 |
 |---|---|
 | v1.0 | Implemented：merge-safe import + drawer 指引 + 台账 UX-CATALOG-030 Fixed |
+| v1.1 | 2026-08-25 P0/P1 分流修订：业务 source 导入不再合并 Manifest columns，防冲掉 pk。2026-11-26 P1-89 D3a 行为变更：表级 `descriptions` 豁免合并入 Manifest；`columns`/`joins` 丢弃时输出 `IMPORT_SCHEMA_KEYS_IGNORED` 告警；零写入返回 `written:false` |
 
 ## 1. 背景
 

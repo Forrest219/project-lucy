@@ -113,6 +113,19 @@ import {
   writeSourceYamlImport
 } from "./semantic-layer";
 import {
+  planSchemaManifestAppend,
+  writeSchemaManifestAppend
+} from "./schema-manifest-append";
+import {
+  listPerTableOverlays,
+  previewPerTableOverlayDelete,
+  deletePerTableOverlay,
+  OverlayNotFoundError,
+  OverlayDeleteForbiddenError,
+  OverlayBusinessEnrichmentProtectedError
+} from "./semantic-overlay-lifecycle";
+import { assertAllowedKeys } from "./request-body";
+import {
   createTableYamlVersionSnapshot,
   listTableYamlVersions,
   previewTableYamlVersionRestore,
@@ -355,6 +368,8 @@ type ErrorEnvelope = {
     message: string;
     detail?: unknown;
   };
+  /** P1-89 D8 — 请求体校验等错误的机器可读下一步（`data.nextSteps`）。 */
+  data?: unknown;
 };
 
 type SupportedError = FastifyError & {
@@ -1088,6 +1103,11 @@ export function buildServer() {
     if (detail !== undefined) {
       payload.error.detail = detail;
     }
+    // P1-89 D8 — 错误携带 data（如 nextSteps）时原样透传到响应顶层。
+    const errorData = (error as { data?: unknown }).data;
+    if (errorData !== undefined && errorData !== null && typeof errorData === "object") {
+      payload.data = errorData;
+    }
     const retryAfter = (error as { retryAfterSeconds?: unknown }).retryAfterSeconds;
     if (typeof retryAfter === "number") reply.header("Retry-After", String(retryAfter));
     // P0-1：忙碌原因（固定枚举，无敏感信息）随响应头返回，供现场与 UAT 归因。
@@ -1162,14 +1182,37 @@ export function buildServer() {
     Params: { conn: string; schema: string; table: string };
     Body: { patch?: TablePatch; dryRun?: boolean; restoredFromVersionId?: string };
   }>("/api/sources/:conn/:schema/:table", async (request, reply) => {
+    // P1-89 D2/D8 — 合同外顶层字段显式 400，不再静默忽略。
+    assertAllowedKeys(
+      request.body,
+      ["patch", "dryRun", "restoredFromVersionId"],
+      "INVALID_SOURCE_PATCH_BODY",
+      "修改表描述请用 patch.tableDescription，列描述请用 patch.columns[].description，详见 03-api-spec.md PUT 小节",
+      ["PUT /api/sources/<conn>/<schema>/<table> with { patch: { tableDescription }, dryRun }"]
+    );
     const dryRun = request.body?.dryRun !== false;
     const projectRoot = await resolveProjectRoot();
     const { conn, schema, table } = request.params;
+    const patch = request.body?.patch ?? {};
     if (dryRun) {
-      const data = await previewSourcePatch(projectRoot, conn, schema, table, request.body?.patch ?? {});
+      const data = await previewSourcePatch(projectRoot, conn, schema, table, patch);
+      // P1-89 D5 — dryRun 显式返回无变更信号。
+      return reply.send({ ok: true, data: { ...data, noChanges: data.files.length === 0 } });
+    }
+
+    // P1-89 D1 — 零文件预览短路：不写盘，不创建版本快照，不登记 changedSources，
+    // 不触发显示缓存失效；validation 仍返回当前源有效性。
+    const pending = await previewSourcePatch(projectRoot, conn, schema, table, patch);
+    if (pending.files.length === 0) {
+      const validation = await applySharedSemanticLegality(
+        projectRoot,
+        { connectionId: conn, schema, table },
+        await validateSource(projectRoot, conn, schema, table)
+      );
+      const files = await changedFiles(projectRoot, writtenFiles);
       return reply.send({
         ok: true,
-        data
+        data: { written: false, noChanges: true, writtenFiles: [], validation, changedFiles: files }
       });
     }
 
@@ -1178,7 +1221,7 @@ export function buildServer() {
       conn,
       schema,
       table,
-      request.body?.patch ?? {},
+      patch,
       trustedActorFromRequest(request)
     );
     for (const file of preview.files) {
@@ -1208,6 +1251,8 @@ export function buildServer() {
       ok: true,
       data: {
         written: true,
+        noChanges: false,
+        writtenFiles: preview.files.map((file) => file.filePath),
         validation,
         changedFiles: files,
         version
@@ -1219,6 +1264,14 @@ export function buildServer() {
     Params: { conn: string; schema: string; table: string };
     Body: { yaml?: string; dryRun?: boolean; sourceFileName?: string; restoredFromVersionId?: string };
   }>("/api/sources/:conn/:schema/:table/import", async (request, reply) => {
+    // P1-89 D2/D8 — 合同外顶层字段显式 400，不再静默忽略。
+    assertAllowedKeys(
+      request.body,
+      ["yaml", "dryRun", "sourceFileName", "restoredFromVersionId"],
+      "INVALID_SOURCE_PATCH_BODY",
+      "导入表 YAML 请传 yaml 字段（单表片段或含 tables.<table> 的 Schema YAML），详见 03-api-spec.md import 小节",
+      ["POST /api/sources/<conn>/<schema>/<table>/import with { yaml: \"<table yaml>\", dryRun }"]
+    );
     const dryRun = request.body?.dryRun !== false;
     const yaml = request.body?.yaml;
     if (typeof yaml !== "string" || !yaml.trim()) {
@@ -1234,9 +1287,30 @@ export function buildServer() {
     const { conn, schema, table } = request.params;
     if (dryRun) {
       const data = await previewSourceYamlImport(projectRoot, conn, schema, table, yaml);
+      // P1-89 D5 — dryRun 显式返回无变更信号。
+      return reply.send({ ok: true, data: { ...data, noChanges: data.files.length === 0 } });
+    }
+
+    // P1-89 D1 — 零文件预览短路：不写盘，不创建版本快照，不登记 changedSources，
+    // 不触发显示缓存失效；被丢弃的 schema 键告警仍随响应透出。
+    const pending = await previewSourceYamlImport(projectRoot, conn, schema, table, yaml);
+    if (pending.files.length === 0) {
+      const validation = await applySharedSemanticLegality(
+        projectRoot,
+        { connectionId: conn, schema, table },
+        await validateSource(projectRoot, conn, schema, table)
+      );
+      const files = await changedFiles(projectRoot, writtenFiles);
       return reply.send({
         ok: true,
-        data
+        data: {
+          written: false,
+          noChanges: true,
+          writtenFiles: [],
+          validation,
+          changedFiles: files,
+          warnings: pending.warnings ?? []
+        }
       });
     }
 
@@ -1269,9 +1343,12 @@ export function buildServer() {
       ok: true,
       data: {
         written: true,
+        noChanges: false,
+        writtenFiles: preview.files.map((file) => file.filePath),
         validation,
         changedFiles: files,
-        version
+        version,
+        warnings: preview.warnings ?? []
       }
     });
   });
@@ -1336,6 +1413,185 @@ export function buildServer() {
         await validateSource(projectRoot, conn, schema, table)
       )
     };
+  });
+
+  app.post<{
+    Params: { conn: string; schema: string };
+    Body: { table?: string; yaml?: string; dryRun?: boolean };
+  }>("/api/schema-manifests/:conn/:schema/tables", async (request, reply) => {
+    // P1-90 D8 — 合同外顶层字段显式 400（create-only 按表追加端点）。
+    assertAllowedKeys(
+      request.body,
+      ["table", "yaml", "dryRun"],
+      "INVALID_SCHEMA_APPEND_BODY",
+      "仅支持 table / yaml / dryRun 字段，详见 03-api-spec.md schema-manifests 小节",
+      ["POST /api/schema-manifests/<conn>/<schema>/tables with { table, yaml, dryRun }"]
+    );
+    const table = request.body?.table ?? "";
+    const yaml = request.body?.yaml;
+    if (!table || typeof yaml !== "string" || !yaml.trim()) {
+      return reply.status(400).send({
+        ok: false,
+        error: { code: "INVALID_SCHEMA_APPEND_BODY", message: "需要 table 与非空 yaml 字段" },
+        data: {
+          allowedKeys: ["table", "yaml", "dryRun"],
+          nextSteps: ["POST /api/schema-manifests/<conn>/<schema>/tables with { table, yaml, dryRun }"]
+        }
+      });
+    }
+    const dryRun = request.body?.dryRun !== false;
+    const projectRoot = await resolveProjectRoot();
+    const { conn, schema } = request.params;
+    const plan = await planSchemaManifestAppend(projectRoot, conn, schema, table, yaml);
+    if (dryRun) {
+      return reply.send({
+        ok: true,
+        data: {
+          diff: plan.diff,
+          proposedYaml: plan.proposedYaml,
+          files: [{ filePath: plan.relPath, diff: plan.diff, proposedYaml: plan.proposedYaml }],
+          noChanges: false,
+          warnings: plan.warnings
+        }
+      });
+    }
+    await writeSchemaManifestAppend(projectRoot, conn, schema, table, plan, trustedActorFromRequest(request));
+    writtenFiles.push({ filePath: plan.relPath });
+    changedSources.set(`${conn}/${schema}/${table}`, { conn, schema, table });
+    // P1-90 — 静态目录重载，使 /api/sources 立即可见新表。
+    await reloadCatalog(projectRoot);
+    const validation = await applySharedSemanticLegality(
+      projectRoot,
+      { connectionId: conn, schema, table },
+      await validateSource(projectRoot, conn, schema, table)
+    );
+    const files = await changedFiles(projectRoot, writtenFiles);
+    return reply.send({
+      ok: true,
+      data: {
+        written: true,
+        noChanges: false,
+        writtenFiles: [plan.relPath],
+        validation,
+        changedFiles: files,
+        warnings: plan.warnings,
+        nextSteps: [`PUT /api/connections/${conn}/enabled-tables`, "POST /api/semantic-assets/reindex"]
+      }
+    });
+  });
+
+  // P1-91 F-a — per-table overlay 只读盘点（消除盲删缺口）。
+  app.get<{
+    Querystring: { conn?: string };
+  }>("/api/semantic-assets/overlays", async (request, reply) => {
+    const query = request.query ?? {};
+    const unknownKeys = Object.keys(query).filter((key) => key !== "conn");
+    if (unknownKeys.length > 0) {
+      return reply.status(400).send({
+        ok: false,
+        error: {
+          code: "INVALID_OVERLAY_LIST_QUERY",
+          message: `无法识别的查询参数 ${unknownKeys.join("、")}；仅支持 conn`
+        },
+        data: {
+          allowedKeys: ["conn"],
+          nextSteps: ["GET /api/semantic-assets/overlays?conn=<conn>"]
+        }
+      });
+    }
+    const conn = typeof query.conn === "string" && query.conn.trim() ? query.conn.trim() : undefined;
+    try {
+      const items = await listPerTableOverlays(await resolveProjectRoot(), conn);
+      return reply.send({ ok: true, data: { items } });
+    } catch (error) {
+      if (error instanceof OverlayDeleteForbiddenError) {
+        return reply.status(error.statusCode).send({
+          ok: false,
+          error: { code: error.code, message: error.message }
+        });
+      }
+      throw error;
+    }
+  });
+
+  // P1-91 F-a（OQ-6）— per-table overlay 受控删除（standalone 直删；业务合并型需显式确认）。
+  app.delete<{
+    Params: { conn: string; sourceName: string };
+    Querystring: { dryRun?: string; confirmBusinessOverlayDelete?: string };
+  }>("/api/semantic-assets/overlay/:conn/:sourceName", async (request, reply) => {
+    try {
+      assertAllowedKeys(
+        request.query,
+        ["dryRun", "confirmBusinessOverlayDelete"],
+        "INVALID_OVERLAY_DELETE_QUERY",
+        "仅支持 dryRun / confirmBusinessOverlayDelete 查询参数",
+        ["DELETE /api/semantic-assets/overlay/<conn>/<sourceName>?dryRun=false"]
+      );
+    } catch (error) {
+      const data = (error as { data?: unknown }).data;
+      return reply.status(400).send({
+        ok: false,
+        error: { code: "INVALID_OVERLAY_DELETE_QUERY", message: (error as Error).message },
+        ...(data && typeof data === "object" ? { data } : {})
+      });
+    }
+    const { conn, sourceName } = request.params;
+    const dryRun = request.query.dryRun !== "false";
+    const confirmBusinessOverlayDelete = request.query.confirmBusinessOverlayDelete === "true";
+    const projectRoot = await resolveProjectRoot();
+    try {
+      const outcome = await previewPerTableOverlayDelete(projectRoot, conn, sourceName);
+      if (outcome.kind === "merge_overlay" && !confirmBusinessOverlayDelete) {
+        throw new OverlayBusinessEnrichmentProtectedError(
+          "目标为业务合并型 overlay（不含 table/sql），删除将清空该表业务口径（grain/measures/segments）。",
+          outcome.kind,
+          ["确认清空业务口径请传 confirmBusinessOverlayDelete=true 重试"]
+        );
+      }
+      if (dryRun) {
+        return reply.send({
+          ok: true,
+          data: {
+            diff: outcome.diff,
+            files: [outcome.relPath],
+            noChanges: false,
+            kind: outcome.kind,
+            dryRun: true
+          }
+        });
+      }
+      await deletePerTableOverlay(projectRoot, conn, sourceName, outcome, trustedActorFromRequest(request));
+      await reloadCatalog(projectRoot);
+      return reply.send({
+        ok: true,
+        data: {
+          deleted: true,
+          noChanges: false,
+          deletedFiles: [outcome.relPath],
+          kind: outcome.kind,
+          fallback:
+            outcome.kind === "standalone"
+              ? "该表读取已回落 Schema Manifest 定义"
+              : "该表业务合并口径已清除",
+          nextSteps: ["POST /api/semantic-assets/reindex"]
+        }
+      });
+    } catch (error) {
+      if (error instanceof OverlayNotFoundError || error instanceof OverlayDeleteForbiddenError) {
+        return reply.status(error.statusCode).send({
+          ok: false,
+          error: { code: error.code, message: error.message }
+        });
+      }
+      if (error instanceof OverlayBusinessEnrichmentProtectedError) {
+        return reply.status(error.statusCode).send({
+          ok: false,
+          error: { code: error.code, message: error.message },
+          data: error.data
+        });
+      }
+      throw error;
+    }
   });
 
   app.get("/api/diff", async () => {
@@ -2847,6 +3103,7 @@ export function buildServer() {
         {
           validationId,
           confirmOverwrite: body.confirmOverwrite === true,
+          allowManifestShadow: body.allowManifestShadow === true,
           ...(typeof body.planDigest === "string" ? { planDigest: body.planDigest } : {}),
           ...(Array.isArray(body.overwriteTargets)
             ? { overwriteTargets: body.overwriteTargets.filter((t): t is string => typeof t === "string") }
@@ -2865,6 +3122,8 @@ export function buildServer() {
           error: { code: error.code, message: error.message },
           data: {
             errors: error.errors,
+            // P1-91 D2/D8 — pendingConfirmations／nextSteps 原样透传。
+            ...(error.data ? { ...error.data } : {}),
             ...(error.release ? { release: error.release } : {})
           }
         });

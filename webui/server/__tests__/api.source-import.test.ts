@@ -151,6 +151,9 @@ describe("source YAML import API", () => {
       .expect(200);
 
     expect(response.body.data.written).toBe(true);
+    expect(response.body.data.noChanges).toBe(false);
+    expect(response.body.data.writtenFiles).toEqual([schemaRelPath]);
+    expect(response.body.data.warnings).toEqual([]);
     expect(response.body.data.version).toMatchObject({
       key: "mysql-aliyun/dataforai/superstore_orders",
       operation: "import",
@@ -188,12 +191,14 @@ measures:
     expect(response.body.data.files.some((file: { filePath: string }) => file.filePath.includes("superstore_orders.yaml"))).toBe(
       true
     );
+    // P1-89 SC-06 — 业务 source 导入无 schema 键：overlay-only 且无告警。
+    expect(response.body.data.warnings).toEqual([]);
     await expect(readFile(path.join(projectRoot, schemaRelPath), "utf8")).resolves.toBe(schemaYaml);
     await expect(readFile(path.join(projectRoot, schemaRelPath), "utf8")).resolves.toContain("columns:");
     await app.close();
   });
 
-  it("P0: standalone source with columns+grain does not patch Manifest (keeps pk)", async () => {
+  it("P1-89 D3a: standalone source merges table-level descriptions into Manifest; columns dropped with warning (keeps pk)", async () => {
     const app = buildServer();
     await app.ready();
     const preview = await request(app.server)
@@ -201,15 +206,22 @@ measures:
       .send({ dryRun: true, yaml: importedStandaloneSourceYaml })
       .expect(200);
 
-    const schemaFiles = (preview.body.data.files as { filePath: string }[]).filter(
-      (file) => file.filePath === schemaRelPath
-    );
-    expect(schemaFiles).toHaveLength(0);
+    // D3a — 表级 descriptions 豁免合并入 Manifest；columns 仍被 P0 丢弃并告警。
+    expect(
+      (preview.body.data.files as { filePath: string }[]).some((file) => file.filePath === schemaRelPath)
+    ).toBe(true);
     expect(
       (preview.body.data.files as { filePath: string }[]).some((file) =>
         file.filePath.includes("superstore_orders.yaml")
       )
     ).toBe(true);
+    expect(preview.body.data.warnings).toEqual([
+      {
+        code: "IMPORT_SCHEMA_KEYS_IGNORED",
+        keys: ["columns"],
+        hint: expect.stringContaining("columns")
+      }
+    ]);
 
     const response = await request(app.server)
       .post("/api/sources/mysql-aliyun/dataforai/superstore_orders/import")
@@ -217,15 +229,113 @@ measures:
       .expect(200);
 
     expect(response.body.data.written).toBe(true);
+    expect(response.body.data.noChanges).toBe(false);
+    expect(response.body.data.writtenFiles).toEqual(
+      expect.arrayContaining([schemaRelPath, "semantic-layer/mysql-aliyun/superstore_orders.yaml"])
+    );
+    expect(response.body.data.warnings).toEqual([
+      {
+        code: "IMPORT_SCHEMA_KEYS_IGNORED",
+        keys: ["columns"],
+        hint: expect.stringContaining("columns")
+      }
+    ]);
     const schemaText = await readFile(path.join(projectRoot, schemaRelPath), "utf8");
-    expect(schemaText).toBe(schemaYaml);
+    // D3a — 表级 descriptions 落 Manifest。
+    expect(schemaText).toContain("human: Standalone source description.");
+    // P0 保护不变：columns 不被 overlay 冲掉，pk/nullable 保留。
     expect(schemaText).toMatch(/\bpk:\s*true\b/);
+    expect(schemaText).toMatch(/\bnullable:\s*false\b/);
+    expect(schemaText).not.toContain("Overlay column text.");
     const overlayText = await readFile(
       path.join(projectRoot, "semantic-layer", "mysql-aliyun", "superstore_orders.yaml"),
       "utf8"
     );
     expect(overlayText).toContain("grain:");
     expect(overlayText).toContain("order_count");
+    await app.close();
+  });
+
+  it("P1-89 SC-01/SC-07: re-importing unchanged content reports noChanges and does not write", async () => {
+    const app = buildServer();
+    await app.ready();
+    // 先写入一次，使磁盘内容与导入内容一致。
+    await request(app.server)
+      .post("/api/sources/mysql-aliyun/dataforai/superstore_orders/import")
+      .send({ dryRun: false, yaml: importedSchemaSnippetYaml })
+      .expect(200);
+    const afterFirstWrite = await readFile(path.join(projectRoot, schemaRelPath), "utf8");
+
+    const dryRun = await request(app.server)
+      .post("/api/sources/mysql-aliyun/dataforai/superstore_orders/import")
+      .send({ dryRun: true, yaml: importedSchemaSnippetYaml })
+      .expect(200);
+    expect(dryRun.body.data.noChanges).toBe(true);
+    expect(dryRun.body.data.files).toEqual([]);
+
+    const response = await request(app.server)
+      .post("/api/sources/mysql-aliyun/dataforai/superstore_orders/import")
+      .send({ dryRun: false, yaml: importedSchemaSnippetYaml })
+      .expect(200);
+    expect(response.body.data).toMatchObject({
+      written: false,
+      noChanges: true,
+      writtenFiles: []
+    });
+    expect(response.body.data.version).toBeUndefined();
+    expect(response.body.data.validation).toBeDefined();
+    await expect(readFile(path.join(projectRoot, schemaRelPath), "utf8")).resolves.toBe(afterFirstWrite);
+
+    // 零写入不得产生新版本快照（仅首次写入的 1 个）。
+    const versions = await request(app.server)
+      .get("/api/sources/mysql-aliyun/dataforai/superstore_orders/versions")
+      .expect(200);
+    expect(versions.body.data.versions).toHaveLength(1);
+    await app.close();
+  });
+
+  it("P1-89 SC-05: business import with joins only reports joins as ignored", async () => {
+    const app = buildServer();
+    await app.ready();
+    const yaml = `name: superstore_orders
+table: dataforai.superstore_orders
+grain:
+  - id
+joins:
+  - to: rows
+    on: superstore_orders.row_id = rows.row_id
+`;
+    const response = await request(app.server)
+      .post("/api/sources/mysql-aliyun/dataforai/superstore_orders/import")
+      .send({ dryRun: false, yaml })
+      .expect(200);
+
+    expect(response.body.data.written).toBe(true);
+    expect(response.body.data.warnings).toEqual([
+      {
+        code: "IMPORT_SCHEMA_KEYS_IGNORED",
+        keys: ["joins"],
+        hint: expect.stringContaining("joins")
+      }
+    ]);
+    const schemaText = await readFile(path.join(projectRoot, schemaRelPath), "utf8");
+    expect(schemaText).toBe(schemaYaml);
+    await app.close();
+  });
+
+  it("P1-89 SC-02: rejects unknown top-level import body fields with a 400 and data.nextSteps", async () => {
+    const app = buildServer();
+    await app.ready();
+    const response = await request(app.server)
+      .post("/api/sources/mysql-aliyun/dataforai/superstore_orders/import")
+      .send({ patch: { tableDescription: "Nope" }, confirmOverwrite: true })
+      .expect(400);
+
+    expect(response.body.ok).toBe(false);
+    expect(response.body.error.code).toBe("INVALID_SOURCE_PATCH_BODY");
+    expect(response.body.error.message).toContain("patch");
+    expect(Array.isArray(response.body.data.nextSteps)).toBe(true);
+    expect(response.body.data.allowedKeys).toEqual(["yaml", "dryRun", "sourceFileName", "restoredFromVersionId"]);
     await app.close();
   });
 

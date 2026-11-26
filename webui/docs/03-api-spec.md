@@ -36,6 +36,7 @@ GET  /api/sources/:conn/:schema/:table
 PUT  /api/sources/:conn/:schema/:table         # body.dryRun 控制预览/落盘
 POST /api/sources/:conn/:schema/:table/validate
 POST /api/sources/:conn/:schema/:table/import
+POST /api/schema-manifests/:conn/:schema/tables   # P1-90: create-only 按表追加（默认 dryRun）
 GET  /api/sources/:conn/:schema/:table/versions
 GET  /api/sources/:conn/:schema/:table/versions/:versionId
 POST /api/sources/:conn/:schema/:table/versions/:versionId/restore/preview
@@ -174,6 +175,8 @@ GET    /api/semantic-assets/operations/:id
 POST   /api/semantic-assets/operations/:id/cancel
 GET    /api/semantic-assets/operations/:id/report.csv
 GET    /api/semantic-assets/plans/:validationId
+GET    /api/semantic-assets/overlays                 # P1-91: per-table overlay 只读盘点（conn 可选）
+DELETE /api/semantic-assets/overlay/:conn/:sourceName  # P1-91: 受控删除（dryRun 默认 true）
 
 GET    /api/publish-workbench/evidence
 
@@ -364,18 +367,40 @@ P1-61：三个探针的请求处理路径**不**触发文件／SQLite／子进�
 }}
 ```
 
+> 查询参数 `?format=manifest` 当前服务端未消费、静默忽略不报错（OQ-1 裁定）；整库 Manifest 读取走 `GET /api/catalog/assets/schema-manifest`（见 §4「Catalog Reload 与 Manifest 上传」）。
+
 ### `PUT /api/sources/:conn/:schema/:table`
-请求：
+请求体白名单顶层键：`patch`、`dryRun`、`restoredFromVersionId`；含合同外顶层字段（如 `yaml`／`model`）→ `400 INVALID_SOURCE_PATCH_BODY`，消息指明正确字段（`patch.tableDescription` 等），响应含顶层 `data: { unknownKeys, allowedKeys, nextSteps }`，`nextSteps` 为字符串数组的机器可读下一步。dryRun 与落盘同样校验。
+
 ```jsonc
 { "patch": { /* TablePatch */ }, "dryRun": true }
 ```
-- `dryRun:true` → 不落盘，返回 `{ diff, proposedYaml }`；
-- `dryRun:false` → 经 `fs-safe` 写回，自动 validate，返回 `{ written:true, validation, changedFiles }`。
+
+`TablePatch` 字段与落点（详见 04-data-model.md §3）：
+
+| 字段 | 类型 | 写入位置 |
+|---|---|---|
+| `tableDescription` | `string?` | Manifest `descriptions.human`（既有行为不变；保留 `descriptions.db`/`descriptions.ai` 子键） |
+| `columns[].description` | `{ name, description? }[]` | Manifest 列描述（合并保留既有 `pk`/`nullable`） |
+| `grain` | `string[]?` | overlay（`semantic-layer/<conn>/<table>.yaml`） |
+| `measures` | `Measure[]?` | overlay |
+| `segments` | `Segment[]?` | overlay |
+| `joins` | `Join[]?` | Manifest（仅 confirmed/formal 写正式 YAML，见 04-data-model.md） |
+
+响应分支：
+
+- `dryRun:true`（默认）→ 不落盘，返回 `{ diff, proposedYaml, files, noChanges }`；零变更时 `noChanges:true` 且 `diff`/`proposedYaml`/`files` 为空；有变更 `noChanges:false`。
+- `dryRun:false` 且补丁无实际变更（零文件预览）→ `200 { written:false, noChanges:true, writtenFiles:[], validation, changedFiles }`；不创建版本快照、不登记 changedSources、不触发显示缓存失效。
+- `dryRun:false` 且有实际写入 → `200 { written:true, noChanges:false, writtenFiles, validation, changedFiles, version }`；`writtenFiles` 为本请求实际写入的仓库相对路径列表（如 `semantic-layer/<conn>/_schema/<schema>.yaml`）。
+
+> `changedFiles` 是 `git diff --name-status -- semantic-layer wiki .ktx-ui` 的工作树白名单目录脏文件列表，**不是**本请求写入清单；本请求写入清单看 `writtenFiles`。
 
 非法路径 → `403 FORBIDDEN_PATH`；YAML 解析失败 → `422 YAML_PARSE_ERROR`。
 
 ### `POST /api/sources/:conn/:schema/:table/import`
 导入当前表的 YAML 片段，供表语义资产工作台的 `导入 YAML -> dry-run -> 保存` 主链路使用。
+
+请求体白名单顶层键：`yaml`、`dryRun`、`sourceFileName`、`restoredFromVersionId`；含合同外字段（如 `patch`／`model`／`confirmOverwrite`）→ `400 INVALID_SOURCE_PATCH_BODY`，同理（消息指明导入请传 `yaml` 字段，`data.nextSteps` 数组）。
 
 请求：
 ```jsonc
@@ -383,16 +408,37 @@ P1-61：三个探针的请求处理路径**不**触发文件／SQLite／子进�
 ```
 
 - `yaml` 可以是单表 YAML 片段，也可以是包含 `tables.<table>` 的 Schema YAML。
-- `dryRun:true`（默认）→ 不落盘，返回 `{ diff, proposedYaml, files }`；
-- `dryRun:false` → 只替换当前 `{conn}/{schema}/{table}` 对应的 Schema Manifest 节点，经 `fs-safe` 写回并自动 validate，返回 `{ written:true, validation, changedFiles }`。
+
+分流规则（2026-08-25 P0/P1 + 2026-11-26 P1-89 D3a 修订）：
+
+- 导入 YAML 为 Schema Manifest 文档（含 `tables.<table>`）或结构片段（仅 `descriptions`/`columns`/`joins`，不含 `grain`/`measures`/`segments`）→ 全量合并入 Schema Manifest（columns 合并保留既有 `pk`/`nullable`）。
+- 业务 source 导入（扁平 YAML 含 `grain`/`measures`/`segments` 任一）→ overlay 照常写入；表级 `descriptions` **豁免合并入 Manifest**（D3a，新行为）；`columns`/`joins` 仍被保护性丢弃（防冲掉 Manifest `pk`），且响应 `warnings` 输出 `[{ code:"IMPORT_SCHEMA_KEYS_IGNORED", keys:["columns",...], hint:"业务 source 导入（含 grain/measures/segments）时 <keys> 不写入 Manifest；结构片段（仅 descriptions/columns/joins）导入或 PUT patch 可写" }]`。
+- 业务 source 导入无任何 schema 键 → overlay-only，`warnings: []`。
+
+响应分支：
+
+- `dryRun:true`（默认）→ 不落盘，返回 `{ diff, proposedYaml, files, noChanges, warnings }`。
+- `dryRun:false` 且零变更 → `200 { written:false, noChanges:true, writtenFiles:[], validation, changedFiles, warnings }`。
+- `dryRun:false` 且有实际写入 → `200 { written:true, noChanges:false, writtenFiles, validation, changedFiles, version, warnings }`；`writtenFiles` 语义同 PUT。
+
+> 非阻断提示统一 `warnings: [{ code, ... }]`（D8 信封约定，见下）。
 
 约束：
 
 - 该接口只处理当前表在 Schema Manifest 中的节点；不导入、不覆盖其他表。
-- `grain` / `measures` / `segments` 等表级 semantic overlay 完整导入仍走后续专用契约；当前接口不得猜测 overlay 归属。
 - 空 YAML → `400 INVALID_IMPORT_YAML`。
-- 导入 YAML 不包含当前表 → `404 SOURCE_NOT_FOUND`。
+- 导入 YAML 不包含当前表 → `404 SOURCE_NOT_FOUND`（P1-90 起，`data.nextSteps` 含 `"POST /api/schema-manifests/<conn>/<schema>/tables"` 指引：全新表走 create-only 按表追加端点；import 仍为 update-only）。
 - YAML 解析失败 → `422 YAML_PARSE_ERROR`。
+
+#### 语义层写接口统一响应信封（D8）
+
+`PUT /api/sources/:conn/:schema/:table` 与本接口等语义层写接口统一遵守：
+
+1. 写接口用 `written`＋`noChanges`＋`writtenFiles`，删接口用 `deleted`＋`noChanges`＋`deletedFiles`。
+2. dryRun 统一含 `diff`、`files`、`noChanges`。
+3. 请求体／查询参数含合同外字段一律 `400`（各端点使用自身清晰错误码并携带合法字段清单）。
+4. 机器可读下一步：错误响应 `data.nextSteps: string[]`、成功响应 `nextSteps: string[]`，禁止另造单数字段名。
+5. 非阻断提示统一 `warnings: [{ code, ... }]`。
 
 ### `POST /api/sources/:conn/:schema/:table/validate`
 ```jsonc
@@ -638,11 +684,81 @@ dryRun 响应：
 
 `GET /api/catalog/assets/schema-manifest` 返回当前 connection + schema 的 Schema Manifest 内容（用于资产工作台读取物理表结构）。`conn` / `schema` 走 query string；目标路径服务端按 `semantic-layer/<conn>/_schema/<schema>.yaml` 解析，不接受客户端任意路径。Manifest 缺失 → `404 SCHEMA_MANIFEST_NOT_FOUND`。
 
+### Schema Manifest 按表追加（P1-90／REQ-030-111）
+
+**「向既有 Schema 新增表」三条通道分工：**
+
+| 通道 | 语义 | 适用 |
+|---|---|---|
+| `POST /api/schema-manifests/:conn/:schema/tables`（本节） | **create-only 按表追加**：向既有 Schema Manifest 新增一张表节点，按表合并（`setIn` 新增节点，其余表节点逐字节不动），禁止整文件替换 | 新表 |
+| `POST /api/sources/:conn/:schema/:table/import` | **update-only 单表导入**：目标表已存在于 Manifest 才允许，只处理当前表节点 | 既有表更新 |
+| `POST /api/catalog/assets/upload` | **整文件受控替换**：提交全量 Schema Manifest 定义（含 `confirmOverwrite` 重试），经发布锁内重新 validate | 整文件替换 |
+
+**Schema Manifest 路径名大小写归一化（`resolveSchemaManifestPath`，四路径共用）：** `GET /api/sources/:conn/:schema/:table`、`PUT /api/sources/:conn/:schema/:table`、`POST .../import`、`POST /api/schema-manifests/:conn/:schema/tables` 的 `schema` 段统一按大小写不敏感匹配 `semantic-layer/<conn>/_schema/` 下既有 `<schema>.yaml`（如 `bidw` 归一化命中 `BIDW.yaml`），命中后按磁盘实际文件名读写。无匹配 → `404 SCHEMA_MANIFEST_NOT_FOUND`（不再以 ENOENT 形式 500）；多义匹配（如 `BIDW.yaml` 与 `bidw.yaml` 并存）→ `409 AMBIGUOUS_SCHEMA`。
+
+#### `POST /api/schema-manifests/:conn/:schema/tables`
+
+create-only 按表追加端点（P1-90／REQ-030-111）。合同回链：[`docs/specs/lucy-20261125-schema-manifest-table-append-spec.md`](../../docs/specs/lucy-20261125-schema-manifest-table-append-spec.md)。
+
+请求体白名单顶层键：`table`、`yaml`、`dryRun`（`dryRun` 默认 `true`）；含合同外顶层字段 → `400 INVALID_SCHEMA_APPEND_BODY`，响应含顶层 `data: { unknownKeys, allowedKeys, nextSteps }`（同 D8 信封约定）；缺 `table` 或 `yaml` 非非空字符串 → `400` 同码。
+
+```jsonc
+{ "table": "v_token_income_unified", "yaml": "table: BIDW.dbo.v_token_income_unified\n...", "dryRun": true }
+```
+
+- `yaml` 可以是单表 YAML 片段，也可以是包含 `tables.<table>` 的片段；服务端仅抽取路径 `{table}` 对应节点，其余内容不落盘。
+- 节点 `table:` 物理表名允许 1／2／3 段（如 `BIDW.dbo.v_token_income_unified`）；其**末尾物理表名段**（按 `.` 分隔最后一段）与 `body.table` **大小写不敏感**一致，否则 `422 TABLE_NAME_MISMATCH`。
+- 节点键限于 `TABLE_KEYS` 白名单（`table`／`descriptions`／`grain`／`columns`／`measures`／`segments`／`joins`）；白名单外键 → `422 SCHEMA_APPEND_UNKNOWN_KEY`。
+- `columns[]` 内含 `expr`／`role` 等 overlay-only 键 → `422 OVERLAY_ONLY_KEY`（派生列请落 per-table overlay；写入 Manifest 会被静默丢弃）。
+- YAML 解析失败 → `422 YAML_PARSE_ERROR`；`yaml` 含 `tables.<table>` 但该表缺失 → `404 SOURCE_NOT_FOUND`。
+
+**create-only：** `tables[<table>]` 已存在 → `409 TABLE_ALREADY_EXISTS`，`data.nextSteps: ["POST /api/sources/<conn>/<schema>/<table>/import"]`；不写盘。
+
+响应分支：
+
+- `dryRun:true`（默认）→ 不落盘，返回 `200 { diff, proposedYaml, files: [{ filePath, diff, proposedYaml }], noChanges: false, warnings }`；diff 仅含新增表节点；同一 payload 重复 dryRun 结果一致。
+- `dryRun:false` → `200 { written: true, noChanges: false, writtenFiles: [relPath], validation, changedFiles, warnings, nextSteps: ["PUT /api/connections/<conn>/enabled-tables", "POST /api/semantic-assets/reindex"] }`；`writtenFiles` 为仓库相对路径（如 `semantic-layer/<conn>/_schema/<schema>.yaml`）。
+
+**反向 standalone shadow 告警：** 若 `semantic-layer/<conn>/<table>.yaml` 存在且顶层含 `table:` 或 `sql:`（standalone source），dryRun 与正式写均在响应 `warnings` 输出，**不阻断追加**：
+
+```jsonc
+{ "code": "EXISTING_STANDALONE_SHADOW", "file": "semantic-layer/<conn>/<table>.yaml",
+  "hint": "同连接存在同名 standalone 文件，将遮蔽刚追加的 Manifest 定义；可经 DELETE /api/semantic-assets/overlay/<conn>/<table> 清理" }
+```
+
+**写入管线与版本边界：** 正式写复用 L25-16 既有管线（ktx.yaml 写锁 → 展示写屏障 → 发布窗口 → 恢复日志 → 审计，`changeType: semantic_table_append`、来源 `schema_manifest_append_api`，不含凭据）；写后执行静态 `reloadCatalog`，`/api/sources` 立即可见新表。追加不创建 `TableYamlVersionSnapshot`（回滚走 release recovery journal）；按表合并写入，既有表节点逐字节不动，禁止整文件替换。
+
 ### 语义资产发布与导出
 
 `POST /api/semantic-assets/validate` 校验语义资产包或 semantic overlay，执行 secret hard block、结构校验和发布前 gate。
 
+**overlay 物理名规则（P1-91／REQ-030-112，D1 方案 A）：** overlay 分类（semanticSource）的 `table:` 放开为**两段**（`schema.table`）或**三段**（`db.schema.table`），段字符集同既有规则（`SAFE_TABLE_SEGMENT`）；三段名 `physicalTable` 原样记录与落盘，validate 响应 `files[].physicalTable` 即该值——该 `table:` 值将**原样成为查询物理表名**；两段名行为逐字节不变；共享 `parseTableRef`（manifest 通道）语义不变。三段名 validate 的 schema 归属：首段或中段命中该连接 schemas 均可。段数非法时仍报 `422 OVERLAY_MISSING_TABLE`，文案更新为「两段或三段」。三段名 standalone 的引擎运行时实证（`sl_query`／`sl_read_source` 原样解析并执行成功）见 [`inbox/p191-task0/RECORD.md`](../../inbox/p191-task0/RECORD.md)。
+
+**validate 同名 shadow 告警（P1-91，OQ-5）：** semanticSource 的 `sourceName` 命中该连接任一 Schema Manifest `tables` 键时，validate 响应 `warnings` 输出冲突信号（**不**因此置 `valid:false`）：
+
+```jsonc
+{ "code": "MANIFEST_SHADOW", "message": "...standalone shadow...allowManifestShadow:true...DELETE /api/semantic-assets/overlay/<conn>/<sourceName>", "filePath": "semantic-layer/<conn>/<sourceName>.yaml" }
+```
+
+后果说明：落盘后将**整体替换** manifest 定义（standalone shadow，catalog 不显示该文件）。batch（维护包）通道同样报 warnings，但**不硬阻断**。
+
 `POST /api/semantic-assets/publish` 发布通过校验的语义资产，写入 release 记录；`GET /api/semantic-assets/releases` 查询 release 列表；`GET /api/semantic-assets/releases/:id/status` 查询单个 release 状态。
+
+**publish 双 409 门禁（P1-91，D2）：** 发布窗口内复验两类待确认项——① 目标文件已存在且未带 `confirmOverwrite:true`；② shadow 冲突且未带 `allowManifestShadow:true`。任一阻断返回 409 且**保留 validation snapshot**（行为变更：原 409 会删除 snapshot 导致确认链死锁，现保留待既有 opportunistic prune 清理）。`data.pendingConfirmations` 一次列齐全部待确认项：
+
+| 场景 | 错误码 | `pendingConfirmations` |
+|---|---|---|
+| 同时命中覆盖门禁与同名冲突 | `409 OVERLAY_MANIFEST_CONFLICT`（优先） | `["confirmOverwrite", "allowManifestShadow"]` |
+| 仅覆盖门禁 | `409 VALIDATION_GATE_FAILED` | `["confirmOverwrite"]` |
+| 仅同名冲突 | `409 OVERLAY_MANIFEST_CONFLICT` | `["allowManifestShadow"]` |
+
+同命中时 `data.nextSteps` 数组含追加端点（`POST /api/schema-manifests/<conn>/<schema>/tables`）、import（`POST /api/sources/<conn>/<schema>/<table>/import`）、组合确认重试与删除清理指引；调用方可**一次带齐确认布尔值**（`confirmOverwrite:true` ＋ `allowManifestShadow:true`）重试成交，避免连撞两次 409。publish 请求体新增可选布尔 `allowManifestShadow`。batch（维护包）通道不硬阻断（validate 已报 warnings）。放行落盘后成功响应的 release 含 `shadowWarnings`：
+
+```jsonc
+{ "code": "MANIFEST_SHADOW", "message": "已确认覆盖同名 Manifest 表 ...；如需回落 manifest 定义，可走 DELETE /api/semantic-assets/overlay/<conn>/<sourceName>", "filePath": "semantic-layer/<conn>/<sourceName>.yaml" }
+```
+
+> 分工（P1-90 交叉引用）：`POST /api/semantic-assets/publish` 的 overlay 通道＝**发布独立命名 source**（per-table overlay / standalone），**不是新表接收入口**；向既有 Schema 新增表走 `POST /api/schema-manifests/:conn/:schema/tables`（见「Schema Manifest 按表追加」节）。
 
 `POST /api/semantic-assets/export` 生成语义资产导出任务；`GET /api/semantic-assets/exports/:exportId/download` 下载指定导出产物。
 
@@ -699,6 +815,8 @@ dryRun 响应：
 
 `GET /api/semantic-assets/plans/:validationId` 返回该批次的**完整计划**：本次导入候选 + 既有待同步磁盘变更 + 精确覆盖集合 + `planDigest`。索引是整批同步，不能按 Catalog 勾选伪装为局部生效。
 
+**非 batch 快照错误码区分（P1-91，D3）：** `GET /api/semantic-assets/plans/:validationId` 对「snapshot 存在但非 batch」（普通 zip validate 产生的 legacy 快照）返回 `409 PLAN_PREVIEW_NOT_AVAILABLE`（message 说明该 validationId 无批量计划可预览；`data.nextSteps` 含 `confirmOverwrite:true` 重试 publish 与重新 validate），与「snapshot 不存在／已失效」的 `404 VALIDATION_SNAPSHOT_NOT_FOUND` 明确区分，不再把新鲜快照误报为已失效。
+
 `POST /api/semantic-assets/publish` 接受 `validationId`、`planDigest`、精确覆盖集合与幂等键。服务端在发布窗口内重建完整计划并重算摘要：目标或依赖在预览后被改动、覆盖集合变化、或摘要不匹配，一律 `409 SEMANTIC_PLAN_DIGEST_MISMATCH`，必须重新预览确认。同一幂等键 + 同一计划返回同一个 release 且不重复写盘或索引；同一幂等键 + 不同计划返回 `409 SEMANTIC_IDEMPOTENCY_CONFLICT`。
 
 请求：
@@ -714,6 +832,46 @@ dryRun 响应：
 ```
 
 若 `.ktx-ui/semantic-publish.lock` 存在，返回 `409 REINDEX_IN_PROGRESS`。
+
+### per-table overlay 盘点与受控删除（P1-91／REQ-030-112）
+
+per-table overlay 生命周期端点（P1-91／REQ-030-112）。合同回链：[`docs/specs/lucy-20261125-overlay-publish-guard-spec.md`](../../docs/specs/lucy-20261125-overlay-publish-guard-spec.md)。闭环「盘点 → 清理 → 回落 manifest」：误发 standalone 可经 API 发现并安全删除，不再只能 SSH 改服务器文件。
+
+**per-table 文件分类：** `standalone`＝顶层含 `table:` 或 `sql:`（publish 通道产物，整体替换同名 manifest 投影）；`merge_overlay`＝不含 `table:`/`sql:`（WebUI 表编辑器／`PUT`/`import` 维护的业务指标口径，安全合并形态）。非法 YAML 存量文件按 `standalone` 上报 `physicalTable: null`。
+
+#### `GET /api/semantic-assets/overlays?conn=<conn>`
+
+只读盘点端点。`conn` 可选，缺省列全连接；未知查询参数 → `400 INVALID_OVERLAY_LIST_QUERY`。扫描 `semantic-layer/<conn>/<name>.yaml`，排除 `_schema/` 等子目录与隐藏文件。响应：
+
+```jsonc
+{ "ok": true, "data": { "items": [{
+  "connectionId": "<conn>",
+  "sourceName": "<source>",
+  "filePath": "semantic-layer/<conn>/<source>.yaml",
+  "kind": "standalone",
+  "physicalTable": "db.schema.table",
+  "shadowsManifest": true,
+  "manifestPath": "semantic-layer/<conn>/_schema/<schema>.yaml"
+}] } }
+```
+
+`physicalTable` 为 `string | null`；`shadowsManifest: true` 时附 `manifestPath`。鉴权与 `POST /api/semantic-assets/publish` 相同的管理员面。
+
+#### `DELETE /api/semantic-assets/overlay/:conn/:sourceName`
+
+受控删除端点。查询参数白名单 `{ dryRun, confirmBusinessOverlayDelete }`（`dryRun` 默认 `true`）；未知查询参数 → `400 INVALID_OVERLAY_DELETE_QUERY`（含 `data.nextSteps`）。
+
+| 分支 | 响应 |
+|---|---|
+| 非法段／路径穿越／`_schema/` | `400 OVERLAY_DELETE_FORBIDDEN` |
+| 文件不存在 | `404 OVERLAY_NOT_FOUND` |
+| `merge_overlay` 且未确认 | `409 OVERLAY_BUSINESS_ENRICHMENT_PROTECTED`（`data.kind` ＋ `data.nextSteps` 指引 `confirmBusinessOverlayDelete=true`；删除将清空该表 grain/measures/segments） |
+| `dryRun`（默认） | `200 { diff, files: [relPath], noChanges: false, kind, dryRun: true }`，不落盘 |
+| `dryRun:false` 正式删除 | `200 { deleted: true, noChanges: false, deletedFiles: [relPath], kind, fallback, nextSteps: ["POST /api/semantic-assets/reindex"] }` |
+
+`fallback` 文案：`standalone` → `"该表读取已回落 Schema Manifest 定义"`；`merge_overlay` → `"该表业务合并口径已清除"`。仅允许 `semantic-layer/<conn>/<sourceName>.yaml` per-table 文件。
+
+**写管线：** 正式删除复用完整 L25-16 管线（ktx.yaml 写锁 → 展示写屏障 → 发布窗口 `semantic_overlay_delete` → 恢复日志 → 审计，`changeType: semantic_overlay_delete`，不含凭据与绝对路径）；删后执行 `reloadCatalog`，展示缓存即时刷新，该表读取回落 Schema Manifest 定义（standalone 删除时）。
 
 ### Eval / 质量评测
 

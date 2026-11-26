@@ -446,7 +446,12 @@ export type ChangedFile = {
 };
 
 export type SourceSaveResponse = {
-  written: true;
+  /** P1-89 D1 — 诚实化：零写入时为 false（旧版恒为 true 属假成功）。 */
+  written: boolean;
+  /** P1-89 D7 — true 表示本次保存零写入（无实际变更），未落任何文件。 */
+  noChanges?: boolean;
+  /** P1-89 D4 — 本请求实际写入的仓库相对路径列表（与 changedFiles 的工作树脏文件列表区分）。 */
+  writtenFiles?: string[];
   validation: ValidationResult;
   changedFiles: ChangedFile[];
   version?: TableYamlVersionSummary | null;
@@ -2685,6 +2690,11 @@ export type SemanticAssetReleaseRecord = {
   attemptId?: string;
   /** The plan digest the confirmation was bound to. */
   planDigest?: string;
+  /**
+   * P1-91 D2 — 同名覆盖（allowManifestShadow）确认放行后随响应返回的
+   * shadow 警示，含删除端点清理指引。
+   */
+  shadowWarnings?: Array<{ code: string; message: string; filePath?: string }>;
   /** The batch this release came from. */
   batchId?: string;
   /** The scope snapshot this release came from. */

@@ -108,6 +108,8 @@ function buildSourceDetail() {
 type FetchHandlers = {
   failSave?: boolean;
   failPreview?: boolean;
+  /** P1-89 D7 — 保存返回零写入（noChanges:true），用于断言诚实提示分支。 */
+  noChangesSave?: boolean;
   candidates?: unknown;
   validateResult?: {
     ok: boolean;
@@ -121,6 +123,7 @@ type FetchHandlers = {
 function stubEditorFetch({
   failSave = false,
   failPreview = false,
+  noChangesSave = false,
   candidates,
   validateResult
 }: FetchHandlers = {}) {
@@ -196,6 +199,21 @@ function stubEditorFetch({
         return new Response(
           JSON.stringify({ ok: false, error: { code: "SAVE_FAILED", message: "disk denied" } }),
           { status: 500 }
+        );
+      }
+      if (noChangesSave) {
+        // P1-89 D7 — 零写入诚实响应。
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            data: {
+              written: false,
+              noChanges: true,
+              writtenFiles: [],
+              validation: { ok: true, exitCode: 0, stdout: "", stderr: "" },
+              changedFiles: []
+            }
+          })
         );
       }
       return new Response(
@@ -1027,6 +1045,20 @@ describe("TableEditor", () => {
       });
       expect(saveCall).toBeTruthy();
     });
+    // P1-89 SC-08 — 有实际写入提示「已保存到语义层」。
+    expect(toastMock.success).toHaveBeenCalledWith("已保存到语义层", { id: "semantic-layer-save" });
+  });
+
+  it("P1-89 SC-08: shows the no-change toast when the save reports zero writes", async () => {
+    stubEditorFetch({ noChangesSave: true });
+    renderEditor();
+
+    fireEvent.click(await screen.findByRole("button", { name: "保存" }));
+
+    await waitFor(() => {
+      expect(toastMock.success).toHaveBeenCalledWith("内容无变更，未写入", { id: "semantic-layer-save" });
+    });
+    expect(toastMock.success).not.toHaveBeenCalledWith("已保存到语义层", { id: "semantic-layer-save" });
   });
 
   it("shows save errors in the inspector", async () => {

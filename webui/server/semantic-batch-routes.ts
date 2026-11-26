@@ -374,7 +374,11 @@ export function registerSemanticBatchRoutes(app: FastifyInstance): void {
         return reply.send({
           ok: false,
           error: { code: error.code, message: error.message },
-          data: { errors: error.errors }
+          // P1-91 D8 — 错误携带 data（如 nextSteps）时原样透传。
+          data: {
+            errors: error.errors,
+            ...(error.data ? { ...error.data } : {})
+          }
         });
       }
       return sendSemanticBatchError(reply, error);

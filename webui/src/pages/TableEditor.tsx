@@ -1318,8 +1318,13 @@ export function TableEditor() {
     onMutate: () => {
       setSaveError(null);
     },
-    onSuccess: () => {
-      toast.success("已保存到语义层", { id: "semantic-layer-save" });
+    onSuccess: (data) => {
+      // P1-89 D7 — 零写入诚实提示，与有写入分支区分，不再对无变更保存报成功。
+      if (data?.noChanges) {
+        toast.success("内容无变更，未写入", { id: "semantic-layer-save" });
+      } else {
+        toast.success("已保存到语义层", { id: "semantic-layer-save" });
+      }
       navigate("/review");
     },
     onError: (error) => {

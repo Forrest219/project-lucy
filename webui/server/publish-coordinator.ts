@@ -35,6 +35,8 @@ export const PUBLISH_COORDINATOR_LOCK_REL = ".ktx-ui/semantic-publish.lock";
 /** Every declared write entry point that must share one publish window. */
 export type PublishEntryKind =
   | "semantic_table_save"
+  | "semantic_table_append"
+  | "semantic_overlay_delete"
   | "manifest_upload"
   | "batch_import"
   | "manual_reindex"
@@ -44,6 +46,8 @@ export type PublishEntryKind =
 
 export const PUBLISH_ENTRY_KINDS: readonly PublishEntryKind[] = [
   "semantic_table_save",
+  "semantic_table_append",
+  "semantic_overlay_delete",
   "manifest_upload",
   "batch_import",
   "manual_reindex",

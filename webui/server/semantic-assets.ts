@@ -145,7 +145,9 @@ export type SemanticAssetWarningCode =
   | "TABLE_SCHEMA_MISMATCH"
   | "UNKNOWN_MANIFEST_SHAPE"
   | "PUBLISH_LOCKED"
-  | "STRIPPED_MANIFEST_COLUMN_KEYS";
+  | "STRIPPED_MANIFEST_COLUMN_KEYS"
+  /** P1-91 D2（OQ-5）— semanticSource 的 sourceName 命中既有 Schema Manifest 表键。 */
+  | "MANIFEST_SHADOW";
 
 export type SemanticAssetErrorCode =
   | "UNKNOWN_CONNECTION"
@@ -162,6 +164,15 @@ export type SemanticAssetErrorCode =
   | "PATH_NOT_ALLOWED"
   | "VALIDATION_SNAPSHOT_NOT_FOUND"
   | "VALIDATION_GATE_FAILED"
+  /**
+   * P1-91 D2 — semanticSource 的 sourceName 与 Schema Manifest 表同名：
+   * 落盘将整体替换 manifest 定义（standalone shadow），未带 allowManifestShadow 确认时阻断。
+   */
+  | "OVERLAY_MANIFEST_CONFLICT"
+  /**
+   * P1-91 D3 — snapshot 存在但来自普通校验（非维护包），无批量计划可预览。
+   */
+  | "PLAN_PREVIEW_NOT_AVAILABLE"
   /** Spec 162 §8 / SC-24 — a failing TS/Python contract check. */
   | "CONTRACT_VIOLATION"
   | "admission_stop_failed"
@@ -330,6 +341,11 @@ export type SemanticAssetReleaseRecord = {
   attemptId?: string;
   /** The plan digest the confirmation was bound to (L25-11 §7.2, D14). */
   planDigest?: string;
+  /**
+   * P1-91 D2 — 放行落盘后随响应返回的 shadow 警示（同名覆盖已确认时非空），
+   * 含删除端点清理指引。
+   */
+  shadowWarnings?: SemanticAssetWarning[];
   /** The batch this release came from (L25-11 §5). */
   batchId?: string;
   /** The scope snapshot this release came from (L25-11 §4.2). */
@@ -412,6 +428,11 @@ export type SemanticAssetPublishRequest = {
    */
   confirmOverwrite?: boolean;
   /**
+   * P1-91 D2（OQ-5 已裁）— 显式确认「sourceName 与 Schema Manifest 表同名」的
+   * standalone shadow 覆盖。未确认时 publish 返回 409 OVERLAY_MANIFEST_CONFLICT。
+   */
+  allowManifestShadow?: boolean;
+  /**
    * Lucy v0.25 / L25-11 §7.2 (D14) — the digest of the COMPLETE plan the
    * operator confirmed. It covers the candidates, the exact target set, every
    * target's expected digest (or its `absent` marker) and the overwrite set.
@@ -486,13 +507,16 @@ export class SemanticAssetValidationError extends Error {
   statusCode: 400 | 403 | 404 | 409 | 422;
   errors: SemanticAssetError[];
   release?: SemanticAssetReleaseRecord;
+  /** P1-91 D2/D8 — 机器可读待确认项与下一步（如 pendingConfirmations／nextSteps）。 */
+  data?: Record<string, unknown>;
 
   constructor(
     code: SemanticAssetErrorCode,
     message: string,
     errors: SemanticAssetError[] = [],
     statusCode: 400 | 403 | 404 | 409 | 422 = 400,
-    release?: SemanticAssetReleaseRecord
+    release?: SemanticAssetReleaseRecord,
+    data?: Record<string, unknown>
   ) {
     super(message);
     this.name = "SemanticAssetValidationError";
@@ -500,6 +524,7 @@ export class SemanticAssetValidationError extends Error {
     this.statusCode = statusCode;
     this.errors = errors;
     this.release = release;
+    this.data = data;
   }
 }
 
@@ -602,6 +627,22 @@ function parseTableRef(table: string): { schema: string; table: string } | null 
   if (!QUALIFIED_TABLE_RE.test(table)) return null;
   const [schema, tableName] = table.split(".");
   return { schema, table: tableName };
+}
+
+/**
+ * P1-91 D1（OQ-4 已裁方案 A）— overlay 专用物理表名解析：允许两段（`schema.table`）
+ * 或三段（`db.schema.table`，SQL Server／Doris external catalog 形态），段字符集与
+ * 既有 QUALIFIED_TABLE_RE 一致；返回值原样保留整串（查询物理表名即该值）。
+ * 共享 `parseTableRef` 的两段语义不变（manifest 通道仍走它）。
+ */
+const OVERLAY_TABLE_SEGMENT_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+function parseOverlayTableRef(table: string): { schema: string; physicalTable: string } | null {
+  if (typeof table !== "string") return null;
+  const segments = table.split(".");
+  if (segments.length !== 2 && segments.length !== 3) return null;
+  if (!segments.every((segment) => OVERLAY_TABLE_SEGMENT_RE.test(segment))) return null;
+  return { schema: segments[0], physicalTable: table };
 }
 
 type Classification =
@@ -764,19 +805,19 @@ function classifyYaml(
         message: "overlay 缺少必需的 `table` 字段"
       };
     }
-    const ref = parseTableRef(record.table.trim());
+    const ref = parseOverlayTableRef(record.table.trim());
     if (!ref) {
       return {
         ok: false,
         code: "OVERLAY_MISSING_TABLE",
-        message: `overlay 缺少合法的 <schema>.<table> 引用：${record.table}`
+        message: `overlay 缺少合法的 <schema>.<table> 或 <db>.<schema>.<table> 引用（两段或三段）：${record.table}`
       };
     }
     return {
       ok: true,
       kind: "semanticSource",
       sourceName,
-      physicalTable: `${ref.schema}.${ref.table}`,
+      physicalTable: ref.physicalTable,
       warnings: []
     };
   }
@@ -1135,7 +1176,49 @@ function connectionForOverlayTable(
 ): ConnectionSchemas | null {
   const [schema] = physicalTable.split(".");
   if (!schema) return null;
+  // P1-91 已知边界（review SUGGEST）：三段名连接推断只取首段；若某部署把 schema
+  // 名配在中段（db.schema.table 且连接仅配中段），会落到 UNKNOWN_CONNECTION。
+  // validate 的 schema 归属（首段或中段）比此处宽；客户主场景（首段即 schema）不受影响。
   return connectionForSchema(list, schema);
+}
+
+/**
+ * P1-91 D2 — 扫描某连接全部 Schema Manifest 的 `tables` 顶层键。
+ * 只读、轻量（逐文件一次 YAML 解析），供 validate warnings 与 publish 窗口内
+ * 双门禁复验共用；解析失败的文件按空集处理（不阻断）。
+ */
+async function manifestTableNamesForConnection(
+  projectRoot: string,
+  connectionId: string
+): Promise<Set<string>> {
+  const names = new Set<string>();
+  const paths = await resolveContentPaths(projectRoot);
+  const schemaDir = path.join(paths.semanticLayer, connectionId, "_schema");
+  let entries;
+  try {
+    entries = await readdir(schemaDir, { withFileTypes: true });
+  } catch (error) {
+    // 连接没有 Manifest 目录（ENOENT）＝无同名冲突，属正常；
+    // 其他 IO 错误留痕——publish 窗口内 shadow 门禁不得在静默中 fail-open。
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      console.warn(`[lucy-semantic] manifest shadow scan failed for ${connectionId}: ${(error as Error).message}`);
+    }
+    return names;
+  }
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(".yaml")) continue;
+    try {
+      const text = await readFile(path.join(schemaDir, entry.name), "utf8");
+      const root = parseDocument(text).toJSON() as Record<string, unknown> | null;
+      const tables = root?.tables;
+      if (tables && typeof tables === "object" && !Array.isArray(tables)) {
+        for (const key of Object.keys(tables as Record<string, unknown>)) names.add(key);
+      }
+    } catch {
+      // 单个 Manifest 读取/解析失败不阻断冲突检查。
+    }
+  }
+  return names;
 }
 
 // ─── Snapshot sidecar (per-validation, used only by publish) ──────────────
@@ -3155,8 +3238,11 @@ export async function validateSemanticAssets(
       // 故意不 addChangedSource：合法纯台账发布（SC-17）不得要求 KTX source validate。
     } else {
       // semanticSource
-      const ref = parseTableRef(classification.physicalTable);
-      if (!ref || !conn.schemas.has(ref.schema)) {
+      // P1-91 D1 — physicalTable 的 schema 归属：两段取首段；三段取首段或中段
+      // （兼容 `db.schema.table` 中 schema 名可能落在任一端的连接配置）。
+      const segments = classification.physicalTable.split(".");
+      const schemaCandidates = segments.length === 3 ? [segments[0], segments[1]] : [segments[0]];
+      if (!schemaCandidates.some((candidate) => candidate && conn.schemas.has(candidate))) {
         errors.push({
           code: "SCHEMA_NOT_CONFIGURED",
           message: `overlay 的 table '${classification.physicalTable}' 的 schema 不在 connection '${conn.id}' 中`,
@@ -3174,6 +3260,16 @@ export async function validateSemanticAssets(
         fileWarnings.push({
           code: "TARGET_EXISTS",
           message: `目标文件已存在：${targetPath}`,
+          filePath: targetPath
+        });
+      }
+      // P1-91 D2（OQ-5）— sourceName 命中该连接任一 Schema Manifest 表键：
+      // 以 warnings 报告冲突信号与后果说明，不因该冲突单独置 valid:false。
+      const manifestTables = await manifestTableNamesForConnection(projectRoot, conn.id);
+      if (manifestTables.has(classification.sourceName)) {
+        fileWarnings.push({
+          code: "MANIFEST_SHADOW",
+          message: `sourceName '${classification.sourceName}' 与 Schema Manifest 表同名：发布落盘后将整体替换 manifest 定义（standalone shadow），catalog 不显示该文件；确需覆盖请在 publish 时携带 allowManifestShadow:true，清理可走 DELETE /api/semantic-assets/overlay/${conn.id}/${classification.sourceName}`,
           filePath: targetPath
         });
       }
@@ -3460,18 +3556,52 @@ export async function publishSemanticAssets(
     confirmedPlanDigest = rebuilt.planDigest;
   }
 
-  // Overwrite check (defer the gate until we know which files overwrite).
+  // Overwrite check + manifest shadow gate (defer until we know which files
+  // overwrite / conflict).
   //
   // ★ L25-11 §7.2 (D14): for a BATCH import the global boolean is NOT the
   // authorization any more — the confirmation is the plan digest, which
   // already covers the exact overwrite set. The boolean path stays for a
   // single-file legacy import that has no batch state.
+  //
+  // ★ P1-91 D2（OQ-5 已裁）— 双 409 门禁组合确认：
+  // ① 目标文件已存在且未带 confirmOverwrite:true；② semanticSource 的
+  // sourceName 命中该连接 Schema Manifest 表键且未带 allowManifestShadow:true。
+  // 任一门禁阻断（未写盘）均保留 validation snapshot（不再删除），并以
+  // data.pendingConfirmations 一次列齐全部待确认项，调用方可单次带齐重试。
+  // 硬阻断仅非 batch 通道；batch（维护包）round-trip 不阻断，validate 已报 warnings。
   const overwriteSet = new Set<string>();
   for (const file of snapshot.files) {
     const oldText = await readExistingTextOrEmpty(projectRoot, file.targetPath);
     if (oldText.length > 0) overwriteSet.add(file.targetPath);
   }
+  const shadowFiles: Array<{ connectionId: string; sourceName: string; targetPath: string }> = [];
+  if (!snapshot.batch) {
+    const shadowByConnection = new Map<string, Set<string>>();
+    for (const file of snapshot.files) {
+      if (file.kind !== "semanticSource" || !file.sourceName) continue;
+      let names = shadowByConnection.get(file.connectionId);
+      if (!names) {
+        names = await manifestTableNamesForConnection(projectRoot, file.connectionId);
+        shadowByConnection.set(file.connectionId, names);
+      }
+      if (names.has(file.sourceName)) {
+        shadowFiles.push({
+          connectionId: file.connectionId,
+          sourceName: file.sourceName,
+          targetPath: file.targetPath
+        });
+      }
+    }
+  }
+  const pendingConfirmations: string[] = [];
   if (!snapshot.batch && overwriteSet.size > 0 && request.confirmOverwrite !== true) {
+    pendingConfirmations.push("confirmOverwrite");
+  }
+  if (!snapshot.batch && shadowFiles.length > 0 && request.allowManifestShadow !== true) {
+    pendingConfirmations.push("allowManifestShadow");
+  }
+  if (pendingConfirmations.length > 0) {
     const record: SemanticAssetReleaseRecord = {
       id: releaseId,
       createdAt,
@@ -3491,7 +3621,35 @@ export async function publishSemanticAssets(
     };
     await appendReleaseRecord(projectRoot, record);
     await releasePublishLock(projectRoot);
-    await deleteSnapshot(projectRoot, request.validationId);
+    // P1-91 D2 — 保留 snapshot（原 P1-90 F-b）：由既有 opportunistic prune 清理，
+    // 幂等回放与 TOCTOU 复验不受影响。
+    const nextSteps: string[] = [];
+    if (pendingConfirmations.includes("confirmOverwrite")) {
+      nextSteps.push("POST /api/semantic-assets/publish with { validationId, confirmOverwrite: true }");
+    }
+    if (pendingConfirmations.includes("allowManifestShadow")) {
+      nextSteps.push(
+        "POST /api/schema-manifests/<conn>/<schema>/tables",
+        "POST /api/sources/<conn>/<schema>/<table>/import",
+        `或携带 ${pendingConfirmations.join(" + ")}=true 重试 publish`,
+        `DELETE /api/semantic-assets/overlay/<conn>/<sourceName>（清理同名 standalone）`
+      );
+    }
+    if (pendingConfirmations.includes("allowManifestShadow")) {
+      throw new SemanticAssetValidationError(
+        "OVERLAY_MANIFEST_CONFLICT",
+        "sourceName 与 Schema Manifest 表同名：落盘后将整体替换 manifest 定义（standalone shadow）。",
+        [
+          {
+            code: "OVERLAY_MANIFEST_CONFLICT",
+            message: `同名冲突：${shadowFiles.map((f) => `${f.connectionId}/${f.sourceName}`).join(", ")}`
+          }
+        ],
+        409,
+        record,
+        { pendingConfirmations, nextSteps }
+      );
+    }
     throw new SemanticAssetValidationError(
       "VALIDATION_GATE_FAILED",
       "存在已存在的目标文件，需先确认覆盖。",
@@ -3502,7 +3660,8 @@ export async function publishSemanticAssets(
         }
       ],
       409,
-      record
+      record,
+      { pendingConfirmations, nextSteps }
     );
   }
 
@@ -3884,7 +4043,17 @@ export async function publishSemanticAssets(
     validation: { ok: true, results: gate.results },
     recoveryRequired: false,
     activationStatus: "unconfirmed",
-    attemptId
+    attemptId,
+    // P1-91 D2 — 放行落盘后响应含 shadow 警示与清理指引（同名覆盖已确认）。
+    ...(shadowFiles.length > 0
+      ? {
+          shadowWarnings: shadowFiles.map((f) => ({
+            code: "MANIFEST_SHADOW" as const,
+            message: `已确认覆盖同名 Manifest 表 ${f.connectionId}/${f.sourceName}（standalone shadow）；如需回落 manifest 定义，可走 DELETE /api/semantic-assets/overlay/${f.connectionId}/${f.sourceName}`,
+            filePath: f.targetPath
+          }))
+        }
+      : {})
   });
   if (!reindexingRecord) {
     await releasePublishLock(projectRoot);
@@ -4381,12 +4550,29 @@ export async function describeSemanticBatchPlan(
   context: { actor: string; instanceId: string }
 ): Promise<SemanticBatchPlanResponse> {
   const snapshot = await readSnapshot(projectRoot, validationId);
-  if (!snapshot || !snapshot.batch) {
+  if (!snapshot) {
     throw new SemanticAssetValidationError(
       "VALIDATION_SNAPSHOT_NOT_FOUND",
       "validationId 已失效或不存在，请重新导入后再预览。",
       [],
       404
+    );
+  }
+  // P1-91 D3 — snapshot 存在但来自普通校验（非维护包）：与「不存在／已过期」区分，
+  // 返回 409 PLAN_PREVIEW_NOT_AVAILABLE 并给出可执行下一步。
+  if (!snapshot.batch) {
+    throw new SemanticAssetValidationError(
+      "PLAN_PREVIEW_NOT_AVAILABLE",
+      "该 validationId 来自普通校验（非维护包），无批量计划可预览；可带确认参数重试 publish，或重新 validate。",
+      [],
+      409,
+      undefined,
+      {
+        nextSteps: [
+          "POST /api/semantic-assets/publish with { validationId, confirmOverwrite: true }",
+          "POST /api/semantic-assets/validate（重新校验）"
+        ]
+      }
     );
   }
   const batch = snapshot.batch;

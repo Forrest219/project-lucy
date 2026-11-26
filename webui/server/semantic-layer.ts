@@ -43,13 +43,75 @@ import {
 
 const TABLE_KEYS = new Set(["table", "descriptions", "grain", "columns", "measures", "segments", "joins"]);
 
+export { TABLE_KEYS };
+
+/**
+ * P1-90 — 公共 schema 名大小写归一化：在 `semantic-layer/<conn>/_schema/` 下
+ * 按大小写不敏感匹配既有 `<schema>.yaml`，覆盖 GET／PUT／import／tables 全路径族。
+ * 无匹配 → 404 SCHEMA_MANIFEST_NOT_FOUND（不再 500 ENOENT）；
+ * 多义（如 `BIDW.yaml` 与 `bidw.yaml` 并存）→ 409 AMBIGUOUS_SCHEMA。
+ */
+export async function resolveSchemaManifestPath(projectRoot: string, conn: string, schema: string): Promise<string> {
+  assertSafeSegment(conn, "connection");
+  assertSafeSegment(schema, "schema");
+  const paths = await loadContentPaths();
+  const schemaDir = path.join(paths.semanticLayer, conn, "_schema");
+  let entries: Array<{ isFile: () => boolean; name: string }>;
+  try {
+    entries = await readdir(schemaDir, { withFileTypes: true });
+  } catch (error) {
+    // 仅「目录不存在」归一化为 404；权限等其他 IO 错误如实上抛（500），不得伪装成不存在。
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      entries = [];
+    } else {
+      throw error;
+    }
+  }
+  const target = `${schema.toLowerCase()}.yaml`;
+  const matches = entries
+    .filter((entry) => entry.isFile() && entry.name.toLowerCase() === target)
+    .map((entry) => entry.name);
+  if (matches.length === 0) {
+    throw new SchemaManifestNotFoundError(`Schema Manifest 不存在：${conn}/${schema}`);
+  }
+  if (matches.length > 1) {
+    throw new AmbiguousSchemaError(`存在大小写歧义的 Schema Manifest：${matches.join("、")}`);
+  }
+  return path.posix.join("semantic-layer", conn, "_schema", matches[0]);
+}
+
 export class SourceNotFoundError extends Error {
   code = "SOURCE_NOT_FOUND";
+  statusCode = 404;
+  /** P1-90 F-a — 机器可读下一步（如指向追加端点），经全局错误处理器透传为响应 data。 */
+  data?: { nextSteps?: string[] };
+
+  constructor(message: string, options?: { nextSteps?: string[] }) {
+    super(message);
+    this.name = "SourceNotFoundError";
+    if (options?.nextSteps?.length) {
+      this.data = { nextSteps: [...options.nextSteps] };
+    }
+  }
+}
+
+export class SchemaManifestNotFoundError extends Error {
+  code = "SCHEMA_MANIFEST_NOT_FOUND";
   statusCode = 404;
 
   constructor(message: string) {
     super(message);
-    this.name = "SourceNotFoundError";
+    this.name = "SchemaManifestNotFoundError";
+  }
+}
+
+export class AmbiguousSchemaError extends Error {
+  code = "AMBIGUOUS_SCHEMA";
+  statusCode = 409;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "AmbiguousSchemaError";
   }
 }
 
@@ -71,7 +133,7 @@ type SchemaFile = {
   mtime: Date;
 };
 
-function valueAsRecord(value: unknown): Record<string, unknown> {
+export function valueAsRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
@@ -263,7 +325,7 @@ function parseYaml(text: string, source: string): Document {
   return doc;
 }
 
-function assertSafeSegment(value: string, label: string): void {
+export function assertSafeSegment(value: string, label: string): void {
   if (!value || value.includes("/") || value.includes("\\") || value === "." || value === ".." || value.includes("..")) {
     throw new ForbiddenPathError(`${label} contains an unsafe path segment`);
   }
@@ -275,7 +337,7 @@ function schemaRelPath(conn: string, schema: string): string {
   return path.posix.join("semantic-layer", conn, "_schema", `${schema}.yaml`);
 }
 
-async function readYamlDocument(projectRoot: string, relPath: string): Promise<{ doc: Document; text: string }> {
+export async function readYamlDocument(projectRoot: string, relPath: string): Promise<{ doc: Document; text: string }> {
   const paths = await loadContentPaths();
   const absPath = await assertReadable(paths, projectRoot, relPath);
   const text = await readFile(absPath, "utf8");
@@ -604,7 +666,7 @@ export async function readSource(
   table: string
 ): Promise<{ model: TableModel; rawYaml: string; completion: ReturnType<typeof computeCompletion> }> {
   assertSafeSegment(table, "table");
-  const relPath = schemaRelPath(conn, schema);
+  const relPath = await resolveSchemaManifestPath(projectRoot, conn, schema);
   const { doc, text } = await readYamlDocument(projectRoot, relPath);
   const root = valueAsRecord(doc.toJSON());
   const tables = valueAsRecord(root.tables);
@@ -706,6 +768,14 @@ export function serialize(doc: Document): string {
   return doc.toString({ lineWidth: 0 });
 }
 
+/** P1-89 D3/D8 — import 分流丢弃 schema 键的非阻断告警（统一 `warnings: [{ code, ... }]` 形态）。 */
+export type SourceImportWarning = {
+  code: string;
+  /** 被丢弃的 schema 键（descriptions/columns/joins 子集）。 */
+  keys: string[];
+  hint: string;
+};
+
 export type SourcePreview = {
   diff: string;
   proposedYaml: string;
@@ -714,6 +784,8 @@ export type SourcePreview = {
     diff: string;
     proposedYaml: string;
   }>;
+  /** 仅 import 预览/写入携带；PUT patch 预览不产生该字段。 */
+  warnings?: SourceImportWarning[];
 };
 
 export async function buildSourcePatchPreview(
@@ -724,7 +796,7 @@ export async function buildSourcePatchPreview(
   patch: TablePatch
 ): Promise<SourcePreview> {
   assertSafeSegment(table, "table");
-  const relPath = schemaRelPath(conn, schema);
+  const relPath = await resolveSchemaManifestPath(projectRoot, conn, schema);
   const { doc, text } = await readYamlDocument(projectRoot, relPath);
   if (!valueAsRecord(valueAsRecord(doc.toJSON()).tables)[table]) {
     throw new SourceNotFoundError(`Source ${conn}/${schema}/${table} was not found`);
@@ -780,7 +852,7 @@ export async function previewSourcePatch(
  * touches. A Manifest feeds D and P (the permission display derives its
  * source map from Manifests); a plain overlay feeds D only.
  */
-async function scopesForSourceFiles(
+export async function scopesForSourceFiles(
   projectRoot: string,
   files: ReadonlyArray<{ filePath: string }>
 ): Promise<DisplayScope[]> {
@@ -924,14 +996,6 @@ const SCHEMA_IMPORT_KEYS = ["table", "descriptions", "columns", "joins"] as cons
 /** Manifest-only column keys that standalone/source YAML must not wipe on merge (P1). */
 const MANIFEST_ONLY_COLUMN_KEYS = ["pk", "nullable"] as const;
 
-function hasMeaningfulSchemaImport(imported: Record<string, unknown>): boolean {
-  return (
-    Object.prototype.hasOwnProperty.call(imported, "columns") ||
-    Object.prototype.hasOwnProperty.call(imported, "descriptions") ||
-    Object.prototype.hasOwnProperty.call(imported, "joins")
-  );
-}
-
 /** Flat source/standalone with business keys — table-page import must not patch Manifest (P0). */
 function isBusinessSourceImport(imported: Record<string, unknown>): boolean {
   return (
@@ -990,6 +1054,8 @@ export type SourceYamlImportDelta = {
   manifest?: { relPath: string; table: string; merged: Record<string, unknown> };
   /** 会改的 Overlay 文件。 */
   overlay?: { relPath: string; grain: string[]; measures: Measure[]; segments: Segment[] };
+  /** P1-89 D3 — 被分流规则丢弃的 schema 键告警（无丢弃时为空数组）。 */
+  warnings: SourceImportWarning[];
 };
 
 export async function planSourceYamlImport(
@@ -1000,33 +1066,53 @@ export async function planSourceYamlImport(
   yaml: string
 ): Promise<SourceYamlImportDelta> {
   assertSafeSegment(table, "table");
-  const relPath = schemaRelPath(conn, schema);
+  const relPath = await resolveSchemaManifestPath(projectRoot, conn, schema);
   const { doc } = await readYamlDocument(projectRoot, relPath);
   const existingTables = valueAsRecord(valueAsRecord(doc.toJSON()).tables);
   const existingTable = valueAsRecord(existingTables[table]);
   if (!existingTables[table]) {
-    throw new SourceNotFoundError(`Source ${conn}/${schema}/${table} was not found`);
+    // P1-90 F-a — import 为 update-only：未登记表指向按表追加端点。
+    throw new SourceNotFoundError(`Source ${conn}/${schema}/${table} was not found`, {
+      nextSteps: [`POST /api/schema-manifests/${conn}/${schema}/tables`]
+    });
   }
 
   const { value: importedValue, fromSchemaManifest } = parseImportedTable(yaml, table);
-  // Spec 114 + P0/P1 (2026-08-25):
+  // Spec 114 + P0/P1 (2026-08-25) + P1-89 D3a (2026-11-26 终稿冻结):
   // - Overlay-only: never touch Manifest.
-  // - Flat business source/standalone (grain|measures|segments): overlay only; do not
-  //   patch Manifest columns (avoids wiping pk after a normal Manifest-then-source upload).
+  // - Flat business source/standalone (grain|measures|segments): columns/joins do not
+  //   patch Manifest (avoids wiping pk after a normal Manifest-then-source upload);
+  //   P1-89 D3a exempts table-level `descriptions` — it is merged into the Manifest.
   // - Schema Manifest doc or structure-only snippet: merge into Manifest; P1 keeps
   //   existing pk/nullable when the incoming column omits them.
+  const schemaKeysPresent = ["descriptions", "columns", "joins"].filter((key) =>
+    Object.prototype.hasOwnProperty.call(importedValue, key)
+  );
+  const businessImport = isBusinessSourceImport(importedValue);
+  // P1-89 D3a — 业务 source 导入也允许表级 descriptions 豁免合并入 Manifest。
   const shouldPatchManifest =
-    hasMeaningfulSchemaImport(importedValue) && (fromSchemaManifest || !isBusinessSourceImport(importedValue));
+    schemaKeysPresent.length > 0 &&
+    (fromSchemaManifest || !businessImport || schemaKeysPresent.includes("descriptions"));
   let manifest: SourceYamlImportDelta["manifest"];
+  let mergedSchemaKeys: string[] = [];
   if (shouldPatchManifest) {
     const schemaPatch: Record<string, unknown> = {};
-    for (const key of SCHEMA_IMPORT_KEYS) {
-      if (Object.prototype.hasOwnProperty.call(importedValue, key)) {
-        schemaPatch[key] = importedValue[key];
+    if (businessImport && !fromSchemaManifest) {
+      // P1-89 D3a — 业务 source 导入仅表级 descriptions 豁免合并；columns/joins 维持 P0 丢弃。
+      schemaPatch.descriptions = importedValue.descriptions;
+      mergedSchemaKeys = ["descriptions"];
+    } else {
+      for (const key of SCHEMA_IMPORT_KEYS) {
+        if (Object.prototype.hasOwnProperty.call(importedValue, key)) {
+          schemaPatch[key] = importedValue[key];
+          if (key !== "table") {
+            mergedSchemaKeys.push(key);
+          }
+        }
       }
-    }
-    if (Object.prototype.hasOwnProperty.call(schemaPatch, "columns")) {
-      schemaPatch.columns = mergeManifestColumns(existingTable.columns, schemaPatch.columns);
+      if (Object.prototype.hasOwnProperty.call(schemaPatch, "columns")) {
+        schemaPatch.columns = mergeManifestColumns(existingTable.columns, schemaPatch.columns);
+      }
     }
     const merged: Record<string, unknown> = { ...existingTable, ...schemaPatch };
     delete merged.name;
@@ -1054,7 +1140,19 @@ export async function planSourceYamlImport(
       }
     : undefined;
 
-  return { manifest, overlay };
+  const ignoredKeys = schemaKeysPresent.filter((key) => !mergedSchemaKeys.includes(key));
+  const warnings: SourceImportWarning[] =
+    ignoredKeys.length > 0
+      ? [
+          {
+            code: "IMPORT_SCHEMA_KEYS_IGNORED",
+            keys: ignoredKeys,
+            hint: `业务 source 导入（含 grain/measures/segments）时 ${ignoredKeys.join("、")} 不写入 Manifest；结构片段（仅 descriptions/columns/joins）导入或 PUT patch 可写`
+          }
+        ]
+      : [];
+
+  return { manifest, overlay, warnings };
 }
 
 /**
@@ -1084,11 +1182,14 @@ export async function previewSourceYamlImport(
   yaml: string
 ): Promise<SourcePreview> {
   assertSafeSegment(table, "table");
-  const relPath = schemaRelPath(conn, schema);
+  const relPath = await resolveSchemaManifestPath(projectRoot, conn, schema);
   const { doc, text } = await readYamlDocument(projectRoot, relPath);
   const existingTables = valueAsRecord(valueAsRecord(doc.toJSON()).tables);
   if (!existingTables[table]) {
-    throw new SourceNotFoundError(`Source ${conn}/${schema}/${table} was not found`);
+    // P1-90 F-a — import 为 update-only：未登记表指向按表追加端点。
+    throw new SourceNotFoundError(`Source ${conn}/${schema}/${table} was not found`, {
+      nextSteps: [`POST /api/schema-manifests/${conn}/${schema}/tables`]
+    });
   }
 
   // 增量计算只有这一处实现（控制面与既有 REST 入口共用）。
@@ -1130,7 +1231,8 @@ export async function previewSourceYamlImport(
   return {
     diff: files.map((file) => file.diff).filter(Boolean).join("\n"),
     proposedYaml: files.map((file) => `# ${file.filePath}\n${file.proposedYaml}`).join("\n"),
-    files
+    files,
+    warnings: delta.warnings
   };
 }
 

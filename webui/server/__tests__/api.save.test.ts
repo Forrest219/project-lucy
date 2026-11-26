@@ -96,8 +96,73 @@ describe("source save API", () => {
       .expect(200);
 
     expect(response.body.data.diff).toContain("+      human: Human description.");
+    // P1-89 D5 — dryRun 显式返回无变更信号。
+    expect(response.body.data.noChanges).toBe(false);
     await expect(readFile(path.join(projectRoot, schemaRelPath), "utf8")).resolves.toBe(schemaYaml);
     expect(validateSource).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("P1-89 SC-07: dryRun reports noChanges true when the patch has no effect", async () => {
+    const app = buildServer();
+    await app.ready();
+    const response = await request(app.server)
+      .put("/api/sources/mysql-aliyun/dataforai/superstore_orders")
+      .send({ dryRun: true, patch: {} })
+      .expect(200);
+
+    expect(response.body.data.noChanges).toBe(true);
+    expect(response.body.data.files).toEqual([]);
+    expect(response.body.data.diff).toBe("");
+    await app.close();
+  });
+
+  it("P1-89 SC-01: returns an honest zero-write response for a no-change save without side effects", async () => {
+    const app = buildServer();
+    await app.ready();
+    const response = await request(app.server)
+      .put("/api/sources/mysql-aliyun/dataforai/superstore_orders")
+      .send({ dryRun: false, patch: {} })
+      .expect(200);
+
+    expect(response.body.data).toMatchObject({
+      written: false,
+      noChanges: true,
+      writtenFiles: []
+    });
+    expect(response.body.data.version).toBeUndefined();
+    expect(response.body.data.validation).toBeDefined();
+    expect(Array.isArray(response.body.data.changedFiles)).toBe(true);
+    await expect(readFile(path.join(projectRoot, schemaRelPath), "utf8")).resolves.toBe(schemaYaml);
+
+    // 零写入不得产生版本快照。
+    const versions = await request(app.server)
+      .get("/api/sources/mysql-aliyun/dataforai/superstore_orders/versions")
+      .expect(200);
+    expect(versions.body.data.versions).toHaveLength(0);
+    await app.close();
+  });
+
+  it("P1-89 SC-02: rejects unknown top-level body fields with a 400 and data.nextSteps", async () => {
+    const app = buildServer();
+    await app.ready();
+    const response = await request(app.server)
+      .put("/api/sources/mysql-aliyun/dataforai/superstore_orders")
+      .send({ yaml: "table: dataforai.superstore_orders", patch: {} })
+      .expect(400);
+
+    expect(response.body.ok).toBe(false);
+    expect(response.body.error.code).toBe("INVALID_SOURCE_PATCH_BODY");
+    expect(response.body.error.message).toContain("yaml");
+    expect(response.body.error.message).toContain("patch.tableDescription");
+    expect(Array.isArray(response.body.data.nextSteps)).toBe(true);
+    expect(response.body.data.allowedKeys).toEqual(["patch", "dryRun", "restoredFromVersionId"]);
+    // dryRun 分支同样校验。
+    const dryRunResponse = await request(app.server)
+      .put("/api/sources/mysql-aliyun/dataforai/superstore_orders")
+      .send({ model: "{}" })
+      .expect(400);
+    expect(dryRunResponse.body.error.code).toBe("INVALID_SOURCE_PATCH_BODY");
     await app.close();
   });
 
@@ -117,6 +182,8 @@ describe("source save API", () => {
       .expect(200);
 
     expect(response.body.data.written).toBe(true);
+    expect(response.body.data.noChanges).toBe(false);
+    expect(response.body.data.writtenFiles).toContain(schemaRelPath);
     expect(response.body.data.validation.ok).toBe(true);
     expect(response.body.data.version).toMatchObject({
       key: "mysql-aliyun/dataforai/superstore_orders",

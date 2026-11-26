@@ -364,6 +364,8 @@ curl -s -X POST http://127.0.0.1:5174/api/catalog/reload \
 
 当 `Deployment readiness = 5/5` 时，WebUI 会给出 MCP 配置模板；未完成时会指出下一项阻塞原因。
 
+**运维步骤**（`/admin/ops-steps`，面向 Lucy 运维）：按操作号（`ops_` 开头）查看进行中、已结束的运维步骤，回答「某次运维操作停在哪一步」。每个步骤同时写到容器标准输出（IT 运维看容器日志，不需登录）和 `${LUCY_CONTENT_ROOT}/.lucy/ops-steps.jsonl` 文件副本，两处操作号相同。步骤账写失败不让原操作失败，页面按通道显示标准输出、文件副本和格式化的丢行计数（按当前进程累计，重启归零）。准备表结构失败时，既有错误区域另显操作号，可拿到本页查询。页面只读，只能刷新和筛选；历史超过 2000 行或 1 小时会截断并提示原因。口径见[运维步骤账 Spec](specs/lucy-20261120-ops-step-journal-spec.md)。
+
 #### 系统概览待处理事项
 
 入口：`/overview`（兼容路由 `/onboarding`）。
@@ -512,6 +514,10 @@ curl -s -X POST http://127.0.0.1:5174/api/catalog/reload \
 | 测试连接 | WebUI 或 `ktx connection test` |
 | 维护启用表范围 | WebUI `/connections/enabled-tables` |
 | 让 Agent 可见 | `webui/config/access.yaml` role / ACL |
+
+> 向既有 Schema 新增表：走 `POST /api/schema-manifests/:conn/:schema/tables`（create-only 按表追加，默认 dryRun）；更新既有表走 `POST /api/sources/:conn/:schema/:table/import`；整文件替换走 `POST /api/catalog/assets/upload`。详见 [`webui/docs/03-api-spec.md`](../webui/docs/03-api-spec.md)「Schema Manifest 按表追加」。
+
+> 语义资产发布（`POST /api/semantic-assets/publish`）的 overlay 通道＝**发布独立命名 source**，**不是新表接收入口**。误发的 standalone overlay 可经 `GET /api/semantic-assets/overlays?conn=` 盘点、`DELETE /api/semantic-assets/overlay/:conn/:sourceName` 清理，删除后该表读取回落 Schema Manifest 定义。详见 [`webui/docs/03-api-spec.md`](../webui/docs/03-api-spec.md)「per-table overlay 盘点与受控删除」。
 
 连接信息来自 `ktx.yaml`。WebUI 只暴露 `passwordSource`，不会读取或返回 `password: file:` 指向的密码文件内容。
 
