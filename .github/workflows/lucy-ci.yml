@@ -64,6 +64,7 @@ jobs:
       - run: npm run lint:yaml-alias
       - run: npm run lint:skip-ledger
       - run: npm run lint:server-sync-io
+      - run: npm run lint:uat-verdict
       - run: npm run lint:e2e-ledger
       - run: npm run lint:handbook-baseline
       - run: npm run lint:handbook-coverage

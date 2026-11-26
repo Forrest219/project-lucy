@@ -1484,6 +1484,16 @@
       "reason": null
     },
     {
+      "path": "scripts/lint/uat-verdict-gate.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "builds fixture UAT trees under a temporary directory and removes them; writes nothing else",
+      "command": "node --test scripts/lint/uat-verdict-gate.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
       "path": "scripts/smoke/p0-mcp-mainpath-smoke.test.mjs",
       "runner": "node --test",
       "environment": "deterministic",

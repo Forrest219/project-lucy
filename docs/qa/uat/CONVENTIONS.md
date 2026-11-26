@@ -12,6 +12,24 @@
 4. **对抗性 ≠ 找茬文案。** 对抗指：另造连接 id／宽表／重载时序／端点闸路径，尝试证伪既有 PASS；仍须全真执行。  
 5. **WebUI：浏览器＋计时强制（严重）。** 套件／选择器若覆盖 WebUI 用户可见面（页面加载、列表／表单、名册、统计展示、按钮反馈等），除后端／API 断言外，**必须**在真实**前台**浏览器执行并记录即时计时（导航→关键内容可见，或合同 `primaryReady`／等价里程碑），与 API 耗时**分列**。仅 HTTP smoke、脚本压测、vitest 或 CR **不得**主张该 WebUI 面已通过。必做用例缺前台浏览器验证或有效计时时，记 `BLOCKED` 并写明缺口。开发规范同位见 [`docs/governance/DEVELOPMENT.md`](../../governance/DEVELOPMENT.md)「验证策略：浏览器测试约束」。
 
+## 升级验收底线（强制）
+
+> 2026-11-27 委托人明示。适用于一切升级／新功能合入的验收主张；与「第一性原则」「WebUI：浏览器＋计时强制」叠加生效，不替代、不降级。
+
+1. **总底线：任何升级不得造成用户体验降级。** 新版本相对既有基线在用户可感知面（页面可用性、时延、错误率、功能可用性）只升不降；主张收口前须有对照证据，无对照即视为未验证，不得默认「无降级」。
+2. **所有新发功能必须通过 UI 验证。** 仅 API、单测或 Code Review 通过**不构成**功能验收；凡有用户可见面（WebUI 页面或 MCP 工具行为）的功能，须有对应真实入口的跑次证据。
+3. **WebUI 升级必须经浏览器验证。** 按下节「WebUI：浏览器＋计时强制」执行；纯 API／HTTP smoke 佐证不得替代浏览器跑次。
+4. **MCP 升级必须做性能测试。** 凡改动 MCP 面（工具列表、工具行为、代理路径、语义层读路径等）的合入，须挂 `UAT-MIP-*`（P1-78）相应档跑次并对照既有基线；性能档 `NOT RUN` 或暂缓执行期间，相关 MCP 改动不得主张收口。
+
+违反上述任一条时，INDEX 判定不得以 `PASS`／`PASS WITH GAP` 表达「接近收口」；只能按 `FAIL`／`NOT RUN`／`BLOCKED` 如实登记并写明缺口。
+
+**机检（强制）**：`npm run lint:uat-verdict`（脚本 `scripts/lint/uat-verdict-gate.mjs`，CI `spec-and-webui` job 与 pre-push hook 挂载）。规则与 SOT：
+
+- 每个套件的**验收面**（`webui`／`mcp`／`api`）登记在 [`suite-faces.json`](suite-faces.json)；INDEX 新增套件行必须同步登记，registry 孤儿条目同样报错。
+- `tier: strict`（0.35 起新套件默认）：上述 R4–R6 违规即门禁 FAIL——PASS 须有真实存在的跑次链接；webui 面 PASS 的跑次须含浏览器证据标记；mcp 面 PASS 须登记 `mip linked`（suite.md 或 INDEX 引用 `UAT-MIP`）或带原因的 `mip exempt`。
+- `tier: legacy`（0.30 及以前存量套件）：同规则只告警不拦 CI（grandfather 惯例），但每次运行都打印待整改项；整改补证后翻 `strict`。
+- 本机检只验证**证据形态**（链接存在、浏览器标记、MIP 关联），不重算判定结论；「无 UX 降级」的实质对照仍归 `UAT-MIP`（P1-78）等对应套件的跑次。
+
 ## 环境档位选型（lean／scale）
 
 本机 demo compose **一栈两档**。选型表与命令以 [`scale-baseline.md` §0](scale-baseline.md#0-环境档位选型leanscale) 为唯一展开；此处只定强制规则：
