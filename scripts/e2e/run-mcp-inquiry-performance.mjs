@@ -552,6 +552,24 @@ export function resolveScenarioPlan({ scenario, questionBank, scaleProfileSatisf
 }
 
 /**
+ * Concurrency identity pool (fixtures §5): independent Tokens for the 20/50-way
+ * lanes, read from a repo-out private JSON ({"NAME":"plain",...} or string[]).
+ * Empty when not configured — single-lane scenarios never use it.
+ */
+function resolveConcurrencyTokenPool(options, env) {
+  const file = env?.MIP_CONCURRENCY_TOKEN_FILE;
+  if (!file) return [];
+  try {
+    const parsed = JSON.parse(readFileSync(file, "utf8"));
+    const raw = Array.isArray(parsed) ? parsed : parsed?.tokens ?? parsed;
+    const values = Array.isArray(raw) ? raw : Object.values(raw ?? {});
+    return values.filter((v) => typeof v === "string" && v.trim()).map((v) => v.trim());
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Lane count for a scenario: the contract encodes 20/50-way concurrency in the
  * `concurrencyGroup` name (Spec §4.1 row 9).
  * @param {object} scenario
@@ -954,10 +972,15 @@ export async function executeScenarioGroup({
   const isRetryable = (journey) =>
     journey?.outcome === "timeout" || journey?.errorClass === "transport_error";
 
+  const tokenPool = resolveConcurrencyTokenPool(options, env);
   const runLane = async (laneIndex, attemptIndex) => {
     const planItemId = `${runId}-${plan.scenarioId}-${String(attemptIndex + 1).padStart(4, "0")}`;
     const maxRetries = Math.max(0, Number(deps.maxRetries ?? 0));
-    const token = tokenFor(plan.tokenRef);
+    // 并发档按 lane 轮换独立身份（fixtures §5：20／50 个不同合成 Agent 各持
+    // 独立 Token；产品按 token 限并发，单 token 高并发必被 admission 拒绝）。
+    const token = lanes > 1 && tokenPool.length > 0
+      ? tokenPool[laneIndex % tokenPool.length]
+      : tokenFor(plan.tokenRef);
     if (!token) return null;
     const records = [];
     const controlRecords = [];
@@ -1229,6 +1252,12 @@ export async function runMcpInquiryPerformance(options, deps = {}) {
   const dispatch = TRIGGER_DISPATCH[options.trigger];
   if (!dispatch) {
     return { status: "BLOCKED", reasons: [`unknown trigger ${options.trigger}`], exitCode: EXIT_CODES.blocked };
+  }
+  // Task 5 接线：隔离栈测程在规模断言（--profile mcp-perf）PASS 后以
+  // MIP_SCALE_PROFILE_SATISFIED=1 声明 WIDE 场景的 profile 前置满足；
+  // 未经断言的独立 runner 调用保持 BLOCKED（fail-closed，不缩规模开跑）。
+  if (deps.scaleProfileSatisfied === undefined && process.env.MIP_SCALE_PROFILE_SATISFIED === "1") {
+    deps = { ...deps, scaleProfileSatisfied: true };
   }
   if (dispatch.lane === "soak" || dispatch.lane === "long-follow") {
     return runSoakLongFollowLane(options, deps);

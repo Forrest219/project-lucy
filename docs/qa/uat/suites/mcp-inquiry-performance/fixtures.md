@@ -127,3 +127,17 @@
 ## 11. 预算真源
 
 所有绝对预算只读 [Spec §5](../../../../specs/lucy-20261123-mcp-inquiry-performance-baseline-spec.md#5-首版绝对预算设计值待实测冻结)，本文件不复制第二份数值。首版数值为设计值，baseline-seed 后的冻结必须独立具名审批；禁止 runner 根据本轮失败自动提高预算。
+
+## 12. 隔离栈实测登记（2026-11-26，Task 5 baseline-seed）
+
+| 项 | 实测值 |
+|---|---|
+| compose 项目 | `lucy-mip-uat`（复用 `deploy/compose/docker-compose.demo.yml`，专用网络／卷 `lucy-mip-uat_lucy-demo-data`；端口 webui 55276／proxy 57981／mysql 54306） |
+| 候选镜像 | `project-lucy:demo`（imageID `2c6cc629496a`，构建 2026-11-26 00:25；候选指纹 `git:b4bc7c6ef1c17c3b310a68da0fb89fcfef521e78+dirty`） |
+| 存储 | MySQL 8.4 容器卷＋Lucy 数据卷 `lucy-mip-uat_lucy-demo-data`；夹具随卷可重建（seed 幂等） |
+| 反代 | 无独立反代；Public MCP 直接暴露 `:57981`（`LUCY_PUBLIC_MCP_URL` 同值） |
+| 缓存状态 | 进程暖态（seed 后重启完成、健康通过后再开跑）；冷态样本归 `COLD` 场景另行构造 |
+| 身份夹具 | MCP-PERF 50 压测身份（`uat_perf_001..050`：2×`lucy_admin`、24×`uat_perf_role_a`（双连接含 `lucy-ops.ops_calls`）、23×`uat_perf_role_b`、1×`lucy_ops_reader`）；P1-54 题库 compat 专用身份 11 个（`uat_compat_*`，角色合同＝`mcp-compat-config-profile.yaml` fixtureRoles＋辅助角色 `uat_compat_readonly_mysql`） |
+| Token 文件 | 仓外 `/Users/zhangxingchen/Projects/.lucy-secrets/mcp-perf-tokens-uat.json` 与 `mcp-compat-tokens-uat.json`（0600；`UAT_MCP_PERF_TOKEN_FILE`／`UAT_COMPAT_TOKEN_FILE`） |
+| 规模断言 | 默认档＋`--profile mcp-perf` 全 PASS（2 项 SKIPPED：Hive 未灌，WARN 归 P1-34 口径）；MySQL 夹具 1201 表（非 XL 档） |
+| 编排入口 | `scripts/uat/mcp-inquiry-performance-uat.mjs seed --trigger <t>`（lib：`scripts/uat/lib/mcp-inquiry-performance-docker.mjs`）；seed 顺序＝大 Schema→access→MCP-PERF 身份→compat 身份→Wiki／Skill→审计行→WAL checkpoint→两档断言→R0 自检 |

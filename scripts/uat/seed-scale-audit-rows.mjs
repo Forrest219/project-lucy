@@ -60,9 +60,11 @@ const int = (lo, hi) => lo + Math.floor(rand() * (hi - lo + 1));
 const pick = (arr) => arr[Math.floor(rand() * arr.length)];
 const iso = (d) => new Date(d).toISOString();
 
-// ---- Agent 人口（与 access.yaml 对齐：uat_agent_001..498 + demo 两个） ----
+// ---- Agent 人口（与 access.yaml 对齐：uat_agent_001..499 + demo 两个） ----
+// 498＝无历史、497＝仅 90 天前活跃，均为边界夹具；窗内活跃须 ≥499（§1.1），
+// 纯 seed（无 demo 真实用量叠加）需人口 499 才能自足达标。
 const AGENTS = [];
-for (let i = 1; i <= 498; i++) AGENTS.push("uat_agent_" + String(i).padStart(3, "0"));
+for (let i = 1; i <= 499; i++) AGENTS.push("uat_agent_" + String(i).padStart(3, "0"));
 AGENTS.push("demo_agent", "demo_ops");
 const NO_HISTORY_AGENT = "uat_agent_498";      // 无历史用户
 const NINETY_DAY_AGENT = "uat_agent_497";      // 仅 90 天前活跃

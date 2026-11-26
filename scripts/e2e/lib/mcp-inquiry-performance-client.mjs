@@ -55,7 +55,9 @@ const DENIAL_CODES = Object.freeze([
   "raw_query_forbidden",
   "ddl_dml_forbidden",
   "read_only_violation",
-  "query_concurrency_exceeded"
+  "query_concurrency_exceeded",
+  // P1-75 source-ambiguity gate — 跨连接多来源合并拒绝（QB-DB-02 的产品侧拒绝族）。
+  "source_ambiguity_gate"
 ]);
 
 // ---------------------------------------------------------------------------

@@ -52,18 +52,22 @@ const SKILL_DOMAINS = ["superstore", "warehouse", "finance", "ops", "generic"];
 
 function wikiPage(n) {
   const id = String(n).padStart(3, "0");
+  // 标记页（001）是 MCP-PERF profile 的实读锚点，`["*"]` 全角色可检索；
+  // 其余页保持随机 uat_role ACL（页 ACL 矩阵语义不变）。
+  const isMarker = id === "001";
   const roleCount = int(1, 3);
   const roles = [];
   for (let k = 0; k < roleCount; k++) {
     const r = `uat_role_${String(int(1, 200)).padStart(3, "0")}`;
     if (!roles.includes(r)) roles.push(r);
   }
+  const allowedRoles = isMarker ? ["*"] : roles;
   const termA = WIKI_TERMS[int(0, WIKI_TERMS.length - 1)];
   const termB = WIKI_TERMS[int(0, WIKI_TERMS.length - 1)];
   const body = [
     `---`,
     `summary: UAT 规模基线 Wiki 页 ${id}：${termA}与${termB}口径说明（夹具，勿用于生产）`,
-    `allowed_roles: [${roles.join(", ")}]`,
+    `allowed_roles: [${allowedRoles.map((r) => JSON.stringify(r)).join(", ")}]`,
     `---`,
     ``,
     `# UAT Wiki ${id}：${termA} × ${termB}`,
@@ -81,6 +85,7 @@ function wikiPage(n) {
     ``,
     `页锚 uat-wiki-${id}：${termA} ${termB} ${int(1000, 999999)}。`,
     ``,
+    ...(isMarker ? [`Marker terms: uat wiki marker page one scale baseline anchor.`, ``] : []),
   ].join("\n");
   return { name: `uat-wiki-${id}.md`, body };
 }
@@ -97,6 +102,7 @@ function skillFile(n) {
       `domain: ${domain}`,
       `title: UAT Skill ${id}（${termA}分析）`,
       `description: UAT 规模基线 Skill ${id}，${domain} 域 ${termA} 分析夹具，勿用于生产。`,
+      `roles_allowed: ["*"]`,
       `version: 1.0.0`,
       `status: published`,
       `---`,
@@ -131,9 +137,13 @@ function main() {
   console.log(`[seed-wiki-skills] 目标：Wiki ${TARGET_WIKI} 页／Skill ${TARGET_SKILLS} 个`);
   const tmp = mkdtempSync(path.join(tmpdir(), "uat-seed-ws-"));
 
-  // 0) 清理旧夹具并预建目录（容器须在运行态才能 exec）
+  // 0) 清理旧夹具并预建目录（容器须在运行态才能 exec）。
+  // Lucy 内容根由 LUCY_CONTENT_ROOT 决定（demo 为 /data/lucy/config），与 KTX
+  // 检索目录（/data/lucy/wiki）是两个视图：ACL／回退读前者，索引读后者，
+  // 两处必须同写，否则页可被 KTX 命中却被 Lucy 判 wiki_not_found。
+  const LUCY_WIKI_DIR = process.env.LUCY_CONTENT_WIKI_DIR || "/data/lucy/config/wiki";
   docker("exec", LUCY, "sh", "-c",
-    `rm -f ${WIKI_DIR}/global/uat-wiki-*.md; rm -rf ${SKILLS_DIR}/uat_skills; mkdir -p ${SKILLS_DIR}/uat_skills; echo cleaned`);
+    `rm -f ${WIKI_DIR}/global/uat-wiki-*.md ${LUCY_WIKI_DIR}/global/uat-wiki-*.md; rm -rf ${SKILLS_DIR}/uat_skills; mkdir -p ${SKILLS_DIR}/uat_skills ${LUCY_WIKI_DIR}/global; echo cleaned`);
   console.log("[seed-wiki-skills] 已清理旧 uat-wiki-*.md／uat_skills，并预建 uat_skills 目录");
 
   try {
@@ -150,8 +160,9 @@ function main() {
   }
   for (const p of wikiPages) {
     docker("cp", path.join(tmp, p.name), `${LUCY}:${WIKI_DIR}/global/${p.name}`);
+    docker("cp", path.join(tmp, p.name), `${LUCY}:${LUCY_WIKI_DIR}/global/${p.name}`);
   }
-  console.log(`[seed-wiki-skills] 已写入 ${wikiPages.length} 页至 ${WIKI_DIR}/global/uat-wiki-*.md`);
+  console.log(`[seed-wiki-skills] 已写入 ${wikiPages.length} 页至 ${WIKI_DIR} 与 ${LUCY_WIKI_DIR} 的 global/uat-wiki-*.md`);
 
   // 2) Skill 文件（目录已预建，停止态 docker cp 到文件路径即可）
   const skillFiles = Array.from({ length: TARGET_SKILLS }, (_, i) => skillFile(i + 1));

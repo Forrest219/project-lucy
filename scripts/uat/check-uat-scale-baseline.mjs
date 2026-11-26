@@ -90,6 +90,8 @@ export function perfOptions(env) {
     mcpUrl: env.LUCY_MCP_URL ||
       `http://127.0.0.1:${env.LUCY_DEMO_PROXY_HOST_PORT || 57881}/mcp`,
     wikiMarker: ident(env.UAT_MCP_PERF_WIKI_MARKER, "uat-wiki-001", "UAT_MCP_PERF_WIKI_MARKER"),
+    // KTX FTS 只分 ASCII 词：检索词用标记页正文的英文锚词，与文件名 marker 分离。
+    wikiQuery: env.UAT_MCP_PERF_WIKI_QUERY || "uat wiki marker",
     skillName: ident(env.UAT_MCP_PERF_SKILL_NAME, "uat-skill-001", "UAT_MCP_PERF_SKILL_NAME"),
     skillMarker: env.UAT_MCP_PERF_SKILL_MARKER || "",
     reqPrefix: ident(env.UAT_MCP_PERF_REQ_PREFIX, "uat-scale-", "UAT_MCP_PERF_REQ_PREFIX"),
@@ -330,7 +332,10 @@ function createRealDeps(env = process.env) {
     },
     auditQuery,
     readBaselineJson() {
-      return JSON.parse(readFileSync(o.baselineJson, "utf8"));
+      // env 闭包：perfOptions 的 o 在 main 内才构造，deps 闭包里不可见。
+      const p = env.UAT_MCP_PERF_BASELINE_JSON ||
+        new URL("../../examples/docker-demo/mysql/_baseline.json", import.meta.url);
+      return JSON.parse(readFileSync(p, "utf8"));
     },
     readTokenFile(path) {
       return JSON.parse(readFileSync(path, "utf8"));
@@ -1020,7 +1025,7 @@ async function collectRuntimeProbes(deps, o, identities, roles) {
       } else {
         probe.wiki.candidate = candidate.id;
         try {
-          const r = await callAs(tokenOf(candidate.id), "wiki_search", { query: o.wikiMarker });
+          const r = await callAs(tokenOf(candidate.id), "wiki_search", { query: o.wikiQuery });
           let data = r.raw?.data;
           if (data === undefined || data === null) {
             try {
@@ -1085,8 +1090,15 @@ async function collectRuntimeProbes(deps, o, identities, roles) {
             detail: `total_sales=${salesVal}（期望 ${baseline.measures.total_sales}）order_count=${ordersVal}（期望 ${baseline.measures.order_count}）`,
           };
         } else if (conn === "lucy-ops") {
+          // Spec 149 §6 — lucy-ops 不随 lucy_admin 通配生效，只认显式绑定的
+          // lucy_ops_reader；用该角色的压测身份实读。
+          const opsReader = identities.find((u) => u.role === "lucy_ops_reader" && tokenOf(u.id));
+          if (!opsReader) {
+            probe.queries[conn] = { ok: false, detail: "缺 lucy_ops_reader 身份凭据" };
+            continue;
+          }
           const before = deps.auditQuery("SELECT COUNT(*) c FROM ops_calls", [])[0]?.c ?? 0;
-          const q = await callAs(adminToken, "lucy_query", {
+          const q = await callAs(tokenOf(opsReader.id), "lucy_query", {
             connectionId: conn, measures: ["ops_calls.call_count"],
           });
           const after = deps.auditQuery("SELECT COUNT(*) c FROM ops_calls", [])[0]?.c ?? 0;
