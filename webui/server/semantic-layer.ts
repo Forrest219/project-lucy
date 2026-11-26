@@ -403,6 +403,29 @@ async function readOverlay(projectRoot: string, conn: string, table: string): Pr
   }
 }
 
+/**
+ * overlay 目录列举失败按「无 overlay」降级（与 manifest 侧 listSchemaFiles 的吞错一致），
+ * 但非 ENOENT 必须可观测：静默会把 overlay 的 grain/measures/segments 从列表、完成度与
+ * MCP 修复提示中抹掉。按 conn+code 去重，避免 MCP 每查询路径在持续故障下刷日志。
+ */
+const overlayListWarnedKeys = new Set<string>();
+
+function warnOverlayListDegraded(conn: string, error: unknown): void {
+  const code = (error as NodeJS.ErrnoException | undefined)?.code;
+  if (code === "ENOENT") {
+    return;
+  }
+  const key = `${conn}${code ?? "unknown"}`;
+  if (overlayListWarnedKeys.has(key)) {
+    return;
+  }
+  overlayListWarnedKeys.add(key);
+  console.warn(
+    `[lucy-semantic] overlay listing degraded for connection ${conn}: ${code ?? "unknown"}; ` +
+      "overlays are treated as absent in source listings until a later scan succeeds"
+  );
+}
+
 async function statOverlay(projectRoot: string, conn: string, table: string): Promise<Date | null> {
   const absPath = path.join((await loadContentPaths()).semanticLayer, conn, `${table}.yaml`);
   try {
@@ -550,9 +573,31 @@ export async function listSourcesWithManifests(
 
   const schemaFiles = await timeAsync("manifest", () => readSchemaFiles(projectRoot));
   await timeAsync("overlay", async () => {
+    // 按连接一次性 readdir 获取存在的 per-table overlay 文件名集合（O(连接数) 替代逐表 O(表数) stat）
+    const semanticLayerRoot = (await loadContentPaths()).semanticLayer;
+    const overlayFilesByConn = new Map<string, Set<string>>();
+    const uniqueConns = [...new Set(schemaFiles.map(({ file }) => file.conn))];
+    await Promise.all(
+      uniqueConns.map(async (conn) => {
+        const entries = await readdir(path.join(semanticLayerRoot, conn), { withFileTypes: true }).catch((error: unknown) => {
+          warnOverlayListDegraded(conn, error);
+          return [];
+        });
+        const names = new Set<string>();
+        for (const entry of entries) {
+          if (entry.isFile() && entry.name.endsWith(".yaml") && !entry.name.startsWith(".")) {
+            names.add(entry.name);
+          }
+        }
+        overlayFilesByConn.set(conn, names);
+      })
+    );
+
     for (const { file, tables } of schemaFiles) {
+      const existingOverlays = overlayFilesByConn.get(file.conn);
       for (const [table, tableValue] of Object.entries(tables)) {
-        const overlayMtime = await statOverlay(projectRoot, file.conn, table);
+        const hasOverlayFile = existingOverlays?.has(`${table}.yaml`) ?? false;
+        const overlayMtime = hasOverlayFile ? await statOverlay(projectRoot, file.conn, table) : null;
         const overlay = overlayMtime ? await readOverlay(projectRoot, file.conn, table) : {};
         pending.push({
           file,
