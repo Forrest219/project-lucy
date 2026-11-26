@@ -14,7 +14,7 @@
 | 配套 Plan | [lucy-20261118-mcp-upgrade-compatibility-plan.md](../plans/lucy-20261118-mcp-upgrade-compatibility-plan.md) |
 | 题库合同 | [P1-54 多场景题库 **v1.1／S5**](lucy-20261118-mcp-upgrade-question-bank-spec.md)（语义正本；终稿确权、开发已授权）；可执行实例 `scripts/e2e/contracts/mcp-upgrade-journeys.yaml` |
 | 测试台 | [`UAT-SUITE-MCP-UPGRADE-COMPATIBILITY`](../qa/uat/suites/mcp-upgrade-compatibility/suite.md) |
-| 关联合同 | [P1-35 纯 MCP 逃生](lucy-20261116-source-ambiguity-mcp-escape-spec.md)、[P1-37 MCP 体验韧性](lucy-20261116-mcp-ux-resilience-spec.md)、[P1-13 发版性能基线](lucy-20261113-release-perf-baseline-gate-spec.md)、P1-52 升级可靠性（并行登记）、[真实用户 E2E](lucy-20261018-enterprise-security-and-real-e2e-spec.md)、[可问治理面](lucy-20261101-ops-evidence-askable-governance-spec.md) |
+| 关联合同 | [P1-35 纯 MCP 逃生](lucy-20261116-source-ambiguity-mcp-escape-spec.md)、[P1-37 MCP 体验韧性](lucy-20261116-mcp-ux-resilience-spec.md)、[P1-13 发版性能基线](lucy-20261113-release-perf-baseline-gate-spec.md)、**[P1-78 MCP 问询端到端性能基准（性能轴 owner；本条 latency 轴在其证据可用时委托之，不再维护第二套样本／预算／相对基线）](lucy-20261123-mcp-inquiry-performance-baseline-spec.md)**、P1-52 升级可靠性（并行登记）、[真实用户 E2E](lucy-20261018-enterprise-security-and-real-e2e-spec.md)、[可问治理面](lucy-20261101-ops-evidence-askable-governance-spec.md) |
 | 授权边界 | **终稿确权 ≠ 开发授权**。委托人 2026-11-22 已发「开工，落地执行」＝Plan Task 1+ 开发授权；Docker 重建／出包／生产升级仍另授；每 Wave 完成后 code review 再进入下一 Wave |
 
 ## 闭口层级

@@ -1,0 +1,11 @@
+# MCP-PERF 隔离栈并发舱壁扩容（委托人 2026-11-26 裁定 B）。
+# 仅叠加在 docker-compose.demo.yml 之上用于 P1-78 隔离栈；demo 栈与产品默认值
+# （token 4／agent 8／connection 16／global 24）不受影响。20／50 路并发档要求
+# 真实在途，产品默认舱壁会把超发请求按设计拒绝（query_concurrency_exceeded）。
+services:
+  lucy:
+    environment:
+      LUCY_QUERY_MAX_INFLIGHT: "${MIP_CAPACITY_TOKEN:-50}"
+      LUCY_MCP_AGENT_MAX_INFLIGHT: "${MIP_CAPACITY_AGENT:-50}"
+      LUCY_MCP_CONNECTION_MAX_INFLIGHT: "${MIP_CAPACITY_CONNECTION:-50}"
+      LUCY_MCP_GLOBAL_MAX_INFLIGHT: "${MIP_CAPACITY_GLOBAL:-64}"

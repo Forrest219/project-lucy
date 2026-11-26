@@ -103,8 +103,12 @@
 
 ### 9.4 宿主额度、成本与豁免
 
-- **宿主额度**：开跑前登记所选宿主的并发上限与限流额度及其来源（账号文档或实测）；额度不足 50 路时 `SOAK` BLOCKED，不得降身份数（Spec D21⑦）。
-- **成本与墙钟估算**：按 Spec D6 样本下限展开的真实模型调用数与总墙钟，登记于此；接每日调度前必须有值（Plan 开工前置 10）。当前**未估算**。
+- **宿主额度（已登记，2026-11-26 实测；委托人明示「走 kscc cli 测试」）**：
+  - 宿主＝`kscc` CLI（claude-code 1.3.8 后端，本机登录态）；适配器 `scripts/e2e/adapters/claude-code.mjs`；链级执行器 `scripts/e2e/lib/mcp-inquiry-performance-chain-executor.mjs`（单进程多轮同 session_id）。
+  - **并发上限（实测）**：50 路并发单轮调用 7 轮实测，成功率 94–100%（47–50/50），**限流（429／rate limit）零触发**；失败全部为 90 秒单轮超时（并发排队拉长，概率 0–6%）。55–60 路超载：单轮超时升至 1–5 个。**结论：50 路额度成立，SOAK 的 D21⑦ 前置满足**。
+  - **限流额度**：实测未触发（50 路瞬时同发零 429）；供应商侧 RPM 余量未知，跑次中若出现 D21① 归类的瞬态错误按有界重试执行。
+  - **来源**：实测（2026-11-26，探针脚本：50 路瞬时同发 7 轮＋55/60 路对照各 1–2 轮）。
+- **成本与墙钟估算（已登记，开工前置 10）**：50 身份×≥1800 s 有效窗口、到达模型 μ=60 s（截断 [20,120] s）→ 期望总轮次 ≈50×1800/60＝**1500 轮**；每轮（LLM＋MCP 往返）实测 p50 9–15 s → SOAK lane 墙钟 ≈**30–45 分钟**（50 长驻会话并行）＋准备/清理；LLM 调用 ≈1500 次，长链复用 SOAK 同 runId 证据（≤10% 链实例另计）。本估算登记为每日 workflow 预算依据（workflow timeout 150 分钟内）。
 - **豁免记录**：事故修复放行文件放 `waivers/`，格式与有效期见 Spec D22；`waived` 不进入 `baselines/` 与 `evidence/` 的 PASS 统计。当前无豁免记录。
 
 ## 10. 执行顺序与长链证据复用
@@ -140,4 +144,5 @@
 | 身份夹具 | MCP-PERF 50 压测身份（`uat_perf_001..050`：2×`lucy_admin`、24×`uat_perf_role_a`（双连接含 `lucy-ops.ops_calls`）、23×`uat_perf_role_b`、1×`lucy_ops_reader`）；P1-54 题库 compat 专用身份 11 个（`uat_compat_*`，角色合同＝`mcp-compat-config-profile.yaml` fixtureRoles＋辅助角色 `uat_compat_readonly_mysql`） |
 | Token 文件 | 仓外 `/Users/zhangxingchen/Projects/.lucy-secrets/mcp-perf-tokens-uat.json` 与 `mcp-compat-tokens-uat.json`（0600；`UAT_MCP_PERF_TOKEN_FILE`／`UAT_COMPAT_TOKEN_FILE`） |
 | 规模断言 | 默认档＋`--profile mcp-perf` 全 PASS（2 项 SKIPPED：Hive 未灌，WARN 归 P1-34 口径）；MySQL 夹具 1201 表（非 XL 档） |
-| 编排入口 | `scripts/uat/mcp-inquiry-performance-uat.mjs seed --trigger <t>`（lib：`scripts/uat/lib/mcp-inquiry-performance-docker.mjs`）；seed 顺序＝大 Schema→access→MCP-PERF 身份→compat 身份→Wiki／Skill→审计行→WAL checkpoint→两档断言→R0 自检 |
+| 并发舱壁（裁定 B，2026-11-26 委托人明示） | 隔离栈 overlay `scripts/uat/lib/mcp-inquiry-performance-capacity-override.yml`：`LUCY_QUERY_MAX_INFLIGHT=50`／`LUCY_MCP_AGENT_MAX_INFLIGHT=50`／`LUCY_MCP_CONNECTION_MAX_INFLIGHT=50`／`LUCY_MCP_GLOBAL_MAX_INFLIGHT=64`（产品默认 4／8／16／24 不变，仅本隔离栈生效） |
+| 编排入口 | `scripts/uat/mcp-inquiry-performance-uat.mjs seed --trigger <t>`（lib：`scripts/uat/lib/mcp-inquiry-performance-docker.mjs`）；seed 顺序＝大 Schema→access→MCP-PERF 身份→compat 身份→Wiki／Skill→审计行→WAL checkpoint→两档断言→R0 自检；并发档身份池＝`mcp-perf-pool-uat.json`（49 token，排除 ops_reader） |

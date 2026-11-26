@@ -790,9 +790,13 @@ export async function runSoakLongFollowLane(options, deps = {}) {
       exitCode:
         status === "PASS"
           ? EXIT_CODES.passed
-          : status === "BLOCKED"
-            ? EXIT_CODES.blocked
-            : EXIT_CODES.failed,
+          : // §7 D7 — PR 档在预算冻结就绪后按 §5 绝对线阻断：绝对 PASS 但无已接受
+            // 基线（SEED_ONLY）只报告、不阻断合入；绝对 FAIL／BLOCKED 仍失败。
+            status === "SEED_ONLY" && dispatch?.tier === "pr"
+            ? EXIT_CODES.passed
+            : status === "BLOCKED"
+              ? EXIT_CODES.blocked
+              : EXIT_CODES.failed,
       runId,
       trigger: options.trigger,
       tier: dispatch?.tier ?? null,
@@ -878,6 +882,28 @@ export async function runSoakLongFollowLane(options, deps = {}) {
     reasons.push(
       "LONG_FOLLOW has no accepted baseline comparison in this lane; the run is SEED_ONLY and never release evidence (Spec §6.3 / D8)"
     );
+  }
+  // Task 7 — 链级与逐轮轨迹落盘（fixtures §9.1／cases「跑次报告最小内容」）：
+  // 独立 verifier 与优化诊断都要能从文件重读链证据，链证据不落盘＝缺证据。
+  try {
+    if (options.evidenceDir && Array.isArray(result?.chains)) {
+      mkdirSync(options.evidenceDir, { recursive: true });
+      const chainFile = path.join(options.evidenceDir, `longfollow-${runId}.json`);
+      writeFileSync(
+        chainFile,
+        `${JSON.stringify({
+          contract: "lucy-mcp-inquiry-performance-longfollow-evidence-v1",
+          runId,
+          trigger: options.trigger,
+          expectedPackDigest: dependency.digest ?? expectedDigest,
+          plannedChainCount: result?.plannedChainCount ?? null,
+          chains: result.chains,
+          judgement
+        }, null, 2)}\n`
+      );
+    }
+  } catch (err) {
+    reasons.push(`long-follow evidence write failed: ${err?.message ?? String(err)}`);
   }
   return finish(status, { reasons, longFollow: { ...result, chainJudgement: judgement } });
 }
@@ -1651,9 +1677,55 @@ export async function main(argv = process.argv.slice(2)) {
     return;
   }
 
+  // P1-78 Task 7 — real-host execution engine for the SOAK/LONG_FOLLOW lanes.
+  // Opt-in via MIP_CHAIN_EXECUTOR=claude: every identity gets its OWN long-lived
+  // host process (single-process multi-turn, same session id throughout the chain)
+  // and its own token from an out-of-repo 0600 file; identities+roleClass mapping
+  // comes from MIP_CHAIN_IDENTITIES_FILE. Without the opt-in the lanes stay
+  // BLOCKED (execution_engine_missing) — the module never fakes the host lane.
+  const chainDeps = {};
+  if (process.env.MIP_CHAIN_EXECUTOR === "claude") {
+    try {
+      const { createChainSessionExecutor, tokenMapFrom, cleanupChainWorkDir } = await import(
+        "./lib/mcp-inquiry-performance-chain-executor.mjs"
+      );
+      const tokenFile = process.env.MIP_CHAIN_TOKEN_FILE;
+      if (!tokenFile) throw new Error("MIP_CHAIN_TOKEN_FILE is required with MIP_CHAIN_EXECUTOR=claude");
+      const tokenOf = tokenMapFrom(tokenFile);
+      let identities = [];
+      if (process.env.MIP_CHAIN_IDENTITIES_FILE) {
+        identities = JSON.parse(readFileSync(process.env.MIP_CHAIN_IDENTITIES_FILE, "utf8"));
+      } else {
+        identities = ["uat_perf_001", "uat_perf_002", "uat_perf_003", "uat_perf_004", "uat_perf_005"]
+          .filter((id) => tokenOf(id))
+          .map((id) => ({ identityId: id, roleClass: "read_only" }));
+      }
+      const executor = createChainSessionExecutor({
+        identities,
+        tokenOf,
+        mcpUrl: parsed.options.mcpUrl ?? process.env.LUCY_MCP_URL ?? "http://127.0.0.1:57881/mcp",
+        env: {}
+      });
+      chainDeps.identities = identities;
+      chainDeps.sessionFactory = executor.sessionFactory;
+      chainDeps.turnExecutor = executor.turnExecutor;
+      const cleanup = () => {
+        executor.closeAll();
+        cleanupChainWorkDir(executor.workDirRoot);
+      };
+      process.on("exit", cleanup);
+      process.on("SIGINT", () => { cleanup(); process.exit(EXIT_CODES.blocked); });
+    } catch (error) {
+      process.stderr.write(`[mip] chain executor unavailable: ${error?.message ?? String(error)}\n`);
+      process.exit(EXIT_CODES.blocked);
+      return;
+    }
+  }
+
   const result = await runMcpInquiryPerformance(parsed.options, {
     writeEvidence: ({ runId, attempts, options }) =>
-      writeAttemptsNdjson({ runId, attempts, evidenceDir: options.evidenceDir })
+      writeAttemptsNdjson({ runId, attempts, evidenceDir: options.evidenceDir }),
+    ...chainDeps
   });
   process.stdout.write(
     `${JSON.stringify(

@@ -11,6 +11,8 @@
 import { execFileSync } from "node:child_process";
 
 const COMPOSE_FILE = new URL("../../../deploy/compose/docker-compose.demo.yml", import.meta.url).pathname;
+/** 并发舱壁扩容 override（裁定 B：隔离栈部署配置，不改产品默认）。 */
+const CAPACITY_OVERRIDE = new URL("mcp-inquiry-performance-capacity-override.yml", import.meta.url).pathname;
 
 export const DEFAULT_STACK = {
   project: "lucy-mip-uat",
@@ -26,11 +28,18 @@ function composeEnv(stack) {
     LUCY_DEMO_PROXY_HOST_PORT: String(stack.proxyPort),
     LUCY_DEMO_MYSQL_HOST_PORT: String(stack.mysqlPort),
     LUCY_PUBLIC_MCP_URL: `http://127.0.0.1:${stack.proxyPort}/mcp`,
+    // 委托人 2026-11-26 裁定 B（隔离栈部署配置扩容，不改产品代码）：20／50 路
+    // 并发档要求真实在途，产品默认舱壁（token 4／connection 16／global 24）
+    // 会把超发按设计拒绝。仅本隔离栈生效；判定口径不变，demo 栈不受影响。
+    LUCY_QUERY_MAX_INFLIGHT: String(process.env.MIP_CAPACITY_TOKEN ?? 50),
+    LUCY_MCP_AGENT_MAX_INFLIGHT: String(process.env.MIP_CAPACITY_AGENT ?? 50),
+    LUCY_MCP_CONNECTION_MAX_INFLIGHT: String(process.env.MIP_CAPACITY_CONNECTION ?? 50),
+    LUCY_MCP_GLOBAL_MAX_INFLIGHT: String(process.env.MIP_CAPACITY_GLOBAL ?? 64),
   };
 }
 
 function compose(stack, args, opts = {}) {
-  return execFileSync("docker", ["compose", "-p", stack.project, "-f", COMPOSE_FILE, ...args], {
+  return execFileSync("docker", ["compose", "-p", stack.project, "-f", COMPOSE_FILE, "-f", CAPACITY_OVERRIDE, ...args], {
     stdio: opts.capture ? ["pipe", "pipe", "pipe"] : "inherit",
     env: composeEnv(stack),
     timeout: opts.timeoutMs ?? 600_000,

@@ -1229,7 +1229,20 @@ export async function executeChainInstances({
     };
   }
 
-  for (const instance of instances.slice(0, limit)) {
+  const byFirstOfRole = [];
+  const seenRoles = new Set();
+  for (const inst of instances) {
+    if (!seenRoles.has(inst.roleClass)) {
+      seenRoles.add(inst.roleClass);
+      byFirstOfRole.push(inst);
+    }
+  }
+  // 链实例选取：比例下限（ceil(0.1×N)）之外，**出现过的每个角色类至少覆盖 1 个
+  // 实例**（fixtures §9.1：50 身份档覆盖 lucy_admin／受限 A／受限 B 各至少 1 个）；
+  // 专项小档（N=5）同理——只跑 1 个 admin 链不满足覆盖要求。
+  const selected = [...byFirstOfRole, ...instances.filter((i) => !byFirstOfRole.includes(i))]
+    .slice(0, Math.max(limit, seenRoles.size));
+  for (const instance of selected) {
     const registration = registry.register(instance.templateId, instance.identityId, runId);
     if (!registration.accepted) {
       rejected += 1;
@@ -1294,7 +1307,9 @@ export async function executeChainInstances({
         budgetClass: mapped.budgetClass,
         cacheState: "warm",
         timedOut: result?.timedOut === true,
-        questionRef: turn?.oracle?.ref ?? null
+        questionRef: turn?.oracle?.ref ?? null,
+        // Task 7 — 逐轮 oracle 失败原因（wrong 轮的诊断与优化归因必需）。
+        oracleReason: result?.oracleReason ?? null
       });
     }
     chains.push({

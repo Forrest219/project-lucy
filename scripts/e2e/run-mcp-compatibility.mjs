@@ -887,14 +887,27 @@ export async function runCompatibilityCommand(command, options, deps = {}) {
       (a) => a.ok !== true && a.ok !== false
     );
 
+    // P1-78 Task 6（性能轴委托）：跑次目录存在 P1-78 性能发布输入时，本条
+    // latency 轴不再自判（避免双源并行）；发布判定由 customer-release-readiness
+    // 的 mcp-inquiry-performance gate 独立执行。
+    const performanceInputPath = path.join(
+      options.runDir ?? ".",
+      "results",
+      "mcp-inquiry-performance.json"
+    );
+    const performanceDelegated =
+      options.performanceEvidencePath != null || existsSync(performanceInputPath);
+
     const mcpInput = {
       budgetClass: mapBudgetClass(suite),
       samplesMs,
-      baselineP95Ms: baseline?.mcp?.p95Ms
+      baselineP95Ms: baseline?.mcp?.p95Ms,
+      ...(performanceDelegated ? { performanceAxis: "delegated" } : {})
     };
     const agentInput = {
       turns: agentTurns,
       baselineMedianMs: baseline?.agent?.medianMs,
+      ...(performanceDelegated ? { performanceAxis: "delegated" } : {}),
       ...(agentRun?.attribution ? { attribution: agentRun.attribution } : {})
     };
 

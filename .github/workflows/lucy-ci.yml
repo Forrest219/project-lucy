@@ -325,6 +325,37 @@ jobs:
       - run: npm ci
       - run: npm run smoke:p0:postgres-demo
 
+  mcp-inquiry-performance-pr:
+    # P1-78 Task 6 step 1 — PR tier of the MCP inquiry performance gate (Spec §7).
+    # Budget freeze is in force (baseline-freeze brief 2026-11-26, option 2), so PR
+    # blocks on §5 absolute lines: absolute FAIL/BLOCKED fail the job; absolute PASS
+    # without an accepted baseline (SEED_ONLY) is report-only and exits 0.
+    # Lite fixtures: the PR family has no WIDE/SOAK/LONG_FOLLOW, so no scale-gate
+    # precondition — compat identities only; the formal tiers always run the full seed.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: PR tier on an isolated stack (lite fixtures + runner)
+        run: node scripts/uat/mcp-inquiry-performance-uat.mjs seed --trigger pr --lite
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: mcp-inquiry-performance-pr-evidence
+          path: docs/qa/uat/suites/mcp-inquiry-performance/evidence/
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Tear down the isolated stack
+        if: always()
+        run: docker compose -p lucy-mip-uat -f deploy/compose/docker-compose.demo.yml -f scripts/uat/lib/mcp-inquiry-performance-capacity-override.yml down -v --remove-orphans
+
   ci-required:
     # Aggregate gate for the DAILY workflow. It reads ONLY needs.<job>.result.
     # A dependency whose result is not "success" — failure, skipped, cancelled, timed out, or
@@ -344,6 +375,7 @@ jobs:
       - ktx-diff-audit
       - demo-db-smoke
       - postgres-demo-db-smoke
+      - mcp-inquiry-performance-pr
     if: always()
     timeout-minutes: 5
     steps:

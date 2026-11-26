@@ -1444,6 +1444,16 @@
       "reason": null
     },
     {
+      "path": "scripts/e2e/__tests__/mcp-inquiry-performance-gate.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "pure gate functions over temp dirs; writes nothing outside tmp",
+      "command": "node --test scripts/e2e/__tests__/mcp-inquiry-performance-gate.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:ci-workflow-contracts",
+      "reason": null
+    },
+    {
       "path": "scripts/uat/__tests__/check-uat-scale-baseline.test.mjs",
       "runner": "node --test",
       "environment": "deterministic",

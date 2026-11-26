@@ -22,6 +22,7 @@ import { expectedExecutions } from "../e2e/lib/catalog.mjs";
 import { automatedRequiredClients } from "../e2e/lib/clients.mjs";
 import { EXIT_CODES, fail, loadRun, parseArgv } from "../e2e/lib/common.mjs";
 import { applyMcpCompatibilityReleaseGate } from "../e2e/lib/mcp-compatibility-wiring.mjs";
+import { applyMcpInquiryPerformanceReleaseGate } from "../e2e/lib/mcp-inquiry-performance-gate.mjs";
 import { fileReaderFor, loadVerifyInputs, verifyRelease } from "../e2e/verify-evidence.mjs";
 
 export const READINESS_STEPS = [
@@ -32,6 +33,7 @@ export const READINESS_STEPS = [
   "security-integration + real management journey (results/security.json, results/management.json)",
   "all required real product clients (results/agent.json + server-evidence.json)",
   "MCP upgrade-compatibility evidence re-verified (mcp-compatibility-candidate.json; CI subset never releaseReady)",
+  "MCP inquiry performance gate re-verified (mcp-inquiry-performance.json; PASS only, or a D22 waiver for its bound candidate)",
   "evidence collected, leakage scanned, verifier decision",
   "promote exactly the tested digest only after this gate passed"
 ];
@@ -70,6 +72,27 @@ export function gateReadinessWithMcpCompatibility({
   });
 }
 
+/**
+ * P1-78 Task 6: fold the MCP inquiry performance gate into the release verdict.
+ * Only a full formal PASS sets releaseReady=true; SEED_ONLY / FAIL / BLOCKED /
+ * NOT RUN stay false, and a valid D22 waiver yields "waived" (never a PASS).
+ * Injectable for unit tests.
+ */
+export function gateReadinessWithMcpInquiryPerformance({
+  runDir,
+  verdict,
+  ciSubset = false,
+  candidateDigest = null,
+  applyGate = applyMcpInquiryPerformanceReleaseGate
+}) {
+  return applyGate({
+    runDir,
+    verdict,
+    ciSubset,
+    candidateDigest
+  });
+}
+
 /** Pure decision from files on disk; used by the CLI and by the tests. */
 export function decideReadiness({
   run,
@@ -78,7 +101,8 @@ export function decideReadiness({
   now = Date.now(),
   inputs = loadVerifyInputs(),
   ciSubset = process.env.COMPAT_COVERAGE_MODE === "ci-subset" || process.env.LUCY_MCP_COMPAT_COVERAGE_MODE === "ci-subset",
-  applyMcpGate = applyMcpCompatibilityReleaseGate
+  applyMcpGate = applyMcpCompatibilityReleaseGate,
+  applyPerformanceGate = applyMcpInquiryPerformanceReleaseGate
 }) {
   const results = loadResults(run);
   const audit = readJsonIfExists(path.join(run.paths.runDir, "results", "npm-audit.json"));
@@ -96,6 +120,15 @@ export function decideReadiness({
     verdict,
     ciSubset,
     applyGate: applyMcpGate
+  });
+  // P1-78 Task 6 — the performance gate binds the evidence to THIS candidate digest and
+  // honours D22 waivers from docs/qa/uat/suites/mcp-inquiry-performance/waivers/.
+  verdict = gateReadinessWithMcpInquiryPerformance({
+    runDir: run.paths.runDir,
+    verdict,
+    ciSubset,
+    candidateDigest: candidate?.imageDigest ?? candidate?.digest ?? null,
+    applyGate: applyPerformanceGate
   });
   if (mode !== "release") {
     // Collect / dry-run gathers and reports; it is not a gate and can never be publishable (Spec §8.2: exit 3).

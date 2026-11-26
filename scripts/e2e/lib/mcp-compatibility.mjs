@@ -260,7 +260,19 @@ function absoluteMcpLimit(budgetClass) {
   }
 }
 
+/**
+ * P1-78 Task 6（性能轴委托）：当跑次存在 P1-78 MCP 问询性能证据（委托人 2026-11-26
+ * 授权接线）时，本条的 latency 轴不再自判，改为消费 P1-78 的发布闸结果——避免
+ * 第二套样本／预算／相对基线算法与 P1-78 并行（P1-78 Spec 边界条款）。
+ * `performanceAxis` 为 null（旧证据、无 P1-78 跑次）时保持旧行为，已收口证据不受回改。
+ */
+export const PERFORMANCE_AXIS_DELEGATED_REASON =
+  "performance axis delegated to P1-78 (mcp-inquiry-performance gate); this run no longer self-judges latency";
+
 function judgeServiceLatency(mcp) {
+  if (mcp?.performanceAxis === "delegated") {
+    return { verdict: "PASS", reasons: [PERFORMANCE_AXIS_DELEGATED_REASON] };
+  }
   const reasons = [];
   if (!mcp || typeof mcp !== "object") {
     return { verdict: "PASS", reasons };
@@ -299,6 +311,9 @@ function judgeServiceLatency(mcp) {
 }
 
 function judgeAgentLatency(agent) {
+  if (agent?.performanceAxis === "delegated") {
+    return { verdict: "PASS", reasons: [PERFORMANCE_AXIS_DELEGATED_REASON], attribution: undefined };
+  }
   const reasons = [];
   let attribution;
   if (!agent || typeof agent !== "object") {

@@ -1,0 +1,99 @@
+# P1-78 MCP inquiry end-to-end performance — daily full-matrix workflow (Task 6 step 2).
+#
+# Contract: docs/specs/lucy-20261123-mcp-inquiry-performance-baseline-spec.md §7 and
+# docs/plans/lucy-20261123-mcp-inquiry-performance-baseline-plan.md Task 6.
+#
+#   - Runs the FULL nightly matrix (all performance scenarios, cold/warm, 20-way
+#     concurrency, SOAK sustained pressure, LONG_FOLLOW long chains) on an isolated
+#     Docker compose stack (project `lucy-mip-uat`; dedicated network/volumes/ports).
+#   - Scale-gate precondition: `uat:scale-baseline` (default + --profile mcp-perf)
+#     must pass before any run; failing dimensions BLOCK, never shrink fixtures.
+#   - A later run for the same candidate may only READ an accepted baseline; it never
+#     promotes itself (LATEST.json is written only by a named acceptance).
+#   - SOAK wall clock (≥1800 s effective window) must fit inside the job budget:
+#     exceeding the budget is a failure, never a truncated window (Spec §7 / D23).
+#   - Evidence is uploaded as a public artifact; private tokens stay out of the repo
+#     (they are generated per-run by the seed scripts into runner temp space).
+#
+# CI Mapping is registered in docs/governance/test-layers-and-release-gates.md.
+
+name: lucy-mcp-inquiry-performance
+
+on:
+  schedule:
+    # Daily, deliberately off the :00/:30 marks.
+    - cron: "17 21 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lucy-mcp-inquiry-performance-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  nightly-performance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+
+      # Isolated stack + full scale fixtures + both scale-gate profiles + R0 self-check.
+      # The compose build is the slow part on a cold runner; the uat entry waits for health.
+      - name: Seed isolated stack (full fixtures, scale gates, R0 self-check)
+        run: node scripts/uat/mcp-inquiry-performance-uat.mjs seed --trigger nightly --skip-runner
+
+      # The P1-54 question bank references identities via env:COMPAT_TOKEN_*; the seed
+      # wrote the plaintext map to an out-of-repo 0600 file. Export it for the runner
+      # steps (synthetic fixture tokens, regenerated per run; never committed).
+      - name: Export compatibility tokens for the runner
+        env:
+          UAT_COMPAT_TOKEN_FILE: ${{ github.workspace }}/../.lucy-secrets/mcp-compat-tokens-uat.json
+        run: |
+          node -e 'const fs=require("fs");const t=JSON.parse(fs.readFileSync(process.env.UAT_COMPAT_TOKEN_FILE,"utf8"));const lines=Object.entries(t).map(([k,v])=>k+"="+v);fs.appendFileSync(process.env.GITHUB_ENV,lines.join("\n")+"\n");'
+
+      - name: Export the concurrency identity pool for the runner
+        env:
+          MIP_CONCURRENCY_TOKEN_FILE: ${{ github.workspace }}/../.lucy-secrets/mcp-perf-pool-uat.json
+        run: echo "MIP_CONCURRENCY_TOKEN_FILE=${MIP_CONCURRENCY_TOKEN_FILE}" >> "${GITHUB_ENV}"
+
+      # Nightly MCP lane: all performance scenarios, cold/warm, 20-way concurrency.
+      - name: Nightly MCP lane (full matrix)
+        env:
+          LUCY_MCP_URL: http://127.0.0.1:57981/mcp
+        run: npm run uat:mcp-inquiry-performance -- --trigger nightly
+
+      # SOAK: 50 identities, ≥1800 s effective window, truncated-normal arrivals.
+      # A budget overrun fails the job; the window is never truncated.
+      - name: SOAK lane (sustained pressure)
+        env:
+          LUCY_MCP_URL: http://127.0.0.1:57981/mcp
+        run: npm run uat:mcp-inquiry-performance -- --trigger soak
+
+      # LONG_FOLLOW: reuses the SOAK run's chain evidence (Spec D20) — one planned
+      # chain instance per identity, never a second ≥20-turn round in the same run.
+      - name: LONG_FOLLOW lane (long chains)
+        env:
+          LUCY_MCP_URL: http://127.0.0.1:57981/mcp
+        run: npm run uat:mcp-inquiry-performance -- --trigger long_follow
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: mcp-inquiry-performance-evidence
+          path: |
+            docs/qa/uat/suites/mcp-inquiry-performance/evidence/
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Tear down the isolated stack
+        if: always()
+        run: docker compose -p lucy-mip-uat -f deploy/compose/docker-compose.demo.yml -f scripts/uat/lib/mcp-inquiry-performance-capacity-override.yml down -v --remove-orphans

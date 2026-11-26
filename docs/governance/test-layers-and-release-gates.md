@@ -60,6 +60,9 @@ P1-58／59 首批入口：`RACS_WEB=http://127.0.0.1:<port> RACS_CONTAINER=lucy-
 | `npm run smoke:p0:headless-config` | customer config | verifies the recommended `/data/lucy` config package shape, secret references, semantic-layer/wiki/eval/access parseability, and compose override |
 | `npm run smoke:p0:demo` | runtime + platform + customer path | demo MySQL, KTX connection/reindex/validate/query, Lucy MCP Proxy bearer token, `sl_read_source`, `sl_query`; same Lucy container also runs a SQLite file `connection test` and one `ktx sql` |
 | `npm run smoke:p0:postgres-demo` | runtime + platform + customer path | PostgreSQL demo DB, KTX connection/reindex/validate/query, Lucy MCP Proxy bearer token, `sl_read_source`, `sl_query` |
+| `npm run uat:mcp-inquiry-performance -- --trigger <pr\|nightly\|release\|upgrade-pre\|upgrade-post\|optimization-ab\|soak\|long_follow>` | uat（P1-78 性能门禁；PR／每日／出包／升级／优化 A/B 同一 runner，只换场景选择器） | MCP 问询端到端性能测程：隔离 compose 栈（`scripts/uat/lib/mcp-inquiry-performance-docker.mjs`，专用网络／卷／端口）＋真实 KTX／MySQL＋Public MCP；判定器／证据／独立 verifier 按 Spec §4–§6；SEED_ONLY／FAIL／BLOCKED／NOT RUN 均不得作为出包／升级性能 PASS（唯一例外 D22 有效 `waived`，只放行绑定候选） |
+| `node scripts/uat/mcp-inquiry-performance-uat.mjs seed --trigger <t> [--lite] [--skip-runner] [--down]` | uat（P1-78 隔离栈编排） | 隔离栈 seed（大 Schema→access→MCP-PERF 身份→compat 身份→Wiki／Skill→审计行→WAL checkpoint）＋两档规模断言＋R0 自检；`--lite` 供 PR 档（PR 家族无规模档前置，compat 身份 only）；正式档必须全量 seed，不缩规模开跑 |
+| `node scripts/uat/write-mcp-inquiry-performance-release-input.mjs --candidate-digest <sha256:…>` | release（P1-78 发布输入） | 从最近一次跑次证据产出候选绑定的 `results/mcp-inquiry-performance.json`＋gzip 原始尝试，供出包聚合器 verifier 复算 |
 | `npm run smoke:p0:business-eval` | business eval catalog | verifies core eval suites can be read by runner |
 | `npm run smoke:p0:spider2-lite-eval` | business eval catalog (optional gated) | Spider2-lite Pilot suite list-cases; no StarRocks required；跑法见 [`../qa/suite-semantic-onboard-mcp-eval.md`](../qa/suite-semantic-onboard-mcp-eval.md) §14 |
 | `npm run smoke:p1:spider2-lite-runtime` | runtime (optional gated) | `starrocks-r1` connection + `s2_*` validate + sandbox row probes; missing SR → blocked；同上 §14 |
@@ -309,6 +312,9 @@ Recommended CI jobs:
 | demo-db-smoke | `npm run smoke:p0:demo`（数据库/演示冒烟，**不是**真实用户 E2E） |
 | postgres-demo-db-smoke | `npm run smoke:p0:postgres-demo`（同上） |
 | real-e2e | 受保护 runner：同一候选 digest 部署到隔离单副本 K8s 后执行 `e2e:real:security` / `e2e:real:management` / `e2e:real:agent`（Spec 20261018 §6） |
+| mcp-inquiry-performance-pr（lucy-ci.yml，ci-required 必过） | 预算已冻结（2026-11-26 选项 2）：`node scripts/uat/mcp-inquiry-performance-uat.mjs seed --trigger pr --lite`；PR 按绝对线阻断（绝对 FAIL／BLOCKED 失败，SEED_ONLY 只报告） |
+| mcp-inquiry-performance（每日 workflow `lucy-mcp-inquiry-performance.yml`） | 全量 seed＋两档断言＋R0 → `--trigger nightly`／`soak`／`long_follow`（≥1800 s 窗口在 job 预算内，超时判失败不截断窗口）；同候选只读已接受基线，不自动晋级 |
+| mcp-inquiry-performance-release（lucy-release.yml） | 拉候选镜像（digest 绑定）→ `--trigger release`／`soak`／`long_follow` → `write-mcp-inquiry-performance-release-input` → artifact；`customer-release-readiness` 经 `mcp-inquiry-performance-gate` 复算：仅完整正式 PASS 放行，D22 有效豁免出 `waived` |
 | customer-release-readiness | **客户发布唯一聚合门禁**：`npm run gate:customer-release`，由唯一 verifier 校验证据与签名归档；所有客户发布分支依赖它 |
 | business-eval-catalog | `npm run smoke:p0:business-eval` |
 | p1-context | `npm run smoke:p1:context -- --strict-runtime` in a prepared KTX/proxy environment |
