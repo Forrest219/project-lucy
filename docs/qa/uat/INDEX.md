@@ -8,6 +8,7 @@
 
 | Suite | 总账 ID | 路径 | 必做环境 | 最近跑次 | 结果 |
 |---|---|---|---|---|---|
+| `UAT-SUITE-SEMANTIC-MAP` | **REQ-0121** | [suites/semantic-map](suites/semantic-map/suite.md) | 本机 demo Docker **lean**＋真实前台浏览器 1920×1080（`/semantic-map`）；规模项可选 scale／customer-stability | 尚无 | **NOT RUN**（Spec v1.0 终稿已确权；Plan／UAT 已登记；Plan／UAT 对抗 **Approve with nits**（2026-11-27，R3 终轮；B1–B7 全 CLOSED）；**开发未授权**、实现未落地；正式跑次须开发授权后执行。≠ 功能合同收口；≠ UAT PASS；≠ 可上线） |
 | `UAT-SUITE-INTEGRATION-MCP-CAP` | **REQ-0119** | [suites/integration-mcp-capacity](suites/integration-mcp-capacity/suite.md) | 本机隔离 Docker demo／scale＋真实 KTX／双 class Agent 纯 MCP＋stability-sentinel；**本轮无浏览器臂**（IMC-09=N/A） | 尚无 | **NOT RUN**（Spec／Plan／UAT v1.0-r2 终稿已确权；Plan／UAT 对抗 R2 PASS WITH FIXES；**开发未授权**、实现未落地；承接 P1-82 SC-06／UAT-MCPHA-05 验收。≠ 功能合同收口；≠ UAT PASS；≠ 可上线） |
 | `UAT-SUITE-ASSET-LIST-ZOOM` | **REQ-0120** | [suites/asset-list-zoom](suites/asset-list-zoom/suite.md) | 本机 demo Docker **lean**＋真实前台浏览器 1920×1080（启用表／Catalog／连接概览／角色授权） | 尚无 | **NOT RUN**（Spec v1.0 终稿已确权；Plan／UAT 设计已登记；Plan／UAT 对抗 Approve with nits（2026-11-27）；**开发未授权**、实现未落地；正式跑次须开发授权后执行。≠ 功能合同收口；≠ UAT PASS；≠ 可上线） |
 | `UAT-SUITE-ACCESS-WRITE-WINDOW` | **REQ-0117** | [suites/access-write-window](suites/access-write-window/suite.md) | 隔离 compose 栈 `lucy-req0117-uat`（2000 启用表＋500 Agent 水位＋30 宽角色 Agent）＋真实前台浏览器＋纯 MCP | [2026-11-26-claude-aww-partial](suites/access-write-window/runs/2026-11-26-claude-aww-partial.md) | **BLOCKED**（跑次中断于前台浏览器阶段：R0／01–07 API＋单测侧证据 PASS，08 前台浏览器两阶段未完成；06/07 修复后复验数据见跑次。≠ 功能合同收口；≠ UAT PASS；≠ 可上线） |

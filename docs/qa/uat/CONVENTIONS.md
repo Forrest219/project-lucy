@@ -91,6 +91,7 @@
 | `UAT-KSG-*` | Chart 停止宽限与 P1-63 预算对齐（P1-85；渲染负控、`Recreate`、真实 SIGTERM、审计守恒与纯 MCP 恢复） |
 | `UAT-MCCC-*` | 敏感元数据工具可见性对齐与拒绝修复引导（P1-88；`tools/list` 隐藏、`sensitive_metadata_forbidden` 修复提示与 `nextTools` 身份过滤、逃生链成交、安全回归） |
 | `UAT-ALZ-*` | 资产列表 Zoom（REQ-0120；有界曝光／单 Schema 组／搜索优先／挂载合同；含 `UAT-ALZ-R0`） |
+| `UAT-SM-*` | 语义地图只读 Canvas（REQ-0121；岛／连通团／并集边／筛选钻取；含 `UAT-SM-R0`） |
 | `UAT-R0` | 环境门禁（各套件共用可引用） |
 
 自动化脚本 ID（`E2E-*`／`VERIFY-*`／`UT-*`）可写在用例「自动化指针」栏，但 UAT 编号保持稳定，便于跨 Agent 引用。
