@@ -45,6 +45,7 @@
 
 | 文档 | 用途 |
 |---|---|
+| [资产列表 Zoom 交互规范 Spec](specs/lucy-20261127-asset-list-zoom-ux-spec.md) | REQ-0120（P1，计划纳入 `v0.35.0`）。S2｜v1.0。**终稿已确权**（2026-11-27）；未获开发授权；测试台 `UAT-SUITE-ASSET-LIST-ZOOM`＝NOT RUN；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。[Plan](plans/lucy-20261127-asset-list-zoom-ux-plan.md) · [UAT](qa/uat/suites/asset-list-zoom/suite.md) · [评审](reviews/2026-11-27-asset-list-zoom-ux-adversarial-review.md)。 |
 | [问询预算面向分析师高频工作流与慢数仓（hive-jd）体验修订 Spec](specs/lucy-20261126-question-budget-analyst-workflow-revision-spec.md) | 待入常青需求池（建议 P0／主路径体验严重缺陷修复，2026-11-26 委托人指示起草）。S1｜v0.2-draft。草案；终稿未确权；未获开发授权；测试台 `not_registered`；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。修订 Spec 162 §7.2、窗口优化／P1-12／P1-74／P1-82 默认并发与超时耦合；配对 Plan 待 D1–D8 裁定与 PRE-01 抓包后补齐。 |
 | [大目录访问配置写窗口韧性 Spec](specs/lucy-20261126-access-write-window-resilience-spec.md) | REQ-0117（P1，产品线 `0.35.0` 候选，待挑入范围单）。S4｜v1.0。终稿已确权；开发授权已获得（2026-11-26）；**实现已落地，UAT 中断于 AWW-08 待验收**；测试台 `UAT-SUITE-ACCESS-WRITE-WINDOW`；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。配对 [Plan](plans/lucy-20261126-access-write-window-resilience-plan.md)。 |
 | [渐进开放 KTX 已内置分析型连接器（ClickHouse / DuckDB）Spec](specs/lucy-20261126-ktx-analytical-connectors-rollout-spec.md) | REQ-0115（P0，计划纳入 `v0.35.0`）。S1｜v0.1-draft。草案；终稿未确权；未获开发授权；测试台 `not_registered`；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。配对 [Plan](plans/lucy-20261126-ktx-analytical-connectors-rollout-plan.md)。 |

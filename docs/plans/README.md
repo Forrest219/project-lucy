@@ -4,6 +4,7 @@ This directory stores repository-level implementation plans that are not scoped 
 
 | Plan | Purpose |
 |---|---|
+| [资产列表 Zoom 交互 Plan](lucy-20261127-asset-list-zoom-ux-plan.md) | REQ-0120（P1，计划纳入 `v0.35.0`）。S2｜v1.0。Spec 终稿已确权；Plan／UAT 设计定稿；未获开发授权；浏览器验证未执行；测试台 NOT RUN；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。配对 [Spec](../specs/lucy-20261127-asset-list-zoom-ux-spec.md) · [UAT](../qa/uat/suites/asset-list-zoom/suite.md)。 |
 | [大目录访问配置写窗口韧性 Plan](lucy-20261126-access-write-window-resilience-plan.md) | REQ-0117（P1，产品线 `0.35.0` 候选，待挑入范围单）。S4｜v1.0。终稿已确权；开发授权已获得（2026-11-26）；**实现已落地，UAT 中断于 AWW-08 待验收**；测试台 `UAT-SUITE-ACCESS-WRITE-WINDOW`；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。配对 [Spec](../specs/lucy-20261126-access-write-window-resilience-spec.md)。 |
 | [渐进开放 KTX 已内置分析型连接器（ClickHouse / DuckDB）Plan](lucy-20261126-ktx-analytical-connectors-rollout-plan.md) | REQ-0115（P0，计划纳入 `v0.35.0`）。S1｜v0.1-draft。草案；终稿未确权；未获开发授权；测试台 `not_registered`；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。配对 [Spec](../specs/lucy-20261126-ktx-analytical-connectors-rollout-spec.md)。 |
 | [自动 Join Graph 推断与辅助标注 Plan](lucy-20261126-auto-join-graph-inference-plan.md) | REQ-0116（P1，计划纳入 `v0.35.0`）。S1｜v0.1-draft。草案；终稿未确权；未获开发授权；测试台 `not_registered`；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。配对 [Spec](../specs/lucy-20261126-auto-join-graph-inference-spec.md)。 |
