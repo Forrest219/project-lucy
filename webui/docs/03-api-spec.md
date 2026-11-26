@@ -1017,6 +1017,22 @@ Lucy v0.25 / P0-4 §3.4：表以**完整身份** `连接.Schema.表` 标识。�
 
 `GET /api/admin/audit` 查询 MCP access log；支持按 user、tool、outcome、时间范围、tableSearch、sessionId、turnId、platform 过滤。默认不包含协议类工具调用；传 `includeProtocol=true` 可包含 `tools/list`、`initialize`、`notifications/initialized`。
 
+### 运维步骤（P1-68）
+
+权威契约见 [运维步骤账 Spec](../../docs/specs/lucy-20261120-ops-step-journal-spec.md) §3.4。
+
+- `GET /api/admin/ops-steps?opId=&op=&step=&state=`：沿用已登录管理员鉴权，只读。返回当前进程读模型：`inFlight`（进行中）、`history`（已结束，超过 2000 行或 1 小时截断并给出原因）及写健康（`stdoutWriteFailed`、`stdoutDroppedCount`、`fileWritable`、`fileDroppedCount`、`formatDroppedCount`、`historyResidual`）。四个查询参数均为精确匹配筛选，同时作用于 `inFlight` 与 `history`。
+
+测试挡板（Spec D11）：仅当 `LUCY_OPS_STEP_UAT=1` 时注册，否则路由不存在（404）。只用于 UAT 托住步骤与注入故障，不得替代真实业务操作；挡板忙时返回 `409 OPS_STEP_UAT_BUSY`。
+
+- `POST /api/admin/ops-step-uat/reset`：重置步骤账与挡板状态。
+- `POST /api/admin/ops-step-uat/diagnostic` `{ steps, holdMs, lifecycle? }`：按已登记诊断步骤（`read_project`／`read_ktx_yaml`／`read_catalog_reloads`／`read_reload_state`／`probe_execution`）启动一次可托住的诊断，`holdMs` 0–3,700,000，`lifecycle` 为 `production`（默认）或 `isolated`；返回 `202`。
+- `POST /api/admin/ops-step-uat/sync-section` `{ holdMs? }`：先返回 `202 { opId }`，随后进入 `uat_sync_section` 同步段占住事件循环，`holdMs` 0–10,000（默认 10,000）。
+- `POST /api/admin/ops-step-uat/background` `{ enabled }`：暂停或恢复后台诊断采集；暂停时等待在途采集结束后返回。
+- `POST /api/admin/ops-step-uat/stdout-failure` `{ mode: "error" | "short" }`：为下一条步骤行注入一次标准输出写错误或短写。
+- `POST /api/admin/ops-step-uat/read-failure` `{ mode: "error" | "delay", delayMs? }`：登记一次管理读故障并返回 `token`；带 `GET /api/admin/ops-steps?uatFault=<token>` 读取时生效，`delay` 的 `delayMs` 为 1–10,000。
+- `POST /api/admin/ops-step-uat/console-probe`：写一条普通 console 日志，用于验证普通日志不受步骤行抑制影响。
+
 ## Lucy v0.25 新增端点
 
 ### 行级策略预览（只读）

@@ -207,6 +207,7 @@ KTX CLI / MCP daemon
 | 运行状态 | 系统概览 | `/overview` | 确认系统可用，处理当前待办。 |
 | 运行状态 | 调用监控 | `/ops/calls` | 准实时查看 MCP 工具调用量、成败与请求时效。 |
 | 运行状态 | 使用概况 | `/admin/usage` | 查看 Agent、Token、数据表的活跃率，以及 WebUI 页面访问情况。 |
+| 运行状态 | 运维步骤 | `/admin/ops-steps` | 按操作号查看进行中、已结束的运维步骤及写入降级。 |
 | 数据接入 | 连接概览 | `/connections` | 管理数据库连接、`Schema` 与 `Schema Manifest`，并查看连通性和本地目录同步状态。 |
 | 数据接入 | 启用表范围 | `/connections/enabled-tables` | 配置各连接进入语义层的表范围，并审阅保存前变更。 |
 | 业务上下文 | 语义资产 | `/catalog` | 管理表、字段、指标、分群与关联等结构化语义资产。 |
@@ -389,7 +390,7 @@ curl -s -X POST http://127.0.0.1:5174/api/catalog/reload \
 
 #### 调用监控（/ops/calls）
 
-入口：`/ops/calls`。运行状态分组下，与 `/overview`（系统概览）和 `/admin/usage`（使用概况）并列；侧栏位置见 [1.5 WebUI 入口速查](#webui-entry-map)。
+入口：`/ops/calls`。运行状态分组下，与 `/overview`（系统概览）、`/admin/usage`（使用概况）和 `/admin/ops-steps`（运维步骤）并列；侧栏位置见 [1.5 WebUI 入口速查](#webui-entry-map)。
 
 调用监控回答「MCP 工具调用现在是否健康、是否变慢、是否被拒绝」：六张 KPI 卡片（调用量（24h）、成功率、错误率、拒绝率、P95 耗时、慢请求数（>30s）），加工具调用排行（Top 10）与最近失败与拒绝短表。**只读观测页**：不修改 ACL、不写日志、不调 KTX、不接告警通道。
 
@@ -479,6 +480,8 @@ curl -s -X POST http://127.0.0.1:5174/api/catalog/reload \
 2. 排行榜百分比的分母是**该榜自身合计**，不是全量调用量。
 3. 界面使用视图里的「页面访问」是 `WebUI` 打开次数，与 `Agent` 的业务问询是两套数。
 4. 少数日志时间无法解析时会被跳过，并在表下提示「有 N 条时间无法解析，未计入」。
+
+同属「运行状态」的 `/admin/ops-steps`（运维步骤）按操作号只读查看进行中与已结束步骤及写入降级，用于排查长操作卡点；侧栏位置见 [1.5 WebUI 入口速查](#webui-entry-map)。不代替访问日志取证，也不修改配置。
 
 ### 3.2 数据接入 · 连接 / Schema / 表范围
 

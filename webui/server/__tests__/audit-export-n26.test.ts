@@ -249,6 +249,14 @@ afterEach(async () => {
 async function makeApp() {
   const { registerAuditRoutes, getAuditDb, resetAuditDbForTests } = await import("../admin/audit.js");
   const app = Fastify();
+  app.decorateRequest("lucyAdmin", null as any);
+  app.addHook("onRequest", async (request) => {
+    (request as any).lucyAdmin = {
+      admin: { id: "admin-1", account_uid: "uid-1", role: "admin" },
+      authMode: "required",
+      session: null
+    };
+  });
   registerAuditRoutes(app);
   await getAuditDb();
   return { app, resetAuditDbForTests };

@@ -1,6 +1,6 @@
 # Changelog
 
-All notable user-visible changes to Lucy ship here. Versions follow `<major>.<minor>.<patch>`; the current development line is `0.35.0` (`lucy-v0.35`); prior tagged release is `v0.30.0`.
+All notable user-visible changes to Lucy ship here. Versions follow `<major>.<minor>.<patch>`; the current development line is `0.35.0` (`lucy-v0.35`); the last tagged release is `v0.30.0` (tag `v0.30.0` @ `fd2074fd`).
 
 > Conventions: `**Breaking**` = action required on upgrade; `**Deprecated**` = still works, will be removed; `**Added**` / `**Changed**` / `**Fixed**` are self-describing.
 
@@ -12,9 +12,9 @@ All notable user-visible changes to Lucy ship here. Versions follow `<major>.<mi
 
 ---
 
-## Unreleased — 0.30.0 (historical capture on lucy-v0.30)
+## 0.30.0
 
-产品线 `lucy-v0.30`／`VERSION=0.30.0` 开发中捕捉（已于 2026-11-24 tag 为 `v0.30.0`；见正式 `## 0.30.0` 若已从 main 回并）。对外叙事定稿见 `docs/releases/v0.30.0-user-facing.md`。
+Scoped Git release（tag `v0.30.0` @ `fd2074fd`，PR #66）。对外叙事见 `docs/releases/v0.30.0-user-facing.md`；台账见 `docs/releases/v0.30.0.json`。**无**客户交付包；**≠** 可上线；**≠** 核心升级完成。
 
 ### Added
 - **P0-1／REQ-030-027 问题类型口径绑定**：运维可发布「问题类型 → 唯一 source + 固定口径」绑定；命中后 `lucy_query`／`lucy_explain_query` 偏离由 Proxy 本机拒绝且零上游执行。

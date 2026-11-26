@@ -1,64 +1,102 @@
 {
   "productVersion": "0.30.0",
   "releaseTag": "v0.30.0",
-  "commit": "PENDING",
-  "releasedAt": "2026-11-18",
+  "commit": "fd2074fd253f78cbd95fb0de7acbc4a5bb096e6f",
+  "releasedAt": "2026-11-24",
   "deliveryPackage": null,
-  "noDeliveryReason": "0.30.0 尚未打正式 tag，也尚未生成客户 amd64 镜像／Helm 交付包。镜像 digest、包 SHA256 与正式交付验收记录均「制品后填」；本条目只满足 VERSION 可追溯的源码侧台账占位，不宣称 productionReady，≠ 可上线。",
-  "artifactPlaceholders": {
-    "imageDigest": "制品后填",
-    "packageSha256": "制品后填",
-    "helmPackageSha256": "制品后填",
-    "note": "Fill after amd64 image + Helm package build; do not invent digests before artifacts exist."
-  },
+  "noDeliveryReason": "Scoped Git release only: annotated tag v0.30.0 and GitHub Release exist at merge commit fd2074fd253f78cbd95fb0de7acbc4a5bb096e6f (PR #66 merge of lucy-v0.30 tip 4d8e371b), but this entry records no customer delivery package, image digest claimed as production-ready, or package SHA256. Tag run 45451977931 failed overall: release/spec-and-webui failed at lint:url-driven-input (Audit.tsx 事件 ID), customer-amd64-native failed at G8 empty-volume cleanup (permission denied), and real-e2e / customer-release-readiness / release-package were skipped. No GitHub release-package chain completed; productionReady must stay unset/false.",
+  "runs": [
+    {
+      "id": "45451882730",
+      "trigger": "push to main at merge commit fd2074fd253f78cbd95fb0de7acbc4a5bb096e6f (merge of lucy-v0.30@4d8e371b via PR #66)",
+      "note": "Completed with overall conclusion failure because non-Required demo-db-smoke and postgres-demo-db-smoke failed (compose demo build missing LUCY_GIT_SHA for BUILD_REVISION). All four Required checks passed on this push: spec-and-webui, docker-smoke, k8s-static and k8s-upgrade-gate. Supporting jobs workflow-contracts, business-eval-catalog, headless-config and ktx-diff-audit also succeeded."
+    },
+    {
+      "id": "45451977931",
+      "trigger": "push of the v0.30.0 tag at commit fd2074fd253f78cbd95fb0de7acbc4a5bb096e6f",
+      "note": "Completed with overall conclusion failure. Among the four Required-named release jobs, release/k8s-static and release/k8s-upgrade-gate succeeded; release/spec-and-webui failed at npm run lint:url-driven-input (webui/src/pages/admin/Audit.tsx:2527 事件 ID value bound to router state); release/docker-smoke and other daily-style release jobs were skipped after that failure. customer-amd64-native built candidate ghcr.io/forrest219/project-lucy@sha256:fe7057470e43a249313ac4b34f302aa82877306f43d8dc3b36e831f6b049e911 then failed at G8 (g8-image-k8s-contract-gate empty-volume entrypoint cleanup with permission-denied removals). real-e2e, customer-release-readiness and release-package were skipped. Do not describe the tag run as fully green or as having passed Required tag checks."
+    }
+  ],
   "gates": [
     {
       "name": "Required main checks",
-      "status": "notExecuted",
+      "status": "passed",
       "required": true,
-      "reason": "No formal release commit yet (commit=PENDING). Re-record after the lock candidate is tagged."
+      "run": "45451882730"
     },
     {
       "name": "Required tag checks",
       "status": "notExecuted",
       "required": true,
-      "reason": "v0.30.0 tag not cut; tag-run gates not executed."
+      "reason": "Tag run 45451977931 did not complete the four Required-named release jobs successfully. release/spec-and-webui failed at npm run lint:url-driven-input (webui/src/pages/admin/Audit.tsx:2527 事件 ID value bound to router state). release/docker-smoke was skipped because it needs release/spec-and-webui. Only release/k8s-static and release/k8s-upgrade-gate succeeded. Ledger rules forbid recording a failed Required check as failed+required; this aggregate is therefore notExecuted and must not be claimed passed. Authoritative Required evidence remains the main push run 45451882730."
+    },
+    {
+      "name": "headless-config",
+      "status": "passed",
+      "required": false,
+      "run": "45451882730"
+    },
+    {
+      "name": "business-eval-catalog",
+      "status": "passed",
+      "required": false,
+      "run": "45451882730"
+    },
+    {
+      "name": "ktx-diff-audit",
+      "status": "passed",
+      "required": false,
+      "run": "45451882730"
+    },
+    {
+      "name": "demo-db-smoke",
+      "status": "failed",
+      "required": false,
+      "run": "45451882730",
+      "reason": "smoke:p0:demo compose build failed: LUCY_GIT_SHA is required to stamp BUILD_REVISION (demo compose path did not forward the build-arg). Not a Required check; recorded honestly; fix belongs on the next product line, not a customer package claim."
+    },
+    {
+      "name": "postgres-demo-db-smoke",
+      "status": "failed",
+      "required": false,
+      "run": "45451882730",
+      "reason": "Same LUCY_GIT_SHA / BUILD_REVISION stamp failure on the postgres demo compose path. Non-Required; recorded as failed."
     },
     {
       "name": "customer-amd64-native",
-      "status": "notExecuted",
+      "status": "failed",
       "required": false,
-      "reason": "制品后填：amd64 native build／G1–G8 not run for a locked 0.30.0 release commit."
+      "run": "45451977931",
+      "reason": "Tag run built and pushed candidate ghcr.io/forrest219/project-lucy@sha256:fe7057470e43a249313ac4b34f302aa82877306f43d8dc3b36e831f6b049e911. G1–G4/G4b appeared to progress, but G8 K8s contract gate failed (empty-volume entrypoint cleanup with permission-denied removals under the temp volume). No customer delivery package or productionReady claim is derived from this candidate digest."
     },
     {
       "name": "real-e2e",
       "status": "notExecuted",
-      "required": false,
-      "reason": "制品后填：blocked until a candidate digest exists and protected amd64 runner path is available."
+      "reason": "Skipped in tag run 45451977931 after upstream customer-amd64-native failed / release chain incomplete."
     },
     {
       "name": "customer-release-readiness",
       "status": "notExecuted",
-      "required": false,
-      "reason": "制品后填：no delivery package identity yet."
+      "reason": "Skipped in tag run 45451977931 because its upstream release-chain dependencies did not complete successfully. No automated customer release credential was produced."
     },
     {
       "name": "release-package",
       "status": "notExecuted",
-      "required": false,
-      "reason": "制品后填：no GitHub release-package chain for 0.30.0."
+      "reason": "Skipped in tag run 45451977931 because customer-release-readiness did not execute. No GitHub-gate-produced package, promoted image or release notes artifact exists."
     },
     {
       "name": "customer delivery gates",
       "status": "notExecuted",
-      "required": false,
-      "reason": "制品后填：customer delivery package SHA／digest not produced."
+      "reason": "No customer delivery package exists for this version (scoped Git release; P5 out of scope), so no artifact-specific delivery or production-readiness gate has been executed."
     }
   ],
   "notes": [
-    "Pre-tag ledger placeholder for VERSION=0.30.0 on branch lucy-v0.30. commit remains PENDING until a release lock commit is chosen.",
-    "FDE R06 Track-E：源码侧关闭「缺台账」门禁；image digest／package SHA256／Helm 包摘要一律「制品后填」。",
-    "Does not claim productionReady. Does not substitute for C01–C20 or native upgrade acceptance.",
-    "User-facing narrative draft remains docs/releases/v0.30.0-user-facing.md; that file is not a ledger entry."
+    "Scoped Git release (A+X): merge PR #66 into main, annotated tag v0.30.0, honest GitHub Release, ledger backfill. No customer amd64 package, no productionReady, no claim of 0.30 core-upgrade complete.",
+    "Release tip is merge commit fd2074fd of lucy-v0.30 tip 4d8e371b (advanced from freeze tip f5f2eb95 only for Required-gate fixes). Product VERSION=0.30.0; Chart 0.2.10; bundled KTX 0.16.0.",
+    "Main push run 45451882730 is the authoritative Required-check evidence for this commit. Tag run 45451977931 is overall red: Required-named release/spec-and-webui failed (lint:url-driven-input on Audit.tsx), so Required tag checks are recorded as notExecuted rather than passed.",
+    "Note the workflow split: lucy-ci.yml (main/PR) spec-and-webui does not run lint:url-driven-input; lucy-release.yml (tag) does. Same commit can therefore pass Required main checks and still fail the tag release/spec-and-webui job.",
+    "customer-amd64-native reached a GHCR candidate digest under the forrest219 namespace, then failed G8. That digest is not claimed as a deliveryPackage identity.",
+    "In-progress 0.30 WIP (local +2 and dirty tree) was parked on lucy-v0.35 before the freeze; subsequent product-line work continues there with VERSION cut to 0.35.0. Hotfixes for 0.30.0 must branch from tag v0.30.0.",
+    "Known product gaps retained in Release narrative: P0-6/7/B frozen; P1-75/83/84; P1-28 row policy PASS on the test ledger (user-facing docs corrected); P1-82 PASS WITH GAP; full CORE-AVAILABILITY matrix incomplete."
   ]
 }

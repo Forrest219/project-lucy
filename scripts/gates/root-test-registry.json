@@ -364,6 +364,16 @@
       "reason": null
     },
     {
+      "path": "scripts/e2e/__tests__/mcp-compat-budget-escape.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "none",
+      "command": "node --test scripts/e2e/__tests__/mcp-compat-budget-escape.test.mjs",
+      "gate": "k8s-static",
+      "gateCommand": "npm run test:e2e-harness",
+      "reason": null
+    },
+    {
       "path": "scripts/e2e/__tests__/mcp-compat-config-profile.test.mjs",
       "runner": "node --test",
       "environment": "deterministic",
@@ -1279,6 +1289,36 @@
       "environment": "deterministic",
       "sideEffects": "pure synthetic in-memory oracle assertions; no Docker, network or runtime data",
       "command": "node --test scripts/uat/agent-roster-summary-oracle.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/uat/context-default-adoption.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "pure synthetic in-memory judge assertions; no Docker, network or runtime data",
+      "command": "node --test scripts/uat/context-default-adoption.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/uat/ensure-scale-baseline.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "pure synthetic in-memory marker/seed assertions; no Docker, network or runtime data",
+      "command": "node --test scripts/uat/ensure-scale-baseline.test.mjs",
+      "gate": "workflow-contracts",
+      "gateCommand": "npm run test:root-contracts",
+      "reason": null
+    },
+    {
+      "path": "scripts/uat/interactive-read-resilience.test.mjs",
+      "runner": "node --test",
+      "environment": "deterministic",
+      "sideEffects": "pure synthetic in-memory judge assertions; no Docker, network or runtime data",
+      "command": "node --test scripts/uat/interactive-read-resilience.test.mjs",
       "gate": "workflow-contracts",
       "gateCommand": "npm run test:root-contracts",
       "reason": null

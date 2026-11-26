@@ -58,6 +58,7 @@
 | 调用监控 | `/ops/calls` |
 | 使用概况 · 数据访问 | `/admin/usage` |
 | 使用概况 · 界面使用 | `/admin/usage?view=interface` |
+| 运维步骤 | `/admin/ops-steps` |
 | 连接概览 | `/connections` |
 | 启用表范围 | `/connections/enabled-tables` |
 | 语义资产 | `/catalog` |

@@ -17,7 +17,7 @@
 
 ## 同一版本线按数值递增
 
-同一产品版本线必须保持数值递增。开发中产品版本为 `0.30.0`（分支 `lucy-v0.30`；已有预 tag 台账 `v0.30.0.json`，`commit=PENDING`，镜像 digest／包 SHA「制品后填」，尚未打正式 tag）。已 tag 的 `0.x` 线为 `0.25.0 > 0.20.0 > 0.17.0 > 0.2.0`。`0.25.0` 是上一已 tag 产品版本；`0.20.0` 再前一已发布版本，接替了短命的 `0.2.0`。错误的 `2.0.0` 切线已废止，其 tag 与 Release 仅作为历史事实保留，不作为当前 `0.x` 版本线的承接基准。
+同一产品版本线必须保持数值递增。已 tag 的 `0.x` 线为 `0.30.0 > 0.25.0 > 0.20.0 > 0.17.0 > 0.2.0`。`0.30.0` 是当前已 tag 产品版本（scoped Git 发版，**无**客户交付包）；后续产品线开发在 `lucy-v0.35`。`0.25.0` 是上一已 tag 产品版本；`0.20.0` 再前一已发布版本，接替了短命的 `0.2.0`。错误的 `2.0.0` 切线已废止，其 tag 与 Release 仅作为历史事实保留，不作为当前 `0.x` 版本线的承接基准。
 
 判断客户运行的是哪一个具体构建，使用**构建提交**（40 位 commit）。完整提交看 `/api/health.data.gitSha`、镜像内 `/app/BUILD_REVISION`，或 WebUI「系统设置 / 版本信息」页的复制内容；该页可见文本是前 12 位。构建提交是对产品版本的补充，不能用来允许当前版本线倒退。
 
@@ -25,8 +25,8 @@
 
 ## 文件
 
-- `v0.30.0.json` — **预 tag 台账占位**（`commit=PENDING`，`deliveryPackage=null`）。镜像 digest／包 SHA256／Helm 包摘要均为「制品后填」；门禁一律 `notExecuted`。满足 `lint:release-ledger` 对当前 `VERSION=0.30.0` 的可追溯要求，**不**表示已发布或可上线。
-- `v0.30.0-user-facing.md` — **对外叙事定稿**（用户／客户可读；与 tip `eb38eee5140c`／中间态出口对齐）。**尚未**打 `v0.30.0` tag，也**没有** `v0.30.0-release-notes.md`；本文件**不**表示可上线或客户交付。工程条目见 `CHANGELOG.md` §`Unreleased — 0.30.0`。草稿捕捉层仍见 `drafts/0.30.0-user.md`。约定见 [`docs/plans/lucy-20261107-dual-layer-release-notes-design.md`](../plans/lucy-20261107-dual-layer-release-notes-design.md)。
+- `v0.30.0.json` — 当前已 tag 产品版本（scoped Git）。annotated tag `v0.30.0` 与正式 GitHub Release 已指向 merge commit `fd2074fd`（PR #66）；main 跑批 `45451882730` 四项 Required checks 通过（整体因非 Required demo 冒烟失败而红）；tag 跑批 `45451977931` 总体失败（`release/spec-and-webui` 红灯、`customer-amd64-native` G8 失败，`real-e2e`／`release-package` 等跳过），**不**宣称 Required tag checks 通过，也**没有**客户交付包或 `productionReady`。
+- `v0.30.0-user-facing.md` — **对外叙事定稿**（用户／客户可读）。对齐 tag `v0.30.0`；**不**表示可上线或客户交付。工程条目见 `CHANGELOG.md` §`0.30.0`。草稿捕捉层仍见 `drafts/0.30.0-user.md`。约定见 [`docs/plans/lucy-20261107-dual-layer-release-notes-design.md`](../plans/lucy-20261107-dual-layer-release-notes-design.md)。
 - `drafts/0.30.0-user.md` — 开发中用户可见草稿（非正式；与定稿同源，含「暂缓」清单）。
 - `v0.25.0.json` — 上一已 tag 产品版本。annotated tag `v0.25.0` 与正式 GitHub Release 已指向 `e84c9ed4`；main 跑批 `42250111386` 四项 Required checks 通过；tag 跑批 `42252441241` 总体失败（`release/spec-and-webui` 红灯、`customer-amd64-native` G8 失败，`real-e2e`／`release-package` 等跳过），**不**宣称 Required tag checks 通过，也**没有**客户交付包或 `productionReady`。
 - `v0.20.0.json` — 上一已发布版本，annotated tag 已指向 `abb503c`，正式 GitHub Release 已按 `v0.20.0-release-notes.md` 创建。main 跑批 `40088995603` 与 tag 跑批 `40097259604` 的四项 Required checks 均通过；项目所有者确认客户已成功部署且版本与该版本 `0.20.0` 一致，**仅客户实际部署路径按人工验收放行**。两项既有非必需 demo 冒烟检查失败并获准留到下一轮修复；GHCR 权限问题导致 GitHub 客户放行链未执行，其他制品不在放行范围内。本版未新登记交付包、镜像摘要或包哈希。

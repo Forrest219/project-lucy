@@ -4,7 +4,7 @@
  */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, writeFile, rm, symlink } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -45,18 +45,27 @@ test("entrypoint preserves exit status through drain-first shutdown", async () =
 test("entrypoint owns the actual Node PID, not an early-exiting npm launcher", async () => {
   const source = await readEntrypoint();
   const start = source.lastIndexOf('cd "${WEBUI_ROOT}"');
-  const launch = source.slice(start, source.indexOf('\nwait -n ', start));
+  const launchRaw = source.slice(start, source.indexOf("\nwait -n ", start));
+  // workflow-contracts installs only root deps; do not require webui/node_modules/tsx.
+  // Keep background + LUCY_PID ownership shape; swap the loader for a plain Node fixture.
+  assert.match(launchRaw, /node --import tsx server\/index\.ts &/);
+  const launch = launchRaw.replace(
+    /node --import tsx server\/index\.ts &/,
+    "node server/index.mjs &"
+  );
   const root = await mkdtemp(path.join(tmpdir(), "lucy-drain-pid-"));
   try {
     await mkdir(path.join(root, "server"));
-    await symlink(path.join(repoRoot, "webui/node_modules"), path.join(root, "node_modules"));
-    await writeFile(path.join(root, "package.json"), JSON.stringify({ type: "module", scripts: { start: "tsx server/index.ts" } }));
-    await writeFile(path.join(root, "server/index.ts"), `
+    await writeFile(path.join(root, "package.json"), JSON.stringify({ type: "module" }));
+    await writeFile(
+      path.join(root, "server/index.mjs"),
+      `
       import { writeFileSync } from "node:fs";
       writeFileSync("actual.pid", String(process.pid));
       process.on("SIGTERM", () => setTimeout(() => { writeFileSync("settled", "yes"); process.exit(0); }, 100));
       setInterval(() => {}, 1000);
-    `);
+    `
+    );
     const script = `set -eu
       WEBUI_ROOT="$1"
       ${launch}

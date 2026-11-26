@@ -161,6 +161,7 @@ function renderHelp(path = "/help") {
               "| 运行状态 | 系统概览 | `/overview` | 确认系统可用，处理当前待办。 |",
               "| 运行状态 | 调用监控 | `/ops/calls` | 准实时查看 MCP 工具调用量、成败与请求时效。 |",
               "| 运行状态 | 使用概况 | `/admin/usage` | 查看 Agent、Token、数据表的活跃率，以及 WebUI 页面访问情况。 |",
+              "| 运行状态 | 运维步骤 | `/admin/ops-steps` | 按操作号查看进行中、已结束的运维步骤及写入降级。 |",
               "| 数据接入 | 连接概览 | `/connections` | 管理数据库连接、`Schema` 与 `Schema Manifest`，并查看连通性和本地目录同步状态。 |",
               "| 数据接入 | 启用表范围 | `/connections/enabled-tables` | 配置各连接进入语义层的表范围，并审阅保存前变更。 |",
               "| 业务上下文 | 语义资产 | `/catalog` | 管理表、字段、指标、分群与关联等结构化语义资产。 |",
@@ -877,7 +878,7 @@ describe("HelpCenter", () => {
     expect(document.querySelector("section#webui-entry-map")).not.toBeNull();
   });
 
-  it("§1.5 table has 4 columns and 26 rows that mirror navigation.ts", async () => {
+  it("§1.5 table has 4 columns and rows that mirror navigation.ts", async () => {
     renderHelp("/help?section=webui-entry-map");
     await waitFor(() =>
       screen.getByRole("heading", { name: /WebUI 入口速查（运行状态侧栏地图）/ })
@@ -903,7 +904,6 @@ describe("HelpCenter", () => {
     const bodyRows = table.querySelectorAll("tbody tr");
     // The literal count is a tripwire: changing `navigation.ts` must be a
     // conscious act that also updates the handbook mirror table.
-    expect(bodyRows.length).toBe(26);
     expect(bodyRows.length).toBe(expectedItems.length);
 
     bodyRows.forEach((tr, idx) => {

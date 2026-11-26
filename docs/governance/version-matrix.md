@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Version Matrix |
 | 文档类型 | Release Metadata / Compatibility Matrix |
-| 版本 | v0.6 |
-| 撰写日期 | 2026-06-21；2026-07-06；2026-08-03（增补：Helm/K8s single-replica supported baseline）；2026-09-02（拆分 Lucy 产品版本与 KTX；基线 0.17.0）；2026-10-19（批准切线到 `2.0.0`）；2026-10-21（§4 Database Matrix 状态值改为引用 `docs/governance/database-support-matrix.md`，补齐 StarRocks / Doris / SQL Server / Oracle / SQLite / Athena）；2026-10-24（产品版本由 `2.0.0` 经 `0.2.0` 更正为 `0.20.0`；§1.1.1 改为同一版本线按数值递增；登记产品版本与部署制品解耦原则）；2026-10-29（客户镜像 CI 改为原生 linux/amd64 单架构，不再写 QEMU 多架构清单）；2026-11-01（产品版本对齐分支 `lucy-v0.25`，基线 `0.25.0`；§1.1 改为产品线与部署制品各自编号）；2026-11-07（开产品线 `lucy-v0.30`，基线 `0.30.0`；`lucy-v0.25` / `v0.25.0` 只接 hotfix）；2026-11-24（开产品线 `lucy-v0.35`，基线 `0.35.0`；`v0.30.0` 只接 hotfix） |
+| 版本 | v0.7 |
+| 撰写日期 | 2026-06-21；2026-07-06；2026-08-03（增补：Helm/K8s single-replica supported baseline）；2026-09-02（拆分 Lucy 产品版本与 KTX；基线 0.17.0）；2026-10-19（批准切线到 `2.0.0`）；2026-10-21（§4 Database Matrix 状态值改为引用 `docs/governance/database-support-matrix.md`，补齐 StarRocks / Doris / SQL Server / Oracle / SQLite / Athena）；2026-10-24（产品版本由 `2.0.0` 经 `0.2.0` 更正为 `0.20.0`；§1.1.1 改为同一版本线按数值递增；登记产品版本与部署制品解耦原则）；2026-10-29（客户镜像 CI 改为原生 linux/amd64 单架构，不再写 QEMU 多架构清单）；2026-11-01（产品版本对齐分支 `lucy-v0.25`，基线 `0.25.0`；§1.1 改为产品线与部署制品各自编号）；2026-11-07（开产品线 `lucy-v0.30`，基线 `0.30.0`；`lucy-v0.25` / `v0.25.0` 只接 hotfix）；2026-11-24（tag `v0.30.0` scoped Git 发版；Chart `0.2.10`；无客户包；开产品线 `lucy-v0.35`，基线 `0.35.0`；`v0.30.0` / `lucy-v0.30` 只接 hotfix）；2026-11-26（main 的 v0.30.0 发版事实并入 0.35 产品线矩阵） |
 | 适用范围 | Lucy release、Docker image、bundled KTX runtime 和 MCP client 兼容性追踪 |
 
 ## 1. Current Baseline
@@ -13,7 +13,7 @@
 | Component | Current Baseline | Evidence |
 |---|---|---|
 | **Lucy product version** | **`0.35.0`** | repo-root `VERSION`, `Chart.yaml` `appVersion`, `/api/health.data.lucyVersion`, WebUI 版本信息页 |
-| Lucy source | product line branch `lucy-v0.35` (opened after scoped Git tag `v0.30.0`); previous tagged release `v0.30.0` on `fd2074fd…` | see `docs/releases/README.md` / `docs/releases/v0.30.0.json` for the prior formal tag ledger |
+| Lucy source | product line branch `lucy-v0.35` (opened after scoped Git tag `v0.30.0`); previous tagged release `v0.30.0` on `fd2074fd…`; prior tagged release `v0.25.0` on `e84c9ed4…` | see `docs/releases/README.md` / `docs/releases/v0.30.0.json` for the prior formal tag ledger |
 | Lucy package | `project-lucy-eval@0.35.0` | `package.json` (aligned with product version) |
 | WebUI package | `webui@1.0.0` | `webui/package.json` (npm package only; not customer-facing) |
 | Bundled KTX npm package | `@kaelio/ktx@0.16.0` | `Dockerfile`, `docker-compose.yml`, `npm run smoke:p0:docker` |
@@ -30,7 +30,7 @@
 
 ## 1.1 Product line and deployment artifacts are numbered separately
 
-The Lucy product version follows the product line. Branch `lucy-v0.35` is product version `0.35.0`. Everyday commits do **not** auto-bump it. Shipping a customer package, changing the Helm chart, or upgrading bundled KTX does **not** by itself mint the next product version, and a product-version change does **not** by itself mint a new chart package, image digest, or delivery-package revision. Tag `v0.30.0` / branch `lucy-v0.30` accept hotfix only.
+The Lucy product version follows the product line. Branch `lucy-v0.35` is product version `0.35.0`. Tag `v0.30.0` freezes product version `0.30.0` on `main`. Everyday commits do **not** auto-bump it. Shipping a customer package, changing the Helm chart, or upgrading bundled KTX does **not** by itself mint the next product version, and a product-version change does **not** by itself mint a new chart package, image digest, or delivery-package revision. Hotfixes for `0.30.0` branch from tag `v0.30.0`; the `v0.30.0` / `lucy-v0.30` line accepts hotfix only. Subsequent product-line work continues on `lucy-v0.35` (cut to `0.35.0` on that branch only).
 
 `Chart.appVersion`, `lucy.version`, `LUCY_VERSION`, and the product segment of a customer image tag are projections of `VERSION`. They name which product is inside a package. They are not the package's own version.
 

@@ -301,6 +301,17 @@ function parseStoredZipEntries(zip: Buffer): Map<string, Buffer> {
 
 beforeEach(async () => {
   vi.resetModules();
+  // P1-60：无 caliber 注册表时 begin 隐藏／call 返回 begin_not_available；
+  // smoke 覆盖 begin 可见与本地处理，需将参与态钉为 active（inactive 路径见 begin-hide-inactive）。
+  vi.doMock("../proxy/caliber-binding-registry.js", async () => {
+    const actual = await vi.importActual<typeof import("../proxy/caliber-binding-registry.js")>(
+      "../proxy/caliber-binding-registry.js"
+    );
+    return {
+      ...actual,
+      classifyCaliberParticipation: async () => "active" as const
+    };
+  });
   projectRoot = await makeProject();
   auditDbPath = path.join(projectRoot, "audit.sqlite");
   previousRoot = process.env.KTX_PROJECT_ROOT;
@@ -1847,7 +1858,9 @@ describe("MCP proxy smoke", () => {
       expect(initRes.status).toBe(200);
       const initBody = await initRes.json() as { result: { serverInfo: { version: string }; instructions: string } };
       expect(initBody.result.serverInfo.version).toBe("local-fallback");
-      expect(initBody.result.instructions).toContain("Visible Scope");
+      // protocol_fallback：上游不可用时走基础指引，不拼动态 Visible Scope（见 decideInstructions）。
+      expect(initBody.result.instructions).toContain("Lucy Data QA Runtime Instructions");
+      expect(initBody.result.instructions).not.toContain("## Visible Scope");
 
       const listRes = await fetch(`http://127.0.0.1:${proxyPort}/mcp`, {
         method: "POST",
@@ -2584,7 +2597,8 @@ describe("MCP proxy smoke", () => {
       });
       const listBody = await listRes.json() as { result: { tools: Array<{ name: string }> } };
       const names = listBody.result.tools.map((tool) => tool.name);
-      expect(names).toEqual(["lucy_read_source"]);
+      // P1-74：问数工具可见时预算逃生会注入 lucy_continue_question（ACL 未列亦可）。
+      expect(names).toEqual(["lucy_read_source", "lucy_continue_question"]);
       expect(names).not.toContain("lucy_begin_question");
       expect(names).not.toContain("kx_catalog");
     } finally {

@@ -22,5 +22,20 @@ if [[ ! -f "${HOOK_JS}" ]]; then
   exit 2
 fi
 
+# Default-off path must not require root node_modules (yaml). k8s-upgrade-gate
+# always invokes this hook after H3; without an early skip the Node entrypoint
+# imports yaml-heavy modules and crashes with MODULE_NOT_FOUND → false FAIL.
+cmd="${1:-}"
+flag="${LUCY_MCP_COMPAT:-}"
+case "${flag}" in
+  1|true|TRUE|on|ON|yes|YES) ;;
+  *)
+    if [[ "${cmd}" == "run" ]]; then
+      echo "mcp-compatibility-hook: SKIPPED (LUCY_MCP_COMPAT unset/off)" >&2
+      exit 3
+    fi
+    ;;
+esac
+
 # bash 3.2: no mapfile/readarray; forward "$@" as-is.
 exec node "${HOOK_JS}" "$@"
