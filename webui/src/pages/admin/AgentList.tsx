@@ -19,6 +19,7 @@ import { buildMcpConfig } from "../../lib/mcpEndpoint";
 import { AgentRoleCapability, AgentRoleField, agentRoleIds, roleSelectionSavable } from "../../components/AgentRoleField";
 import { PageHeader } from "../../components/PageHeader";
 import { AsyncRegion, asyncStatus } from "../../components/AsyncRegion";
+import { DisplayDegradedNotice, displayRefreshing } from "../../components/DisplayDegradedNotice";
 import { DisplayRefreshNotice } from "../../components/DisplayRefreshNotice";
 import { MetricCard } from "../../components/MetricCard";
 import { PolicyDegradeMetric } from "../../components/PolicyDegradeMetric";
@@ -30,7 +31,7 @@ import { OPS_EVIDENCE_ROLE_ID, OPS_EVIDENCE_ROLE_WARNING } from "../../lib/opsEv
 import {
   adminAgentsSummaryQueryOptions,
   adminAgentsCompatibleStatisticsQueryOptions,
-
+  DISPLAY_REGION_PATHS,
   formatListLoadError
 } from "../../lib/displayQueryOptions";
 import { rosterConfigurationSummary, rosterStatisticsSummary } from "../../lib/agentRosterSummary";
@@ -551,6 +552,9 @@ function NewAgentModal({
   );
 }
 
+/** Roster and statistics are the independently degradable Agent list regions. */
+const AGENT_DEGRADED_PATHS = [DISPLAY_REGION_PATHS.agents, DISPLAY_REGION_PATHS.agentStatistics] as const;
+
 export function AgentList() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -728,6 +732,13 @@ export function AgentList() {
             </>
           }
         />
+        <DisplayDegradedNotice
+          paths={AGENT_DEGRADED_PATHS}
+          queryKeys={[queryKeys.adminAgents]}
+          onRefresh={() => rosterQuery.refetch()}
+          refreshing={displayRefreshing(rosterQuery)}
+          testId="agent-display-degraded-notice"
+        />
         <AsyncRegion
           status={asyncStatus(rosterQuery)}
           label="Agent 名册"
@@ -807,6 +818,15 @@ export function AgentList() {
             <button type="button" className="pl-btn pl-btn--primary" onClick={() => setShowNew(true)}>新建 Agent</button>
           </div>
         }
+      />
+
+      <DisplayDegradedNotice
+        paths={AGENT_DEGRADED_PATHS}
+        queryKeys={[queryKeys.adminAgents]}
+        onRefresh={refreshAgents}
+        refreshing={displayRefreshing(rosterQuery, statisticsQuery)}
+        className="mt-4"
+        testId="agent-display-degraded-notice"
       />
 
       <DisplayRefreshNotice query={rosterQuery} className="mt-4" />

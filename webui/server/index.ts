@@ -11,8 +11,8 @@ import { addTiming, registerEntryPerformanceTiming, withRequestTiming } from "./
 import { displayGenerations, onDisplayGenerationChange, withDisplayWriteBarrier } from "./display-generation";
 import { withKtxYamlWriteLock } from "./ktx-yaml-write-lock";
 import { parseProbePurpose, ProbeScheduler, type ProbeTiming } from "./background-probes";
+import { automaticProbeFallback, displayBudgetFor, rememberProbeResult, replyIfDegradedRead } from "./display-http";
 import {
-  createDisplayRequestBudget,
   getDisplaySnapshot,
   displayBusySummary,
   prewarmDisplaySnapshots,
@@ -1067,6 +1067,8 @@ export function buildServer() {
   app.addHook("onRequest", requireWebuiAuthHook);
 
   app.setErrorHandler((error: SupportedError, request, reply) => {
+    // P1-75 §2.5.1: A-class display refusals are 200 `pending`, never a retryable 503.
+    if (replyIfDegradedRead(error, request, reply)) return;
     if (error.code === "FST_ERR_CTP_BODY_TOO_LARGE") {
       const limitMiB = request.routeOptions.bodyLimit / 1024 / 1024;
       reply.status(413).send({
@@ -1143,7 +1145,15 @@ export function buildServer() {
     const { data, diagnostics } = probeDataFromMemory(processIdentity, diagnosticSnapshot);
     return {
       ok: true,
-      data: { ...data, eventLoop: eventLoopDelaySnapshot(), displayBusy: displayBusySummary(), selfHeal: selfHealSnapshot(), mcpCapacity: getMcpExecutionCapacity().publicSummary(), publicEntryHeavyWork: publicEntryHeavyWorkCounters() },
+      data: {
+        ...data,
+        uptimeS: Math.round(process.uptime()),
+        eventLoop: eventLoopDelaySnapshot(),
+        displayBusy: displayBusySummary(),
+        selfHeal: selfHealSnapshot(),
+        mcpCapacity: getMcpExecutionCapacity().publicSummary(),
+        publicEntryHeavyWork: publicEntryHeavyWorkCounters()
+      },
       diagnostics
     };
   });
@@ -1163,7 +1173,7 @@ export function buildServer() {
     const projectRoot = await resolveProjectRoot();
     // Spec 195 §6 — the request budget covers the whole request: at most
     // three attempts and one shared recovery wait.
-    const snapshot = await getSourcesDisplaySnapshot(projectRoot, createDisplayRequestBudget());
+    const snapshot = await getSourcesDisplaySnapshot(projectRoot, displayBudgetFor(request));
     return reply.type("application/json; charset=utf-8").send(sourcesResponseBody(snapshot));
   }));
 
@@ -2422,11 +2432,15 @@ export function buildServer() {
         })
       });
       logProbeTiming(request, "live-schemas", purpose, timing);
+      rememberProbeResult("live-schemas", projectRoot, connId, data);
       return { ok: true, data };
     } catch (err) {
       if (err instanceof LiveCatalogConnectionNotFoundError) {
         throw enabledTableError(err.code, err.message);
       }
+      // P1-75 X4: an automatic probe refused by the queue shows the latest result with its age, or pending.
+      const fallback = automaticProbeFallback(err, purpose, "live-schemas", projectRoot, connId, request);
+      if (fallback) return fallback;
       throw err;
     }
   }));
@@ -2621,15 +2635,23 @@ export function buildServer() {
     const { connId } = request.params;
     // Spec 174 §5 — bounded shared queue; latencyMs stays the KTX command time only.
     const generation = displayGenerations().L;
-    const { value: result, timing } = await probeScheduler.submit({
-      key: `${projectRoot}\u0000L${generation}\u0000${connId}\u0000test`,
-      generation,
-      purpose,
-      signal: clientAbortSignal(reply),
-      run: () => testConnection(projectRoot, connId)
-    });
-    logProbeTiming(request, "test", purpose, timing);
-    return { ok: true, data: result };
+    try {
+      const { value: result, timing } = await probeScheduler.submit({
+        key: `${projectRoot}\u0000L${generation}\u0000${connId}\u0000test`,
+        generation,
+        purpose,
+        signal: clientAbortSignal(reply),
+        run: () => testConnection(projectRoot, connId)
+      });
+      logProbeTiming(request, "test", purpose, timing);
+      rememberProbeResult("test", projectRoot, connId, result);
+      return { ok: true, data: result };
+    } catch (err) {
+      // P1-75 X4: an automatic probe refused by the queue shows the latest result with its age, or pending.
+      const fallback = automaticProbeFallback(err, purpose, "test", projectRoot, connId, request);
+      if (fallback) return fallback;
+      throw err;
+    }
   }));
 
   app.post<{

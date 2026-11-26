@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { randomUUID } from "node:crypto";
 import { stringifySafe } from "../yaml-safe.js";
 import { timeAsync, withRequestTiming } from "../entry-performance-timing.js";
+import { displayBudgetFor } from "../display-http.js";
 import { resolveProjectRoot } from "../project.js";
 import { getAuditDb } from "./audit.js";
 import {
@@ -79,7 +80,6 @@ import { getSecurityStore } from "../security/instance.js";
 import { generationKey, hasPendingDisplayWrite } from "../display-generation.js";
 import {
   AGENT_PERMISSION_SCOPES,
-  createDisplayRequestBudget,
   DisplaySnapshotBusyError,
   getDisplaySnapshot,
   registerDisplayPrewarmer,
@@ -1103,7 +1103,7 @@ export function registerRoleRoutes(app: FastifyInstance) {
   app.get<{ Querystring: { includeTemplates?: string } }>("/api/admin/roles", async (request) => withRequestTiming(request, async () => {
     const projectRoot = await resolveProjectRoot();
     const includeTemplates = request.query.includeTemplates !== "false";
-    const budget = createDisplayRequestBudget();
+    const budget = displayBudgetFor(request);
     for (;;) {
       const accessGeneration = generationKey(["P", "C"]);
       const listing = await buildRolesListResponse(projectRoot, includeTemplates, budget);

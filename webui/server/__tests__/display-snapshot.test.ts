@@ -37,8 +37,14 @@ import {
   displayBusySummary,
   displaySnapshotDiagnostics,
   DISPLAY_RECOVERY_WAIT_BUDGET_MS,
+  DisplayReconciliationFailedError,
   DisplaySnapshotBusyError,
+  DisplaySnapshotPendingError,
+  DISPLAY_BUILD_WAIT_BUDGET_MS,
+  DISPLAY_DEGRADE_MAX_MS,
+  displayReadServable,
   getDisplaySnapshot,
+  SOURCES_SCOPES,
   evictDisplaySnapshotSlot,
   reconcileFullDigest,
   reconcileMetadata,
@@ -64,6 +70,15 @@ function deferred<T = void>() {
   });
   return { promise, resolve, reject };
 }
+
+/** P1-75 v1.4 — a request that cannot be served in time answers `pending` (200, no data), not a 503. */
+const pendingError = (reason?: string) => expect.objectContaining({
+  name: "DisplaySnapshotPendingError",
+  display: expect.objectContaining({ state: "pending" }),
+  ...(reason ? { reason } : {})
+});
+/** Short request budget so tests that expect `pending` do not wait the 10 s build deadline. */
+const quickBudget = () => createDisplayRequestBudget(3, 1500, 50);
 
 const manifestPath = () => path.join(projectRoot, "config", "semantic-layer", "warehouse", "_schema", "fin.yaml");
 /** Spec 195 §4 — a plain table overlay only feeds D (never P). */
@@ -141,13 +156,14 @@ describe("Spec 174 T3 — display snapshot cache (SC-03/04/13/15)", () => {
       const results = await Promise.race([timedOut, new Promise<never>((_, reject) => {
         watchdog = setTimeout(() => reject(new Error("readers remained attached")), 500);
       })]);
+      // v1.4: the wait budget ends in 200 `pending` (no data), never a retryable 503.
       expect(results).toEqual(Array.from({ length: 2 }, () => ({
         status: "rejected",
-        reason: expect.objectContaining({ code: "DISPLAY_SNAPSHOT_BUSY", statusCode: 503, retryAfterSeconds: 1, reason: "build_wait_timeout" })
+        reason: pendingError("build_wait_timeout")
       })));
       expect(displaySnapshotDiagnostics()).toMatchObject({ inflightBuilds: 1, busyByReason: { build_wait_timeout: 2 } });
       const summary = displayBusySummary();
-      expect(summary).toMatchObject({ busy: 2, byReason: { build_wait_timeout: 2 } });
+      expect(summary).toMatchObject({ busy: 0, pendingServes: 2, byReason: { build_wait_timeout: 2 } });
       expect(summary.recent).toHaveLength(2);
       expect(summary.recent[0]).toMatchObject({ name: "slow", reason: "build_wait_timeout", attempts: 1 });
       expect(summary.recent[0]).toEqual(expect.objectContaining({ at: expect.any(String), uptimeS: expect.any(Number), eventLoopMaxMs: expect.any(Number), ages: expect.any(Object) }));
@@ -239,7 +255,7 @@ describe("Spec 174 T3 — display snapshot cache (SC-03/04/13/15)", () => {
       return "x";
     }));
     await new Promise((resolve) => setTimeout(resolve, 5));
-    await expect(getDisplaySnapshot("cap-extra", ["D"], async () => "y")).rejects.toMatchObject({ code: "DISPLAY_SNAPSHOT_BUSY", statusCode: 503, retryAfterSeconds: 1 });
+    await expect(getDisplaySnapshot("cap-extra", ["D"], async () => "y", { budget: quickBudget() })).rejects.toMatchObject({ reason: "build_capacity", display: { state: "pending" } });
     gates.forEach((gate) => gate.resolve());
     await Promise.all(running);
 
@@ -262,11 +278,11 @@ describe("Spec 174 T3 — display snapshot cache (SC-03/04/13/15)", () => {
     expect(JSON.parse(second.payload)).toEqual({ tables: [{ name: "a" }] });
   });
 
-  it("is busy without a payload while the reconciler is stopped, and serves again once it recovers", async () => {
+  it("is pending without a payload while the reconciler is stopped, and serves again once it recovers", async () => {
     stopDisplayReconciler();
     expect(displayCacheVerified()).toBe(false);
     let builds = 0;
-    await expect(getDisplaySnapshot("b", ["D"], async () => String(++builds))).rejects.toMatchObject({ code: "DISPLAY_SNAPSHOT_BUSY", statusCode: 503, retryAfterSeconds: 1 });
+    await expect(getDisplaySnapshot("b", ["D"], async () => String(++builds))).rejects.toMatchObject({ reason: "reconcile_failed", display: { state: "pending" } });
     expect(builds).toBe(0);
     await startDisplayReconciler({ metadataIntervalMs: 60_000, fullDigestIntervalMs: 60_000 });
     expect((await getDisplaySnapshot("b", ["D"], async () => String(++builds))).payload).toBe("1");
@@ -274,11 +290,11 @@ describe("Spec 174 T3 — display snapshot cache (SC-03/04/13/15)", () => {
 });
 
 describe("Spec 174 R1 — unverified reconciliation never bypasses the safe return boundary (SC-03/04/05/15)", () => {
-  it("unverified × pending write: busy, no build, no payload", async () => {
+  it("unverified × pending write: pending, no build, no payload", async () => {
     stopDisplayReconciler();
     const token = beginDisplayWrite(["D"]);
     let builds = 0;
-    await expect(getDisplaySnapshot("up", ["D"], async () => `partial-${++builds}`)).rejects.toBeInstanceOf(DisplaySnapshotBusyError);
+    await expect(getDisplaySnapshot("up", ["D"], async () => `partial-${++builds}`)).rejects.toBeInstanceOf(DisplaySnapshotPendingError);
     endDisplayWrite(token);
     expect(builds).toBe(0);
     expect(displaySnapshotDiagnostics().inflightBuilds).toBe(0);
@@ -303,7 +319,7 @@ describe("Spec 174 R1 — unverified reconciliation never bypasses the safe retu
       return "x";
     };
     const sameKey = Array.from({ length: 6 }, () => getDisplaySnapshot("same", ["D"], build));
-    const otherKeys = Array.from({ length: 8 }, (_, index) => getDisplaySnapshot(`other-${index}`, ["D"], build));
+    const otherKeys = Array.from({ length: 8 }, (_, index) => getDisplaySnapshot(`other-${index}`, ["D"], build, { budget: quickBudget() }));
     const all = Promise.allSettled([...sameKey, ...otherKeys]);
     await new Promise((resolve) => setTimeout(resolve, 5));
     expect(displaySnapshotDiagnostics().inflightBuilds).toBeLessThanOrEqual(MAX_CONCURRENT_DISPLAY_BUILDS);
@@ -315,7 +331,7 @@ describe("Spec 174 R1 — unverified reconciliation never bypasses the safe retu
     expect(displaySnapshotDiagnostics().inflightBuilds).toBe(0);
   });
 
-  it("verification lost during a build: owner and attached waiters are busy, nothing is published", async () => {
+  it("verification lost during a build: owner and attached waiters are pending, nothing is published", async () => {
     const gate = deferred();
     let builds = 0;
     const build = async () => {
@@ -329,8 +345,8 @@ describe("Spec 174 R1 — unverified reconciliation never bypasses the safe retu
     // as soon as the build settles, and awaiting the owner first would leave
     // `attached` without a handler for a tick - an unhandled rejection fails
     // the whole run even when every assertion passes.
-    const ownerRejects = expect(owner).rejects.toBeInstanceOf(DisplaySnapshotBusyError);
-    const attachedRejects = expect(attached).rejects.toBeInstanceOf(DisplaySnapshotBusyError);
+    const ownerRejects = expect(owner).rejects.toBeInstanceOf(DisplaySnapshotPendingError);
+    const attachedRejects = expect(attached).rejects.toBeInstanceOf(DisplaySnapshotPendingError);
     await new Promise((resolve) => setTimeout(resolve, 5));
     stopDisplayReconciler();
     gate.resolve();
@@ -342,11 +358,11 @@ describe("Spec 174 R1 — unverified reconciliation never bypasses the safe retu
     expect((await getDisplaySnapshot("lost", ["D"], build)).payload).toBe("b-2");
   });
 
-  it("verification lost while waiting for a pending write is busy", async () => {
+  it("verification lost while waiting for a pending write is pending", async () => {
     const token = beginDisplayWrite(["D"]);
     const waiting = getDisplaySnapshot("wait-lost", ["D"], async () => "data");
     // Attach the handler before yielding; see the sibling test above.
-    const waitingRejects = expect(waiting).rejects.toBeInstanceOf(DisplaySnapshotBusyError);
+    const waitingRejects = expect(waiting).rejects.toBeInstanceOf(DisplaySnapshotPendingError);
     await new Promise((resolve) => setTimeout(resolve, 5));
     stopDisplayReconciler();
     endDisplayWrite(token);
@@ -379,7 +395,7 @@ describe("Spec 174 R1 — unverified reconciliation never bypasses the safe retu
       await writeFile(path.join(otherRoot, "ktx.yaml"), "connections: {}\n", "utf8");
       process.env.KTX_PROJECT_ROOT = otherRoot;
       invalidateContentPathsCache();
-      await expect(getDisplaySnapshot("switch", ["D"], async () => "other")).rejects.toBeInstanceOf(DisplaySnapshotBusyError);
+      await expect(getDisplaySnapshot("switch", ["D"], async () => "other", { budget: quickBudget() })).rejects.toMatchObject({ reason: "context_mismatch", display: { state: "pending" } });
       await startDisplayReconciler({ metadataIntervalMs: 60_000, fullDigestIntervalMs: 60_000 });
       expect((await getDisplaySnapshot("switch", ["D"], async () => "other")).payload).toBe("other");
     } finally {
@@ -584,12 +600,12 @@ describe("Spec 195 SI-09/SI-10/SI-12 — bounded recovery and diagnostics", () =
     return () => spy.mockRestore();
   }
 
-  it("SI-09 an overdue verification serves no payload and recovers afterwards", async () => {
+  it("SI-09 an overdue verification with no committed view answers pending without a payload and recovers afterwards", async () => {
     const hold = deferred();
     fsGate.hold = hold.promise;
     const restoreClock = makeOverdue();
     const started = Date.now();
-    await expect(getDisplaySnapshot("overdue", ["D"], async () => "payload")).rejects.toBeInstanceOf(DisplaySnapshotBusyError);
+    await expect(getDisplaySnapshot("overdue", ["D"], async () => "payload", { budget: quickBudget() })).rejects.toBeInstanceOf(DisplaySnapshotPendingError);
     const waited = Date.now() - started;
     // The request waits for the shared task, but never past its own budget.
     expect(waited).toBeLessThan(DISPLAY_RECOVERY_WAIT_BUDGET_MS + 1500);
@@ -612,7 +628,8 @@ describe("Spec 195 SI-09/SI-10/SI-12 — bounded recovery and diagnostics", () =
     const started = performance.now();
     const served = await getDisplaySnapshot("grace", ["D"], async () => { throw new Error("must not build"); });
     expect(performance.now() - started).toBeLessThan(500);
-    expect(served).toMatchObject({ payload: "payload", cache: "hit", version: first.version });
+    expect(served).toMatchObject({ payload: "payload", cache: "hit", version: first.version, degraded: { state: "grace", generation: expect.any(String) } });
+    expect(served.degraded?.ageMs).toBeGreaterThanOrEqual(0);
     expect(displaySnapshotDiagnostics()).toMatchObject({ graceServes: 1 });
     hold.resolve();
     fsGate.hold = null;
@@ -620,13 +637,16 @@ describe("Spec 195 SI-09/SI-10/SI-12 — bounded recovery and diagnostics", () =
     await reconcileMetadata();
   });
 
-  it("P0-1 beyond the grace limit the committed slot is not served", async () => {
+  it("P1-75 beyond the grace limit the same-generation committed slot is served as stale (200), never as grace", async () => {
     await getDisplaySnapshot("grace-limit", ["D"], async () => "payload");
     const hold = deferred();
     fsGate.hold = hold.promise;
     const restoreClock = makeOverdue();
-    await expect(getDisplaySnapshot("grace-limit", ["D"], async () => "payload")).rejects.toBeInstanceOf(DisplaySnapshotBusyError);
-    expect(displaySnapshotDiagnostics().graceServes).toBe(0);
+    const served = await getDisplaySnapshot("grace-limit", ["D"], async () => "must not build", { budget: quickBudget() });
+    expect(served).toMatchObject({ payload: "payload", cache: "hit", degraded: { state: "stale", generation: expect.any(String) } });
+    expect(served.degraded?.ageMs).toBeGreaterThan(150_000);
+    expect(served.degraded).not.toHaveProperty("pendingMs");
+    expect(displaySnapshotDiagnostics()).toMatchObject({ graceServes: 0, staleServes: 1 });
     hold.resolve();
     fsGate.hold = null;
     restoreClock();
@@ -638,8 +658,8 @@ describe("Spec 195 SI-09/SI-10/SI-12 — bounded recovery and diagnostics", () =
     const hold = deferred();
     fsGate.hold = hold.promise;
     const restoreClock = makeOverdue();
-    const shortBudget = createDisplayRequestBudget(3, 60);
-    await expect(getDisplaySnapshot("shared", ["D"], async () => "payload", { budget: shortBudget })).rejects.toBeInstanceOf(DisplaySnapshotBusyError);
+    const shortBudget = createDisplayRequestBudget(3, 60, 50);
+    await expect(getDisplaySnapshot("shared", ["D"], async () => "payload", { budget: shortBudget })).rejects.toBeInstanceOf(DisplaySnapshotPendingError);
     // The shared task is still running: the reconciler is alive and the scope
     // has no completed verification yet.
     expect(displaySnapshotDiagnostics().reconcilerRunning).toBe(true);
@@ -656,9 +676,9 @@ describe("Spec 195 SI-09/SI-10/SI-12 — bounded recovery and diagnostics", () =
     const hold = deferred();
     fsGate.hold = hold.promise;
     const restoreClock = makeOverdue();
-    const budget = createDisplayRequestBudget();
+    const budget = quickBudget();
     const started = Date.now();
-    await expect(getDisplaySnapshot("attempts", ["D"], async () => "payload", { budget })).rejects.toBeInstanceOf(DisplaySnapshotBusyError);
+    await expect(getDisplaySnapshot("attempts", ["D"], async () => "payload", { budget })).rejects.toBeInstanceOf(DisplaySnapshotPendingError);
     const elapsed = Date.now() - started;
     expect(budget.attemptsLeft).toBeGreaterThanOrEqual(0);
     expect(elapsed).toBeLessThan(DISPLAY_RECOVERY_WAIT_BUDGET_MS + 1500);
@@ -710,7 +730,7 @@ describe("Spec 195 SI-09/SI-10/SI-12 — bounded recovery and diagnostics", () =
 
 describe("P1-75 committed view served during a single note-only write", () => {
   const SCOPES = ["P", "C"] as const;
-  const quick = () => createDisplayRequestBudget(3, 30);
+  const quick = () => createDisplayRequestBudget(3, 30, 50);
   async function warm(payload = "old") {
     await getDisplaySnapshot("roster", SCOPES, async () => payload, { extraKey: "v1" });
     return captureCommittedDisplayView("roster", SCOPES, "v1", { raw: "old-raw", version: "v1" });
@@ -853,7 +873,7 @@ describe("P1-75 committed view served during a single note-only write", () => {
     });
     const started = Date.now();
     await expect(getDisplaySnapshot("roster", SCOPES, async () => "x", { extraKey: "v1", budget: quick() }))
-      .rejects.toMatchObject({ code: "DISPLAY_SNAPSHOT_BUSY", reason: "reconcile_failed" });
+      .rejects.toMatchObject({ reason: "reconcile_failed", display: { state: "pending" } });
     expect(Date.now() - started).toBeLessThan(DISPLAY_RECOVERY_WAIT_BUDGET_MS + 1500);
     await startDisplayReconciler({ metadataIntervalMs: 60_000, fullDigestIntervalMs: 60_000 });
     const recovered = await getDisplaySnapshot("roster", SCOPES, async () => "recovered", { extraKey: "v1" });
@@ -866,6 +886,283 @@ describe("P1-75 committed view served during a single note-only write", () => {
       openCommittedViewServe(view!, token);
       await expect(getDisplaySnapshot("other", SCOPES, async () => "x", { budget: quick(), committedView: view! })).rejects.toMatchObject({ reason: "generation_changed" });
       await expect(getDisplaySnapshot("roster", ["P"], async () => "x", { budget: quick(), committedView: view! })).rejects.toMatchObject({ reason: "generation_changed" });
+    });
+  });
+});
+
+/**
+ * P1-75 v1.4 §2.4 / §2.5.1 / Appendix A — A-class reads answer 200 degraded states instead of 503.
+ */
+describe("P1-75 X3 — degraded read states (grace / stale / pending) and D_max", () => {
+  const holds: Array<{ resolve: () => void }> = [];
+  /** Block file reads; always released in afterEach so a failed assertion cannot wedge the shared I/O scheduler. */
+  function holdFs() {
+    const gate = deferred();
+    holds.push(gate);
+    fsGate.hold = gate.promise;
+    return gate;
+  }
+  afterEach(() => {
+    fsGate.hold = null;
+    for (const gate of holds.splice(0)) gate.resolve();
+  });
+
+  /** Past the grace window (120 s / 180 s) yet error-free: the committed view is `stale`. */
+  function clockAt(offsetMs: number) {
+    const realNow = Date.now();
+    const spy = vi.spyOn(Date, "now").mockReturnValue(realNow + offsetMs);
+    return { set: (next: number) => spy.mockReturnValue(realNow + next), restore: () => spy.mockRestore() };
+  }
+
+  it("the build/verification wait budget is 10 s and every request deadline is derived from it", () => {
+    expect(DISPLAY_BUILD_WAIT_BUDGET_MS).toBe(10_000);
+    expect(DISPLAY_DEGRADE_MAX_MS).toBe(180_000);
+    const budget = createDisplayRequestBudget();
+    const left = budget.buildDeadline - performance.now();
+    expect(left).toBeGreaterThan(9_500);
+    expect(left).toBeLessThanOrEqual(10_000);
+  });
+
+  it("a build that outlasts the old 4 s budget but finishes inside 10 s is fresh, not a 503", async () => {
+    const gate = deferred<string>();
+    const read = getDisplaySnapshot("slow-build", ["D"], () => gate.promise, { budget: createDisplayRequestBudget(3, 1500, 600) });
+    setTimeout(() => gate.resolve("late"), 250);
+    await expect(read).resolves.toMatchObject({ payload: "late", cache: "miss" });
+  });
+
+  it("no same-generation view: waits for verification inside the 10 s window and returns fresh when it recovers", async () => {
+    const hold = holdFs();
+    const clock = clockAt(200_000);
+    setTimeout(() => { fsGate.hold = null; hold.resolve(); }, 1_800);
+    const started = Date.now();
+    const served = await getDisplaySnapshot("recover-in-wait", ["D"], async () => "payload");
+    expect(served).toMatchObject({ payload: "payload", cache: "miss" });
+    expect(served.degraded).toBeUndefined();
+    expect(Date.now() - started).toBeLessThan(10_000);
+    clock.restore();
+  }, 15_000);
+
+  it("pending carries no payload and the error exposes only the frozen marker fields", async () => {
+    stopDisplayReconciler();
+    const error = await getDisplaySnapshot("pending-shape", ["D"], async () => "secret").catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(DisplaySnapshotPendingError);
+    const pending = error as DisplaySnapshotPendingError;
+    expect(pending.display).toEqual({ state: "pending", generation: expect.any(String), pendingMs: expect.any(Number) });
+    expect(JSON.stringify(pending.display)).not.toContain("secret");
+    expect(pending.display).not.toHaveProperty("ageMs");
+    expect(displaySnapshotDiagnostics()).toMatchObject({ pendingServes: 1 });
+  });
+
+  it("write_pending stays a B-class retryable 503 (it is not degraded)", async () => {
+    const token = beginDisplayWrite(["D"]);
+    await expect(getDisplaySnapshot("b-class", ["D"], async () => "x", { budget: createDisplayRequestBudget(3, 40) }))
+      .rejects.toMatchObject({ code: "DISPLAY_SNAPSHOT_BUSY", statusCode: 503, reason: "write_pending" });
+    endDisplayWrite(token);
+  });
+
+  it("stale never serves across a pending write or a recorded verification error", async () => {
+    await getDisplaySnapshot("stale-guard", ["D"], async () => "payload");
+    const hold = holdFs();
+    const clock = clockAt(200_000);
+    const token = beginDisplayWrite(["D"]);
+    // A pending write refuses the degraded view; unverified + write pending is A-class pending, never stale data.
+    await expect(getDisplaySnapshot("stale-guard", ["D"], async () => "x", { budget: createDisplayRequestBudget(3, 40, 50) }))
+      .rejects.toBeInstanceOf(DisplaySnapshotPendingError);
+    endDisplayWrite(token);
+    stopDisplayReconciler();
+    await expect(getDisplaySnapshot("stale-guard", ["D"], async () => "x", { budget: quickBudget() }))
+      .rejects.toMatchObject({ reason: "reconcile_failed", display: { state: "pending" } });
+    clock.restore();
+    hold.resolve();
+  });
+
+  it("non-error degradation past D_max keeps answering 200 and is flagged prolonged (never a 503)", async () => {
+    await getDisplaySnapshot("prolonged", ["D"], async () => "payload");
+    const hold = holdFs();
+    const clock = clockAt(200_000);
+    const first = await getDisplaySnapshot("prolonged", ["D"], async () => "x", { budget: quickBudget() });
+    expect(first.degraded).toMatchObject({ state: "stale" });
+    expect(first.degraded?.prolonged).toBeUndefined();
+    clock.set(200_000 + DISPLAY_DEGRADE_MAX_MS + 1_000);
+    const later = await getDisplaySnapshot("prolonged", ["D"], async () => "x", { budget: quickBudget() });
+    expect(later).toMatchObject({ payload: "payload", degraded: { state: "stale", prolonged: true } });
+    expect(displaySnapshotDiagnostics()).toMatchObject({ prolongedServes: 1, reconciliationFailed: 0 });
+    clock.restore();
+    hold.resolve();
+  });
+
+  it("pending past D_max without a recorded error is still 200 pending, flagged prolonged", async () => {
+    const hold = holdFs();
+    const clock = clockAt(200_000);
+    const first = await getDisplaySnapshot("prolonged-pending", ["D"], async () => "x", { budget: quickBudget() }).catch((e: unknown) => e);
+    expect((first as DisplaySnapshotPendingError).display).toMatchObject({ state: "pending" });
+    clock.set(200_000 + DISPLAY_DEGRADE_MAX_MS + 1_000);
+    const later = await getDisplaySnapshot("prolonged-pending", ["D"], async () => "x", { budget: quickBudget() }).catch((e: unknown) => e);
+    expect(later).toBeInstanceOf(DisplaySnapshotPendingError);
+    expect((later as DisplaySnapshotPendingError).display).toMatchObject({ state: "pending", prolonged: true });
+    expect((later as DisplaySnapshotPendingError).display.pendingMs).toBeGreaterThan(DISPLAY_DEGRADE_MAX_MS);
+    clock.restore();
+    hold.resolve();
+  });
+
+  it("a fresh read clears the degradation clock of that view", async () => {
+    await getDisplaySnapshot("clears", ["D"], async () => "payload");
+    const hold = holdFs();
+    const clock = clockAt(200_000);
+    await getDisplaySnapshot("clears", ["D"], async () => "x", { budget: quickBudget() });
+    clock.restore();
+    fsGate.hold = null;
+    hold.resolve();
+    await reconcileMetadata();
+    await reconcileFullDigest();
+    const fresh = await getDisplaySnapshot("clears", ["D"], async () => "x");
+    expect(fresh.degraded).toBeUndefined();
+    const again = clockAt(200_000 + DISPLAY_DEGRADE_MAX_MS + 5_000);
+    holdFs();
+    const restarted = await getDisplaySnapshot("clears", ["D"], async () => "x", { budget: quickBudget() });
+    expect(restarted.degraded?.prolonged).toBeUndefined();
+    again.restore();
+    fsGate.hold = null;
+  });
+
+  it("continuous reconcile_failed: 200 pending inside D_max, C-class 503 DISPLAY_RECONCILIATION_FAILED beyond it, cleared on recovery", async () => {
+    stopDisplayReconciler();
+    const clock = clockAt(0);
+    await expect(getDisplaySnapshot("rf", ["D"], async () => "x", { budget: quickBudget() }))
+      .rejects.toMatchObject({ reason: "reconcile_failed", display: { state: "pending" } });
+    // New requests never reset the clock.
+    clock.set(DISPLAY_DEGRADE_MAX_MS - 1_000);
+    await expect(getDisplaySnapshot("rf", ["D"], async () => "x", { budget: quickBudget() }))
+      .rejects.toBeInstanceOf(DisplaySnapshotPendingError);
+    clock.set(DISPLAY_DEGRADE_MAX_MS + 1_000);
+    const failure = await getDisplaySnapshot("rf", ["D"], async () => "x", { budget: quickBudget() }).catch((e: unknown) => e);
+    expect(failure).toBeInstanceOf(DisplayReconciliationFailedError);
+    expect(failure).toMatchObject({ code: "DISPLAY_RECONCILIATION_FAILED", statusCode: 503 });
+    expect(failure).not.toHaveProperty("retryAfterSeconds");
+    expect((failure as Error).message).not.toMatch(/重试/);
+    expect(displaySnapshotDiagnostics()).toMatchObject({ reconciliationFailed: 1 });
+    // The C-class code is distinct from the retryable busy code, and it keeps no old content.
+    expect(failure).not.toBeInstanceOf(DisplaySnapshotBusyError);
+    clock.restore();
+    // Verified again: the clock is cleared and a later failure starts a new window.
+    await startDisplayReconciler({ metadataIntervalMs: 60_000, fullDigestIntervalMs: 60_000 });
+    await expect(getDisplaySnapshot("rf", ["D"], async () => "ok")).resolves.toMatchObject({ payload: "ok" });
+    stopDisplayReconciler();
+    await expect(getDisplaySnapshot("rf", ["D"], async () => "x", { budget: quickBudget() })).rejects.toBeInstanceOf(DisplaySnapshotPendingError);
+  });
+
+  it("reconcile_failed is tracked per scope: one failing scope does not fail the others", async () => {
+    stopDisplayReconciler();
+    const clock = clockAt(0);
+    await expect(getDisplaySnapshot("scope-d", ["D"], async () => "x", { budget: quickBudget() })).rejects.toBeInstanceOf(DisplaySnapshotPendingError);
+    clock.set(DISPLAY_DEGRADE_MAX_MS + 1_000);
+    await expect(getDisplaySnapshot("scope-d", ["D"], async () => "x", { budget: quickBudget() })).rejects.toBeInstanceOf(DisplayReconciliationFailedError);
+    // Scope P never failed before: its first observation starts its own clock (pending, not 503).
+    await expect(getDisplaySnapshot("scope-p", ["P"], async () => "x", { budget: quickBudget() })).rejects.toBeInstanceOf(DisplaySnapshotPendingError);
+    clock.restore();
+  });
+
+  describe("identity isolation and write-out authorization (§2.5.1 conditions 2 and 4)", () => {
+    const alice = { scope: "admin:alice", permissionVersion: "owner:1:1" };
+
+    async function warmFor(name: string) {
+      await getDisplaySnapshot(name, ["D"], async () => "alice-view", { principal: alice });
+    }
+
+    it("serves the degraded view only to an identity it was served fresh to", async () => {
+      await warmFor("iso");
+      const hold = holdFs();
+      const clock = clockAt(200_000);
+      const own = await getDisplaySnapshot("iso", ["D"], async () => "x", { budget: quickBudget(), principal: alice });
+      expect(own).toMatchObject({ payload: "alice-view", degraded: { state: "stale" } });
+      await expect(getDisplaySnapshot("iso", ["D"], async () => "x", { budget: quickBudget(), principal: { scope: "admin:bob", permissionVersion: "owner:1:1" } }))
+        .rejects.toMatchObject({ display: { state: "pending" } });
+      await expect(getDisplaySnapshot("iso", ["D"], async () => "x", { budget: quickBudget(), principal: { ...alice, permissionVersion: "owner:1:2" } }))
+        .rejects.toMatchObject({ display: { state: "pending" } });
+      await expect(getDisplaySnapshot("iso", ["D"], async () => "x", { budget: quickBudget() }))
+        .rejects.toMatchObject({ display: { state: "pending" } });
+      clock.restore();
+      hold.resolve();
+    }, 20_000);
+
+    it("a fresh hit by another identity makes the same view servable to it", async () => {
+      await warmFor("iso-hit");
+      const bob = { scope: "admin:bob", permissionVersion: "owner:1:1" };
+      await expect(getDisplaySnapshot("iso-hit", ["D"], async () => "x", { principal: bob })).resolves.toMatchObject({ cache: "hit" });
+      const hold = holdFs();
+      const clock = clockAt(200_000);
+      await expect(getDisplaySnapshot("iso-hit", ["D"], async () => "x", { budget: quickBudget(), principal: bob }))
+        .resolves.toMatchObject({ payload: "alice-view", degraded: { state: "stale" } });
+      clock.restore();
+      hold.resolve();
+    });
+
+    it("runs the authorization hook right before a degraded view is written out; a revoked caller gets no data", async () => {
+      await warmFor("auth");
+      const hold = holdFs();
+      const clock = clockAt(200_000);
+      const allow = vi.fn(async () => true);
+      await expect(getDisplaySnapshot("auth", ["D"], async () => "x", { budget: quickBudget(), principal: alice, authorize: allow }))
+        .resolves.toMatchObject({ payload: "alice-view", degraded: { state: "stale" } });
+      expect(allow).toHaveBeenCalledTimes(1);
+      const revoked = vi.fn(async () => false);
+      const denied = await getDisplaySnapshot("auth", ["D"], async () => "x", { budget: quickBudget(), principal: alice, authorize: revoked }).catch((e: unknown) => e);
+      expect(revoked).toHaveBeenCalled();
+      expect(denied).toBeInstanceOf(DisplaySnapshotPendingError);
+      expect(JSON.stringify((denied as DisplaySnapshotPendingError).display)).not.toContain("alice-view");
+      clock.restore();
+      hold.resolve();
+    });
+
+    it("authorization revoked while the hook is running abandons the degradation", async () => {
+      await warmFor("overlap");
+      const hold = holdFs();
+      const clock = clockAt(200_000);
+      let revoked = false;
+      const authorize = async () => {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        return !revoked;
+      };
+      const reading = getDisplaySnapshot("overlap", ["D"], async () => "x", { budget: quickBudget(), principal: alice, authorize });
+      revoked = true;
+      await expect(reading).rejects.toBeInstanceOf(DisplaySnapshotPendingError);
+      clock.restore();
+      hold.resolve();
+    });
+
+    it("the budget carries identity and hook for nested snapshot reads", async () => {
+      await warmFor("budget-ctx");
+      const hold = holdFs();
+      const clock = clockAt(200_000);
+      const budget = Object.assign(quickBudget(), { principal: alice, authorize: async () => true });
+      await expect(getDisplaySnapshot("budget-ctx", ["D"], async () => "x", { budget })).resolves.toMatchObject({ degraded: { state: "stale" } });
+      clock.restore();
+      hold.resolve();
+    });
+  });
+
+  describe("P1-81 alignment: degraded reads are not healthy evidence", () => {
+    it("fresh is the only healthy display read; grace, stale and pending all fail the probe", async () => {
+      await getDisplaySnapshot("sources", SOURCES_SCOPES, async () => "view");
+      expect(displayReadServable()).toEqual({ ok: true });
+      const hold = holdFs();
+      const grace = clockAt(5_000);
+      expect(displayReadServable()).toMatchObject({ ok: false, degraded: "grace" });
+      grace.restore();
+      const stale = clockAt(200_000);
+      expect(displayReadServable()).toMatchObject({ ok: false, degraded: "stale" });
+      stale.restore();
+      stopDisplayReconciler();
+      expect(displayReadServable()).toMatchObject({ ok: false, degraded: "pending", reason: "no_reconciler" });
+      hold.resolve();
+    });
+
+    it("an overdue scope with no committed view probes as pending", async () => {
+      const hold = holdFs();
+      const clock = clockAt(200_000);
+      expect(displayReadServable()).toMatchObject({ ok: false, degraded: "pending" });
+      clock.restore();
+      hold.resolve();
     });
   });
 });

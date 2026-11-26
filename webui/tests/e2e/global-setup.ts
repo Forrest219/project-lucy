@@ -5,12 +5,30 @@
 
 import type { FullConfig } from "@playwright/test";
 
+async function fetchJsonWithRetry<T>(url: URL, timeoutMs = 60_000): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  let lastError: unknown;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(5_000) });
+      const text = await res.text();
+      if (res.ok && text.trim().length > 0) {
+        return JSON.parse(text) as T;
+      }
+      lastError = new Error(`${url.pathname} returned HTTP ${res.status} (${text.slice(0, 120) || "empty body"})`);
+    } catch (error) {
+      lastError = error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error(`[contract-fixture] timed out waiting for ${url.toString()}: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
+}
+
 export default async function globalSetup(config: FullConfig): Promise<void> {
   const baseURL = config.projects[0]?.use.baseURL;
   if (!baseURL) throw new Error("[contract-fixture] baseURL is not configured");
 
-  const statusRes = await fetch(new URL("/api/auth/status", baseURL));
-  const status = (await statusRes.json()) as { data?: { mode?: string } };
+  const status = await fetchJsonWithRetry<{ data?: { mode?: string } }>(new URL("/api/auth/status", baseURL));
   if (status.data?.mode !== "open") {
     throw new Error(
       `[contract-fixture] ${baseURL} reports auth mode "${status.data?.mode ?? "unknown"}", expected "open" ` +
@@ -18,8 +36,7 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
     );
   }
 
-  const projectRes = await fetch(new URL("/api/project", baseURL));
-  const project = (await projectRes.json()) as { data?: { connections?: Array<{ id?: string }> } };
+  const project = await fetchJsonWithRetry<{ data?: { connections?: Array<{ id?: string }> } }>(new URL("/api/project", baseURL));
   const ids = (project.data?.connections ?? []).map((conn) => conn.id);
   if (!ids.includes("demo-mysql")) {
     throw new Error(

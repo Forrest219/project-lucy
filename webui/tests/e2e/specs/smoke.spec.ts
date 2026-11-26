@@ -8,14 +8,30 @@
 // 侧栏一级、二级的壳层检查不在本文件。见 e2e:release-ux。
 // 跑法：npm run e2e:smoke
 
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { assertNoForbiddenTerms } from "../fixtures/helpers/terminology";
 import { assertFixtureOnly } from "../fixtures/helpers/reset";
 
-test.describe("L1 PR Smoke 10 条 (升级对齐版)", () => {
+const pageErrorsByPage = new WeakMap<Page, string[]>();
+
+test.describe("L1 PR Smoke (升级对齐版)", () => {
   test.beforeAll(() => {
     // L1 不需要 fixture；guard 走 warn 模式，仅当 fixture 路径指向真实仓库时拦截
     assertFixtureOnly({ warnIfMissing: true });
+  });
+
+  test.beforeEach(({ page }) => {
+    const errors: string[] = [];
+    pageErrorsByPage.set(page, errors);
+    page.on("pageerror", (error) => {
+      errors.push(error.stack || error.message || String(error));
+    });
+  });
+
+  test.afterEach(async ({ page }) => {
+    const errors = pageErrorsByPage.get(page) ?? [];
+    expect(errors, `Unexpected pageerror(s):\n${errors.join("\n")}`).toEqual([]);
+    await expect(page.locator('[data-testid="route-chunk-error"], [data-testid="route-render-error"]')).toHaveCount(0);
   });
 
   // 1. E2E-PUB-02：/review 自动重定向
@@ -138,5 +154,22 @@ test.describe("L1 PR Smoke 10 条 (升级对齐版)", () => {
       "semantic-layer/demo-mysql/_schema/dataforai.yaml"
     );
     expect(JSON.stringify(body)).not.toContain("../etc/passwd");
+  });
+
+  // 11. E2E-PAGE-01：核心管理路由零崩溃巡检（防 2026-11-18 渲染崩溃被兜底边界伪装）
+  test("@pr-smoke E2E-PAGE-01 核心路由零崩溃巡检", async ({ page }) => {
+    const routes = [
+      "/overview",
+      "/catalog",
+      "/admin/agents",
+      "/admin/roles",
+      "/admin/access-map",
+      "/admin/audit?view=calls"
+    ];
+    for (const route of routes) {
+      await page.goto(route, { waitUntil: "domcontentloaded" });
+      await expect(page.locator("#root")).not.toBeEmpty();
+      await expect(page.locator('[data-testid="route-chunk-error"], [data-testid="route-render-error"]')).toHaveCount(0);
+    }
   });
 });

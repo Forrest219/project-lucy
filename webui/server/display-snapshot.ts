@@ -9,8 +9,11 @@
  * Snapshots are only served while the reconciler for the current project
  * verifies them: fs.watch triggers + 1 s metadata reconciliation + 30 s
  * full-content digest. Without that (stopped / failed reconciler, overdue
- * digest, other project root) requests are a retryable DISPLAY_SNAPSHOT_BUSY
- * with no payload until reconciliation recovers.
+ * digest, other project root) requests are served per P1-75 v1.4 §2.5.1: a
+ * same-generation committed view as `grace`/`stale`, else a data-free `pending`
+ * after a bounded wait (never a 503). Only a pending write (B class, retryable
+ * DISPLAY_SNAPSHOT_BUSY) and a `reconcile_failed` lasting past D_max (C class,
+ * DISPLAY_RECONCILIATION_FAILED) still answer 503.
  *
  * Spec 195: both reconciliations consume ONE file revision ledger, so a
  * confirmed change invalidates its derived scopes exactly once; verification
@@ -76,8 +79,14 @@ export const DISPLAY_BUILD_FAILURE_BACKOFF_MS = 1000;
 export const MAX_DISPLAY_ATTEMPTS = 3;
 /** Spec 195 §6 — the total recovery wait of one request (shared, never reset). */
 export const DISPLAY_RECOVERY_WAIT_BUDGET_MS = 1500;
-/** P1-75 SC-08 — leave time for the browser to receive a retryable response. */
-const DISPLAY_BUILD_WAIT_BUDGET_MS = 4000;
+/**
+ * P1-75 §2.4 / §2.5.1 (v1.4) — a request waits for a build or verification for at most this long,
+ * then answers 200 `stale` / `pending` instead of a retryable 503 (v1.2 used 4 s).
+ */
+export const DISPLAY_BUILD_WAIT_BUDGET_MS = 10_000;
+/** P1-75 §2.5.1 boundary 5 — continuous degradation limit D_max (aligned with P1-81 T_B). */
+export const DISPLAY_DEGRADE_MAX_MS = 180_000;
+export const DISPLAY_RECONCILIATION_FAILED = "DISPLAY_RECONCILIATION_FAILED";
 /** Spec 195 §6 — file I/O starts with two concurrent workers. */
 export const DISPLAY_FILE_IO_CONCURRENCY = 2;
 
@@ -117,14 +126,71 @@ export class DisplaySnapshotBusyError extends Error {
   }
 }
 
-type Slot = { key: string; payload: string; sidecar?: string; version: string; builtAt: number; incarnation: symbol };
+/**
+ * Identity a degraded view may be served to (P1-75 §2.5.1 condition 2): the account scope plus the
+ * permission version it was last served fresh to. Unscoped callers share the empty identity.
+ */
+export type DisplayPrincipal = { scope: string; permissionVersion?: string };
+
+/** Caller hook run right before a degraded view is written out; `false` abandons the degradation. */
+export type DisplayAuthorize = () => boolean | Promise<boolean>;
+
+/**
+ * A reasons (P1-75 Appendix A) never reach the browser as 503: anything but a pending write (B) is
+ * answered with a 200 degraded read.
+ */
+export function isDisplayClassAReason(reason: DisplayBusyReason): boolean {
+  return reason !== "write_pending";
+}
+
+/**
+ * P1-75 §2.5.1 `pending`: no servable same-generation view within the request wait. The HTTP layer
+ * answers 200 with {@link DisplayDegradeMark} and NO business data fields.
+ */
+export class DisplaySnapshotPendingError extends Error {
+  readonly display: DisplayDegradeMark;
+  readonly reason: DisplayBusyReason;
+
+  constructor(reason: DisplayBusyReason, display: DisplayDegradeMark) {
+    super("页面数据正在加载。");
+    this.name = "DisplaySnapshotPendingError";
+    this.reason = reason;
+    this.display = display;
+  }
+}
+
+/** P1-75 Appendix A, C class — one scope has been in `reconcile_failed` for longer than D_max. */
+export class DisplayReconciliationFailedError extends Error {
+  code = DISPLAY_RECONCILIATION_FAILED;
+  statusCode = 503;
+  readonly reason: DisplayBusyReason = "reconcile_failed";
+  readonly failingForMs: number;
+
+  constructor(failingForMs: number) {
+    super("页面数据核验持续失败，请联系管理员检查服务状态。");
+    this.name = "DisplayReconciliationFailedError";
+    this.failingForMs = failingForMs;
+  }
+}
+
+type Slot = {
+  key: string;
+  payload: string;
+  sidecar?: string;
+  version: string;
+  builtAt: number;
+  incarnation: symbol;
+  /** Identities this exact view has been served to fresh (built or verified hit). */
+  principals: Set<string>;
+};
 type BuildOutcome = { slot: Slot; context: ScopeContext } | { reason: DisplayBusyReason } | { error: unknown };
 type BuildTask = { readers: Set<(outcome: BuildOutcome) => void> };
 type Entry = { current?: Slot; inflight: Map<string, BuildTask>; failure?: { key: string; until: number; error: unknown } };
 
 const entries = new Map<string, Entry>();
 let inflightBuilds = 0;
-let stats = { builds: 0, hits: 0, misses: 0, busy: 0, graceServes: 0 };
+const emptyStats = () => ({ builds: 0, hits: 0, misses: 0, busy: 0, graceServes: 0, staleServes: 0, pendingServes: 0, prolongedServes: 0, reconciliationFailed: 0 });
+let stats = emptyStats();
 const busyByReason = new Map<DisplayBusyReason, number>();
 /** Spec 195 §7 — request correlation for the diagnostics (no payload, no secrets). */
 let lastRequest: { name: string; scopes: DisplayScope[]; attempts: number; reason?: DisplayBusyReason } | null = null;
@@ -150,18 +216,34 @@ function recordBusyEvent(fields: Record<string, unknown>): void {
 export function displayBusySummary(): {
   busy: number;
   graceServes: number;
+  staleServes: number;
+  pendingServes: number;
+  prolongedServes: number;
+  reconciliationFailed: number;
   byReason: Record<string, number>;
   recent: Array<Record<string, unknown>>;
 } {
   return {
     busy: stats.busy,
     graceServes: stats.graceServes,
+    staleServes: stats.staleServes,
+    pendingServes: stats.pendingServes,
+    prolongedServes: stats.prolongedServes,
+    reconciliationFailed: stats.reconciliationFailed,
     byReason: Object.fromEntries(busyByReason),
     recent: busyEvents.map((event) => ({ ...event }))
   };
 }
 
-export type DisplaySnapshotResult = { payload: string; sidecar?: string; version: string; cache: "hit" | "miss"; incarnation: symbol };
+export type DisplaySnapshotResult = {
+  payload: string;
+  sidecar?: string;
+  version: string;
+  cache: "hit" | "miss";
+  incarnation: symbol;
+  /** Set when the view is a degraded read (`grace` / `stale`); absent for `fresh`. */
+  degraded?: DisplayDegradeMark;
+};
 /**
  * A build returns the serialized payload, optionally with a small serialized
  * sidecar (e.g. compile inputs) the handler evaluates per response.
@@ -187,6 +269,10 @@ export type DisplayRequestBudget = {
   attemptsLeft: number;
   deadline: number;
   buildDeadline: number;
+  /** Identity of the requester (P1-75 §2.5.1 condition 2); set by the HTTP layer. */
+  principal?: DisplayPrincipal;
+  /** Runs right before a degraded view is written out; `false` abandons the degradation. */
+  authorize?: DisplayAuthorize;
 };
 
 export function createDisplayRequestBudget(
@@ -222,8 +308,8 @@ async function buildSlot(key: string, build: DisplayBuild): Promise<Slot> {
   const built = await build(version);
   const incarnation = Symbol("display-slot");
   return typeof built === "string"
-    ? { key, payload: built, version, builtAt: Date.now(), incarnation }
-    : { key, payload: built.payload, sidecar: built.sidecar, version, builtAt: Date.now(), incarnation };
+    ? { key, payload: built, version, builtAt: Date.now(), incarnation, principals: new Set() }
+    : { key, payload: built.payload, sidecar: built.sidecar, version, builtAt: Date.now(), incarnation, principals: new Set() };
 }
 
 function sameContext(a: ScopeContext, b: ScopeContext): boolean {
@@ -464,6 +550,7 @@ async function runMetadataPass(state: ReconcilerState): Promise<void> {
     const failure = digestFailures.get(scope);
     if (failure) markScopeDigestError(scope, failure);
   }
+  noteReconcileFailures([...metaFailures.keys(), ...digestFailures.keys()]);
 
   if (!guard.stable) {
     // The file set moved during the pass: the coverage claim is incomplete,
@@ -532,6 +619,7 @@ async function runFullDigestPass(state: ReconcilerState): Promise<void> {
     const failure = digestFailures.get(scope);
     if (failure) markScopeDigestError(scope, failure);
   }
+  noteReconcileFailures(digestFailures.keys());
   if (!guard.stable) {
     // The file set moved during the pass: the full coverage claim is
     // incomplete, so no completion time advances.
@@ -562,6 +650,7 @@ function sharedMetadataPass(state: ReconcilerState): Promise<void> {
     const task = runMetadataPass(state)
       .catch((error) => {
         state.error = errorMessage(error);
+        noteReconcileFailures(DISPLAY_SCOPES);
       })
       .finally(() => {
         if (Date.now() - startedAt >= PROBE_SLOW_PASS_MS) probeLog("pass", { pass: "metadata", ms: Date.now() - startedAt, files: state.ledger.size, error: state.error ? true : false });
@@ -579,6 +668,7 @@ function sharedFullDigestPass(state: ReconcilerState): Promise<void> {
     const task = runFullDigestPass(state)
       .catch((error) => {
         state.error = errorMessage(error);
+        noteReconcileFailures(DISPLAY_SCOPES);
       })
       .finally(() => {
         if (Date.now() - startedAt >= PROBE_SLOW_PASS_MS) probeLog("pass", { pass: "digest", ms: Date.now() - startedAt, files: state.ledger.size, error: state.error ? true : false });
@@ -629,15 +719,19 @@ function busyReasonFor(scopes: readonly DisplayScope[]): DisplayBusyReason {
 }
 
 /**
- * P1-81 — would a display read of the default scopes be served right now (verified or within the
- * bounded grace)? Used by the stuck-state watchdog as the "display read" business probe; it never
- * builds, waits or touches the disk.
+ * P1-81 / P1-75 §2.5.1 — would a display read of the default scopes be *fresh* right now? Used by
+ * the stuck-state watchdog as the "display read" business probe; it never builds, waits or touches
+ * the disk. `grace`, `stale` and `pending` are degraded reads and are NOT healthy evidence: the
+ * result carries which degraded state a real read would answer with.
  */
-export function displayReadServable(): { ok: boolean; reason?: string } {
-  if (!reconciler) return { ok: false, reason: "no_reconciler" };
-  if (reconciler.error) return { ok: false, reason: "reconciler_error" };
-  if (displayCacheWithinGrace(SOURCES_SCOPES)) return { ok: true };
-  return { ok: false, reason: busyReasonFor(SOURCES_SCOPES) };
+export function displayReadServable(): { ok: boolean; reason?: string; degraded?: DisplayDegradeState } {
+  if (!reconciler) return { ok: false, reason: "no_reconciler", degraded: "pending" };
+  if (reconciler.error) return { ok: false, reason: "reconciler_error", degraded: "pending" };
+  if (displayCacheVerified(SOURCES_SCOPES)) return { ok: true };
+  const reason = busyReasonFor(SOURCES_SCOPES);
+  if (displayCacheWithinGrace(SOURCES_SCOPES)) return { ok: false, reason, degraded: "grace" };
+  const hasView = Boolean(entries.get("sources")?.current) && scopesErrorFree(SOURCES_SCOPES);
+  return { ok: false, reason, degraded: hasView ? "stale" : "pending" };
 }
 
 /** Start (or attach to) the shared passes the scopes need; does not wait. */
@@ -674,34 +768,189 @@ function displayCacheWithinGrace(scopes: readonly DisplayScope[], now: number = 
   return true;
 }
 
+// ─── degraded-read bookkeeping (P1-75 §2.5.1) ───────────────────────────────
+
+/** Continuous `stale`/`pending` time per view name; cleared only when that view is served fresh. */
+const degradeStreaks = new Map<string, number>();
 /**
- * P0-1 — instead of failing the page with 503 when only the freshness window has
- * lapsed (typically a starved event loop delaying the background pass), serve the
- * already-committed slot for the same key and re-verify in the background. Never
- * builds, never serves across a context or generation change or a pending write.
+ * Start of the continuous `reconcile_failed` per scope (D/P/C). Never reset by new requests; cleared
+ * only once the scope is error-free again. Past D_max the scope answers the C-class 503.
  */
-async function serveWithinGrace(name: string, scopes: readonly DisplayScope[], extraKey: string): Promise<DisplaySnapshotResult | undefined> {
+const reconcileFailedSince = new Map<DisplayScope, number>();
+
+const MAX_SLOT_PRINCIPALS = 64;
+
+function principalKeyOf(principal?: DisplayPrincipal): string {
+  return `${principal?.scope ?? ""}\u0000${principal?.permissionVersion ?? ""}`;
+}
+
+function rememberPrincipal(slot: Slot, principalKey: string): void {
+  if (slot.principals.has(principalKey)) return;
+  if (slot.principals.size >= MAX_SLOT_PRINCIPALS) slot.principals.delete(slot.principals.values().next().value as string);
+  slot.principals.add(principalKey);
+}
+
+function noteFresh(name: string, slot: Slot, principalKey: string): void {
+  degradeStreaks.delete(name);
+  rememberPrincipal(slot, principalKey);
+}
+
+function noteDegraded(name: string): { durationMs: number; prolonged: boolean } {
+  const now = Date.now();
+  const since = degradeStreaks.get(name) ?? now;
+  if (!degradeStreaks.has(name)) degradeStreaks.set(name, now);
+  const durationMs = now - since;
+  return { durationMs, prolonged: durationMs > DISPLAY_DEGRADE_MAX_MS };
+}
+
+/** Build the frozen degraded-read marker and attach it to the current request's timing. */
+function markDegraded(name: string, scopes: readonly DisplayScope[], state: DisplayDegradeState, ageMs?: number): DisplayDegradeMark {
+  const generation = generationKey(scopes);
+  if (state === "grace") {
+    const mark: DisplayDegradeMark = { state, generation, ageMs: ageMs ?? 0 };
+    markDisplayDegraded(mark);
+    return mark;
+  }
+  const streak = noteDegraded(name);
+  const mark: DisplayDegradeMark = state === "stale"
+    ? { state, generation, ageMs: ageMs ?? 0 }
+    : { state, generation, pendingMs: streak.durationMs };
+  if (streak.prolonged) {
+    mark.prolonged = true;
+    stats.prolongedServes += 1;
+  }
+  markDisplayDegraded(mark);
+  return mark;
+}
+
+function noteReconcileFailures(scopes: Iterable<DisplayScope>): void {
+  const now = Date.now();
+  for (const scope of scopes) if (!reconcileFailedSince.has(scope)) reconcileFailedSince.set(scope, now);
+}
+
+/** Scopes that are error-free again leave the continuous-failure clock. */
+function clearRecoveredReconcileFailures(): void {
+  for (const scope of [...reconcileFailedSince.keys()]) if (scopesErrorFree([scope])) reconcileFailedSince.delete(scope);
+}
+
+function longestReconcileFailureMs(scopes: readonly DisplayScope[], start: boolean): number {
+  const now = Date.now();
+  let longest = 0;
+  for (const scope of scopes) {
+    let since = reconcileFailedSince.get(scope);
+    if (since === undefined && start) {
+      since = now;
+      reconcileFailedSince.set(scope, now);
+    }
+    if (since !== undefined) longest = Math.max(longest, now - since);
+  }
+  return longest;
+}
+
+function throwIfReconciliationExpired(scopes: readonly DisplayScope[], start: boolean): void {
+  const failingForMs = longestReconcileFailureMs(scopes, start);
+  if (failingForMs <= DISPLAY_DEGRADE_MAX_MS) return;
+  stats.reconciliationFailed += 1;
+  recordBusyEvent({ reason: "reconcile_failed", outcome: "DISPLAY_RECONCILIATION_FAILED", failingForMs });
+  throw new DisplayReconciliationFailedError(failingForMs);
+}
+
+/** Recorded-error free: reconciler alive, every scope has evidence and no metadata/digest error. */
+function scopesErrorFree(scopes: readonly DisplayScope[]): boolean {
+  if (!reconciler || reconciler.error) return false;
+  const health = scopeHealthSnapshot();
+  return scopes.every((scope) => {
+    const entry = health[scope];
+    return Boolean(entry) && !entry.metadataError && !entry.digestError;
+  });
+}
+
+/** Age of what the served view still vouches for: since it was read, capped by the last verification. */
+function viewAgeMs(slot: Slot, scopes: readonly DisplayScope[], now: number = Date.now()): number {
+  const health = scopeHealthSnapshot();
+  let verificationAge = 0;
+  for (const scope of scopes) {
+    const entry = health[scope];
+    if (entry) verificationAge = Math.max(verificationAge, now - entry.metadataCompletedAt, now - entry.digestCompletedAt);
+  }
+  return Math.max(0, Math.min(now - slot.builtAt, verificationAge));
+}
+
+type Requester = { principalKey: string; authorize?: DisplayAuthorize };
+
+/**
+ * P0-1 / P1-75 §2.5.1 — instead of failing the page with 503, serve the already-committed slot for
+ * the same key (same scopes, projection and generation) and re-verify in the background. `grace`:
+ * verification only aged within the bounded window. `stale`: past the window, still no recorded
+ * error. Never builds, never serves across a context, generation, pending write or identity change,
+ * and re-checks authorization right before the view would be written out.
+ */
+async function serveDegradedSlot(
+  name: string,
+  scopes: readonly DisplayScope[],
+  extraKey: string,
+  mode: "grace" | "stale",
+  requester: Requester
+): Promise<DisplaySnapshotResult | undefined> {
   const state = reconciler;
   const refuse = (cause: string): undefined => { lastGraceRefusal = cause; return undefined; };
   if (!state) return refuse("no_reconciler");
   if (state.error) return refuse("reconciler_error");
-  if (!displayCacheWithinGrace(scopes)) return refuse("outside_grace_or_scope_error");
+  const eligible = () => (mode === "grace" ? displayCacheWithinGrace(scopes) : scopesErrorFree(scopes));
+  if (!eligible()) return refuse("outside_grace_or_scope_error");
   if (hasPendingDisplayWrite(scopes)) return refuse("write_pending");
   const context = await currentScopeContext();
-  if (!displayCacheWithinGrace(scopes)) return refuse("outside_grace_after_context");
+  if (!eligible()) return refuse("outside_grace_after_context");
   if (hasPendingDisplayWrite(scopes)) return refuse("write_pending_after_context");
-  if (!sameContext(state.context, context)) return refuse("context_mismatch");
-  const entry = entries.get(name);
-  const slot = entry?.current;
+  if (reconciler !== state || !sameContext(state.context, context)) return refuse("context_mismatch");
+  const slot = entries.get(name)?.current;
   if (!slot) return refuse("no_committed_slot");
   if (slot.key !== keyFor(name, scopes, context, extraKey)) return refuse("slot_key_changed");
+  if (!slot.principals.has(requester.principalKey)) return refuse("principal_not_verified");
+  // §2.5.1 condition 4: authorization is re-checked right before write-out; a revoked caller gets no degraded view.
+  if (requester.authorize && !(await requester.authorize())) return refuse("authorization_changed");
+  if (entries.get(name)?.current !== slot || !eligible() || hasPendingDisplayWrite(scopes)
+    || slot.key !== keyFor(name, scopes, context, extraKey)) return refuse("view_changed_after_authorize");
   void Promise.all(startVerificationTasks(state, scopes));
   stats.hits += 1;
-  stats.graceServes += 1;
+  if (mode === "grace") stats.graceServes += 1;
+  else stats.staleServes += 1;
   countEntryPerf("displayHits");
   markDisplayCache("hit");
-  markDisplayDegraded("grace");
-  return { payload: slot.payload, sidecar: slot.sidecar, version: slot.version, cache: "hit", incarnation: slot.incarnation };
+  const degraded = markDegraded(name, scopes, mode, viewAgeMs(slot, scopes));
+  return { payload: slot.payload, sidecar: slot.sidecar, version: slot.version, cache: "hit", incarnation: slot.incarnation, degraded };
+}
+
+const sleepMs = (ms: number) => new Promise<void>((resolve) => {
+  const timer = setTimeout(resolve, Math.max(0, ms));
+  timer.unref?.();
+});
+
+/**
+ * P1-75 §2.5.1 `pending` — wait inside the request's own build deadline (10 s) for the thing that
+ * blocked the read to clear: a free build slot, or verification of the scopes. No wait when
+ * nothing can recover it (no reconciler) or the reason is not a wait condition.
+ */
+async function waitForRecovery(reason: DisplayBusyReason, scopes: readonly DisplayScope[], deadline: number): Promise<boolean> {
+  if (reason === "build_wait_timeout" || reason === "generation_changed" || reason === "write_pending") return false;
+  if (reason === "build_capacity") {
+    while (performance.now() < deadline) {
+      if (inflightBuilds < MAX_CONCURRENT_DISPLAY_BUILDS) return true;
+      await sleepMs(Math.min(25, deadline - performance.now()));
+    }
+    return inflightBuilds < MAX_CONCURRENT_DISPLAY_BUILDS;
+  }
+  for (;;) {
+    const state = reconciler;
+    if (!state) return false;
+    if (verifiedFor(await currentScopeContext(), scopes)) return true;
+    const left = deadline - performance.now();
+    if (left <= 0) return false;
+    const tasks = startVerificationTasks(state, scopes);
+    await Promise.race([Promise.all(tasks), sleepMs(left)]);
+    if (verifiedFor(await currentScopeContext(), scopes)) return true;
+    await sleepMs(Math.min(100, deadline - performance.now()));
+  }
 }
 
 /**
@@ -943,106 +1192,169 @@ export async function getDisplaySnapshot(
   name: string,
   scopes: readonly DisplayScope[],
   build: DisplayBuild,
-  options: { extraKey?: string; budget?: DisplayRequestBudget; committedView?: CommittedDisplayView } = {}
+  options: {
+    extraKey?: string;
+    budget?: DisplayRequestBudget;
+    committedView?: CommittedDisplayView;
+    principal?: DisplayPrincipal;
+    authorize?: DisplayAuthorize;
+  } = {}
 ): Promise<DisplaySnapshotResult> {
   const extraKey = options.extraKey ?? "";
   const budget = options.budget ?? createDisplayRequestBudget();
   if (options.committedView) return serveCommittedView(name, scopes, options.committedView, budget);
-  let reason: DisplayBusyReason = "metadata_overdue";
+  const requester: Requester = {
+    principalKey: principalKeyOf(options.principal ?? budget.principal),
+    authorize: options.authorize ?? budget.authorize
+  };
+  // §2.5.1 boundary 5: a scope in continuous `reconcile_failed` past D_max answers the C-class 503.
+  clearRecoveredReconcileFailures();
+  throwIfReconciliationExpired(scopes, false);
   let attempts = 0;
-  for (let attempt = 1; attempt <= MAX_DISPLAY_ATTEMPTS; attempt += 1) {
-    if (budget.attemptsLeft <= 0) break;
-    budget.attemptsLeft -= 1;
-    attempts += 1;
-    if (!displayCacheVerified(scopes)) {
-      const grace = await serveWithinGrace(name, scopes, extraKey);
-      if (grace) {
-        lastRequest = { name, scopes: [...scopes], attempts };
-        return grace;
+  let waited = false;
+
+  const runAttempts = async (): Promise<DisplaySnapshotResult | { reason: DisplayBusyReason }> => {
+    let reason: DisplayBusyReason = "metadata_overdue";
+    for (let attempt = 1; attempt <= MAX_DISPLAY_ATTEMPTS; attempt += 1) {
+      if (budget.attemptsLeft <= 0) break;
+      budget.attemptsLeft -= 1;
+      attempts += 1;
+      if (!displayCacheVerified(scopes)) {
+        const grace = await serveDegradedSlot(name, scopes, extraKey, "grace", requester);
+        if (grace) {
+          lastRequest = { name, scopes: [...scopes], attempts };
+          return grace;
+        }
       }
-    }
-    if (!(await ensureVerified(scopes, budget))) {
-      reason = busyReasonFor(scopes);
-      break;
-    }
-    if (hasPendingDisplayWrite(scopes)) {
-      const remaining = budget.deadline - Date.now();
-      if (remaining <= 0) {
-        reason = "write_pending";
+      if (!(await ensureVerified(scopes, budget))) {
+        reason = busyReasonFor(scopes);
         break;
       }
-      if (!(await waitForDisplayWritesSettled(scopes, remaining))) {
-        reason = "write_pending";
+      if (hasPendingDisplayWrite(scopes)) {
+        const remaining = budget.deadline - Date.now();
+        if (remaining <= 0) {
+          reason = "write_pending";
+          break;
+        }
+        if (!(await waitForDisplayWritesSettled(scopes, remaining))) {
+          reason = "write_pending";
+          break;
+        }
+      }
+      const context = await currentScopeContext();
+      if (!verifiedFor(context, scopes)) {
+        // P0-1：等待上下文期间新鲜窗可能刚好过期（事件循环被占）；仍在宽限内则服务已提交快照。
+        const grace = await serveDegradedSlot(name, scopes, extraKey, "grace", requester);
+        if (grace) {
+          lastRequest = { name, scopes: [...scopes], attempts };
+          return grace;
+        }
+        reason = reconciler && !sameContext(reconciler.context, context) ? "context_mismatch" : busyReasonFor(scopes);
         break;
       }
-    }
-    const context = await currentScopeContext();
-    if (!verifiedFor(context, scopes)) {
-      // P0-1：等待上下文期间新鲜窗可能刚好过期（事件循环被占）；仍在宽限内则服务已提交快照。
-      const grace = await serveWithinGrace(name, scopes, extraKey);
-      if (grace) {
+      const key = keyFor(name, scopes, context, extraKey);
+      const entry = entryFor(name);
+      if (entry.current?.key === key && !hasPendingDisplayWrite(scopes)) {
         lastRequest = { name, scopes: [...scopes], attempts };
-        return grace;
+        stats.hits += 1;
+        countEntryPerf("displayHits");
+        markDisplayCache("hit");
+        noteFresh(name, entry.current, requester.principalKey);
+        return { payload: entry.current.payload, sidecar: entry.current.sidecar, version: entry.current.version, cache: "hit", incarnation: entry.current.incarnation };
       }
-      reason = reconciler && !sameContext(reconciler.context, context) ? "context_mismatch" : busyReasonFor(scopes);
-      break;
-    }
-    const key = keyFor(name, scopes, context, extraKey);
-    const entry = entryFor(name);
-    if (entry.current?.key === key && !hasPendingDisplayWrite(scopes)) {
+      if (entry.failure && entry.failure.key === key && Date.now() < entry.failure.until) {
+        throw entry.failure.error;
+      }
+      if (performance.now() >= budget.buildDeadline) {
+        reason = "build_wait_timeout";
+        break;
+      }
+      let task = entry.inflight.get(key);
+      if (!task) {
+        if (inflightBuilds >= MAX_CONCURRENT_DISPLAY_BUILDS) {
+          reason = "build_capacity";
+          break;
+        }
+        task = startDisplayBuild(name, entry, key, scopes, extraKey, build);
+      }
+      const outcome = await waitForDisplayBuild(task, budget.buildDeadline);
+      if ("error" in outcome) throw outcome.error;
+      if ("reason" in outcome) {
+        reason = outcome.reason;
+        if (reason === "generation_changed") continue;
+        break;
+      }
+      const { slot, context: publishedContext } = outcome;
+      const invalid = invalidBuildReason(name, entry, scopes, publishedContext, slot, extraKey);
+      if (invalid) {
+        reason = invalid;
+        if (reason === "generation_changed") continue;
+        break;
+      }
       lastRequest = { name, scopes: [...scopes], attempts };
-      stats.hits += 1;
-      countEntryPerf("displayHits");
-      markDisplayCache("hit");
-      return { payload: entry.current.payload, sidecar: entry.current.sidecar, version: entry.current.version, cache: "hit", incarnation: entry.current.incarnation };
+      stats.misses += 1;
+      countEntryPerf("displayMisses");
+      markDisplayCache("miss");
+      noteFresh(name, slot, requester.principalKey);
+      return { payload: slot.payload, sidecar: slot.sidecar, version: slot.version, cache: "miss", incarnation: slot.incarnation };
     }
-    if (entry.failure && entry.failure.key === key && Date.now() < entry.failure.until) {
-      throw entry.failure.error;
+    return { reason };
+  };
+
+  let outcome = await runAttempts();
+  while ("reason" in outcome) {
+    const reason = outcome.reason;
+    if (reason === "write_pending") throw busyAfterAttempts(name, scopes, reason, attempts);
+    if (reason === "reconcile_failed") {
+      noteReconcileFailures(scopes);
+      throwIfReconciliationExpired(scopes, true);
     }
-    if (performance.now() >= budget.buildDeadline) {
-      reason = "build_wait_timeout";
-      break;
-    }
-    let task = entry.inflight.get(key);
-    if (!task) {
-      if (inflightBuilds >= MAX_CONCURRENT_DISPLAY_BUILDS) {
-        reason = "build_capacity";
-        break;
+    // stale: a same-generation committed view past the grace window, but only with no recorded error.
+    if (reason !== "reconcile_failed") {
+      const stale = await serveDegradedSlot(name, scopes, extraKey, "stale", requester);
+      if (stale) {
+        lastRequest = { name, scopes: [...scopes], attempts, reason };
+        return stale;
       }
-      task = startDisplayBuild(name, entry, key, scopes, extraKey, build);
     }
-    const outcome = await waitForDisplayBuild(task, budget.buildDeadline);
-    if ("error" in outcome) throw outcome.error;
-    if ("reason" in outcome) {
-      reason = outcome.reason;
-      if (reason === "generation_changed") continue;
-      break;
+    // pending: wait inside the request deadline (10 s) for recovery, once; then answer without data.
+    if (!waited && budget.attemptsLeft > 0) {
+      waited = true;
+      if (await waitForRecovery(reason, scopes, budget.buildDeadline)) {
+        outcome = await runAttempts();
+        continue;
+      }
     }
-    const { slot, context: publishedContext } = outcome;
-    const invalid = invalidBuildReason(name, entry, scopes, publishedContext, slot, extraKey);
-    if (invalid) {
-      reason = invalid;
-      if (reason === "generation_changed") continue;
-      break;
-    }
-    lastRequest = { name, scopes: [...scopes], attempts };
-    stats.misses += 1;
-    countEntryPerf("displayMisses");
-    markDisplayCache("miss");
-    return { payload: slot.payload, sidecar: slot.sidecar, version: slot.version, cache: "miss", incarnation: slot.incarnation };
+    throw pendingAfterAttempts(name, scopes, reason, attempts);
   }
+  return outcome;
+}
+
+/** B class (`write_pending`): the only A-path reason that still ends as a retryable 503. */
+function busyAfterAttempts(name: string, scopes: readonly DisplayScope[], reason: DisplayBusyReason, attempts: number): DisplaySnapshotBusyError {
   stats.busy += 1;
   busyByReason.set(reason, (busyByReason.get(reason) ?? 0) + 1);
-  {
-    const now = Date.now();
-    const ages = Object.fromEntries(Object.entries(scopeHealthSnapshot()).map(([scope, e]) => [scope, { m: now - e.metadataCompletedAt, d: now - e.digestCompletedAt, me: Boolean(e.metadataError), de: Boolean(e.digestError) }]));
-    const metaTask = Boolean(reconciler?.metadataTask);
-    const fullTask = Boolean(reconciler?.fullTask);
-    probeLog("busy", { name, reason, graceRefusal: lastGraceRefusal, attempts, ages, metaTask, fullTask });
-    recordBusyEvent({ name, reason, lastGraceRefusal, attempts, ages, metaTask, fullTask });
-  }
+  recordDegradedEvent(name, scopes, reason, attempts);
   lastRequest = { name, scopes: [...scopes], attempts, reason };
-  throw new DisplaySnapshotBusyError(reason);
+  return new DisplaySnapshotBusyError(reason);
+}
+
+/** A class: no servable view in time — 200 `pending`, never an empty list or a 503. */
+function pendingAfterAttempts(name: string, scopes: readonly DisplayScope[], reason: DisplayBusyReason, attempts: number): DisplaySnapshotPendingError {
+  stats.pendingServes += 1;
+  busyByReason.set(reason, (busyByReason.get(reason) ?? 0) + 1);
+  recordDegradedEvent(name, scopes, reason, attempts, "pending");
+  lastRequest = { name, scopes: [...scopes], attempts, reason };
+  return new DisplaySnapshotPendingError(reason, markDegraded(name, scopes, "pending"));
+}
+
+function recordDegradedEvent(name: string, scopes: readonly DisplayScope[], reason: DisplayBusyReason, attempts: number, outcome?: string): void {
+  const now = Date.now();
+  const ages = Object.fromEntries(Object.entries(scopeHealthSnapshot()).map(([scope, e]) => [scope, { m: now - e.metadataCompletedAt, d: now - e.digestCompletedAt, me: Boolean(e.metadataError), de: Boolean(e.digestError) }]));
+  const metaTask = Boolean(reconciler?.metadataTask);
+  const fullTask = Boolean(reconciler?.fullTask);
+  probeLog(outcome ?? "busy", { name, reason, graceRefusal: lastGraceRefusal, attempts, ages, metaTask, fullTask });
+  recordBusyEvent({ name, reason, ...(outcome ? { outcome } : {}), lastGraceRefusal, attempts, ages, metaTask, fullTask });
 }
 
 function installWatchers(state: ReconcilerState): void {
@@ -1124,6 +1436,7 @@ async function baselineReconciler(state: ReconcilerState): Promise<void> {
     if (failure) {
       markScopeMetadataError(scope, failure);
       markScopeDigestError(scope, failure);
+      noteReconcileFailures([scope]);
     } else {
       markScopeMetadataOk(scope, now);
       markScopeDigestOk(scope, now);
@@ -1151,6 +1464,7 @@ export async function startDisplayReconciler(options: { metadataIntervalMs?: num
   } catch (error) {
     // Stay unverified (busy) and let the timers retry until reconciliation recovers.
     state.error = errorMessage(error);
+    noteReconcileFailures(DISPLAY_SCOPES);
   }
   // Nothing that happened while unverified was observed: no earlier snapshot or build may be served.
   entries.clear();
@@ -1211,7 +1525,9 @@ export async function prewarmDisplaySnapshots(): Promise<void> {
 export function resetDisplaySnapshotsForTests(): void {
   entries.clear();
   serveLeases.clear();
-  stats = { builds: 0, hits: 0, misses: 0, busy: 0, graceServes: 0 };
+  stats = emptyStats();
+  degradeStreaks.clear();
+  reconcileFailedSince.clear();
   busyByReason.clear();
   busyEvents.length = 0;
   resetRevisionLedger();
@@ -1253,4 +1569,12 @@ export function displaySnapshotDiagnostics() {
     lastRequest: lastRequest ? { ...lastRequest } : null,
     ...stats
   };
+}
+
+/**
+ * HTTP layer: a route-level A-class refusal (e.g. the access generation kept moving through all
+ * retries) is answered as `pending` as well, and counted on the same per-view streak.
+ */
+export function createDisplayPending(name: string, scopes: readonly DisplayScope[], reason: DisplayBusyReason): DisplaySnapshotPendingError {
+  return pendingAfterAttempts(name, scopes, reason, 0);
 }

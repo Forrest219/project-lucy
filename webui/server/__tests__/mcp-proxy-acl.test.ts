@@ -77,6 +77,30 @@ const ACCESS_YAML = `users:
       tools:
         - lucy_read_source
         - sql_execution
+  - id: noread_agent
+    name: No Read Agent
+    tokens:
+      - hash: "${tokenHash("noread-token")}"
+        label: noread-token
+        created: 2026-06-20
+    allow:
+      tables:
+        - dataforai.superstore_orders
+      tools:
+        - lucy_query
+        - dictionary_search
+        - discover_data
+  - id: zero_source_agent
+    name: Zero Source Agent
+    tokens:
+      - hash: "${tokenHash("zero-token")}"
+        label: zero-token
+        created: 2026-06-20
+    allow:
+      tables: []
+      tools:
+        - dictionary_search
+        - discover_data
   - id: wildcard_agent
     name: Wildcard Agent
     tokens:
@@ -214,6 +238,63 @@ describe("MCP proxy ACL enforcement", () => {
         args: { connectionId: "mysql-aliyun", sourceName: "kx_fact_financial_amount" },
         reason: "explicit_table_required:dataforai.kx_fact_financial_amount"
       });
+    });
+  });
+
+  it("attaches a sensitive-metadata repair payload with identity-filtered nextTools and a single source list (P1-88 SC-03)", async () => {
+    await withProxy(async (port) => {
+      const res = await callTool(port, TOKEN, "proxy-repair-sensitive", "dictionary_search", { query: "financial" });
+      expect(res.status).toBe(200);
+      const body = await res.json() as {
+        result?: { isError?: boolean; content?: Array<{ text?: string }>; data?: Record<string, unknown> };
+      };
+      expect(body.result?.isError).toBe(true);
+      const text = body.result?.content?.[0]?.text ?? "";
+      expect(text).toContain("Access denied: sensitive_metadata_forbidden:kx");
+      // 区分「全局搜索受限」与「已授权数据源可查」。
+      expect(text).toContain("全局敏感元数据搜索工具受限");
+      expect(text).toContain("已授权数据源");
+      // 来源清单只拼接一次（不再重复输出第二遍全量列表）。
+      expect(text.split("可用来源：").length - 1).toBe(1);
+      // `nextTools` 按身份 `allowedToolNames` 过滤：未授 `lucy_catalog` 不得推荐。
+      expect(body.result?.data).toMatchObject({
+        reason: "sensitive_metadata_forbidden:kx",
+        failureDimension: "权限拒绝"
+      });
+      expect([...((body.result?.data?.nextTools ?? []) as string[])].sort())
+        .toEqual(["lucy_query", "lucy_read_source"]);
+      // 不泄露未授权表名。
+      expect(JSON.stringify(body)).not.toContain("kx_fact_financial_amount");
+    });
+  });
+
+  it("omits lucy_read_source from nextTools when the role does not grant it (P1-88 SC-03)", async () => {
+    await withProxy(async (port) => {
+      const res = await callTool(port, "noread-token", "proxy-repair-noread", "discover_data", {});
+      expect(res.status).toBe(200);
+      const body = await res.json() as {
+        result?: { content?: Array<{ text?: string }>; data?: Record<string, unknown> };
+      };
+      const text = body.result?.content?.[0]?.text ?? "";
+      expect(text).toContain("sensitive_metadata_forbidden:kx");
+      expect(text).not.toContain("lucy_read_source");
+      expect(body.result?.data).toMatchObject({ nextTools: ["lucy_query"] });
+    });
+  });
+
+  it("falls back to the B15 factual error without a dead-end source list when no sources are authorized (P1-88 SC-03)", async () => {
+    await withProxy(async (port) => {
+      const res = await callTool(port, "zero-token", "proxy-repair-zero", "discover_data", {});
+      expect(res.status).toBe(200);
+      const body = await res.json() as {
+        result?: { content?: Array<{ text?: string }>; data?: Record<string, unknown> };
+      };
+      const text = body.result?.content?.[0]?.text ?? "";
+      expect(text).toContain("sensitive_metadata_forbidden:kx");
+      // B15 事实性兜底：明确「暂无已授权来源」，不出现「可用来源」死路引导。
+      expect(text).toContain("暂无已授权来源");
+      expect(text).not.toContain("可用来源：");
+      expect(body.result?.data).toMatchObject({ sources: [], connections: [] });
     });
   });
 

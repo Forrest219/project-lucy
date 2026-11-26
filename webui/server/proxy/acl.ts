@@ -3086,8 +3086,66 @@ async function commitEffectivePolicyUnlocked(): Promise<PolicyRuntimeStatus> {
     tokenHashPrefix: "policy-compile"
   });
 
+  // REQ-0117 方向 1（委托人 2026-11-26 扩权本文件：仅限缩小重编译面）——按变更作用域
+  // 增量重编译。不变式：单用户编译输入 = 自身记录 + 其角色闭包 + 全局输入（defaults、
+  // 行策略模板目录、source map、启用表、工具分类常量）。全局输入未变且上次快照可复用时，
+  // 仅重编「自身记录变化或引用了变化角色」的用户；其余用户逐字复用上次编译结果，
+  // allow / 行权限编译结果不变。任何 gate 不满足即回退全量编译（保守正确优先）。
+  const previousSnapshot = previous && !previous.degradedGlobal ? previous : null;
+  const globalInputsStable = Boolean(
+    previousSnapshot
+      && previousSnapshot.sourceMapVersion === state.version
+      && previousSnapshot.enabledTablesDigest === enabledTablesDigest
+      && stableJson(previousSnapshot.config.defaults ?? null) === stableJson(config.defaults ?? null)
+      && stableJson((previousSnapshot.config as AccessConfigWithTemplates).row_policy_templates ?? null)
+        === stableJson((config as AccessConfigWithTemplates).row_policy_templates ?? null)
+  );
+
+  let affectedUsers: Set<string> | null = null;
+  if (globalInputsStable && previousSnapshot) {
+    const previousRoles = previousSnapshot.config.roles ?? {};
+    const nextRoles = config.roles ?? {};
+    const changedRoleIds = new Set<string>();
+    for (const [roleId, role] of Object.entries(nextRoles)) {
+      if (stableJson(previousRoles[roleId] ?? null) !== stableJson(role ?? null)) changedRoleIds.add(roleId);
+    }
+    for (const roleId of Object.keys(previousRoles)) {
+      if (!(roleId in nextRoles)) changedRoleIds.add(roleId);
+    }
+    affectedUsers = new Set<string>();
+    const previousUsersById = new Map((previousSnapshot.config.users ?? []).map((user) => [user.id, user]));
+    for (const user of config.users ?? []) {
+      if (!user?.id) continue;
+      const before = previousUsersById.get(user.id);
+      if (!before || stableJson(before) !== stableJson(user)) {
+        affectedUsers.add(user.id);
+        continue;
+      }
+      const roleList = resolveRoleIds(user);
+      const beforeRoleList = resolveRoleIds(before);
+      const currentIds = roleList.ok ? roleList.roleIds : [];
+      const beforeIds = beforeRoleList.ok ? beforeRoleList.roleIds : [];
+      if (stableJson(currentIds) !== stableJson(beforeIds) || currentIds.some((id) => changedRoleIds.has(id))) {
+        affectedUsers.add(user.id);
+      }
+    }
+  }
+
   for (const user of config.users ?? []) {
     if (!user?.id) continue;
+    const reusable = affectedUsers !== null && !affectedUsers.has(user.id)
+      ? previousSnapshot?.byUserId.get(user.id) ?? null
+      : null;
+    if (reusable) {
+      byUserId.set(user.id, reusable);
+      if (!reusable.ok && (
+        reusable.reason.startsWith("role_resolution_failed")
+        || reusable.reason.startsWith("source_map_compile_failed")
+      )) {
+        degradedAgents.add(user.id);
+      }
+      continue;
+    }
     const resolved = await resolveEffectivePermissions(previewIdentity(user.id), config, policy, {
       sourceMap: state
     });
@@ -3176,6 +3234,15 @@ async function commitEffectivePolicyUnlocked(): Promise<PolicyRuntimeStatus> {
  * On unparseable YAML: set degradedGlobal (DataPlane fail-closed).
  * Concurrent callers are queued (not coalesced) so each Admin write can ack against its digest.
  */
+/**
+ * REQ-0117 test hook — the current per-user compile results. Used to assert that the
+ * incremental recompile REUSES unaffected users (reference equality) instead of
+ * recompiling them; not part of any runtime contract.
+ */
+export function policyRuntimeByUserIdForTests(): Map<string, RoleResolutionResult> | null {
+  return effectivePolicyRef?.byUserId ?? null;
+}
+
 export async function commitEffectivePolicy(): Promise<PolicyRuntimeStatus> {
   const run = commitTail.then(() => commitEffectivePolicyUnlocked());
   commitTail = run.then(

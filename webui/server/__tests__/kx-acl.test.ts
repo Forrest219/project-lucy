@@ -548,6 +548,32 @@ describe("KX financial domain ACL guardrails", () => {
       .resolves.toEqual({ allowed: true });
   });
 
+  it("hides sensitive metadata tools from tools/list unless all matching sensitive tables are explicitly granted (P1-88 SC-01/SC-02)", async () => {
+    const { allowedToolNames } = await loadAcl();
+
+    // SC-01 — `tables: ["*"]` 通配不算显式全量：`tools/list` 不暴露敏感元数据工具。
+    const visibleForWildcard = await allowedToolNames(identity("wildcard_agent"));
+    expect(visibleForWildcard).not.toContain("discover_data");
+    expect(visibleForWildcard).not.toContain("dictionary_search");
+
+    // SC-01 — 只显式列出部分敏感表（1/6）仍不算全量：继续隐藏。
+    const visibleForPartialKx = await allowedToolNames(identity("wildcard_with_explicit_kx_agent"));
+    expect(visibleForPartialKx).not.toContain("discover_data");
+    expect(visibleForPartialKx).not.toContain("dictionary_search");
+
+    // SC-01 — 仅普通表授权但 `allow.tools` 含敏感元数据工具：同样隐藏，普通主路径工具不受影响。
+    const visibleForSuperstore = await allowedToolNames(identity("superstore_agent"));
+    expect(visibleForSuperstore).not.toContain("discover_data");
+    expect(visibleForSuperstore).not.toContain("dictionary_search");
+    expect(visibleForSuperstore).toContain("lucy_query");
+    expect(visibleForSuperstore).toContain("lucy_read_source");
+
+    // SC-02 — 显式全量敏感表 + `allow.tools` 已授予：`tools/list` 保留敏感元数据工具。
+    const visibleForKxGuard = await allowedToolNames(identity("kx_guard_tester"));
+    expect(visibleForKxGuard).toContain("discover_data");
+    expect(visibleForKxGuard).toContain("dictionary_search");
+  });
+
   it("classifies sl_validate as table-scoped only when a source is provided", async () => {
     const { check } = await loadAcl();
 
@@ -1243,5 +1269,69 @@ defaults:
         allowed: false,
         reason: expect.stringMatching(/^role_resolution_failed:lucy_admin:/)
       });
+  });
+});
+
+describe("sensitive metadata tools/list gate under empty sensitive-table match (P1-88 OQ-2)", () => {
+  it("keeps sensitive metadata tools hidden and denied when no table matches the sensitive prefixes", async () => {
+    // 空匹配环境：sourceMap 不含任何 `dataforai.kx_*` 表，但 `sensitive_metadata_tools` 非空。
+    await writeFile(
+      path.join(projectRoot, "ktx.yaml"),
+      `connections:
+  poc-mysql-aliyun:
+    driver: mysql
+    enabled_tables:
+      - data_agent_poc.poc_metric_catalog
+      - data_agent_poc.poc_app_active_daily
+`,
+      "utf8"
+    );
+    await writeFile(path.join(projectRoot, "semantic-layer", "mysql-aliyun", "_schema", "dataforai.yaml"), "tables: {}\n", "utf8");
+    await writeFile(
+      path.join(projectRoot, "webui", "config", "access.yaml"),
+      `users:
+  - id: poc_meta_agent
+    name: POC Meta Agent
+    tokens: []
+    allow:
+      connections:
+        - poc-mysql-aliyun
+      tables:
+        - data_agent_poc.poc_metric_catalog
+      tools:
+        - lucy_query
+        - lucy_read_source
+        - discover_data
+        - dictionary_search
+defaults:
+  deny_tools:
+    - sql_execution
+    - sql_dialect_notes
+  known_tools:
+    - lucy_query
+    - lucy_read_source
+    - discover_data
+    - dictionary_search
+  sensitive_metadata_tools:
+    - dictionary_search
+    - discover_data
+`,
+      "utf8"
+    );
+    const { allowedToolNames, check } = await loadAcl();
+
+    // OQ-2 裁定 — `sensitiveTables(...)` 为空仍 fail-closed：`tools/list` 隐藏 + `tools/call` 拒绝。
+    const visible = await allowedToolNames(identity("poc_meta_agent"));
+    expect(visible).not.toContain("discover_data");
+    expect(visible).not.toContain("dictionary_search");
+
+    await expect(check(identity("poc_meta_agent"), "discover_data", {}))
+      .resolves.toEqual({ allowed: false, reason: "sensitive_metadata_forbidden:kx" });
+
+    // 第一性原理 — 合法主路径不受影响：已授权 poc 来源仍可见、可查。
+    expect(visible).toContain("lucy_query");
+    expect(visible).toContain("lucy_read_source");
+    await expect(check(identity("poc_meta_agent"), "lucy_read_source", { connectionId: "poc-mysql-aliyun", sourceName: "poc_metric_catalog" }))
+      .resolves.toEqual({ allowed: true });
   });
 });

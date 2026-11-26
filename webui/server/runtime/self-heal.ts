@@ -69,7 +69,12 @@ export function countSelfHealRestarts(file: string, sinceMs: number): number {
 async function probeDisplay(): Promise<ProbeOutcome> {
   const started = performance.now();
   const servable = displayReadServable();
-  return { ok: servable.ok, ms: Math.round(performance.now() - started), ...(servable.reason ? { detail: servable.reason } : {}) };
+  return {
+    ok: servable.ok,
+    ms: Math.round(performance.now() - started),
+    ...(servable.reason ? { detail: servable.reason } : {}),
+    ...(servable.degraded ? { degraded: servable.degraded } : {})
+  };
 }
 
 function upstreamOutcome(): ProbeOutcome {

@@ -131,7 +131,7 @@ async function main(): Promise<void> {
   await writeFile(outFile, `${JSON.stringify(report, null, 2)}\n`, "utf8");
   console.log(JSON.stringify(report, null, 2));
   await app.close();
-  if (!sc13 || !sc14) process.exitCode = 1;
+  process.exit(sc13 && sc14 ? 0 : 1);
 }
 
 main().catch((error: unknown) => {

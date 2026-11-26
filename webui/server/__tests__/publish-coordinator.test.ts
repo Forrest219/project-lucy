@@ -177,7 +177,7 @@ describe("shared single-instance publish coordinator", () => {
     });
 
     await expect(
-      withPublishCoordinator("role_policy_save", async () => "reclaimed", {
+      withPublishCoordinator("manual_reindex", async () => "reclaimed", {
         projectRoot,
         staleAfterMs: 30 * 60 * 1000
       })
@@ -198,7 +198,7 @@ describe("shared single-instance publish coordinator", () => {
     });
 
     const result = await withPublishCoordinator(
-      "role_policy_save",
+      "manual_reindex",
       async () => "reclaimed-dead-pid",
       { projectRoot, staleAfterMs: 30 * 60 * 1000 }
     );
@@ -217,7 +217,7 @@ describe("shared single-instance publish coordinator", () => {
     });
 
     const result = await withPublishCoordinator(
-      "role_policy_save",
+      "manual_reindex",
       async () => "reclaimed-ownerless",
       { projectRoot, staleAfterMs: 30 * 60 * 1000 }
     );
@@ -235,7 +235,7 @@ describe("shared single-instance publish coordinator", () => {
     });
 
     await expect(
-      withPublishCoordinator("role_policy_save", async () => "should-not-run", {
+      withPublishCoordinator("manual_reindex", async () => "should-not-run", {
         projectRoot,
         staleAfterMs: 30 * 60 * 1000
       })
@@ -281,6 +281,225 @@ describe("shared single-instance publish coordinator", () => {
     await releasePublishCoordinatorLock(projectRoot, holder);
 
     expect(await readPublishCoordinatorLock(projectRoot)).toBeNull();
+  });
+});
+
+// ─── REQ-0117 方向 2：发布窗口有界等待（仅 role_policy_save / agent_save） ───
+
+describe("REQ-0117 bounded publish wait (role_policy_save / agent_save)", () => {
+  beforeEach(async () => {
+    projectRoot = await mkdtemp(path.join(tmpdir(), "lucy-req0117-wait-"));
+  });
+
+  afterEach(async () => {
+    resetSemanticRecoveryAdmissionForTests();
+    await rm(projectRoot, { recursive: true, force: true });
+  });
+
+  it("SC-02: an overlapping role_policy_save waits and completes when the holder releases within the budget", async () => {
+    const first = withPublishCoordinator(
+      "role_policy_save",
+      async () => {
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        return "first";
+      },
+      { projectRoot }
+    );
+    const second = withPublishCoordinator(
+      "role_policy_save",
+      async () => "second",
+      { projectRoot, wait: { budgetMs: 5000, pollIntervalMs: 20 } }
+    );
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+    expect(firstResult).toBe("first");
+    expect(secondResult).toBe("second");
+    expect(await readPublishCoordinatorLock(projectRoot)).toBeNull();
+  });
+
+  it("SC-03: a wait past the budget is an honest refusal with retryAfterSeconds and the CURRENT holder", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const first = withPublishCoordinator(
+      "agent_save",
+      async () => {
+        await gate;
+      },
+      { projectRoot }
+    );
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    let innerError: unknown = null;
+    try {
+      await withPublishCoordinator(
+        "agent_save",
+        async () => undefined,
+        { projectRoot, wait: { budgetMs: 120, pollIntervalMs: 20, retryAfterSeconds: 5 } }
+      );
+    } catch (err) {
+      innerError = err;
+    }
+    release();
+    await first;
+
+    expect(innerError).toBeInstanceOf(PublishCoordinatorBusyError);
+    const busy = innerError as PublishCoordinatorBusyError;
+    expect(busy.code).toBe("PUBLISH_COORDINATOR_BUSY");
+    expect(busy.retryAfterSeconds).toBe(5);
+    // 持有者信息重读锁文件获得（当前持有者 agent_save，而非候选 holder）
+    expect(busy.holder).toMatchObject({ kind: "agent_save" });
+    expect(busy.message).toContain("agent_save");
+  });
+
+  it("OQ-2: beyond maxWaiters=1 a third writer is refused immediately with retryAfterSeconds", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const first = withPublishCoordinator(
+      "role_policy_save",
+      async () => {
+        await gate;
+      },
+      { projectRoot }
+    );
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    // 第二个写进入有界等待（等待者 1/1）
+    const second = withPublishCoordinator(
+      "role_policy_save",
+      async () => "second",
+      { projectRoot, wait: { budgetMs: 8000, pollIntervalMs: 20 } }
+    );
+    await new Promise((resolve) => setTimeout(resolve, 60));
+
+    const started = Date.now();
+    let innerError: unknown = null;
+    try {
+      await withPublishCoordinator(
+        "role_policy_save",
+        async () => undefined,
+        { projectRoot, wait: { budgetMs: 8000, pollIntervalMs: 20, retryAfterSeconds: 5 } }
+      );
+    } catch (err) {
+      innerError = err;
+    }
+    const refusedAfterMs = Date.now() - started;
+    release();
+    await first;
+    await expect(second).resolves.toBe("second");
+
+    expect(innerError).toBeInstanceOf(PublishCoordinatorBusyError);
+    expect((innerError as PublishCoordinatorBusyError).retryAfterSeconds).toBe(5);
+    expect(refusedAfterMs).toBeLessThan(1000);
+  });
+
+  it("the seven other entry kinds keep busy-immediately (no queueing) while a role save waits", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const first = withPublishCoordinator(
+      "role_policy_save",
+      async () => {
+        await gate;
+      },
+      { projectRoot }
+    );
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    const waiter = withPublishCoordinator(
+      "role_policy_save",
+      async () => "waiter",
+      { projectRoot, wait: { budgetMs: 8000, pollIntervalMs: 20 } }
+    );
+    await new Promise((resolve) => setTimeout(resolve, 60));
+
+    const started = Date.now();
+    await expect(
+      withPublishCoordinator("manifest_upload", async () => undefined, { projectRoot })
+    ).rejects.toMatchObject({ code: "PUBLISH_COORDINATOR_BUSY" });
+    expect(Date.now() - started).toBeLessThan(1000);
+
+    release();
+    await first;
+    await expect(waiter).resolves.toBe("waiter");
+  });
+
+  it("stale-lock takeover inside the wait loop enters the critical section (no regression)", async () => {
+    // 持有者已死：等待循环里的 acquire 按既有语义接管陈旧锁——无 stale 特判、无裸 break。
+    await writeRawLock({
+      kind: "role_policy_save",
+      operationId: "dead-holder",
+      acquiredAt: new Date().toISOString(),
+      pid: 2 ** 22
+    });
+
+    const result = await withPublishCoordinator(
+      "role_policy_save",
+      async () => "took-over",
+      { projectRoot, wait: { budgetMs: 2000, pollIntervalMs: 20 } }
+    );
+    expect(result).toBe("took-over");
+    expect(await readPublishCoordinatorLock(projectRoot)).toBeNull();
+  });
+
+  it("SC-04: after a bounded wait acquires, the caller's own version check still rejects a same-object save", async () => {
+    // 路由层的既有 fresh 读＋baseObjectVersion 校验不变；此处以同型断言证明等待成交后
+    // 临界区内的版本校验错误原样抛出（409 族），不被等待路径吞掉。
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const first = withPublishCoordinator(
+      "role_policy_save",
+      async () => {
+        await gate;
+      },
+      { projectRoot }
+    );
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    const second = withPublishCoordinator(
+      "role_policy_save",
+      async () => {
+        throw Object.assign(new Error("配置已变化：目标对象版本不一致，请比较后重新预览"), {
+          code: "VERSION_CONFLICT",
+          statusCode: 409
+        });
+      },
+      { projectRoot, wait: { budgetMs: 5000, pollIntervalMs: 20 } }
+    );
+    release();
+    await first;
+
+    await expect(second).rejects.toMatchObject({ code: "VERSION_CONFLICT", statusCode: 409 });
+    expect(await readPublishCoordinatorLock(projectRoot)).toBeNull();
+  });
+
+  it("wait: false restores the busy-immediately contract for bounded kinds", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const first = withPublishCoordinator(
+      "role_policy_save",
+      async () => {
+        await gate;
+      },
+      { projectRoot }
+    );
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    const started = Date.now();
+    await expect(
+      withPublishCoordinator("role_policy_save", async () => undefined, { projectRoot, wait: false })
+    ).rejects.toMatchObject({ code: "PUBLISH_COORDINATOR_BUSY" });
+    expect(Date.now() - started).toBeLessThan(1000);
+
+    release();
+    await first;
   });
 });
 
@@ -381,15 +600,19 @@ describe("semantic recovery closes the shared write window", () => {
     );
     await acquired;
 
-    const kinds: PublishEntryKind[] = [
+    const kinds: Array<PublishEntryKind | { kind: PublishEntryKind; wait: false }> = [
       "semantic_table_save",
       "manifest_upload",
       "batch_import",
-      "role_policy_save"
+      // REQ-0117：role_policy_save 现在对重叠持有者做有界等待；其「忙即拒绝」语义
+      // 由 `wait: false` 显式还原（有界等待本身的合同在 REQ-0117 专属用例里覆盖）。
+      { kind: "role_policy_save", wait: false }
     ];
-    for (const kind of kinds) {
+    for (const entry of kinds) {
+      const kind = typeof entry === "string" ? entry : entry.kind;
+      const extra = typeof entry === "string" ? {} : { wait: entry.wait };
       await expect(
-        withPublishCoordinator(kind, async () => undefined, { projectRoot })
+        withPublishCoordinator(kind, async () => undefined, { projectRoot, ...extra })
       ).rejects.toMatchObject({ code: "PUBLISH_COORDINATOR_BUSY" });
     }
 

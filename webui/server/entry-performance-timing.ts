@@ -21,6 +21,32 @@ export const SERVER_TIMING_NAMES = [
 export type ServerTimingName = (typeof SERVER_TIMING_NAMES)[number];
 export type DisplayCacheState = "hit" | "miss";
 
+/**
+ * P1-75 §2.5.1 / OQ-3 — degraded-read marker. The semantic fields are frozen: state, data age
+ * (milliseconds; `pending` has no age and reports the continuous pending time instead) and the
+ * view generation. Carrier (frozen by X3): response headers `X-Lucy-Display-*` plus Server-Timing
+ * `degraded;desc=<state>`. Never carries object names, paths or permissions.
+ */
+export type DisplayDegradeState = "grace" | "stale" | "pending";
+export type DisplayDegradeMark = {
+  state: DisplayDegradeState;
+  /** Age of the served view; absent for `pending`. */
+  ageMs?: number;
+  /** Display generation key of the view (or of the scopes while pending). */
+  generation: string;
+  /** `pending` only: continuous time the view has been pending. */
+  pendingMs?: number;
+  /** Non-error degradation lasted beyond D_max (180 s): UI upgrades to the "long time not updated" prompt. */
+  prolonged?: boolean;
+};
+
+export const DISPLAY_STATE_HEADER = "X-Lucy-Display-State";
+export const DISPLAY_AGE_HEADER = "X-Lucy-Display-Age-Ms";
+export const DISPLAY_GENERATION_HEADER = "X-Lucy-Display-Generation";
+export const DISPLAY_PENDING_HEADER = "X-Lucy-Display-Pending-Ms";
+export const DISPLAY_PROLONGED_HEADER = "X-Lucy-Display-Prolonged";
+const DEGRADE_RANK: Record<DisplayDegradeState, number> = { grace: 1, stale: 2, pending: 3 };
+
 const ALLOWED_NAMES = new Set<string>(SERVER_TIMING_NAMES);
 
 export type RequestTiming = {
@@ -28,7 +54,9 @@ export type RequestTiming = {
   durations: Map<ServerTimingName, number>;
   cache?: DisplayCacheState;
   /** P1-75：本次读取是受限降级（宽限内服务已提交快照），如实暴露，不改 `cache` 取值。 */
-  degraded?: "grace";
+  degraded?: DisplayDegradeState;
+  /** The full marker behind `degraded` (worst state of the request wins). */
+  degradeMark?: DisplayDegradeMark;
   builds: number;
 };
 
@@ -106,8 +134,37 @@ export function markDisplayCache(state: DisplayCacheState, timing = currentReque
   if (timing) timing.cache = state;
 }
 
-export function markDisplayDegraded(kind: "grace", timing = currentRequestTiming()): void {
-  if (timing) timing.degraded = kind;
+export function markDisplayDegraded(kind: DisplayDegradeState | DisplayDegradeMark, timing = currentRequestTiming()): void {
+  if (!timing) return;
+  const mark: DisplayDegradeMark = typeof kind === "string" ? { state: kind, generation: "" } : kind;
+  const held = timing.degradeMark;
+  if (held && DEGRADE_RANK[held.state] > DEGRADE_RANK[mark.state]) return;
+  if (held && held.state === mark.state) {
+    timing.degradeMark = {
+      ...mark,
+      ...(held.ageMs !== undefined || mark.ageMs !== undefined ? { ageMs: Math.max(held.ageMs ?? 0, mark.ageMs ?? 0) } : {}),
+      ...(held.prolonged || mark.prolonged ? { prolonged: true } : {})
+    };
+  } else {
+    timing.degradeMark = mark;
+  }
+  timing.degraded = timing.degradeMark.state;
+}
+
+/** Headers carrying the degraded-read marker (frozen contract; see {@link DisplayDegradeMark}). */
+export function degradeHeaders(mark: DisplayDegradeMark): Record<string, string> {
+  const headers: Record<string, string> = { [DISPLAY_STATE_HEADER]: mark.state };
+  if (mark.ageMs !== undefined && mark.state !== "pending") headers[DISPLAY_AGE_HEADER] = String(Math.max(0, Math.round(mark.ageMs)));
+  if (mark.generation) headers[DISPLAY_GENERATION_HEADER] = mark.generation;
+  if (mark.state === "pending" && mark.pendingMs !== undefined) headers[DISPLAY_PENDING_HEADER] = String(Math.max(0, Math.round(mark.pendingMs)));
+  if (mark.prolonged) headers[DISPLAY_PROLONGED_HEADER] = "1";
+  return headers;
+}
+
+/** Mark the request the handler/error handler is answering, even outside `withRequestTiming`. */
+export function markRequestDegraded(request: FastifyRequest, mark: DisplayDegradeMark): void {
+  const timing = requestTimings.get(request);
+  if (timing) markDisplayDegraded(mark, timing);
 }
 
 export function markDisplayBuild(timing = currentRequestTiming()): void {
@@ -144,6 +201,7 @@ export function registerEntryPerformanceTiming(app: FastifyInstance): void {
     const timing = requestTimings.get(request);
     if (timing && request.url.startsWith("/api/")) {
       reply.header("Server-Timing", formatServerTiming(timing));
+      if (timing.degradeMark) reply.headers(degradeHeaders(timing.degradeMark));
     }
     return payload;
   });

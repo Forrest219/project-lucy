@@ -302,8 +302,9 @@ describe("P1-66 explicit roster summary projection", () => {
       return slot;
     });
     try{
-      const response=await request(app.server).get("/api/admin/agents?view=roster&projection=summary").expect(permanent?503:200);
-      if(permanent)expect(response.body.error.code).toBe("DISPLAY_SNAPSHOT_BUSY");
+      const response=await request(app.server).get("/api/admin/agents?view=roster&projection=summary").expect(200);
+      // P1-75 v1.4: permanent corruption is an A-class refusal — 200 pending with no data, never a 503 or an empty list.
+      if(permanent){expect(response.body).toMatchObject({ok:true,data:null,display:{state:"pending"}});expect(response.headers["x-lucy-display-state"]).toBe("pending");}
       expect(agentRosterProjectionDiagnostics.read()).toEqual({builds:2,fullParses:0,sidecarParses:2});
     }finally{spy.mockRestore();await app.close();}
   });

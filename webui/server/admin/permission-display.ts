@@ -89,8 +89,90 @@ export async function resolvePermissionBatch(snapshot: AccessSnapshot, userIds: 
     return { results: new Map(), context: null, problem: snapshot.problem, policyInputs: null };
   }
   const context = await buildAdminPermissionContext(snapshot.runtimeConfig);
-  const results = await resolveEffectivePermissionsBatchForAdmin(userIds, context);
+  const results = await resolvePermissionBatchIncremental(userIds, context);
   return { results, context, policyInputs: displayPolicyInputsOf(context) };
+}
+
+// ─── REQ-0117 方向 1（委托人 2026-11-26 扩权本文件：展示快照重建缩面）────────
+//
+// 展示编译是输入的纯函数：单用户结果取决于「自身记录 + 其角色定义 + 全局输入
+// （source map、启用表、工具分类、defaults）」。输入逐字未变的对象复用上次编译
+// 结果（输出逐字一致），其余用户/角色正常编译。全局输入任一变化即整体失效。
+// 夹具规模（530 Agent 含绑定 2000 表角色的 Agent）下，这把重建从 >10s（超过
+// DISPLAY_BUILD_WAIT_BUDGET_MS，快照无限 pending）压回构建预算内；语义不变。
+
+const displayCompileMemo = new Map<string, unknown>();
+const DISPLAY_COMPILE_MEMO_CAP = 4096;
+
+function displayCompileMemoKeyPrefix(context: AdminPermissionContext): string {
+  const defaultsKey = stableJsonOf(context.config.defaults ?? null);
+  return `${context.sourceMapVersion}\u0000${context.enabledTablesDigest}\u0000${context.toolClassificationVersion}\u0000${defaultsKey}`;
+}
+
+function stableJsonOf(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJsonOf).join(",")}]`;
+  if (value && typeof value === "object") {
+    const out: string[] = [];
+    for (const key of Object.keys(value as Record<string, unknown>).sort()) {
+      out.push(`${JSON.stringify(key)}:${stableJsonOf((value as Record<string, unknown>)[key])}`);
+    }
+    return `{${out.join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+function memoPut(key: string, value: unknown): void {
+  if (displayCompileMemo.size >= DISPLAY_COMPILE_MEMO_CAP) {
+    const oldest = displayCompileMemo.keys().next().value;
+    if (oldest !== undefined) displayCompileMemo.delete(oldest);
+  }
+  displayCompileMemo.set(key, value);
+}
+
+/** Event-loop relief: yield between compile chunks so builds do not block in multi-second slices. */
+const yieldToEventLoop = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
+
+async function resolvePermissionBatchIncremental(
+  userIds: string[],
+  context: AdminPermissionContext
+): Promise<Map<string, RoleResolutionResult>> {
+  const prefix = displayCompileMemoKeyPrefix(context);
+  const roles = context.config.roles ?? {};
+  const usersById = new Map((context.config.users ?? []).filter((user) => user?.id).map((user) => [user.id, user]));
+  const keys = new Map<string, string>();
+  const reusable = new Map<string, RoleResolutionResult>();
+  const pending: string[] = [];
+  for (const userId of userIds) {
+    const user = usersById.get(userId);
+    if (!user) continue;
+    const roleList = resolveRoleIds(user);
+    const roleDefs = roleList.ok ? roleList.roleIds.map((id) => roles[id] ?? null) : [];
+    const key = `${prefix}\u0000user\u0000${userId}\u0000${stableJsonOf(user)}\u0000${stableJsonOf(roleDefs)}`;
+    keys.set(userId, key);
+    const cached = displayCompileMemo.get(key);
+    if (cached !== undefined) reusable.set(userId, cached as RoleResolutionResult);
+    else pending.push(userId);
+  }
+  const results = pending.length > 0
+    ? await resolveEffectivePermissionsBatchForAdmin(pending, context)
+    : new Map<string, RoleResolutionResult>();
+  const merged = new Map<string, RoleResolutionResult>();
+  let compiled = 0;
+  for (const userId of userIds) {
+    const reused = reusable.get(userId);
+    if (reused) {
+      merged.set(userId, reused);
+      continue;
+    }
+    const fresh = results.get(userId);
+    if (!fresh) continue;
+    merged.set(userId, fresh);
+    const key = keys.get(userId);
+    if (key) memoPut(key, fresh);
+    compiled += 1;
+    if (compiled % 20 === 0) await yieldToEventLoop();
+  }
+  return merged;
 }
 
 type CountInput = { conn: string; schema: string; table: string };
@@ -172,16 +254,13 @@ function sourceNamesFromCompilation(
   ];
 }
 
-function usersReferencingRole(config: YamlAccessConfig, roleId: string) {
-  return config.users.filter((user) => {
-    const resolved = resolveRoleIds(user);
-    return resolved.ok && resolved.roleIds.includes(roleId);
-  });
-}
-
 /**
  * Spec 174 / P1-58 §3.2 — one permission context compiles every list row. Runtime
  * authorization, dryRun and save paths must not read this output.
+ *
+ * REQ-0117 方向 1 — 角色行编译同样按输入缩面（记忆化）＋单遍用户索引＋分片让出，
+ * 使大目录（含绑定 2000 表角色的行）重建不超构建预算、不长时间阻塞事件循环。
+ * 输出与全量编译逐字一致。
  */
 export async function compileAdminRoleListRows(
   listConfig: YamlAccessConfig,
@@ -189,10 +268,34 @@ export async function compileAdminRoleListRows(
 ): Promise<{ rows: RoleListDisplayRow[]; policyInputs: DisplayPolicyInputs | null }> {
   if (!listConfig) return { rows: [], policyInputs: null };
   const context = await buildAdminPermissionContext(listConfig as unknown as AccessConfig);
+  const prefix = displayCompileMemoKeyPrefix(context);
+  // 单遍用户索引：roleId → 引用它的 users（保持 config.users 顺序，与逐条 filter 等价）。
+  const usersByRole = new Map<string, YamlAccessConfig["users"]>();
+  for (const user of listConfig.users ?? []) {
+    const resolved = resolveRoleIds(user);
+    if (!resolved.ok) continue;
+    for (const roleId of resolved.roleIds) {
+      let list = usersByRole.get(roleId);
+      if (!list) usersByRole.set(roleId, list = []);
+      list.push(user);
+    }
+  }
   const rows: RoleListDisplayRow[] = [];
+  let compiledCount = 0;
+  type MemoRow = { ok: boolean; reason?: string; sources?: Array<{ table?: string; sourceName?: string }> };
   for (const entry of entries) {
-    const compiled = await compileRoleForAdmin(entry.id, context);
-    const users = usersReferencingRole(listConfig, entry.id);
+    const key = `${prefix} role ${entry.id} ${stableJsonOf(entry.role ?? null)}`;
+    let row = displayCompileMemo.get(key) as MemoRow | undefined;
+    if (row === undefined) {
+      const compiled = await compileRoleForAdmin(entry.id, context);
+      row = compiled.ok
+        ? { ok: true, sources: compiled.sources }
+        : { ok: false, reason: compiled.reason };
+      memoPut(key, row);
+      compiledCount += 1;
+      if (compiledCount % 20 === 0) await yieldToEventLoop();
+    }
+    const users = usersByRole.get(entry.id) ?? [];
     const allow = entry.role.allow;
     rows.push({
       id: entry.id,
@@ -208,10 +311,10 @@ export async function compileAdminRoleListRows(
         enabled: user.enabled !== false,
         tokenCount: user.tokens?.length ?? 0
       })),
-      sourceCount: compiled.ok ? (compiled.sources?.length ?? 0) : 0,
-      sourceNames: sourceNamesFromCompilation(compiled),
-      invalid: !compiled.ok,
-      warnings: compiled.ok ? [] : [compiled.reason ?? "role_resolution_failed"]
+      sourceCount: row.ok ? (row.sources?.length ?? 0) : 0,
+      sourceNames: row.ok ? sourceNamesFromCompilation(row as never) : [],
+      invalid: !row.ok,
+      warnings: row.ok ? [] : [row.reason ?? "role_resolution_failed"]
     });
   }
   return { rows, policyInputs: displayPolicyInputsOf(context) };

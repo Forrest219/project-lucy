@@ -312,7 +312,7 @@ describe("Spec 174 T3 — invalidation matrix (DI-01..15/18)", () => {
     expect(deniedAgents.status).toBe(401);
   });
 
-  it("R1 unverified reconciliation: sources and agents are busy with no data, then serve the final disk state", async () => {
+  it("R1 unverified reconciliation: sources and agents answer 200 pending with no data, then serve the final disk state", async () => {
     await sources();
     await request(app.server).get("/api/admin/agents").expect(200);
     await request(app.server).get("/api/admin/roles").expect(200);
@@ -321,9 +321,12 @@ describe("Spec 174 T3 — invalidation matrix (DI-01..15/18)", () => {
     await writeFile(path.join(projectRoot, "webui", "config", "access.yaml"), ACCESS.replace("name: Li Si", "name: Li Si 3"), "utf8");
     for (const url of ["/api/sources", "/api/admin/agents", "/api/admin/roles"]) {
       const busy = await request(app.server).get(url);
-      expect(busy.status).toBe(503);
-      expect(busy.headers["retry-after"]).toBe("1");
-      expect(busy.body).toEqual({ ok: false, error: { code: "DISPLAY_SNAPSHOT_BUSY", message: "页面数据暂时无法完成刷新，请稍后重试。" } });
+      // P1-75 v1.4: A-class refusal → 200 + pending marker; no business data field, no Retry-After.
+      expect(busy.status).toBe(200);
+      expect(busy.headers["retry-after"]).toBeUndefined();
+      expect(busy.headers["x-lucy-display-state"]).toBe("pending");
+      expect(busy.headers["x-lucy-busy-reason"]).toBe("reconcile_failed");
+      expect(busy.body).toEqual({ ok: true, data: null, display: { state: "pending", generation: expect.any(String), pendingMs: expect.any(Number) } });
     }
     await startDisplayReconciler({ metadataIntervalMs: 60_000, fullDigestIntervalMs: 60_000 });
     const recovered = await sources();

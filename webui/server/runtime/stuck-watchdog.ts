@@ -20,7 +20,17 @@
 export type StuckPhase = "normal" | "stuck" | "unhealthy";
 
 /** `upstream` = the KTX daemon itself is not answering; `io` = only the local file-I/O pool is backlogged. */
-export type ProbeOutcome = { ok: boolean; ms: number; detail?: string; kind?: "upstream" | "io" };
+export type ProbeOutcome = {
+  ok: boolean;
+  ms: number;
+  detail?: string;
+  kind?: "upstream" | "io";
+  /**
+   * P1-75 §2.5.1 / P1-81 §3 — the read was answered as a degraded 200. `grace`, `stale` and `pending`
+   * are never healthy evidence: a probe carrying this is a failure even if it reports `ok: true`.
+   */
+  degraded?: "grace" | "stale" | "pending";
+};
 
 export type RecoverTargets = { display: boolean; mcp: boolean };
 
@@ -115,18 +125,24 @@ export type StuckSnapshot = {
   stuckDomain: "mcp" | "both" | null;
 };
 
+/** A degraded read (grace / stale / pending) is not fresh success, whatever `ok` the probe claimed. */
+function normalizeDegraded(outcome: ProbeOutcome): ProbeOutcome {
+  if (!outcome.degraded) return outcome;
+  return { ...outcome, ok: false, detail: outcome.detail ?? `degraded_${outcome.degraded}` };
+}
+
 /** Bound a probe so a hung dependency cannot hang the watchdog itself. */
 export async function runProbeWithTimeout(probe: () => Promise<ProbeOutcome>, timeoutMs: number): Promise<ProbeOutcome> {
   const started = performance.now();
   let timer: NodeJS.Timeout | undefined;
   try {
-    return await Promise.race([
+    return normalizeDegraded(await Promise.race([
       probe(),
       new Promise<ProbeOutcome>((resolve) => {
         timer = setTimeout(() => resolve({ ok: false, ms: Math.round(performance.now() - started), detail: `probe_timeout_${timeoutMs}ms` }), timeoutMs);
         timer.unref?.();
       })
-    ]);
+    ]));
   } catch (error) {
     return { ok: false, ms: Math.round(performance.now() - started), detail: error instanceof Error ? error.message.slice(0, 120) : "probe_error" };
   } finally {

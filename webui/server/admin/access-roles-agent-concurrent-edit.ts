@@ -30,7 +30,7 @@ import { stringifySafe } from "../yaml-safe";
 import { requireWebuiAuthHook } from "../auth/guard.js";
 import { readAccessRecoveryState } from "../access-recovery.js";
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { withPublishCoordinator, type PublishEntryKind } from "../publish-coordinator.js";
+import { withPublishCoordinator, PublishCoordinatorBusyError, type PublishEntryKind } from "../publish-coordinator.js";
 import {
   ACCESS_OBJECT_VERSION_VOCABULARY,
   type BaseObjectVersion,
@@ -250,8 +250,15 @@ export async function runRolesAgentPublishWindow<T>(
   try { result = await withPublishCoordinator(kind, () => fn(facade), { projectRoot }); }
   catch (error) {
     if ((error as { code?: string }).code !== "PUBLISH_COORDINATOR_BUSY") throw error;
-    return reply.status(503).send({ ok: false, error: { code: "PUBLISH_COORDINATOR_BUSY",
-      message: "有变更正在保存，请稍后重试。" } });
+    // REQ-0117 SC-03 — an honest refusal carries Retry-After plus the current holder
+    // facts (the busy error message embeds kind / operationId / acquiredAt / phase).
+    const busy = error as PublishCoordinatorBusyError;
+    const retryAfter = typeof busy.retryAfterSeconds === "number" ? busy.retryAfterSeconds : 5;
+    return reply.status(503)
+      .header("Retry-After", String(retryAfter))
+      .send({ ok: false, error: { code: "PUBLISH_COORDINATOR_BUSY",
+        message: "有变更正在保存，请稍后重试。",
+        detail: { holder: busy.holder, requestedKind: busy.requestedKind, retryAfterSeconds: retryAfter } } });
   }
   return pending ? reply.send(pending.payload) : result;
 }

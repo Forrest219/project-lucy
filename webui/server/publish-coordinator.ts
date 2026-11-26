@@ -124,7 +124,12 @@ export class PublishCoordinatorBusyError extends Error {
   readonly code = "PUBLISH_COORDINATOR_BUSY";
   readonly statusCode = 503;
 
-  constructor(readonly holder: PublishLockHolder | null, readonly requestedKind: PublishEntryKind) {
+  constructor(
+    readonly holder: PublishLockHolder | null,
+    readonly requestedKind: PublishEntryKind,
+    /** Present when the refusal came from the bounded-wait path (OQ-2: Retry-After 5s). */
+    readonly retryAfterSeconds?: number
+  ) {
     super(formatPublishWindowBusy(holder, requestedKind));
     this.name = "PublishCoordinatorBusyError";
   }
@@ -138,9 +143,63 @@ export interface PublishCoordinatorOptions {
   now?: () => number;
   /** Optional operation id, recorded in the lock file for readable busy messages. */
   operationId?: string;
+  /**
+   * REQ-0117 方向 2 — bounded-wait overrides for `role_policy_save` / `agent_save`.
+   * Omitted fields fall back to `publishWaitConfigFromEnv()`. `wait: false` restores the
+   * legacy busy-immediately contract (also the behaviour for every other entry kind).
+   */
+  wait?: Partial<PublishWaitConfig> | false;
 }
 
 const DEFAULT_STALE_AFTER_MS = 30 * 60 * 1000;
+
+/**
+ * REQ-0117 方向 2 — only the role / agent save kinds get the bounded wait; the other seven
+ * semantic write entry points and every direct `acquirePublishCoordinatorLock` caller keep
+ * the original busy-immediately contract (Spec「与既有 Spec 的关系」精确限定修订范围).
+ */
+const BOUNDED_WAIT_KINDS: ReadonlySet<PublishEntryKind> = new Set(["role_policy_save", "agent_save"]);
+
+/** OQ-2 裁定：maxWaiters=1、等待上限 10–15s（本实现默认 15s）、Retry-After 5s；均可经环境覆盖。 */
+export interface PublishWaitConfig {
+  budgetMs: number;
+  maxWaiters: number;
+  retryAfterSeconds: number;
+  pollIntervalMs: number;
+}
+
+const WAIT_ENV_DEFAULTS: PublishWaitConfig = {
+  budgetMs: 15_000,
+  maxWaiters: 1,
+  retryAfterSeconds: 5,
+  pollIntervalMs: 50
+};
+
+function envNumber(value: string | undefined, fallback: number): number {
+  const parsed = Number(value?.trim());
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+export function publishWaitConfigFromEnv(env: NodeJS.ProcessEnv = process.env): PublishWaitConfig {
+  return {
+    budgetMs: Math.max(0, envNumber(env.LUCY_PUBLISH_WAIT_BUDGET_MS, WAIT_ENV_DEFAULTS.budgetMs)),
+    maxWaiters: Math.max(1, Math.floor(envNumber(env.LUCY_PUBLISH_MAX_WAITERS, WAIT_ENV_DEFAULTS.maxWaiters))),
+    retryAfterSeconds: Math.max(1, Math.floor(envNumber(env.LUCY_PUBLISH_RETRY_AFTER_SECONDS, WAIT_ENV_DEFAULTS.retryAfterSeconds))),
+    pollIntervalMs: Math.max(1, Math.floor(envNumber(env.LUCY_PUBLISH_WAIT_POLL_MS, WAIT_ENV_DEFAULTS.pollIntervalMs)))
+  };
+}
+
+/** In-process bounded-waiter count. Single instance / single process boundary (DEVELOPMENT). */
+let inProcessWaiters = 0;
+
+export function inProcessPublishWaitersForTests(): number {
+  return inProcessWaiters;
+}
+
+const sleepMs = (ms: number) => new Promise<void>((resolve) => {
+  const timer = setTimeout(resolve, Math.max(0, ms));
+  timer.unref?.();
+});
 
 /**
  * Marks the current async context as already holding the coordinator, so nested calls
@@ -474,6 +533,14 @@ export async function updatePublishCoordinatorLockPayload(
  * Run `fn` inside the shared publish window.
  *
  * Throws `PublishCoordinatorBusyError` when another live holder owns the window.
+ *
+ * REQ-0117 方向 2 — for `kind ∈ {role_policy_save, agent_save}` a competing writer waits a
+ * bounded time for the window (at most `maxWaiters` in-process waiters) instead of being
+ * refused immediately; on timeout / over-queue it still throws `PublishCoordinatorBusyError`
+ * (with `retryAfterSeconds`) and the route layer maps it to a 503 with `Retry-After`.
+ * The wait re-attempts `acquirePublishCoordinatorLock` each poll: stale-lock takeover stays
+ * inside acquire — there is no stale special-case that could fall into the critical section.
+ * After acquiring, the caller's own fresh read + version checks run unchanged.
  */
 export async function withPublishCoordinator<T>(
   kind: PublishEntryKind,
@@ -492,11 +559,59 @@ export async function withPublishCoordinator<T>(
     operationId: options.operationId
   });
 
-  if (!acquired) {
-    throw new PublishCoordinatorBusyError(
-      await readPublishCoordinatorLock(options.projectRoot),
-      kind
-    );
+  let currentHolder: PublishLockHolder;
+  if (acquired) {
+    currentHolder = holder;
+  } else {
+    const waitConfig = boundedWaitConfigFor(kind, options);
+    if (!waitConfig) {
+      throw new PublishCoordinatorBusyError(
+        await readPublishCoordinatorLock(options.projectRoot),
+        kind
+      );
+    }
+    // The candidate holder returned by a failed acquire is OUR OWN (pid, fresh timestamp),
+    // never the current holder: holder facts for the error / the wait target are re-read
+    // from the lock file.
+    if (inProcessWaiters >= waitConfig.maxWaiters) {
+      throw new PublishCoordinatorBusyError(
+        await readPublishCoordinatorLock(options.projectRoot),
+        kind,
+        waitConfig.retryAfterSeconds
+      );
+    }
+    const deadline = Date.now() + waitConfig.budgetMs;
+    inProcessWaiters += 1;
+    try {
+      let acquiredLater: PublishLockHolder | null = null;
+      for (;;) {
+        const attempt = await acquirePublishCoordinatorLock(options.projectRoot, kind, {}, {
+          staleAfterMs: options.staleAfterMs,
+          now: options.now,
+          operationId: options.operationId
+        });
+        if (attempt.acquired) {
+          acquiredLater = attempt.holder;
+          break;
+        }
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) {
+          throw new PublishCoordinatorBusyError(
+            await readPublishCoordinatorLock(options.projectRoot),
+            kind,
+            waitConfig.retryAfterSeconds
+          );
+        }
+        // Wait on the CURRENT lock (re-read), bounded by the deadline. No stale
+        // special-casing: a crashed holder is taken over by acquire itself.
+        const current = await readPublishCoordinatorLock(options.projectRoot);
+        if (!current) continue;
+        await sleepMs(Math.min(waitConfig.pollIntervalMs, remaining));
+      }
+      currentHolder = acquiredLater as PublishLockHolder;
+    } finally {
+      inProcessWaiters -= 1;
+    }
   }
 
   try {
@@ -506,8 +621,19 @@ export async function withPublishCoordinator<T>(
     await assertSemanticWritesOpen(options.projectRoot);
     return await coordinatorHeld.run(true, fn);
   } finally {
-    await releasePublishCoordinatorLock(options.projectRoot, holder);
+    await releasePublishCoordinatorLock(options.projectRoot, currentHolder);
   }
+}
+
+/** Resolved wait config for `kind`, or `null` when `kind` must refuse immediately. */
+function boundedWaitConfigFor(
+  kind: PublishEntryKind,
+  options: PublishCoordinatorOptions
+): PublishWaitConfig | null {
+  if (!BOUNDED_WAIT_KINDS.has(kind)) return null;
+  if (options.wait === false) return null;
+  const env = publishWaitConfigFromEnv();
+  return options.wait ? { ...env, ...options.wait } : env;
 }
 
 /**

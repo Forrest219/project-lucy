@@ -1638,7 +1638,7 @@ describe("P1-75 roster stays readable during a note-only save", () => {
     await app.close();
   });
 
-  it("a concurrent second save is rejected by the publish window and the first stays consistent", async () => {
+  it("REQ-0117: a concurrent second save waits for the publish window and both saves stay consistent", async () => {
     const app = buildServer();
     await app.ready();
     await seedNote(app, "旧备注");
@@ -1646,23 +1646,25 @@ describe("P1-75 roster stays readable during a note-only save", () => {
     let second: Promise<unknown> | undefined;
     agentCommitTestHooks.afterCapture = async () => {
       agentCommitTestHooks.afterCapture = null;
+      // REQ-0117 方向 2：第二写对重叠持有者做有界等待。不得在钩子内 await：
+      // 那会让第一写与等待中的第二写互锁（第一写要等钩子返回，第二写要等第一写放锁）。
+      // 这里只发起，钩子返回后第一写正常结算，第二写随后取得锁并串行成交。
       second = new Promise((resolve) => {
         request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch: { note: "第二次" } }).end((_err, res) => resolve(res));
       });
-      await second;
     };
     await request(app.server).patch("/api/admin/agents/zhangsan").send({ dryRun: false, patch: { note: "第一次" } }).expect(200);
-    const secondRes = (await second) as { status: number; body: { error: { code: string } } };
-    expect(secondRes.status).toBe(503);
-    expect(secondRes.body.error.code).toBe("PUBLISH_COORDINATOR_BUSY");
-    expect(noteOf((await request(app.server).get(ROSTER).expect(200)).body)).toBe("第一次");
+    const secondRes = (await second) as { status: number; body: { error?: { code: string } } };
+    expect(secondRes.status).toBe(200);
+    expect(secondRes.body.error?.code).toBeUndefined();
+    expect(noteOf((await request(app.server).get(ROSTER).expect(200)).body)).toBe("第二次");
     expect(activeCommittedView("agent-permissions")).toBeNull();
     await app.close();
   });
 
   // ── failure paths: eligibility is withdrawn BEFORE rollback / recovery runs ──
   describe("failure paths", () => {
-    type Probe = { status: number; note?: string };
+    type Probe = { status: number; note?: string; pending?: true };
     /** Record whether the committed view is still eligible at every rollback-capable disk write. */
     async function watchDiskWrites() {
         const eligibleAtWrite: boolean[] = [];
@@ -1680,6 +1682,8 @@ describe("P1-75 roster stays readable during a note-only save", () => {
     }
     const probe = async (app: ReturnType<typeof buildServer>): Promise<Probe> => {
       const res = await request(app.server).get(ROSTER);
+      // P1-75 v1.4: an unverifiable view answers 200 `pending` with `data: null` (no note, no list).
+      if (res.status === 200 && res.body.data === null) return { status: 200, pending: true };
       return { status: res.status, note: res.status === 200 ? noteOf(res.body) : undefined };
     };
     const accessYaml = () => readFile(path.join(projectRoot, "webui/config/access.yaml"), "utf8");
@@ -1761,7 +1765,7 @@ describe("P1-75 roster stays readable during a note-only save", () => {
       await app.close();
     });
 
-    it("unverifiable snapshot during the write: bounded 503 (no stale 200), then the same process recovers", async () => {
+    it("unverifiable snapshot during the write: bounded 200 pending without data (no stale view), then the same process recovers", async () => {
       const app = buildServer();
       await warmRoster(app);
       const seen: Array<Probe & { ms: number }> = [];
@@ -1778,7 +1782,8 @@ describe("P1-75 roster stays readable during a note-only save", () => {
       } finally {
         await startDisplayReconciler();
       }
-      expect(seen[0].status).toBe(503);
+      expect(seen[0]).toMatchObject({ status: 200, pending: true });
+      expect(seen[0].note).toBeUndefined();
       expect(seen[0].ms).toBeLessThan(3000);
       const started = Date.now();
       expect(await probe(app)).toEqual({ status: 200, note: "恢复备注" });

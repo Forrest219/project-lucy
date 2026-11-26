@@ -10,6 +10,7 @@ import { SelectField } from "../components/SelectField";
 import { StatusBadge } from "../components/StatusBadge";
 import { PageHeader } from "../components/PageHeader";
 import { AsyncRegion, asyncStatus } from "../components/AsyncRegion";
+import { DisplayDegradedNotice, displayRefreshing } from "../components/DisplayDegradedNotice";
 import { DisplayRefreshNotice } from "../components/DisplayRefreshNotice";
 import { RowMoreMenu } from "../components/RowMoreMenu";
 import {
@@ -24,7 +25,8 @@ import {
   type CatalogNavigationEventType
 } from "../lib/catalogNavigationUsage";
 import type { CompletionStatus, SourceSummary, SemanticBatchStaging } from "../lib/types";
-import { sourcesQueryOptions, useDisplayFactsPending } from "../lib/displayQueryOptions";
+import { DISPLAY_REGION_PATHS, sourcesQueryOptions, useDisplayFactsPending } from "../lib/displayQueryOptions";
+import { queryKeys } from "../lib/queryKeys";
 import { apiPost } from "../lib/apiClient";
 import { toast } from "sonner";
 
@@ -478,6 +480,14 @@ export function Catalog() {
       <PageHeader
         title="语义资产"
         description="管理表、字段、指标、分群与关联等结构化语义资产。"
+      />
+
+      <DisplayDegradedNotice
+        paths={[DISPLAY_REGION_PATHS.sources]}
+        queryKeys={[queryKeys.sources]}
+        onRefresh={() => sourcesQuery.refetch()}
+        refreshing={displayRefreshing(sourcesQuery)}
+        testId="catalog-display-degraded-notice"
       />
 
       <section className="pl-catalog-workspace">

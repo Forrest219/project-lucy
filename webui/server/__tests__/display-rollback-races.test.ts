@@ -178,6 +178,11 @@ function finalOrBusy(res: request.Response) {
     return null;
   }
   expect(res.status).toBe(200);
+  // P1-75 v1.4: a read racing the write may answer 200 `pending` — no data at all, never partial or intermediate content.
+  if (res.body.data === null) {
+    expect(res.body.display.state).toBe("pending");
+    return null;
+  }
   return res.body;
 }
 

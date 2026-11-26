@@ -2,7 +2,8 @@ import { useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { adminRolesQueryOptions, formatListLoadError } from "../../lib/displayQueryOptions";
+import { adminRolesQueryOptions, DISPLAY_REGION_PATHS, formatListLoadError } from "../../lib/displayQueryOptions";
+import { DisplayDegradedNotice, displayRefreshing } from "../../components/DisplayDegradedNotice";
 import type { Role } from "../../lib/types";
 import { PageHeader } from "../../components/PageHeader";
 import { MetricCard } from "../../components/MetricCard";
@@ -170,7 +171,7 @@ export function RoleList() {
   const [tableFilter, setTableFilter] = useState("");
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
-  const { data, isLoading, error, refetch } = useQuery({
+  const { data, isLoading, isFetching, failureCount, error, refetch } = useQuery({
     ...adminRolesQueryOptions<RolesResponse>()
   });
 
@@ -245,7 +246,24 @@ export function RoleList() {
     [roles, tableFilter]
   );
 
-  if (isLoading) return <div className="pl-notice">加载中…</div>;
+  const degradedNotice = (
+    <DisplayDegradedNotice
+      paths={[DISPLAY_REGION_PATHS.roles]}
+      queryKeys={[["admin", "roles"]]}
+      onRefresh={() => refetch()}
+      refreshing={displayRefreshing({ isFetching, failureCount })}
+      testId="role-list-display-degraded-notice"
+    />
+  );
+
+  if (isLoading) {
+    return (
+      <>
+        {degradedNotice}
+        <div className="pl-notice">加载中…</div>
+      </>
+    );
+  }
   if (error) {
     return (
       <div className="pl-page-stack">
@@ -293,6 +311,8 @@ export function RoleList() {
           </Link>
         }
       />
+
+      {degradedNotice}
 
       <div className="pl-metric-grid" data-testid="role-metric-grid">
         {METRIC_ITEMS.map((metric) => (

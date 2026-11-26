@@ -64,6 +64,7 @@ import { matchedActivePublishWriteStages } from "../publish-coordinator.js";
 import { isControlPlaneTool } from "../ops/control-plane.js";
 import { invokeOpsTool, opsToolDescriptors } from "../ops/ops-tools.js";
 import { listSources } from "../semantic-layer.js";
+import { detectStandaloneOverlayConflicts } from "../semantic-overlay-lifecycle.js";
 import { caliberBindingsPath, loadContentPaths } from "../paths.js";
 import {
   firstConnectionIdFromArgs,
@@ -1895,6 +1896,8 @@ async function lucyExplainQuery(identity: Identity, args: unknown): Promise<Reco
     requestedSources,
     finalRowsBySource: permissions.ok ? permissions.permissions.finalRowsBySource : undefined
   });
+  // OQ-3 — 检测同名 standalone per-table 文件遮蔽 Schema Manifest 的冲突（仅冲突时输出加法字段）
+  const sourceConflicts = await detectStandaloneOverlayConflicts(requestedSources).catch(() => []);
 
   return {
     ...rowPolicy,
@@ -1903,6 +1906,9 @@ async function lucyExplainQuery(identity: Identity, args: unknown): Promise<Reco
     executed: false,
     upstreamTool: "sl_query",
     requestedSources,
+    ...(sourceConflicts.length > 0
+      ? { sourceConflict: sourceConflicts[0], sourceConflicts }
+      : {}),
     resultRows: null,
     sampleRows: null,
     aggregateResults: null,

@@ -21,7 +21,13 @@ import {
   type ServiceHealthSummary,
   severityLabelBySeverity
 } from "../lib/opsDashboard";
-import { adminAgentsIdentityQueryOptions, projectQueryOptions, sourcesQueryOptions } from "../lib/displayQueryOptions";
+import { DisplayDegradedNotice, displayRefreshing } from "../components/DisplayDegradedNotice";
+import {
+  adminAgentsIdentityQueryOptions,
+  DISPLAY_REGION_PATHS,
+  projectQueryOptions,
+  sourcesQueryOptions
+} from "../lib/displayQueryOptions";
 
 type AgentsResponse = { agents: Agent[] };
 
@@ -603,6 +609,14 @@ export function Onboarding() {
             </button>
           </div>
         }
+      />
+
+      <DisplayDegradedNotice
+        paths={[DISPLAY_REGION_PATHS.project, DISPLAY_REGION_PATHS.sources, DISPLAY_REGION_PATHS.agents]}
+        queryKeys={[queryKeys.project, queryKeys.sources, queryKeys.adminAgents]}
+        onRefresh={() => Promise.allSettled([projectQuery.refetch(), sourcesQuery.refetch(), agentsQuery.refetch()])}
+        refreshing={displayRefreshing(projectQuery, sourcesQuery, agentsQuery)}
+        testId="onboarding-display-degraded-notice"
       />
 
       <AsyncRegion status={statusRegion.status} label="系统状态" error={statusRegion.error} onRetry={statusRegion.retry} minHeight={88}>

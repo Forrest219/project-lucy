@@ -214,4 +214,18 @@ describe("listSources — skipAuthorizedCounts（P1-37 U4：拒绝路径不为�
     expect(strip(light.tables)).toEqual(strip(full.tables));
     expect(findSummary(full.tables, "superstore_orders").authorizedAgentCount).toBeGreaterThan(0);
   });
+
+  it("按连接一次性 readdir 只读取真实存在的 overlay，跳过隐藏文件与无 overlay 表", async () => {
+    const tableNames = Array.from({ length: 50 }, (_, idx) => `tbl_${String(idx).padStart(3, "0")}`);
+    await writeSchema(projectRoot, "dataforai", tableNames);
+    await writeOverlay(projectRoot, "tbl_007", "name: tbl_007\ngrain: [id]\n");
+    // 隐藏文件不应被当成普通 overlay
+    await writeFile(path.join(projectRoot, "semantic-layer", "mysql-aliyun", ".hidden.yaml"), "name: hidden\n", "utf8");
+
+    const result = await listSourcesWithManifests(projectRoot, { skipAuthorizedCounts: true });
+    expect(result.tables).toHaveLength(50);
+    expect(findSummary(result.tables, "tbl_007").hasGrain).toBe(true);
+    expect(findSummary(result.tables, "tbl_000").hasGrain).toBe(false);
+    expect(findSummary(result.tables, "tbl_000").semanticUpdatedAtSource).toBe("manifest");
+  });
 });

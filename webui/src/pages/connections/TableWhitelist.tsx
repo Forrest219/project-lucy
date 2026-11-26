@@ -14,7 +14,9 @@ import type {
 } from "../../lib/types";
 import { DiffViewer } from "../../components/DiffViewer";
 import { PageHeader } from "../../components/PageHeader";
-import { sourcesQueryOptions } from "../../lib/displayQueryOptions";
+import { DisplayDegradedNotice, displayRefreshing } from "../../components/DisplayDegradedNotice";
+import { DISPLAY_REGION_PATHS, sourcesQueryOptions } from "../../lib/displayQueryOptions";
+import { useDisplayInfo } from "../../lib/displayState";
 import {
   canonicalEnabledTables,
   enabledNameMatchesRow,
@@ -288,6 +290,10 @@ export function TableWhitelist() {
   const sourcesQuery = useQuery({
     ...sourcesQueryOptions()
   });
+  // P1-75 X5: under stale／pending sources the page keeps P1-80's three-state honesty —
+  // dangerous actions (移出无效启用) stay unreachable until a fresh read.
+  const sourcesDegraded = useDisplayInfo([DISPLAY_REGION_PATHS.sources]);
+  const sourcesUnsettled = sourcesDegraded?.state === "stale" || sourcesDegraded?.state === "pending";
 
   const tablesQueries = useQueries({
     queries: connections.map((c) => ({
@@ -501,8 +507,8 @@ export function TableWhitelist() {
   }, [connectionFilteredRows, search, schemaFilter]);
 
   const tablesListNotReady = useMemo(
-    () => connectionFilteredRows.some(({ tablesLoadState }) => tablesLoadState !== "ready"),
-    [connectionFilteredRows]
+    () => sourcesUnsettled || connectionFilteredRows.some(({ tablesLoadState }) => tablesLoadState !== "ready"),
+    [connectionFilteredRows, sourcesUnsettled]
   );
 
   const showFocusedMissingManifest =
@@ -880,6 +886,15 @@ export function TableWhitelist() {
       <PageHeader
         title="启用表范围"
         description="配置各连接进入语义层的表范围，并审阅保存前变更。"
+      />
+
+      <DisplayDegradedNotice
+        paths={[DISPLAY_REGION_PATHS.sources]}
+        queryKeys={[queryKeys.sources]}
+        onRefresh={() => sourcesQuery.refetch()}
+        refreshing={displayRefreshing(sourcesQuery)}
+        pendingText="正在读取表清单…"
+        testId="whitelist-display-degraded-notice"
       />
 
       <section className="pl-panel">

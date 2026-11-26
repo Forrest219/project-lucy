@@ -114,6 +114,75 @@ function classifyPerTableYaml(text: string): { kind: PerTableOverlayKind; physic
   return { kind, physicalTable };
 }
 
+export type StandaloneOverlayConflict = {
+  connectionId: string;
+  sourceName: string;
+  overlayFilePath: string;
+  overlayKind: "standalone";
+  manifestPhysicalTable: string;
+  overlayPhysicalTable: string | null;
+  physicalTableMismatch: boolean;
+  warning: string;
+};
+
+/**
+ * OQ-3 — 检测 requestedSources 中是否存在同名 standalone per-table 文件（含 `table:`/`sql:`）
+ * 正在遮蔽 Schema Manifest 定义，供 `lucy_explain_query` 输出加法告警字段。
+ * 业务合并型 overlay（不含 `table:`/`sql:`）不构成遮蔽冲突。
+ */
+export async function detectStandaloneOverlayConflicts(
+  requestedSources: ReadonlyArray<{
+    connectionId?: string;
+    sourceName?: string;
+    physicalTable?: string;
+  }>
+): Promise<StandaloneOverlayConflict[]> {
+  if (requestedSources.length === 0) return [];
+  const paths = await loadContentPaths();
+  const seen = new Set<string>();
+  const conflicts: StandaloneOverlayConflict[] = [];
+  for (const source of requestedSources) {
+    const conn = typeof source.connectionId === "string" ? source.connectionId.trim() : "";
+    const name = typeof source.sourceName === "string" ? source.sourceName.trim() : "";
+    if (!conn || !name) continue;
+    const dedupeKey = `${conn.toLowerCase()}\0${name.toLowerCase()}`;
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    try {
+      assertSafeSegment(conn, "connection");
+      assertSafeSegment(name, "sourceName");
+    } catch {
+      continue;
+    }
+    const relPath = path.posix.join("semantic-layer", conn, `${name}.yaml`);
+    const absPath = path.join(paths.semanticLayer, conn, `${name}.yaml`);
+    let text: string;
+    try {
+      text = await readFile(absPath, "utf8");
+    } catch {
+      continue;
+    }
+    const { kind, physicalTable: overlayPhysicalTable } = classifyPerTableYaml(text);
+    if (kind !== "standalone") continue;
+    const manifestPhysicalTable = typeof source.physicalTable === "string" ? source.physicalTable : "";
+    const physicalTableMismatch =
+      overlayPhysicalTable !== null &&
+      manifestPhysicalTable !== "" &&
+      overlayPhysicalTable.trim().toLowerCase() !== manifestPhysicalTable.trim().toLowerCase();
+    conflicts.push({
+      connectionId: conn,
+      sourceName: name,
+      overlayFilePath: relPath,
+      overlayKind: "standalone",
+      manifestPhysicalTable,
+      overlayPhysicalTable,
+      physicalTableMismatch,
+      warning: `存在同名 standalone 文件 ${relPath}（含 table/sql），运行时 lucy_query 将使用该文件覆盖 Schema Manifest 定义；可经 DELETE /api/semantic-assets/overlay/${conn}/${name} 清理`
+    });
+  }
+  return conflicts;
+}
+
 /** 某连接全部 Schema Manifest 的 `tables` 键 → 表名到 Manifest 相对路径的映射。 */
 async function manifestTablePathsForConnection(
   paths: { semanticLayer: string },

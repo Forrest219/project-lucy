@@ -1,3 +1,11 @@
+import {
+  clearDisplayInfo,
+  parseDisplayEnvelope,
+  parseDisplayHeaders,
+  setDisplayInfo,
+  type DisplayInfo
+} from "./displayState";
+
 type ApiSuccess<T> = {
   ok: true;
   data: T;
@@ -23,6 +31,8 @@ export class ApiError extends Error {
   requestId?: string;
   serverTiming?: string;
   retryAfterSeconds?: number;
+  /** `X-Lucy-Busy-Reason` of a 503 (fixed enum, diagnostics only — never user-visible). */
+  busyReason?: string;
 
   constructor(error: ApiFailure["error"], data?: unknown) {
     super(error.message);
@@ -31,6 +41,27 @@ export class ApiError extends Error {
     this.detail = error.detail;
     this.data = data;
   }
+}
+
+/**
+ * P1-75 X5 — a degraded read answered 200 `pending` (`data: null`): no servable view yet.
+ * Thrown so the query stays loading and the page shows its skeleton / 「正在加载…」 — `data: null`
+ * is never handed to a consumer, so it can never render as an empty list.
+ */
+export const DISPLAY_PENDING = "DISPLAY_PENDING";
+
+export class DisplayPendingError extends ApiError {
+  info: DisplayInfo;
+
+  constructor(info: DisplayInfo) {
+    super({ code: DISPLAY_PENDING, message: "正在加载…" });
+    this.name = "DisplayPendingError";
+    this.info = info;
+  }
+}
+
+export function isDisplayPendingError(error: unknown): error is DisplayPendingError {
+  return error instanceof DisplayPendingError;
 }
 
 /** Internal code — never show verbatim in user-visible copy. */
@@ -78,6 +109,8 @@ function attachResponseMeta(error: ApiError, response: Response): ApiError {
   error.serverTiming = responseHeader(response, "server-timing") ?? undefined;
   const retryAfter = parseRetryAfterSeconds(responseHeader(response, "retry-after"));
   if (retryAfter !== undefined) error.retryAfterSeconds = retryAfter;
+  const busyReason = responseHeader(response, "x-lucy-busy-reason")?.trim();
+  if (busyReason) error.busyReason = busyReason;
   return error;
 }
 
@@ -99,7 +132,12 @@ export function userFacingApiErrorMessage(error: unknown): string {
   return error.requestId ? `${base}（请求编号：${error.requestId}）` : base;
 }
 
-/** Bounded read retry (display lists): BUSY or HTML gateway only — not auth, conflict, or stale. */
+/**
+ * Bounded read retry (display lists), at most one extra attempt: HTML gateway faults and the
+ * B-class `DISPLAY_SNAPSHOT_BUSY` (`write_pending`; unknown reason keeps the legacy retry).
+ * A-class refusals no longer exist as 503 (P1-75: they are 200 grace/stale/pending, see
+ * DisplayPendingError); C-class `DISPLAY_RECONCILIATION_FAILED` and auth/conflict/stale are never retried.
+ */
 export function isRetryableDisplayReadError(error: unknown): boolean {
   if (!(error instanceof ApiError)) return false;
   if (error.code === STALE_RESPONSE || error.code === WRITE_STALE_RESPONSE) return false;
@@ -113,7 +151,8 @@ export function isRetryableDisplayReadError(error: unknown): boolean {
   ) {
     return false;
   }
-  return error.code === "DISPLAY_SNAPSHOT_BUSY" || error.code === GATEWAY_UNAVAILABLE;
+  if (error.code === "DISPLAY_SNAPSHOT_BUSY") return !error.busyReason || error.busyReason === "write_pending";
+  return error.code === GATEWAY_UNAVAILABLE;
 }
 
 /**
@@ -148,6 +187,7 @@ export function currentAuthEpoch(): number {
 
 export function bumpAuthEpoch(): void {
   authEpoch += 1;
+  clearDisplayInfo();
 }
 
 export function currentDisplayWriteEpoch(scope: DisplayReadScope = "sources"): number {
@@ -318,6 +358,12 @@ async function apiRequest<T>(path: string, init: RequestInit, options: ApiReques
   if (envelope.ok === false) {
     rejectIfAuthLost(response, envelope);
     throw attachResponseMeta(new ApiError(envelope.error, envelope.data), response);
+  }
+  // P1-75 X5: record grace/stale/pending (headers first, pending body as fallback); no header = fresh.
+  const display = parseDisplayHeaders(response.headers) ?? parseDisplayEnvelope((envelope as { display?: unknown }).display);
+  if (scope || display) setDisplayInfo(path, display);
+  if (display?.state === "pending" && (envelope.data === null || envelope.data === undefined)) {
+    throw new DisplayPendingError(display);
   }
   if (scope && awaitingFreshRead[scope]) {
     awaitingFreshRead[scope] = false;

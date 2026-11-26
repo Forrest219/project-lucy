@@ -91,6 +91,7 @@ const DEFAULT_USAGE_CONDITION = defaultUsageConditionSql().sql;
 const EVAL_PROBE_CONDITION = evalProbeConditionSql().sql;
 import { readAuditWriteHealth, type AuditWriteHealthSnapshot } from "../proxy/audit-write-health.js";
 import { countEntryPerf, markDisplayCache, timeAsync, withRequestTiming } from "../entry-performance-timing.js";
+import { displayBudgetFor } from "../display-http.js";
 import { readAccessSnapshot, resolvePermissionBatch, type PermissionBatch } from "./permission-display.js";
 import { generationKey, hasPendingDisplayWrite } from "../display-generation.js";
 import {
@@ -1587,7 +1588,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
       return reply.status(400).send({ ok: false, error: { code: "BAD_REQUEST", message: "请选择有效的 Agent 名册读取方式。" } });
     }
     if (request.query.view === "roster") {
-      const budget = createDisplayRequestBudget();
+      const budget = displayBudgetFor(request);
       for (;;) {
         const accessGeneration = generationKey(["P", "C"]);
         // P1-75 — during a verified note-only write, bind the response to that ONE committed view.
@@ -1612,7 +1613,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
     // if access changes while dynamic stats are read, rebuild the whole batch.
     // Spec 195 §6 — the route and the snapshot layer share ONE request budget:
     // at most three attempts for the whole request, and one recovery wait.
-    const budget = createDisplayRequestBudget();
+    const budget = displayBudgetFor(request);
     for (;;) {
       // Spec 195 §4 — the permission display depends on P and C; a change to C
       // during the statistics read must reject the old permission result too.
@@ -1849,7 +1850,7 @@ export function registerAgentRoutes(app: FastifyInstance) {
       const forceRefresh = request.query.refresh === "true";
       const actor = trustedActorFromRequest(request);
       const principalId = `${actor.accountUid ?? actor.actorId}:${actor.role}`;
-      const budget = createDisplayRequestBudget();
+      const budget = displayBudgetFor(request);
       for (;;) {
         const accessGeneration = generationKey(["P", "C"]);
         const listing = await readAgentStatisticsDisplay(projectRoot, range, principalId, forceRefresh, budget);

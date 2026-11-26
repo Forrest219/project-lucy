@@ -106,7 +106,7 @@ KTX WebUI
 | 访问治理 | MCP 调试台 | `/admin/mcp-playground` | 检查 Agent 能不能连上，或者能不能查某张表。 |
 | 访问治理 | 配置审计 | `/admin/config-audit` | 查看各类配置与内容资产的写入记录、变更内容和操作者 |
 | 系统设置 | 品牌外观 | `/admin/branding` | 配置客户 Logo、产品名称与品牌副标题 |
-| 系统设置 | 登录账户 | `/admin/admins` | 管理 WebUI 登录账户，并配置所有者或运维角色 |
+| 系统设置 | 登录账户 | `/admin/accounts` | 管理 WebUI 登录账户，并配置所有者或运维角色 |
 | 系统设置 | 版本信息 | `/admin/version` | 查看产品版本、构建提交和随包 KTX 版本 |
 
 > 兼容入口：`/admin/audit-sources` 重定向到 `/admin/audit`，保留为外部链接兼容（M35 → Spec 89 移除 heatmap Tab）。

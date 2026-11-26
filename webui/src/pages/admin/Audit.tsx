@@ -1795,6 +1795,16 @@ export function Audit() {
     },
     history: "push"
   });
+  const eventIdMirror = useUrlMirroredField({
+    read: (sp) => sp.get("eventId") ?? "",
+    write: (prev, raw) => {
+      const next = new URLSearchParams(prev);
+      if (raw) next.set("eventId", raw);
+      else next.delete("eventId");
+      return next;
+    },
+    history: "push"
+  });
   /**
    * 统一搜索：一个输入框聚合 `key`（含遗留 `turnIdFilter`）／`turnSearch`／
    * `tableSearch`。`read` 保持既有聚合口径；`write` 仍按 `looksLikeIdQuery`
@@ -2047,6 +2057,7 @@ export function Audit() {
     deviceNameMirror.reset("");
     tableSearchMirror.reset("");
     unifiedSearchMirror.reset("");
+    eventIdMirror.reset(keepEventId ?? "");
     const snapshot = readFilterSnapshot();
     for (const field of FILTER_PERSIST_FIELDS) {
       if (field === "view" || field === "range" || field === "turnId") continue;
@@ -2530,8 +2541,8 @@ export function Audit() {
                 placeholder="事件 ID"
                 aria-label="事件 ID"
                 data-testid="audit-event-id-filter"
-                value={eventId}
-                onChange={(e) => updateParam("eventId", e.target.value)}
+                value={eventIdMirror.value}
+                onChange={(e) => applyMirroredText(eventIdMirror, e.target.value)}
               />
               <input
                 className="pl-input w-36 notranslate"

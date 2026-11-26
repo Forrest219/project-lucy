@@ -286,14 +286,16 @@ describe("Spec 195 SI-07 — verification health is isolated per dependency scop
     fsGate.blockedFiles.add(overlayPath());
     await reconcileMetadata();
 
+    // P1-75 v1.4: the broken scope answers 200 `pending` (no data) after the bounded 10 s wait, not a 503.
     const busy = await request(app.server).get("/api/sources");
-    expect(busy.status).toBe(503);
-    expect(busy.body.error.code).toBe("DISPLAY_SNAPSHOT_BUSY");
+    expect(busy.status).toBe(200);
+    expect(busy.body).toMatchObject({ ok: true, data: null, display: { state: "pending" } });
+    expect(busy.headers["x-lucy-busy-reason"]).toBe("reconcile_failed");
 
     const list = await request(app.server).get("/api/admin/agents");
     expect(list.status).toBe(200);
     expect(list.body.data.agents.length).toBeGreaterThan(0);
-  });
+  }, 20_000);
 
   it("a semantic layer that cannot be enumerated also blocks the Agent list", async () => {
     await sources();
@@ -304,10 +306,10 @@ describe("Spec 195 SI-07 — verification health is isolated per dependency scop
 
     for (const url of ["/api/sources", "/api/admin/agents"]) {
       const busy = await request(app.server).get(url);
-      expect(busy.status).toBe(503);
-      expect(busy.body.error.code).toBe("DISPLAY_SNAPSHOT_BUSY");
+      expect(busy.status).toBe(200);
+      expect(busy.body).toMatchObject({ ok: true, data: null, display: { state: "pending" } });
     }
-  });
+  }, 30_000);
 
   /**
    * Spec 195 §4 / SI-11 — a P change while the dynamic statistics are read

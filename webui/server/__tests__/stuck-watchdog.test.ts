@@ -154,6 +154,51 @@ describe("StuckWatchdog (P1-81)", () => {
     expect(h.restart).not.toHaveBeenCalled();
   });
 
+  describe("P1-75 §2.5.1 / P1-81 §3 — degraded display reads are failures", () => {
+    for (const degraded of ["grace", "stale", "pending"] as const) {
+      it(`a ${degraded} read reported as ok is normalised to a failure by the probe wrapper`, async () => {
+        const outcome = await runProbeWithTimeout(async () => ({ ok: true, ms: 4, degraded }), 1000);
+        expect(outcome).toMatchObject({ ok: false, degraded, detail: `degraded_${degraded}` });
+      });
+    }
+
+    it("a healthy fresh probe is untouched", async () => {
+      await expect(runProbeWithTimeout(async () => ok, 1000)).resolves.toEqual(ok);
+    });
+
+    for (const degraded of ["stale", "pending"] as const) {
+      it(`continuous ${degraded} display reads plus a failing MCP path count toward STUCK like a 503`, async () => {
+        const h = harness();
+        h.state.display = { ok: true, ms: 5, degraded };
+        await h.advance(50_000);
+        expect(h.dog.getPhase()).toBe("normal");
+        await h.advance(20_000);
+        expect(h.dog.getPhase()).toBe("stuck");
+        expect(h.dog.snapshot().lastProbe.display).toMatchObject({ ok: false, degraded });
+      });
+
+      it(`display-only ${degraded} reads restart the reconciler in place, never the process`, async () => {
+        const h = harness();
+        h.state.mcp = ok;
+        h.state.display = { ok: true, ms: 5, degraded };
+        await h.advance(200_000);
+        expect(h.events.some((e) => e.type === "display_only_in_place")).toBe(true);
+        expect(h.inPlace).toHaveBeenCalledWith({ display: true, mcp: false });
+        expect(h.restart).not.toHaveBeenCalled();
+      });
+    }
+
+    it("one fresh read resets the degraded streak", async () => {
+      const h = harness();
+      h.state.mcp = ok;
+      for (let i = 0; i < 30; i += 1) {
+        h.state.display = i % 3 === 2 ? ok : { ok: true, ms: 5, degraded: "stale" };
+        await h.advance(10_000);
+      }
+      expect(h.inPlace).not.toHaveBeenCalled();
+    });
+  });
+
   it("display-only failure restarts the reconciler in place, never the process", async () => {
     const h = harness();
     h.state.mcp = ok;
