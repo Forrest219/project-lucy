@@ -11,8 +11,8 @@
 #     never changes this workflow's conclusion and it is not part of ci-required
 #     (Spec §1.1 item 2).
 #
-# TEMPORARY ENTRY — the `lucy-v0.25` push trigger below exists only while lucy-v0.25 is the
-# integration branch. DELETE this push trigger when lucy-v0.25 is merged into main or stops
+# TEMPORARY ENTRY — the `lucy-v0.35` push trigger below exists only while lucy-v0.35 is the
+# integration branch. DELETE this push trigger when lucy-v0.35 is merged into main or stops
 # being an integration branch (Spec §1.1 item 6). It is not a permanent second trunk.
 name: Lucy CI
 
@@ -22,7 +22,7 @@ on:
     branches:
       - main
       # TEMPORARY: integration-branch entry. See the note above.
-      - lucy-v0.25
+      - lucy-v0.35
   workflow_dispatch:
 
 # Read-only by default. Only the release workflow's candidate-image and promote jobs own
@@ -31,12 +31,12 @@ permissions:
   contents: read
 
 # A new commit on a pull request cancels the previous run of that pull request.
-# A push to main / lucy-v0.25 cancels a stale daily run of the same ref.
+# A push to main / lucy-v0.35 cancels a stale daily run of the same ref.
 # pull_request and push use different group keys, so they never cancel each other
 # (Spec §1.1 item 6, §5).
 concurrency:
   group: lucy-ci-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/lucy-v0.25' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/lucy-v0.35' }}
 
 env:
   KTX_VERSION: "0.16.0"

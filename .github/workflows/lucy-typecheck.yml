@@ -22,7 +22,7 @@ on:
     branches:
       - main
       # TEMPORARY: integration-branch entry, same lifetime as the lucy-ci.yml one.
-      - lucy-v0.25
+      - lucy-v0.35
   workflow_dispatch:
 
 permissions:
@@ -30,7 +30,7 @@ permissions:
 
 concurrency:
   group: lucy-typecheck-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/lucy-v0.25' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/lucy-v0.35' }}
 
 jobs:
   typecheck:

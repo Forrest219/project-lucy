@@ -4,8 +4,8 @@
 |---|---|
 | 文档名称 | Lucy Release CI |
 | 文档类型 | Release / CI Spec |
-| 版本 | v0.5 |
-| 撰写日期 | 2026-06-22；2026-07-06；2026-09-02 v0.3 最终 digest 门禁与 Required checks；2026-10-29 v0.4 日常门禁钉 ubuntu-24.04、PR 取消并发，并修正 registry 与单架构口径；2026-10-29 v0.5 日常／发布／类型检查分层为三个 workflow，并修正 compose source bundle 的交付边界 |
+| 版本 | v0.6 |
+| 撰写日期 | 2026-06-22；2026-07-06；2026-09-02 v0.3 最终 digest 门禁与 Required checks；2026-10-29 v0.4 日常门禁钉 ubuntu-24.04、PR 取消并发，并修正 registry 与单架构口径；2026-10-29 v0.5 日常／发布／类型检查分层为三个 workflow，并修正 compose source bundle 的交付边界；2026-11-26 v0.6 日常 push 触发从 `lucy-v0.25` 迁到 `lucy-v0.35`（`lucy-v0.25` 已并入 `main`；`lucy-v0.35` 为当前产品线分支，见 `docs/governance/version-matrix.md`） |
 | 适用范围 | GitHub Actions 日常门禁与 release gates、Docker image build、KTX upgrade compatibility |
 
 ## 1. CI Workflow
@@ -14,11 +14,11 @@ Workflow files:
 
 | File | Lifecycle | Triggers |
 |---|---|---|
-| `.github/workflows/lucy-ci.yml` | 日常验证（daily verification） | 所有 pull request；push 到 `main` 和 `lucy-v0.25`；`workflow_dispatch` |
+| `.github/workflows/lucy-ci.yml` | 日常验证（daily verification） | 所有 pull request；push 到 `main` 和 `lucy-v0.35`；`workflow_dispatch` |
 | `.github/workflows/lucy-typecheck.yml` | 类型检查（独立结论） | 与日常验证相同 |
 | `.github/workflows/lucy-release.yml` | 客户发布 / 诊断 | 仅 `v*` tag；显式手动（需先选 mode） |
 
-`lucy-v0.25` 的 push 触发是**临时入口**：该分支并入 `main`、或不再作为集成分支时必须删除该触发。
+`lucy-v0.35` 的 push 触发是**临时入口**：该分支并入 `main`、或不再作为集成分支时必须删除该触发。
 pull request 与 push 使用不同的 concurrency group，互相不取消。
 
 Manual inputs (`lucy-release.yml`):
@@ -57,7 +57,7 @@ Manual inputs (`lucy-release.yml`):
 
 日常 job 在 `lucy-ci.yml` 里跑；发布链在 `lucy-release.yml` 里**在同一个 SHA 上重跑**所需的日常与交付门禁，不从最近一次任意成功 run 推定通过，也不通过 `workflow_run` 跨信任边界启动发布。发布 workflow 里与日常 workflow 同名的 job 使用 `release / ` 前缀的显示名，两个 workflow 不会产生同名 check。
 
-Hosted jobs use `ubuntu-24.04` and Node 22. 每个日常 job 都有 `timeout-minutes`。pull request 的新提交取消同一 PR 的旧 run；push 到 `main` / `lucy-v0.25` 取消该 ref 上过时的日常 run；pull request 与 push 互不取消；**发布运行不自动取消**。
+Hosted jobs use `ubuntu-24.04` and Node 22. 每个日常 job 都有 `timeout-minutes`。pull request 的新提交取消同一 PR 的旧 run；push 到 `main` / `lucy-v0.35` 取消该 ref 上过时的日常 run；pull request 与 push 互不取消；**发布运行不自动取消**。
 
 `demo-db-smoke` and `postgres-demo-db-smoke` run on every pull request and on `main`. They are not branch-protection required checks until one green run is recorded; do not mark a red workflow as accepted by ignoring them.
 
@@ -124,7 +124,7 @@ StarRocks R1 P1 note:
 
 ## 5. Registry Publishing
 
-Tag runs and manual `mode=customer-candidate` runs push one linux/amd64 image to GHCR with `GITHUB_TOKEN`. The image name is `ghcr.io/<namespace>/project-lucy`, where `<namespace>` is `vars.LUCY_IMAGE_NAMESPACE` or, when that variable is unset, the repository owner in lowercase. Pull requests, pushes to `main` and pushes to `lucy-v0.25` do not push.
+Tag runs and manual `mode=customer-candidate` runs push one linux/amd64 image to GHCR with `GITHUB_TOKEN`. The image name is `ghcr.io/<namespace>/project-lucy`, where `<namespace>` is `vars.LUCY_IMAGE_NAMESPACE` or, when that variable is unset, the repository owner in lowercase. Pull requests, pushes to `main` and pushes to `lucy-v0.35` do not push.
 
 `packages: write` 只授予两个 job：`customer-amd64-native`（推 `candidate-` 标签）和 `release-package`（promote 已测试的 digest）。日常 workflow 与类型检查 workflow 一律 `contents: read`，没有任何 registry 写权限。
 

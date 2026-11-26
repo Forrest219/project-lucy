@@ -77,10 +77,10 @@ describe("daily workflow (lucy-ci.yml)", () => {
     }
   });
 
-  it("triggers on every pull request and on push to main and lucy-v0.25, with no path filter", () => {
+  it("triggers on every pull request and on push to main and lucy-v0.35, with no path filter", () => {
     const on = daily.workflow.on ?? daily.workflow[true];
     assert.ok(on.pull_request !== undefined, "the daily workflow must run on pull requests");
-    assert.deepEqual(on.push.branches, ["main", "lucy-v0.25"]);
+    assert.deepEqual(on.push.branches, ["main", "lucy-v0.35"]);
     assert.equal(on.push.paths, undefined, "the first rollout must not filter by path");
     assert.equal(on.pull_request?.paths, undefined, "the first rollout must not filter by path");
     assert.ok(on.workflow_dispatch !== undefined, "a manual daily run must be possible");
@@ -143,7 +143,7 @@ describe("daily workflow (lucy-ci.yml)", () => {
     const cancel = String(daily.workflow.concurrency["cancel-in-progress"]);
     assert.match(cancel, /pull_request/);
     assert.match(cancel, /refs\/heads\/main/);
-    assert.match(cancel, /refs\/heads\/lucy-v0\.25/);
+    assert.match(cancel, /refs\/heads\/lucy-v0\.35/);
     assert.equal(release.workflow.concurrency["cancel-in-progress"], false, "a release run must never be auto-cancelled");
   });
 
