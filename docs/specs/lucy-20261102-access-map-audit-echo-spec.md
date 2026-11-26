@@ -6,6 +6,7 @@
 | 日期 / 目标版本 | 2026-11-02 / 不绑定产品版本号。不升 Spec 187 版本号，不进入 v0.25 登记册 |
 | 功能编号 / 优先级 | **无** / **P1**（访问关系图工具条与访问层筛选口径） |
 | 状态 | **功能合同已收口（2026-11-04）**。S1–S3 已落地；SC-14 逐边在出口；SC-12 页序子句已拆出。本条收口不表示可上线。证据见 [实施笔记](../reviews/2026-11-04-access-map-audit-echo-implementation-notes.md)。出口修订见 [`lucy-20261104-access-map-echo-exit-revision-spec.md`](lucy-20261104-access-map-echo-exit-revision-spec.md)。原 Deferred → [`REQ-030-003`](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md) 已拉出。剥离背景见 [A／B](../reviews/2026-11-03-product-close-peel-a-b.md) |
+| 阶段 | S5 |
 | 决策来源 | 2026-11-02 对 `http://127.0.0.1:55176/admin/access-map?trust=include_candidate` 的反馈：①筛选器行不对齐；②「问询计入」分段控件突兀。澄清后拍板 **方案 B**：桑基图是访问日志／调用流水的可视化，不得另造核心分类；维度与数量须呼应。Codex 第 1 轮退回（高 3／中 2）→ v0.2；第 2 轮退回（中 2：结构筛选后 meta、deny 集合 D）→ v0.3 闭合 |
 | 需求来源 | 治理台访问关系图应让管理员用与访问日志相同的管理语言筛选访问面；关联质量口径可保留，但不得冒充「问询」主筛选 |
 | 实施主体 | Lucy WebUI：`webui/server/admin/access-map.ts`、`webui/src/pages/admin/AccessMap.tsx` 及相关组件／测试。不修改 KTX |

@@ -7,6 +7,7 @@
 | 台账号 | 无（0.30 台账未建立） |
 | 功能编号 / 优先级 | 清单 **P0-6**；需求池 **REQ-030-025**／**P0**；最小面挂 **REQ-030-019**／**REQ-030-020** |
 | 状态 | **v0.4-draft；Cursor 过程对抗已修订（2026-11-13）；O1–O3 已闭合（2026-11-13）＝建议包 S；待 R2-F；终稿未确权；冻结落地；未授权实现**。**不是** R2-F，**不是** R4，**不可功能合同收口**。须 Codex CLI 终审或委托人明示确权（R2-F）→ 另授开发授权后才可改代码。本条不表示可上线 |
+| 阶段 | S1 |
 | 授权边界 | 本文件**不授权改代码**。现行阶段只接受评审与修订。实施须：§评审门禁 R1–R4（见功能清单池 §2.2）全部通过 |
 | 决策来源 | 2026-11-06 CFO 选表误报（**检出缺口**）＋ 2026-11-07 沟通实录：五域（损益／资金／资产／Token／GPU）日跑测评承诺；误报防线 **G6＋G8** |
 | 需求来源 | [需求池 REQ-030-025](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；[误报防线 §4.6 G6／§4.8 G8](../plans/lucy-20261107-misreport-defense-and-stored-user-experience-plan.md)；[功能清单池 P0-6](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)；[019 Spec](lucy-20261107-eval-tool-assertion-authoring-spec.md)；[020 Spec](lucy-20261107-audit-journey-eval-case-draft-spec.md) |

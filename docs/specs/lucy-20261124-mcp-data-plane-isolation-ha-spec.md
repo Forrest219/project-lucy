@@ -18,6 +18,7 @@
 
 | 版本 | 变更 |
 |---|---|
+| v0.3-r2 | 2026-11-24 指针：公共首页／静态公开接口在混压下不被饿死的同进程合同，已另立 [P1-84／REQ-030-105](lucy-20261124-public-entry-static-isolation-spec.md)（承接 §9 B1 控制面入口差集；**不分进程**）。本条范围、状态与出口不变 |
 | v0.3 | 2026-11-24 范围裁定（委托人明示）：**SC-06（流式体积上限／全局内存背压）移出本期出口，授权下期实现**；`UAT-MCPHA-05` 移出本期必做，随下期 SC-06 验收。本期出口相应修订（§闭口层级）；§2.1 第 5 条与 SC 表同步标注。不改运行代码；状态行与总账镜像同步 |
 | v0.2 | 2026-11-24 **终稿确权＋开发授权（委托人明示）并实现**：容量默认值 Token 4／Agent 8／连接 16／全局 24（满足 `agent < connection <= global`，`LUCY_MCP_*_MAX_INFLIGHT` 可覆盖，非法顺序自动修正并告警）；拒绝立即返回并带 `capacityScope`／`retryAfterMs`；首期无等待队列（OQ-2）；租约在真实上游工作结束后释放。**SC-06 未实现**（OQ-3 单响应上限与全局内存背压）。另落地展示扫描合并与公平调度、覆盖层缓存（P1-75 根因侧，根因见 `f5e4b14d`）。UAT 仍 NOT RUN |
 | v0.3-r1 | 2026-11-24 评审反馈修订（实现与证据已落地）：①**Token 上限覆盖全部上游语义工具**，含 `lucy_read_source`（Docker 实测 60 并发单 Token：33 次 `scope=token` 拒绝）；②**上游硬截止**新增 `LUCY_PROXY_UPSTREAM_HARD_DEADLINE_MS`（默认 90 秒，POST 专用），与空闲超时 30 秒、问数预算 `QUESTION_BUDGET_ABS_EXEC_MS` 120 秒并存，取代客户现场 613 秒无界等待；③**客户端断连不提前释放**：KTX 不取消已发出的 DB 语句，故上游已发起而客户端先离开时，租约额外持有 `LUCY_MCP_CANCEL_HOLD_MS`（默认 30 秒）；Docker 实测断连后租约保持 31.2 秒（修复前 1.3 秒即释放，而 DB 语句 9.2 秒才结束）；④**配额冻结 4／8／16／24**：2 CPU／2 GiB 实测 4／8／12／16／24／32 并发真语义查询均无挂死，CPU 在约 8 并发饱和、吞吐持平、内存（约 50 MiB／并发查询）为约束，p95 在 24 并发 14 s、32 并发 18 s；多 Token 绕 Agent 限额被拦（12 并发拒绝 4，scope=agent）；⑤`/api/health` 增 `mcpCapacity` 聚合摘要。证据 `inbox/p181-p182-docker-verify/p182-semantic-capacity-ladder.json`。**残余**：Docker `HEALTHCHECK`（`ktx admin runtime status` 等）在 16 并发真查询饱和时超 10 秒致容器转 unhealthy（空闲 0.8 秒，负载结束即恢复），待委托人裁定（轻量探针或加大超时）；SC-06 仍移下期；UAT 仍 NOT RUN |

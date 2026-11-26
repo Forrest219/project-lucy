@@ -6,7 +6,8 @@
 | 日期 | 2026-11-23 |
 | 总账 / 合同 | P1-75／REQ-030-096 · [Spec](../../../../specs/lucy-20261123-interactive-read-resilience-spec.md) |
 | 运行环境 | 隔离 Docker compose 单实例＋真实 KTX 和合成数据源＋真实桌面前台浏览器。原生纯 MCP 使用 Agent Token，WebUI 使用独立登录会话。 |
-| 剧本 | [用例](cases.md) · [夹具](fixtures.md) · [跑次槽](runs/README.md) |
+| 剧本 | [用例](cases.md) · [夹具](fixtures.md) · [跑次槽](runs/README.md) · [X0 矩阵草稿](x0-page-tab-api-503-matrix.md)（09 分母来源，待复核） |
+| 开发授权指针 | 09／10 对应 SC-09／10 的运行代码与测程开发授权已获得（2026-11-24，见 [Spec 授权边界](../../../../specs/lucy-20261123-interactive-read-resilience-spec.md)）。**实现进展（与开发台同句）**：X1 判定器最小升级已落地；X3／X4 服务端已落地；X5 前端 banner／`pending` 已挂主路径页；X0 待非作者复核；X2／X6 未做。09／10 仍 **NOT RUN**，≠ UAT PASS；≠ 功能合同收口 |
 | 判定 | [INDEX](../../INDEX.md) 为判定事实源。已有改前定向诊断，完整功能合同尚未执行。 |
 | 应急缩窗 | [`emergency-smoke`](emergency-smoke.md)：最新干净镜像症状门禁＋客户清单回填；**≠** SC-01–08／G2 功能合同 PASS，不得单独回写 INDEX 为套件收口。 |
 

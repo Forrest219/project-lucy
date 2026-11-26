@@ -192,7 +192,7 @@ Lucy 当前只支持**单实例、单副本**部署，不支持多个 WebUI / MC
 
 ### 状态登记只有一份现值
 
-一条功能的现行状态只有一个事实源：该功能 Spec 头部的「状态」行。配对 Plan 的「状态」行、`docs/README.md` 与 `docs/plans/README.md` 里这条的索引、登记册里这条的现行状态段、`docs/governance/project-overview.md` §9 里这条的现行行，都是这份状态的镜像。镜像与事实源用同一句现值。
+一条功能的现行状态只有一个事实源：该功能 Spec 头部的「状态」行。配对 Plan 的「状态」行、`docs/README.md` 与 `docs/plans/README.md` 里这条的索引、登记册里这条的现行状态段、`docs/governance/project-overview.md` §9 里这条的现行行，都是这份状态的镜像。**常青需求池（`docs/backlog/README.md`／`archive.md`）的「阶段」列仅做阶段码同码镜像（`lint:inventory-stage`），不再要求抄写整句状态散文**；其余现值镜像仍与事实源保持一致。
 
 改状态、写收口记录或写实施笔记时，同一次改动里改完上面全部已有镜像。没有索引行就不新造；有索引行就必须改。历史变更行（建议书的 `v1.x 变更`、概览的 `v1.x 更新`）不改写当天发生了什么，需要留痕时另加一条新版本记录。审阅记录的标题不是现行状态。复核快照和实施笔记也不是现行状态。
 
@@ -261,22 +261,20 @@ S5 的状态行不得含「未收口」显式短语表（含 `≠功能已收口
 不得含「开发授权已获得」；状态行首个「阶段:」之后不得把 `可上线`／`UAT PASS`／`测试台PASS` 当作阶段码，
 「≠」-前缀否定式（DEVELOPMENT 标准写法）放行。
 
-**总账跟进状态 ↔ Spec 阶段（P1-73 v1.1＋降熵补丁）**：执行总账「跟进状态」须以阶段码 `｜` 开头；有主 Spec
-（链接文案 `Spec`／`主 Spec`）时，须与 Spec「阶段」格同码。机器门禁＝规则 `inventory-stage`
-（`npm run lint:inventory-stage`，PR CI 同跑）。无主 Spec 的行仍须带合法阶段前缀。回填脚本
-`npm run mig:funnel-inventory`（仅授权 MIG 时用）。完成率分列规则见上条第 4 点与现行总账「收口分列」小节。
+**常青需求池阶段 ↔ Spec 阶段（P1-73 v1.3 修订）**：常青需求池（`docs/backlog/README.md` 与 `docs/backlog/archive.md`）「阶段」列须为合法阶段码（`CODE` 或 `CODE｜` 开头）；有主 Spec（链接文案 `Spec`／`主 Spec`）时，须与 Spec「阶段」格**同码**，不再要求在总账中抄写整句现状。机器门禁＝规则 `inventory-stage`（`npm run lint:inventory-stage`，PR CI 同跑）。无主 Spec 的行仍须带合法阶段码。历史回填脚本 `npm run mig:funnel-inventory` 已归档为 0.30 一次性脚本。完成率分列规则见上条第 4 点与 [`docs/backlog/README.md`](../backlog/README.md)「收口分列」。
 
 ### 产品线执行总账（SOT）
 
-每条**已开线**的产品线必须有一份**执行总账表**。它是该产品线上「有哪些新功能、对旧功能的修复／事故修复、尚未开发／冻结／结案不做」的**唯一跟进 SOT**。对话纪要、中间态盘点、`user-facing` 草稿、发布说明**都不是**这份全集的替代品；它们只能引用总账行，或触发下面的差集补录。
+全仓库采用**常青需求池（跨版本唯一工作项全集）＋版本范围视图（按发版列车勾选）**的解耦结构。常青需求池是「有哪些新功能、对旧功能的修复／事故修复、概念探索、尚未开发／冻结／结案不做」的**唯一跟进 SOT**。对话纪要、中间态盘点、`user-facing` 草稿、发布说明**都不是**这份全集的替代品；它们只能引用需求池稳定 ID，或触发下面的差集补录。
 
 | 角色 | 文件 | 回答什么 |
 |---|---|---|
-| **执行总账（SOT）** | 该产品线的功能清单池（现行 `0.35.0`／`lucy-v0.35` 暂沿用 → [`docs/plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md`](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)，待单独立项 `0.35` 总账） | 本产品线工作项**全集**与跟进序 |
-| **需求正文** | 该产品线需求池（现行 `0.35.0`／`lucy-v0.35` 暂沿用 → [`docs/plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md`](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)） | 缺口来源与正文；与总账 REQ 双向可追 |
-| **单条功能合同现值** | 该功能 Spec 头部「状态」行 | 这一条承诺现在到哪一步（见上一小节）；总账「跟进状态」是它的**镜像**，须同句 |
+| **常青需求池（SOT）** | [`docs/backlog/README.md`](../backlog/README.md)（活跃池）＋ [`docs/backlog/archive.md`](../backlog/archive.md)（`X_DEF`/`X_SUP` 归档） | 跨版本工作项**全集**、稳定 ID（新项自 `REQ-0113` 起递增）、类型、阶段与目标版本 |
+| **需求正文** | 新需求一需求一文件落 [`docs/backlog/entries/`](../backlog/entries/_template.md)；存量 `REQ-030-*` 锚定在只读冻结的 [`lucy-20261102-lucy-0-30-0-requirement-pool-plan.md`](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md) | 缺口来源与需求正文；与常青池稳定 ID 双向可追 |
+| **版本发版视图** | `docs/releases/v<major>.<minor>.0-scope.md`（现行 [`docs/releases/v0.35.0-scope.md`](../releases/v0.35.0-scope.md)） | 当前版本计划交付哪些稳定 ID（不复制需求正文与详细状态）；开新版本只需新建 scope 视图，不再克隆整本总账 |
+| **单条功能合同现值** | 该功能 Spec 头部「阶段／状态」行 | 这一条承诺现在到哪一步（见上一小节）；常青需求池「阶段」列只做**阶段码同码镜像**，池级历史交给 git 与 Spec Changelog |
 
-下一产品线开线时，必须另立同角色总账（可新文件，但职责不变）。未开线的想法仍先入对应需求池／总账草稿，不得无行改运行代码。
+下一版本开线时，仅新建 `docs/releases/v<X>.<Y>.0-scope.md` 并在常青需求池标记 `目标版本`，不复制总账。未挂目标版本的想法先入常青需求池（`目标版本=—`），不得无行改运行代码。
 
 **强制入账（先入账，再动手／再叙事）：**
 
@@ -308,7 +306,7 @@ S5 的状态行不得含「未收口」显式短语表（含 `≠功能已收口
 
 | 台 | 唯一真实来源（SOT） | 回答什么 | 明确不回答 |
 |---|---|---|---|
-| **需求台** | 产品线执行总账（上节）＋需求池正文 | 要不要做、优先级、核心分母、跟进序、REQ | 单条 Spec 合同是否收口；UAT 是否绿 |
+| **需求台** | 常青需求池（[`docs/backlog/README.md`](../backlog/README.md)）＋需求正文（`entries/` 与冻结 0.30 需求池）＋版本视图（`docs/releases/v*-scope.md`） | 要不要做、稳定 ID、类型、优先级、核心分母、目标版本 | 单条 Spec 合同是否收口；UAT 是否绿 |
 | **开发台** | 该功能 Spec 头部「状态」行（镜像规则见「状态登记只有一份现值」） | 功能合同／实现／CR 到哪一步 | 「已 UAT」「可上线」 |
 | **测试台** | [`docs/qa/uat/INDEX.md`](../qa/uat/INDEX.md)（套件＋最近跑次；树根 [`docs/qa/uat/`](../qa/uat/README.md) 为**唯一** UAT SOT；旧 `docs/uat/` 仅归档） | 哪套 UAT、最近结果 PASS／PASS WITH GAP／FAIL／SKIPPED | 改写 Spec 合同状态；代替发布取证整包；用 `docs/uat/` 历史稿冒充现行 PASS |
 
@@ -439,13 +437,13 @@ S5 的状态行不得含「未收口」显式短语表（含 `≠功能已收口
 | 11 | **功能 Spec 含「闭口层级」**。层级只能是「功能合同」或「发布取证」，并写明本条承诺、本条出口、不在本条出口、上线关系。功能合同写「本条收口不表示可上线」；发布取证写「本条通过不表示各模块无问题」 | 本文件「功能闭口与发布取证」 | `lint:spec-docs`（规则 `close-layer`） |
 | 12 | **已作废的状态句不得裸写**。「未执行且不排期」「未执行且未排期」「不可交付 UAT」若出现，作废标记必须紧贴该句。「未作废」和同一行里另一件事的「作废」不算。本规则不走基线豁免 | 本文件「功能闭口与发布取证」 | `lint:spec-docs`（规则 `stale-status`） |
 | 13 | **触发的 Spec 写交互合同或豁免**。触发、豁免、文法以本 Spec 为准；机器门禁是 `lint:spec-docs` | [`lucy-20261107-ui-interaction-contract-gate-spec.md`](../specs/lucy-20261107-ui-interaction-contract-gate-spec.md) | `lint:spec-docs`（规则 `interaction-contract`） |
-| 14 | **挂在已开线产品线上的新功能／修复：先入该产品线执行总账（SOT）并回写需求池**。无总账行不得改运行代码，也不得写进 `user-facing`／Fixes 主张交付。「不入核心分母」须写在总账行属性上，不得省略入账 | 本文件「产品线执行总账（SOT）」；现行 `0.35.0`／`lucy-v0.35` 暂沿用总账见 [`lucy-20261107-lucy-0-30-feature-inventory-pool.md`](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) | 无（人工／出门差集补录） |
-| 15 | **端到端三台账**：需求台＝总账；开发台＝Spec 头部状态；测试台＝`docs/qa/uat/INDEX.md`。主张 UAT／客户场景复现必须挂测试台；勾连与缺口见 [`e2e-ledger.md`](e2e-ledger.md)；可选 `node scripts/uat/check-e2e-ledger.mjs` | 本文件「端到端三台账」 | `scripts/uat/check-e2e-ledger.mjs`（文件／Suite 存在性） |
+| 14 | **新功能／修复／概念探索：先入常青需求池（SOT）并落需求正文（`docs/backlog/entries/`）**。无池内稳定 ID 行不得改运行代码，也不得写进 `user-facing`／Fixes 主张交付。「不入核心分母」与 `目标版本` 须写在池内属性上，不得省略入账 | 本文件「产品线执行总账（SOT）」；常青需求池见 [`docs/backlog/README.md`](../backlog/README.md)，现行版本视图见 [`docs/releases/v0.35.0-scope.md`](../releases/v0.35.0-scope.md) | `lint:spec-docs`（元数据／词表／作废句）＋人工／出门差集补录 |
+| 15 | **端到端三台账**：需求台＝常青需求池；开发台＝Spec 头部阶段／状态；测试台＝`docs/qa/uat/INDEX.md`。主张 UAT／客户场景复现必须挂测试台；勾连与缺口见 [`e2e-ledger.md`](e2e-ledger.md)；可选 `node scripts/uat/check-e2e-ledger.mjs` | 本文件「端到端三台账」 | `scripts/uat/check-e2e-ledger.mjs`（文件／Suite 存在性） |
 | 16 | **主路径可用性优先**：新功能／门禁不得把最终用户主路径变成无逃生不可用；Spec／UAT 须同时覆盖「约束生效」与「合法用户仍可用」（含纯 MCP 部署实况）。只验「拦住」不得收口 | 本文件「第一性原理：主路径可用性优先」 | 无（评审／出门人工；错题举一反三） |
 | 17 | **新功能 Spec 必含「受影响画像」小节**：4 画像（问数方／治理方／运维方／管理层）逐行判定 `↑`／`＝`／`↓`，写明变更前后体验与**可核对依据**；判 `↓` 必须写补偿路径并挂验收编号，否则不得收口。事实源与模板见 [`user-personas.md`](user-personas.md) | 本文件「Review 要求」＋ [`user-personas.md`](user-personas.md) §4／§5 | 无（评审／出门人工；`lint:spec-docs` 的 `persona-impact` 规则属第二阶段，**未实现**） |
 | 18 | **WebUI 验证强制浏览器＋计时**：触及 WebUI 用户可见面时，开发验证与测试台不得只验后端 HTTP；须真实前台浏览器＋导航／primaryReady（或等价）计时，并与 API 耗时分列。仅 API smoke 不得记 WebUI PASS／收口 | 本文件「验证策略：浏览器测试约束」＋ [`docs/qa/uat/CONVENTIONS.md`](../qa/uat/CONVENTIONS.md) | 无（评审／UAT 出门人工） |
 | 19 | **Spec／Plan「状态」行禁止英文状态词，表头写「状态」不写 `Status`**（匹配规则见「状态措辞用中文」） | [`lucy-20261122-spec-status-vocabulary-chinese-plan.md`](../plans/lucy-20261122-spec-status-vocabulary-chinese-plan.md) | `lint:spec-docs`（规则 `status-vocab`）＋ `lint:status-vocab`（PR CI） |
-| 20 | **Spec 头部须恰好一行可解析「阶段」；「状态」不得与阶段机器可判矛盾；Plan「状态」行须镜像阶段码前缀；执行总账「跟进状态」须 `CODE｜` 且与主 Spec「阶段」同码**（口径见「开发台漏斗阶段码」） | [`lucy-20261122-spec-status-funnel-gate-spec.md`](../specs/lucy-20261122-spec-status-funnel-gate-spec.md) | `lint:spec-docs`（`status-funnel`＋`inventory-stage`）＋ `lint:status-funnel`／`lint:inventory-stage`（PR CI） |
+| 20 | **Spec 头部须恰好一行可解析「阶段」；「状态」不得与阶段机器可判矛盾；Plan「状态」行须镜像阶段码前缀；常青需求池（`docs/backlog/README.md`／`archive.md`）「阶段」列须为合法阶段码且与主 Spec「阶段」同码**（口径见「开发台漏斗阶段码」） | [`lucy-20261122-spec-status-funnel-gate-spec.md`](../specs/lucy-20261122-spec-status-funnel-gate-spec.md) | `lint:spec-docs`（`status-funnel`＋`inventory-stage`）＋ `lint:status-funnel`／`lint:inventory-stage`（PR CI） |
 | 21 | **导航 IA 变更须委托人独立确认**：增删改一级分组、二级菜单项或二级页内分页 Tab 时，Spec／Plan 可提案，但改运行导航前必须有针对当次清单的明示确认；终稿确权／开发授权／功能收口均不代替。确认后同批更新 `06-navigation-ia.md` | 本文件「导航信息架构变更：委托人独立确认」 | 无（人工；`lint:ia-boundary` 不代替） |
 
 ### 交互合同

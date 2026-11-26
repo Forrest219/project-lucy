@@ -1,0 +1,57 @@
+{
+  "phase": "normal",
+  "startedAt": "2026-11-26T09:33:05.125Z",
+  "webui": "http://127.0.0.1:55386",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "cases": [
+    {
+      "name": "E1-E5-roles-list-load",
+      "status": "FAIL",
+      "error": "Error: expect(locator).toBeVisible() failed\n\nLocator: getByTestId('role-list-table')\nExpected: visible\nTimeout: 30000ms\nError: element(s) not found\n\nCall log:\n  - Expect \"to.be.visible\" with timeout 30000ms\n  - waiting for getByTestId('role-list-table')\n",
+      "ms": 115394
+    },
+    {
+      "name": "E3-roles-list-read-your-write",
+      "status": "FAIL",
+      "error": "TimeoutError: The operation was aborted due to timeout",
+      "ms": 1249048
+    },
+    {
+      "name": "E4-E12-roles-ui-edit-save-overlap",
+      "status": "FAIL",
+      "error": "TimeoutError: The operation was aborted due to timeout",
+      "ms": 1058715
+    },
+    {
+      "name": "E8b-version-conflict-hint",
+      "status": "FAIL",
+      "error": "TimeoutError: The operation was aborted due to timeout",
+      "ms": 994931
+    },
+    {
+      "name": "E13-E17-agents-list-load",
+      "status": "FAIL",
+      "error": "Error: role-list 快照 90000ms 未收敛",
+      "ms": 877219
+    },
+    {
+      "name": "E18-agents-no-error-terminal-during-write",
+      "status": "FAIL",
+      "error": "Error: role-list 快照 90000ms 未收敛",
+      "ms": 90773
+    }
+  ],
+  "browserTimings": [],
+  "failures": [
+    "E1-E5-roles-list-load",
+    "E3-roles-list-read-your-write",
+    "E4-E12-roles-ui-edit-save-overlap",
+    "E8b-version-conflict-hint",
+    "E13-E17-agents-list-load",
+    "E18-agents-no-error-terminal-during-write"
+  ],
+  "browser": "158.0.8127.37"
+}

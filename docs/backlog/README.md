@@ -22,6 +22,7 @@
 
 | 稳定 ID | 历史别名 | 类型 | 优先级 | 标题 | 漏斗阶段 | 目标版本 | 关联文档 |
 |---|---|---|---|---|---|---|---|
+| REQ-0117 | — | 需求 | P1 | 大目录下创建 2000+ 表角色时 WebUI 报 503（已复现，待立项） | S4｜ | — | [正文](entries/REQ-0117-create-2000-table-roles-webui-503.md) · [Spec](../specs/lucy-20261126-access-write-window-resilience-spec.md) · [Plan](../plans/lucy-20261126-access-write-window-resilience-plan.md) · [错题本](../lessons/2026-11-26-large-catalog-role-write-blocks-display-reads.md) |
 | REQ-0116 | — | 需求 | P1 | 自动 Join Graph 推断与辅助标注 | S1｜ | v0.35.0 | [Spec](../specs/lucy-20261126-auto-join-graph-inference-spec.md) · [Plan](../plans/lucy-20261126-auto-join-graph-inference-plan.md) |
 | REQ-0115 | — | 需求 | P0 | 渐进开放 KTX 已内置分析型连接器（ClickHouse / DuckDB） | S1｜ | v0.35.0 | [Spec](../specs/lucy-20261126-ktx-analytical-connectors-rollout-spec.md) · [Plan](../plans/lucy-20261126-ktx-analytical-connectors-rollout-plan.md) |
 | REQ-0114 | — | 需求 | P1 | BI / 建模层与外部文档只读导入器（风险较大，暂缓开发） | S1｜ | — | [Spec](../specs/lucy-20261126-bi-doc-readonly-importer-spec.md) · [Plan](../plans/lucy-20261126-bi-doc-readonly-importer-plan.md) |

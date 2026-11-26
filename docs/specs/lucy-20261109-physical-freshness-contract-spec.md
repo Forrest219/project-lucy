@@ -7,6 +7,7 @@
 | 台账号 | 无（0.30 台账未建立） |
 | 功能编号 / 优先级 | 清单 **P0-B**；需求池 **REQ-030-028** / **P0 伴生** |
 | 状态 | **v0.1-draft；O1–O3 已闭合（2026-11-13）＝建议包 F；待 R2-F；终稿未确权；冻结落地；未授权实现**。**不是** R2-F，**不是** R4，**不可功能合同收口**。须 Codex CLI 终审或委托人明示确权（R2-F）→ 另授开发授权后才可改代码。本条不表示可上线 |
+| 阶段 | S1 |
 | 授权边界 | 本文件**不授权改代码**。不修改 P0-4 已落地的 `answer_verifiability.cutoff`（该条 O2＝A：成功块一律 `not_checked`） |
 | 决策来源 | 2026-11-08 能力盘点：呈现闸需要截止期真源；2026-11-09 委托人要求把 P0-B 的 Spec／Plan 往前推 |
 | 需求来源 | [需求池 REQ-030-028](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；[功能清单池 P0-B](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)；[P0-4 可核对 Spec](lucy-20261107-answer-verifiability-spec.md) §4.4 |

@@ -14,8 +14,7 @@ Workflow files:
 
 | File | Lifecycle | Triggers |
 |---|---|---|
-| `.github/workflows/lucy-ci.yml` | 日常验证（daily verification） | 所有 pull request；push 到 `main` 和 `lucy-v0.35`；`workflow_dispatch` |
-| `.github/workflows/lucy-typecheck.yml` | 类型检查（独立结论） | 与日常验证相同 |
+| `.github/workflows/lucy-ci.yml` | 日常验证（daily verification，含 `webui-typecheck`、`event-loop-gate`、`webui-pr-smoke`） | 所有 pull request；push 到 `main` 和 `lucy-v0.35`；`workflow_dispatch` |
 | `.github/workflows/lucy-release.yml` | 客户发布 / 诊断 | 仅 `v*` tag；显式手动（需先选 mode） |
 
 `lucy-v0.35` 的 push 触发是**临时入口**：该分支并入 `main`、或不再作为集成分支时必须删除该触发。
@@ -47,8 +46,10 @@ Manual inputs (`lucy-release.yml`):
 | `headless-config` | daily | `npm run smoke:p0:headless-config` |
 | `demo-db-smoke` | daily | `npm run smoke:p0:demo`（原名 `demo-e2e`，仅数据库/演示冒烟） |
 | `postgres-demo-db-smoke` | daily | `npm run smoke:p0:postgres-demo`（原名 `postgres-demo-e2e`） |
+| `webui-typecheck` | daily | `tsc --noEmit --incremental false -p webui/tsconfig.json`；零基线达成后已并入日常 workflow 并纳入 `ci-required` |
+| `event-loop-gate` | daily | `npm run gate:event-loop`（SC-13/SC-14 客户规模事件循环回归门禁）；纳入 `ci-required` |
+| `webui-pr-smoke` | daily | Playwright Chromium `@pr-smoke`（含零 `pageerror` 与兜底错误页巡检）；纳入 `ci-required` |
 | `ci-required` | daily | 聚合本 workflow 全部日常 job 的 `needs.*.result`；`if: always()`；**不解析测试总数**；任一依赖不是 `success` 即失败。**尚未**纳入分支保护 |
-| `typecheck` | typecheck | `tsc --noEmit --incremental false -p webui/tsconfig.json`；独立 workflow，失败不改变日常 workflow 的结论，也不进入 `ci-required` |
 | `customer-amd64-native` | release | tag/manual `mode=customer-candidate`；原生 amd64 **单架构**构建候选镜像（`candidate-amd64-…` tag），G1/G2/G3/G4/G4b/G8 结果按候选 digest 记录 |
 | `real-e2e` | release | tag/manual `mode=customer-candidate`；`[self-hosted, lucy-protected]` runner：同一 digest 部署到隔离单副本 K8s，执行 security / 浏览器 / 真实客户端并签名归档；无该 runner 即不可调度（BLOCKED，不退化为 headless） |
 | `customer-release-readiness` | release | **Required check**：独立复验证据与签名归档；`npm run gate:customer-release` |

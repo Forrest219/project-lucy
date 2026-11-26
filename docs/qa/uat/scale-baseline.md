@@ -61,10 +61,27 @@
 | Skill | **≥100** 个（loader 同口径） | 另须 `lucy_skill_read` 真实读到指定 Skill |
 | 正式角色 | **≥200**，含 `lucy_admin` 全局角色与受限角色 | 运行时生效绑定、全局 Source 集合与跨连接正确查询须核对 |
 | 表 | 沿用 §2 跨夹具 **≥2000**（含宽表） | 口径仍由 P1-34 拥有 |
+| 持续压力到达模型（设计值） | 思考时间＝**截断正态 μ=60 秒、σ=20 秒、截断 [20 秒, 120 秒]**；有效窗口 **12×150 秒**；题档占比 **simple 60%／complex 40%**；思考时间随机种子固定整数 **20261124**（跑次证据记录，同候选族跨跑次不变） | P1-78 判定器从本节读取并写入证据（Spec D23⑥）；期望每窗口每档到达量须 ≥20、每个长链身份在**完整 1800 秒有效窗口内**的计划到达 ≥21（不是每个 150 秒窗口；按上列参数：50 身份×150÷60≈125 次／窗口，complex≈50、simple≈75；单个长链身份 1800÷60≈30 次／全窗口）。**设计值，非实测**：由委托人在 baseline-seed 后具名冻结，冻结前 P1-78 只产生 `SEED_ONLY`；不得随失败样本调整 |
+| 长链实例（P1-78 `LONG_FOLLOW`） | 50 身份档 **≥5 个链实例**（`ceil(0.1×50)`），覆盖 `lucy_admin`、受限角色 A、受限角色 B 各至少 1 个 | 模板由 P1-79 提供；链实例＝模板×身份×`runId`（Spec D20）；身份分布仍沿用「压测 Agent 身份」行 |
 
-- **造数与断言**：沿用 §4 三件套（`uat:scale-baseline:seed:access｜wiki-skills｜audit`）与 `npm run uat:scale-baseline`；本 profile 的精确向量与 50 身份断言需扩展 `scripts/uat/check-uat-scale-baseline.mjs`，属测试基建改动，需独立开发授权后落地。
+- **造数与断言**：沿用 §4 三件套（`uat:scale-baseline:seed:access｜wiki-skills｜audit`）与 `npm run uat:scale-baseline`；本 profile 的精确向量与 50 身份断言需扩展 `scripts/uat/check-uat-scale-baseline.mjs`，属测试基建改动，需独立开发授权后落地。到达模型与长链实例两行不是库内计数，由 P1-78 判定器读取并在开跑前做样本可达性校验，不进入该断言脚本。
 - **未达标时**：P1-78 的 `SOAK`／`LONG_FOLLOW` 记 BLOCKED，不得缩规模、换身份或用直连脚本替代开跑。
 - **备份与还原**：①② 改配置／Wiki 前自动备份，改动前卷内留副本；demo 基座的无关角色、Agent、凭据与业务数据不得被覆盖。
+
+### 1.2 客户超标稳定性基线档（`customer-stability`）与常规伴随哨兵门禁
+
+> 登记于 2026-11-26（委托人确认：未来 UAT 基准线须高于已知客户现网水位，并将外部拨测升级为常规伴随门禁）。本档位是对标客户现网（8 连接／25 Schema／2691 张已发现表／Helm 默认 `2C / 2Gi`）按 **1.2×–1.3×** 抬升后的稳定性前置与门禁，通过 `node scripts/uat/check-uat-scale-baseline.mjs --profile customer-stability` 校验，不降低 §1 与 §1.1 任何既有下限。
+
+| 维度 | 本 profile 下限 / 红线 | 已知客户现网参考 | 计数口径与核验方式 |
+|---|---|---|---|
+| 数据连接数 | **≥ 10** | 8 个连接 | `ktx.yaml` `connections` 键数（含 `driver`/`username`/`schemas`/`enabled_tables` 完整契约） |
+| Schema 数 | **≥ 30** | 25 个 Schema | `semantic-layer/<conn>/_schema/*.yaml` 文件计数（与 `webui/server/semantic-layer.ts` 真实加载口径一致） |
+| 跨源已发现表数 | **≥ 3500** | 2691 张表 | MySQL + Hive（及扩展夹具库）合计表数；仅靠 MySQL 不足时须启用 Hive 或 XL 档，不再以 `SKIPPED` 放行 |
+| 容器资源上限 | **CPU ≤ 2 核、内存 ≤ 2Gi** | Helm 默认 `2C / 2Gi` | Docker `HostConfig.Memory` / `NanoCpus` 只读校验；防止本机大内存掩盖 V8 Full GC 与 OOMKill |
+| 常规伴随哨兵门禁 | **`stability-sentinel.mjs --mode=gate` 退出码 0** | 外部 `monitor.log` 拨测 | 压测／Soak 期间以 **15s** 频率全程采样 `/api/livez`、`/api/readyz`、`/api/health`（含顶层 `data.uptimeS`、`selfHeal`、`eventLoop.{p99Ms,maxMs}`、`displayBusy.{busy,graceServes}`、`mcpCapacity`）及周期性 `/api/auth/login`（`1883-soak` 自动注入隔离栈管理员 0600 凭据；`mip-uat` 透传 `LUCY_SENTINEL_ADMIN_ID`/`PASSWORD_FILE`）；任一非预期 502/503、`readyz != 200`、登录失败、`uptimeS` 回退、`selfHeal.phase !== normal`、连续 3 轮 `eventLoop.p99Ms > 250ms` 或单次 `maxMs > 1000ms` 判 FAIL（单纯 `health.status=degraded` 且 `readyz=200` 仅作观测统计，不误杀预期 KTX reload 窗口） |
+
+- **双模式复用**：`scripts/uat/stability-sentinel.mjs` 同时支持 `--mode=observe`（线上 30s 观测，输出 JSONL 与单行告警）与 `--mode=gate`（UAT 15s 伴随门禁，输出 `summary.json` 并按红线返回退出码 0/1），消除线上拨测与 UAT 门禁的观测割裂。
+- **压测叠加动作**：在 `customer-stability` 稳定性 Soak 期间，需叠加「多连接并发刷新 + 问数并发」，以复现并拦截连接刷新与事件循环阻塞叠加触发 P1-81 看门狗摘流/重启的退化。
 
 ## 2. 表分布口径（合计 ≥2000）
 

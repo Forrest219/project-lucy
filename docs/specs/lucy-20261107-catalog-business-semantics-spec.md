@@ -7,6 +7,7 @@
 | 台账号 | 无（0.30 台账未建立） |
 | 功能编号 / 优先级 | 清单 **P0-2**；需求池 **REQ-030-023** / **P0** |
 | 状态 | **v0.6；R2-F＋R3（O1–O3）＋R4 已闭合（2026-11-08）；功能合同已收口（2026-11-13）；实现 CR 已落盘（PASS，2026-11-13）**（SC-01–SC-17 证据关闭；见 [证据审计](../reviews/2026-11-13-catalog-business-semantics-sc-evidence-audit.md)）。**本条收口不表示可上线** |
+| 阶段 | S5 |
 | 授权边界 | R2-F＋R3＋R4 已闭合（R4：2026-11-08）。授权范围＝本 Spec／Plan 实现与测试；**不**表示可上线／发布取证。实现由 Cursor coder；Cursor reviewer 做 code review。 |
 | 决策来源 | 2026-11-06 CFO 误报事故 ＋ 2026-11-07 客户沟通实录（翊总／田总）：「AI 取数取错了表」；第二轮沟通自述「**表一多，AI 自己不知道该选哪张**」 |
 | 需求来源 | [需求池 REQ-030-023](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；[误报防线 §4.1 G1](../plans/lucy-20261107-misreport-defense-and-stored-user-experience-plan.md)；[功能清单池 P0-2](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md)；[核心方向 §4.1 约束闸](../plans/lucy-20261107-lucy-0-30-core-direction.md) |

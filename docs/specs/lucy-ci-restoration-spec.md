@@ -239,3 +239,8 @@ New terms:
 
 - [GitHub Required status checks](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks)：workflow 级过滤可能留下 Pending，聚合需显式覆盖失败依赖；未来启用 merge queue 时需新增 merge_group，当前不自行启用。
 - [GitHub Workflow syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax)：job 级 permissions、条件及执行策略。
+
+## 变更记录（v1.1，2026-11-26）
+
+- 满足 §4.1 零诊断基线前提（`npm run typecheck` 实测 0 诊断），将 `webui-typecheck` 从独立 `.github/workflows/lucy-typecheck.yml` 折叠并入 `.github/workflows/lucy-ci.yml` 并纳入 `ci-required` 聚合门禁，同步删除独立 workflow 文件。
+- 在 `lucy-ci.yml` 增补 `event-loop-gate`（SC-13/SC-14）与 `webui-pr-smoke`（Playwright `@pr-smoke`）并行 job 并纳入 `ci-required`；在 `spec-and-webui` 补接生产依赖 `npm audit`、`lint:skip-ledger`、`lint:server-sync-io` 等静态门禁。

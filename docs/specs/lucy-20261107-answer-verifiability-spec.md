@@ -7,6 +7,7 @@
 | 台账号 | 无 |
 | 功能编号 / 优先级 | 清单 **P0-4**；需求池 **REQ-030-022** / **P0** |
 | 状态 | **v0.4；R2-F＋R3＋R4 已闭合（2026-11-09）**；**功能合同已收口（2026-11-13）**；**实现 CR 已落盘（PASS，2026-11-13）**（SC-16／17／21／22 夹具证据已补全；vitest `answer-verifiability` 26/26）。O1＝A／O2＝A。**本条收口不表示可上线** |
+| 阶段 | S5 |
 | 授权边界 | **已获开发授权（R4，2026-11-09）**：可按配套 Plan 改运行代码与测试；不表示可上线 |
 | 需求来源 | [需求池 REQ-030-022](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md)；[误报防线](../plans/lucy-20261107-misreport-defense-and-stored-user-experience-plan.md)；[功能清单池](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) |
 | 配套 Plan | [lucy-20261107-answer-verifiability-plan.md](../plans/lucy-20261107-answer-verifiability-plan.md)（**v0.4-draft**） |

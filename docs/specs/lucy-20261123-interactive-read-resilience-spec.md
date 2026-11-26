@@ -7,9 +7,9 @@
 | 功能编号 | P1-75／REQ-030-096（拟 P1，不入核心分母） |
 | 台账号 | 无 |
 | 阶段 | S3 |
-| 状态 | S3｜实现进行中（既有 SC-01–08：A1／A2 单元＋复审 PASS；A3 判定器 24/24；demo 镜像已含改动）。正式 G1 R0–07／G2 与多页面必做回归尚未封存跑次。2026-11-24 委托人明示定稿扩容设计（Spec v1.4／Plan v1.3／UAT v1.3）：目标「WebUI 全部页面含二级 tab 无 503」，503 按原因登记表判定（附录 A），超宽限的只读展示降级为 200；定稿不含开发授权，SC-09–10 对应运行代码开发未授权，仅设计与登记，测试台 `UAT-READ-RES-09／10` NOT RUN；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。 |
-| 授权边界 | 2026-11-23 委托人批准修订 Spec、UAT 与并行任务；同日明示「完成落地和测试」＝运行代码＋测程开发授权，**范围仅 SC-01–08**。2026-11-24 委托人明示「定稿 Spec、Plan、UAT，不进行开发」：扩容部分按无 Codex 时的委托人明示确权口径登记**设计层终稿确权**，**不含 §2.5／SC-09–10 的开发授权**，须委托人另发。正式 UAT／INDEX 登记仍须实测回执。 |
-| 扩容修订 | 2026-11-24 v1.4：定稿 §2.5 与附录 A（503 原因登记表），关闭 v1.3-draft 的 OQ-1 至 OQ-4；修订 §2.4 构建等待口径；新增 SC-09／SC-10；修订 UAT-READ-RES-08-B 的「可重试 503」口径；登记对 [Spec 195](lucy-20261030-display-snapshot-invalidation-isolation-spec.md)、[Spec 174](../../webui/docs/174-webui-entry-performance-spec.md) 的边界修订指针，并联动修订 [P1-81](lucy-20261124-stuck-state-self-healing-spec.md) §3。2026-11-24 复核修订（同版；委托人确认设计复核通过，进入「待开发授权」，暂定值与原因码命名已接受）：`reconcile_failed` 持续越界转 C 类 503 的状态机；四种 200 状态与待定计时；B 类补上限、`ACCESS_RECOVERY_REQUIRED` 与 `question_budget_unavailable` 改归 C。评审处置见 [Kimi 评审处置](../reviews/2026-11-24-p1-75-v1-3-kimi-review-disposition.md)。**旧 08-B 证据只保留历史意义，不能证明 v1.4 的 08-B。** |
+| 状态 | S3｜实现进行中（既有 SC-01–08：A1／A2 单元＋复审 PASS；A3 判定器 24/24；demo 镜像已含改动）。**开发授权已获得（2026-11-24，委托人明示「授权完成 P1-75／REQ-030-096 的落地」）**：覆盖 Plan X0–X6／SC-09／SC-10 运行代码与测程，含为满足 X3 前置而对 P1-81 `stuck-watchdog`／展示读探针按 Spec v1.4 §2.5.1／P1-81 §3 做失败定义对齐（仅对齐增量，不重开 P1-81 范围）。**运行代码落地进展**：X1 判定器最小升级已落地（`interactive-read-resilience.mjs`＋`check-503-registry.mjs`，旧 08-B 503 合格口径已改）；X3／X4 服务端已落地（10 秒构建等待、`stale`／`pending` 200、`DISPLAY_RECONCILIATION_FAILED`、响应头冻结、自动探测不 503、P1-81 探针对齐）；X5 前端 banner／`pending` 消费已挂主路径页（概览／catalog／Agent／角色／启用表范围）。X0 矩阵草稿已落盘（术语登记、[降级提示交互合同](lucy-20261124-p175-degraded-read-ui-contract-spec.md)），**待非作者复核**后方可宣称 X1 对账完成；X2 根因单变量对照报告、X6 混压 UAT **未做**。正式 G1／G2 与 09／10 UAT 仍未封存，测试台 `UAT-READ-RES-09／10` NOT RUN；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。 |
+| 授权边界 | 2026-11-23 委托人批准修订 Spec、UAT 与并行任务；同日明示「完成落地和测试」＝运行代码＋测程开发授权，**范围仅 SC-01–08**。2026-11-24 委托人明示「定稿 Spec、Plan、UAT，不进行开发」：扩容部分按无 Codex 时的委托人明示确权口径登记**设计层终稿确权**，**不含 §2.5／SC-09–10 的开发授权**，须委托人另发。正式 UAT／INDEX 登记仍须实测回执。 **2026-11-24 开发授权（委托人明示「授权完成 P1-75／REQ-030-096 的落地」）**：补发上句所缺的开发授权，覆盖 Plan X0–X6／SC-09／SC-10 运行代码与测程，含为满足 X3 前置而对 P1-81 `stuck-watchdog`／展示读探针按本 Spec v1.4 §2.5.1／P1-81 §3 做失败定义对齐（仅对齐增量，不重开 P1-81 范围）；此前「不含 §2.5／SC-09–10 的开发授权」仅为 2026-11-24 设计定稿时的历史边界，现以本句为准。正式 G1／G2 与 09／10 UAT 仍未封存；授权 ≠ 功能合同收口；≠ UAT PASS；≠ 可上线。 |
+| 扩容修订 | 2026-11-24 v1.4：定稿 §2.5 与附录 A（503 原因登记表），关闭 v1.3-draft 的 OQ-1 至 OQ-4；修订 §2.4 构建等待口径；新增 SC-09／SC-10；修订 UAT-READ-RES-08-B 的「可重试 503」口径；登记对 [Spec 195](lucy-20261030-display-snapshot-invalidation-isolation-spec.md)、[Spec 174](../../webui/docs/174-webui-entry-performance-spec.md) 的边界修订指针，并联动修订 [P1-81](lucy-20261124-stuck-state-self-healing-spec.md) §3。2026-11-24 复核修订（同版；委托人确认设计复核通过，进入「待开发授权」，暂定值与原因码命名已接受）：`reconcile_failed` 持续越界转 C 类 503 的状态机；四种 200 状态与待定计时；B 类补上限、`ACCESS_RECOVERY_REQUIRED` 与 `question_budget_unavailable` 改归 C。评审处置见 [Kimi 评审处置](../reviews/2026-11-24-p1-75-v1-3-kimi-review-disposition.md)。**旧 08-B 证据只保留历史意义，不能证明 v1.4 的 08-B。** 2026-11-24 授权登记：X0 矩阵草稿见 [x0-page-tab-api-503-matrix](../qa/uat/suites/interactive-read-resilience/x0-page-tab-api-503-matrix.md)（待非作者复核者对账）；X3／X5 前置交互合同见 [降级提示交互合同](lucy-20261124-p175-degraded-read-ui-contract-spec.md)；降级提示术语已登记 [术语标准 §4.6.1](../../webui/docs/00-product-terminology-standard.md)。**2026-11-24 X3 承载位置已冻结为响应头**：`X-Lucy-Display-State`（`grace|stale|pending`）、`X-Lucy-Display-Age-Ms`（`pending` 不带）、`X-Lucy-Display-Generation`、`X-Lucy-Display-Pending-Ms`（仅 `pending`）、`X-Lucy-Display-Prolonged: 1`（非错误型越过 D_max），并带 Server-Timing `degraded;desc=<state>`；`grace`／`stale` 保持原响应体，`pending` 为 `{ ok: true, data: null, display: {…} }`；持续 `reconcile_failed` 越界稳定码 `DISPLAY_RECONCILIATION_FAILED`（C 类 503）。实现见 `webui/server/display-http.ts`／`display-snapshot.ts`；X5 前端消费另批。 |
 | 需求 / 验收 | [总账 P1-75](../plans/lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [REQ-030-096](../plans/lucy-20261102-lucy-0-30-0-requirement-pool-plan.md#req-030-096mcp-握手与-agent-名册读取长尾治理) · [UAT-SUITE-INTERACTIVE-READ-RESILIENCE](../qa/uat/suites/interactive-read-resilience/suite.md) |
 | 配对计划／评审 | [修复与复现 Plan](../plans/lucy-20261123-interactive-read-resilience-plan.md) · [初审](../reviews/2026-11-23-p1-75-interactive-read-resilience-adversarial-review.md) · [Codex 复审及定稿处理](../reviews/2026-11-23-p1-75-interactive-read-resilience-codex-review.md) · [v1.3 扩容 Kimi 评审](../reviews/2026-11-24-p1-75-v1-3-all-pages-no-503-kimi-review.md) · [评审处置](../reviews/2026-11-24-p1-75-v1-3-kimi-review-disposition.md) |
 
@@ -74,7 +74,7 @@
 
 展示快照构建共用请求级等待截止。v1.2 为 4 秒、到点返回可重试的 `DISPLAY_SNAPSHOT_BUSY`；**v1.4 起取消该 503**：无可服务视图时请求内等待构建至多 10 秒（与 08-A 首构建预算一致），到点返回 200＋显式待定状态，有同代次视图时按 §2.5 返回降级 200，均记录 `build_wait_timeout` 等内部原因。共享构建继续占用原槽位和执行容量，完成后核对当前作用域、新鲜度及代次，通过核验才发布。每个新请求仍执行独立鉴权和读取核验。既有 1.5 秒核验／写入恢复预算继续适用。已实现的 4 秒截止及其 T0 判定器须随 §2.5 升级。
 
-### 2.5 全页面无 503 合同（v1.4 扩容，设计定稿）
+### 2.5 全页面无 503 合同（v1.4 扩容，设计定稿；开发授权已获得 2026-11-24）
 
 **目标。** WebUI 全部页面和页内二级 tab，在正常运行与压力下，用户首读、tab 切换、写后首读及自动重试，都看不到 503。依据：`f5e4b14d` 压力跑次中概览首读 503 为 10/10，停压后 134 秒内展示读有 80 次 503。「零」指冻结样本内 0 次并报告 `0/N`，不外推为普遍保证。
 
@@ -141,7 +141,7 @@ A 类读不再返回 503，而是返回下列四种 200 之一。`fresh` 是正�
 |---|---|
 | OQ-1 年龄上限 | 持续降级上限 D_max＝180 秒，对齐 P1-81 T_B；非错误型降级越界不以 503 收场，提示升级并计为持续降级失败，同时作为 P1-81 观测输入；持续 `reconcile_failed` 越界转 C 类 503（见 §2.5.1 边界 5）。降级占比上限在 09 首次实测校准后由委托人写入变更行，校准前占比必须报告但不作通过条件，D_max 不得放宽 |
 | OQ-2 无视图首读 | 请求内等待至多 10 秒，仍无结果则 200＋`pending`，不含数据字段；有同代次视图则按 `grace`／`stale` 处理 |
-| OQ-3 降级标记 | 语义字段集合冻结：状态（`grace`／`stale`／`pending`）、数据年龄（毫秒）、视图代次。承载位置（响应头或信封）在 X3 冻结。页面文案先登记术语标准、先补交互合同再实现，这是 X3／X5 的**前置门槛**，不再是开放设计问题 |
+| OQ-3 降级标记 | 语义字段集合冻结：状态（`grace`／`stale`／`pending`）、数据年龄（毫秒）、视图代次。承载位置（响应头或信封）在 X3 冻结。页面文案先登记术语标准、先补交互合同再实现，这是 X3／X5 的**前置门槛**，不再是开放设计问题（2026-11-24 已落盘：[术语标准 §4.6.1](../../webui/docs/00-product-terminology-standard.md)、[交互合同](lucy-20261124-p175-degraded-read-ui-contract-spec.md)；承载位置仍在 X3 冻结） |
 | OQ-4 自动探测 | 页面加载自动探测归 A；用户主动探测归 D；`PROBE_QUEUE_FULL` 与 `PROBE_QUEUE_TIMEOUT` 均登记 |
 
 ## 核心流程（伪代码）
@@ -264,11 +264,11 @@ P1 的降级须经主路径可用性复核。合法纯 MCP 仍可在同一入口
 ## 交互合同豁免
 
 - 原因：SC-01–08 不改变用户可见 WebUI 表面，只修订既有请求和快照的数据路径与性能。
-- 不改变：现有路由、导航、布局、控件、错误文案和重试入口。前台浏览器验证与即时计时见 SC-04／05／07／08／09／10。**v1.3 例外**：§2.5 的降级提示（数据年龄、「数据可能不是最新」类文案、手动刷新）是新增的用户可见内容，豁免不适用于该部分；实现前须先补交互合同（位置、触发、样式）与术语标准登记，X3／X5 的前置门槛未满足前不得实现该提示。
+- 不改变：现有路由、导航、布局、控件、错误文案和重试入口。前台浏览器验证与即时计时见 SC-04／05／07／08／09／10。**v1.3 例外**：§2.5 的降级提示（数据年龄、「数据可能不是最新」类文案、手动刷新）是新增的用户可见内容，豁免不适用于该部分；实现前须先补交互合同（位置、触发、样式）与术语标准登记，X3／X5 的前置门槛未满足前不得实现该提示。前置已于 2026-11-24 落盘：[交互合同](lucy-20261124-p175-degraded-read-ui-contract-spec.md)（X5 前置；X3 承载位置实现时冻结）。
 
 ## Terminology Compliance
 
 This feature follows `webui/docs/00-product-terminology-standard.md`.
 
 New terms:
-- 降级展示提示（拟，v1.4）：页面在展示较旧的已核验数据，或尚无可展示数据（待定）时的提示用语，含「数据可能不是最新」「长时间未更新」「正在加载」三类。先登记术语标准再写 UI 文案或测试断言（X3／X5 前置门槛）。`degraded`、`busyReason`、错误码仍只用于 Spec、UAT 与证据，不进入用户可见文案。
+- 降级展示提示（拟，v1.4）：页面在展示较旧的已核验数据，或尚无可展示数据（待定）时的提示用语，含「数据可能不是最新」「长时间未更新」「正在加载」三类。先登记术语标准再写 UI 文案或测试断言（X3／X5 前置门槛）。已登记：[术语标准 §4.6.1](../../webui/docs/00-product-terminology-standard.md)（数据可能不是最新／正在加载／长时间未更新）。`degraded`、`busyReason`、错误码仍只用于 Spec、UAT 与证据，不进入用户可见文案。

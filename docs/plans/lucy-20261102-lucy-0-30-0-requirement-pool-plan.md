@@ -1,5 +1,7 @@
 # Lucy 0.30.0 需求池
 
+> **【只读冻结快照 — 2026-11-26】**：本 0.30 需求池索引已迁移至全仓唯一常青需求池 **[`docs/backlog/README.md`](../backlog/README.md)**，新需求（`REQ-0113+`）改在一需一档 `docs/backlog/entries/<ID>.md` 登记。本文件保留历史 `REQ-030-001`–`112` 正文与锚点只读可查，**禁止继续追加或改写**。
+
 | 元数据 | 内容 |
 |---|---|
 | 文档类型 | 候选需求池。**不是**功能 Spec，**不授权**实现 |
@@ -11,8 +13,26 @@
 | P1-66 本轮变更 | v0.123（2026-11-20）：新增 REQ-030-087／P1-66，授权优化方案、Spec／Plan、保留现场权限展开规模的 Docker 浏览器验证设计；不授权实现或执行。 |
 | P1-73 本轮变更 | v0.140（2026-11-22）：P1-73＋P1-35 → **S5 功能合同已收口**（编排 Plan 执行完成）。v0.139：P1-73 开发授权；S2→S3。v0.137：终稿确权 S2。v0.136：伞含 `status-vocab`。v0.135：入池 REQ-030-094。 |
 | P1-74 本轮变更 | v0.141（2026-11-22）：Spec／Plan v1.1 终审闭环修订，D1–D9 不变；UAT 设计 v1.0，BESC-R0／01–12 全必做；开发未授权，仍 NOT RUN。v0.140：终稿确权；v0.139：挂测试台；v0.138：入池。 |
-| 版本 / 日期 | v0.181 / 2026-11-25 |
+| 版本 / 日期 | v0.183 / 2026-11-25 |
+| P1-89/90/91 MECE 优化 | v0.183（2026-11-25）：委托人授权跨 Spec MECE 边界优化，REQ-030-110/111/112（P1-89/90/91）三套 Spec／Plan 升 v0.2-draft（原 P1-90 F-b/F-c 移交 P1-91 独占 `semantic-assets`；P1-89 确立 D8 统一信封并补登 e2e-ledger；P1-90 修复三段名、四路径归一化与反向 shadow 告警；P1-91 增双 409 组合确认、只读列表与业务 overlay 防误删）。镜像总账 v2.92。 |
+| P1-91 本轮变更 | v0.182（2026-11-25）：新增 REQ-030-112（清单 P1-91）语义层 overlay 发布通道冲突护栏与生命周期修复；源自客户修正版报告（publish per-table 文件两段名顶掉 manifest 三段名、query 失败、API 无法删除）与当日对 Lucy 及上游 `@kaelio/ktx@0.16.0` 的逐条代码核查；仅登记与起草，S1，终稿未确权，开发未授权；测试台 not_registered。镜像总账 v2.90。 |
 | P1-90 本轮变更 | v0.181（2026-11-25）：新增 REQ-030-111（清单 P1-90）Schema Manifest 按表追加与覆盖门禁逃生修复；源自客户新表接入死锁 Bug 报告（v0.25.0 实测四路径死锁）与当日逐条代码核查；仅登记与起草，S1，终稿未确权，开发未授权；测试台 not_registered。镜像总账 v2.89。 |
+| P1-83 v0.5 复审整改 | v0.180（2026-11-24）：REQ-030-104 Spec／Plan 升 v0.5-draft；补齐持久化、配置与双向兼容、故障注入、画像、计时和审计对账；步骤 2 确权与步骤 3 基线后预算冻结解耦，开发前冻结与另行开发授权不变；同步 P1-85 OQ-1 及步骤 6 后 Chart／values 变更失效规则。Codex CLI 用量上限未能执行，本轮非确权；仍 S1，终稿未确权，开发未授权。镜像总账 v2.86。 |
+| P1-85 本轮变更 | v0.179（2026-11-24）：REQ-030-106 委托人授权起草 Spec／Plan／UAT，新增 Chart 停止宽限文档与 `UAT-SUITE-K8S-STOP-GRACE`（NOT RUN）；默认 60、下限 45、`Recreate`、无 `preStop`；OQ-1（旧 Chart 首升编排归属）待裁定；P1-83 步骤 1⑥ 基线须先于候选落台；仍 S1，终稿未确权，开发未授权。镜像总账 v2.85。 |
+| P1-84 终稿确权 | v0.178（2026-11-24）：REQ-030-105 终稿确权（委托人明示「按这个处置，并定稿，暂不开发」）→ Spec／Plan／UAT v1.0、阶段 S2；第二轮对抗复审处置落盘（接受／收窄／延期见总账 v2.84）；OQ-1／OQ-7 冻结；无 Codex 复审；开发未授权；测试台 NOT RUN；镜像总账 v2.84。 |
+| P1-86／P1-87 本轮变更 | v0.176（2026-11-24）：新增 REQ-030-107（清单 P1-86）镜像候选门禁、REQ-030-108（清单 P1-87）门禁速赢四项；依据[门禁现状审阅](../reviews/2026-11-24-image-candidate-gate-review.md)；委托人明示「批准先写 Review 报告，同时起草总账条目」；仅登记，Spec 待写；S1，终稿未确权，开发未授权；测试台 not_registered。镜像总账 v2.82。 |
+| P1-83 v0.4 修订 | v0.177（2026-11-24）：REQ-030-104 Spec／Plan 升 v0.4-draft（第二轮评审认同项落盘）；预裁定 OQ-3 红线 ≤360 秒、N＝3；OQ-5 dry-run 切分 SC-01–11；REQ-030-106 范围订为 grace＝60＋渲染断言、不并入 `preStop`；D-2 机器来源暂缓，台建设与测程授权暂缓；仍 S1，终稿未确权，开发未授权。镜像总账 v2.83。 |
+| P1-83 OQ-5 补裁 | v0.175（2026-11-24）：REQ-030-104 OQ-5 已裁——X3 为最终镜像门禁，一次性全量验收，取消 X3 后复跑；延期熔断 pre-X3 dry-run（排除 SC-01–07、不抵扣、委托人判定触发）；仍 S1，终稿未确权，开发未授权。镜像总账 v2.81。 |
+| P1-83／P1-85 决策升版 | v0.174（2026-11-24）：REQ-030-104 Spec／Plan 升 v0.3-draft，记录委托人裁定 OQ-1＝C、OQ-4、OQ-6、OQ-7、OQ-3 口径、D-2 方向（红线数值与 amd64 K3s 台授权待裁）；新增 REQ-030-106（清单 P1-85）Chart 停止宽限；仍 S1，终稿未确权，开发未授权。镜像总账 v2.80。 |
+| P1-84 Gate／OQ-2 | v0.173（2026-11-24）：REQ-030-105 → v0.3-draft；诊断 Gate 完成；**OQ-2＝A**；测试台仍 NOT RUN；终稿未确权；开发未授权；镜像总账 v2.79。 |
+| P1-83 评审修订 | v0.172（2026-11-24）：REQ-030-104 Spec／Plan 升 v0.2-draft，按 Kimi 开发前对抗性评审修订（11 项中采纳 8、部分采纳 3）；SC 扩为 11 条；待委托人裁 OQ-1／3／4／6／7 与 B 层台；仍 S1，终稿未确权，开发未授权。镜像总账 v2.78。 |
+| P1-79 终稿确权 | v0.171（2026-11-24）：REQ-030-100 终稿确权（委托人明示「授权 P1-79 定稿，暂不开发」）→ Spec／Plan v1.0、阶段 S2；O1＝A、M1–M4 已并入；未经 Codex 复审（额度 2026-11-27 恢复后可补审）。开发未授权；P1-78 保持 S2｜v1.0；镜像总账 v2.77。 |
+| P1-84 对抗修订 | v0.170（2026-11-24）：REQ-030-105 Spec／Plan／UAT → v0.2-draft（对抗评审处置）；S1；诊断 Gate／OQ-2 未裁定；测试台 NOT RUN；镜像总账 v2.75。 |
+| P1-79 决策闭合 | v0.169（2026-11-24）：REQ-030-100 升 v0.3-draft；委托人选定 O1＝A（长链题面自包含、禁指代词、每轮单一意图，避开运行时「复述并等确认」规则），并入 M1–M4（逐轮 `turns[].oracle`、`budgetClass` 取值域、`templateId` 对应、同角色类可见范围前置）。S1；终稿未确权；开发未授权；镜像总账 v2.74。 |
+| P1-78 终稿确权 | v0.168（2026-11-24）：REQ-030-099 终稿确权（委托人明示「批准修复建议」）→ Spec／Plan／UAT 套件 v1.0、阶段 S2；Codex CLI（`gpt-5.6-sol`）终审 R1–R3 已修（D21⑧、§4.1.1 映射、放行口径统一）；Codex 第二轮复审因额度未做。数值设计值不冻结；REQ-030-100（P1-79）仍 S1｜v0.2-draft。开发未授权；镜像总账 v2.72。 |
+| P1-78／P1-79 本轮变更 | v0.167（2026-11-24）：REQ-030-099 升 v0.5-draft、REQ-030-100 升 v0.2-draft；按 P1-78 过程评审（非 Codex CLI，≠ 终稿确权）修订阻断项 B1–B4：新增 D21 供应商错误归类、D22 事故修复放行、D23 SOAK 窗口口径，D20 定义链实例；P1-79 最低链模板 3→5；到达模型设计值登记进规模基线 §1.1。终稿未确权；开发未授权；镜像总账 v2.71。 |
+| P1-84 本轮变更 | v0.166（2026-11-24）：新增 REQ-030-105 公共首页与静态公开接口隔离（同进程）；S1 设计；挂测试台 `UAT-SUITE-PUBLIC-ENTRY-STATIC`（NOT RUN）；编号避让 P1-83／REQ-030-104；镜像总账 v2.70。 |
+| P1-83 本轮变更 | v0.165（2026-11-24）：新增 REQ-030-104 客户 K8s 下的假活自愈（优先级 P0；沿 P1-78 先例保留 P1 序号；不入核心分母）；S1 设计；委托人明示批准起草并提级 P0；测试台 not_registered；镜像总账 v2.69。 |
 | P1-75 扩容 | v0.164（2026-11-24）：REQ-030-096 扩容设计定稿（Spec v1.4／Plan v1.3／UAT v1.3），目标为 WebUI 全部页面（含二级 tab）无 503；503 按原因登记表（Spec 附录 A）判定；超宽限只读展示 200＋降级标记，无视图时 200＋`pending`；关闭 OQ-1 至 OQ-4；新增 09-F 对照臂与 10-F／G／H／I；联动 P1-81 §3。开发未授权；`UAT-READ-RES-09／10` NOT RUN。镜像总账 v2.64。v0.163：扩容立项。 |
 | P1-82 本轮变更 | v0.162（2026-11-24）：新增 REQ-030-103 MCP 数据面执行舱壁与跨 Agent 故障隔离；S1 设计；挂测试台 `UAT-SUITE-MCP-DATA-PLANE-HA`（NOT RUN）；镜像总账 v2.61。 |
 | P1-81 本轮变更 | v0.161（2026-11-24）：新增 REQ-030-102 假活状态自愈与探针一致性；S1 设计；挂测试台 `UAT-SUITE-SELF-HEAL`（NOT RUN）；镜像总账 v2.59。 |
@@ -82,12 +102,18 @@
 
 | REQ | 需求 | 来源 | 优先级 | 跟进状态 |
 |---|---|---|---|---|
-| REQ-030-111 | Schema Manifest 按表追加与覆盖门禁逃生修复 | 2026-11-25 客户 Bug 报告：v0.25.0 向既有 100 表 `BIDW` Schema 新增 1 表，overlay publish／import／enabled-tables／manifest publish 四路径死锁，仅 SSH 改服务器文件可解 | P1（清单 P1-90；治理主路径可用性／事故修复；不入核心分母） | S1｜v0.1-draft。登记立项；终稿未确权（OQ-1～OQ-3 待裁定）；开发未授权；测试台 not_registered。 |
+| REQ-030-112 | 语义层 overlay 发布通道冲突护栏与生命周期修复 | 2026-11-25 客户修正版报告＋前序覆盖门禁死锁报告（`semantic-assets` 通道独占收口） | P1（清单 P1-91；治理主路径可用性／事故修复；不入核心分母） | S1｜v0.2-draft。登记立项并完成跨 Spec MECE 优化；终稿未确权（OQ-1～OQ-6 待裁定）；开发未授权；测试台 not_registered。 |
+| REQ-030-111 | Schema Manifest 按表追加与路径归一化 | 2026-11-25 客户 Bug 报告：v0.25.0 向既有 100 表 `BIDW` Schema 新增 1 表四路径死锁（publish/plans 归口 REQ-030-112） | P1（清单 P1-90；治理主路径可用性／事故修复；不入核心分母） | S1｜v0.2-draft。登记立项并完成跨 Spec MECE 优化；终稿未确权（OQ-1～OQ-3 待裁定）；开发未授权；测试台 not_registered。 |
+| REQ-030-108 | 门禁速赢四项 | 2026-11-24 门禁现状审阅 §5.1：CI 触发分支仍为 `lucy-v0.25`；正式性能基线在 `inbox/`；升级后 MCP 兼容默认关闭；升级保护校验只比字节数 | P1（清单 P1-87；门禁缺口快修；不入核心分母） | S3｜Q1 开发授权已获得（2026-11-24「go on」），工作树落地未提交；Q2–Q4 未授权；测试台 not_registered。 |
+| REQ-030-107 | 镜像候选门禁 | 2026-11-24 委托人反馈一周内频繁 503、MCP 阻塞；门禁现状审阅确认真实出包路径无能力门禁 | P1（清单 P1-86；发布底线／测试基建；是否提级 P0 待裁；不入核心分母） | S1｜登记。Spec 待写；P1-67 是否收拢待裁；终稿未确权；开发未授权；测试台 not_registered。 |
+| REQ-030-106 | Chart 停止宽限与 P1-63 预算对齐 | 2026-11-24 P1-83 评审 OQ-7：Chart 未设 `terminationGracePeriodSeconds`（默认 30 秒），P1-63 要求外部停止宽限 ≥45 秒，compose 已设 45 秒；P1-63 SC-06 仅覆盖 Docker demo compose | P1（清单 P1-85；事故修复／快修；有 K8s 台证据证明强杀或审计丢失后再议提 P0；不入核心分母） | S1｜v0.1-draft。委托人 2026-11-24 授权起草 Spec／Plan／UAT；终稿未确权；开发未授权；测试台 NOT RUN；OQ-1（旧 Chart 首升编排归属）待裁定；P1-83 步骤 1⑥ 改前基线须先于候选 Chart 落台；不入核心分母；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。 |
+| REQ-030-105 | 公共首页与静态公开接口隔离 | 2026-11-24 混压语境入口饿死差集；P1-82 B1 须另立 Spec；委托人批准新开。v0.3：Gate 升格同步饥饿；OQ-2＝A | P1（清单 P1-84；事故修复／主路径可用性；不入核心分母） | S2｜v1.0。**终稿已确权**；诊断 Gate 完成；**OQ-2＝A**；OQ-1／OQ-7 冻结；**开发未授权**；测试台 NOT RUN；≠ 功能合同收口；≠ 可上线。 |
+| REQ-030-104 | 客户 K8s 下的假活自愈 | 2026-11-24 委托人核实请求：`livez` 为常量、看门狗唯一重启出口是退出码 75；P1-81 Spec 明确不覆盖 K8s／Helm，UAT 仅 Docker；Chart 无自愈配置与渲染门禁 | **P0**（清单 P1-83；客户 K8s 主路径可用性；不入核心分母） | S1｜v0.5-draft。委托人 2026-11-24 明示批准起草并提级 P0；已裁 OQ-1＝C、OQ-4、OQ-6、OQ-7（D-1 另立 P1-85）、OQ-3 流程与口径、D-2 方向（单节点 K3s、amd64 原生），OQ-3 红线预裁定 ≤360 秒、N＝3（改前基线后、开发授权前冻结）；amd64 机器来源暂定不了，B 层台建设与步骤 0／1b／1 测程授权暂缓；已完成 v0.4 复审及整改（[复审记录](../reviews/2026-11-24-p1-83-v0-4-final-review.md)），Codex CLI 因账号用量上限未能执行，本轮不构成终稿确权；终稿未确权（待 Codex CLI 或委托人明示）；开发未授权；测试台 `not_registered`（未立套件）；不入核心分母；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。 |
 | REQ-030-103 | MCP 数据面执行舱壁与跨 Agent 故障隔离 | 2026-11-24 架构探查：WebUI／MCP 共用进程与同步 SQLite；单 Token 限流缺少全局／分连接舱壁；既有混压中 Web 503 与独立 MCP 查询超时共存 | P1（清单 P1-82；事故修复／可用性；不入核心分母） | S4｜v0.2。终稿已确权（委托人 2026-11-24）；开发授权已获得；实现已落地，SC-06 未实现；待验收；测试台 NOT RUN；≠ 可上线。 |
 | REQ-030-102 | 假活状态自愈与探针一致性 | 2026-11-24 P1-75 `f5e4b14d` 压力跑次：停压后同实例不恢复、`readyz` 全绿，仅重启恢复；Docker 健康检查不含业务能力且无自动重启 | P1（清单 P1-81；事故修复；不入核心分母） | S4｜v0.2。终稿已确权（委托人 2026-11-24）；开发授权已获得；实现已落地待验收；测试台 NOT RUN；≠ 可上线。 |
 | REQ-030-101 | 启用表范围表清单三态诚实展示 | 2026-11-23 管理站超时调查差集＋本机 demo 三态复现：`/tables` pending／error 与成功空表同文误报「缺少 Manifest／无效启用」 | P1（清单 P1-80；事故修复；不入核心分母） | S5｜v1.0；功能合同已收口（2026-11-23）。测试台 PASS；[收口记录](../reviews/2026-11-23-p180-s5-closure-record.md)。≠ 可上线。 |
-| REQ-030-100 | 长追问题组（性能专用，≥20 轮单进程长链） | 2026-11-23 委托人要求 MCP 问询性能门禁不自制题目；P1-54 现有追问链仅 3 轮量级，且其题库 digest 绑定 P1-53 已收口证据 | P1（清单 P1-79；测试内容；P1-78 依赖；不入核心分母） | S1｜v0.1-draft。委托人2026-11-23授权补充长追问题组并登记；终稿未确权；开发未授权；仅设计与登记；≠ 功能合同收口；≠ 可上线。 |
-| REQ-030-099 | MCP 问询端到端性能基准与持续门禁 | 2026-11-23 委托人认定 MCP 问询体验是用户对 Lucy 的最大体感；静态核查发现完整答复性能无持续门禁、P1-53 相对基线值为 `null` 且样本／预算分档未按场景落地；同日要求只消费既有问题 spec 与初始化数据 spec，不自制题目与夹具 | P0（清单 P1-78；核心体验／发布底线；独立门禁，不改变既有核心分母） | S1｜v0.3-draft。委托人2026-11-23授权新建独立性能测试 Spec／Plan／UAT 设计；终稿未确权；开发未授权；仅设计，不执行性能跑次；不改产品优化代码；≠ 发布取证收口；≠ 可上线。 |
+| REQ-030-100 | 长追问题组（性能专用，≥20 轮单进程长链） | 2026-11-23 委托人要求 MCP 问询性能门禁不自制题目；P1-54 现有追问链仅 3 轮量级，且其题库 digest 绑定 P1-53 已收口证据 | P1（清单 P1-79；测试内容；P1-78 依赖；不入核心分母） | S2｜v1.0。委托人2026-11-23授权补充长追问题组并登记；2026-11-24 最低链模板提到 5、模板声明角色类，O1＝A（题面自包含禁指代词）决策闭合（[确权材料](../reviews/2026-11-24-p1-79-long-followup-question-pack-ratification-brief.md)）；**终稿已确权（委托人 2026-11-24 明示「授权 P1-79 定稿，暂不开发」）**；开发未授权；仅设计与登记；≠ 功能合同收口；≠ 可上线。 |
+| REQ-030-099 | MCP 问询端到端性能基准与持续门禁 | 2026-11-23 委托人认定 MCP 问询体验是用户对 Lucy 的最大体感；静态核查发现完整答复性能无持续门禁、P1-53 相对基线值为 `null` 且样本／预算分档未按场景落地；同日要求只消费既有问题 spec 与初始化数据 spec，不自制题目与夹具 | P0（清单 P1-78；核心体验／发布底线；独立门禁，不改变既有核心分母） | S2｜v1.0。委托人2026-11-23授权新建独立性能测试 Spec／Plan／UAT 设计；2026-11-24 按[终审意见](../reviews/2026-11-24-p1-78-mcp-inquiry-performance-final-review.md)（含 Codex CLI 终审）修订 B1–B4／R1–R3；**终稿已确权（委托人 2026-11-24 明示「批准修复建议」）**；开发未授权；仅设计，不执行性能跑次；不改产品优化代码；≠ 发布取证收口；≠ 可上线。 |
 | REQ-030-098 | 数据问答默认主动采用业务上下文 | 2026-11-23 用户反馈「默认取语义，不取 skill/wiki，除非提示词要求」；同日 KSCC 跑次复现，Kimi 跑次为诊断对照 | P1（清单 P1-77，拟；不入核心分母） | S3｜实现进行中（B1 同源 C1–C4/C6 已入完整／基础指引；B2 判定器 27/27）。双宿主 live／PERF／MIX 缺证，按合同默认行为仍维持候选 A；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。 |
 | REQ-030-096 | MCP 握手、Agent 名册读取长尾治理，及 WebUI 全部页面（含二级 tab）无 503 | 2026-11-23 现场名册报忙、MCP 握手审计与 FDE 四页读取异常；阶段归因待验证。2026-11-24 `f5e4b14d` 压力跑次：概览首读 503、停压后 80 次 503 | P1（清单 P1-75，拟；不入核心分母） | S3｜实现进行中（既有 SC-01–08：A1／A2 单元＋复审 PASS；A3 判定器 24/24；demo 镜像已含改动）。正式 G1 R0–07／G2 与多页面必做回归尚未封存跑次。2026-11-24 委托人明示定稿扩容设计（Spec v1.4／Plan v1.3／UAT v1.3）：目标「WebUI 全部页面含二级 tab 无 503」，503 按原因登记表判定（附录 A），超宽限的只读展示降级为 200；定稿不含开发授权，SC-09–10 对应运行代码开发未授权，仅设计与登记，测试台 `UAT-READ-RES-09／10` NOT RUN；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。 |
 | REQ-030-082 | 存活／就绪探针纯内存响应与诊断隔离 | 同构建 503 排查及探针读盘调用链核对；不预判现场根因 | P1（清单 P1-61；建议第一批） | v0.1-draft。终稿已确权；开发授权已获得；2026-11-20授权修复及本机Docker全真复测已完成；CAV-01真实停止／自动恢复局部复测PASS WITH GAP；完整F61矩阵未完成；不入核心分母；≠ 功能合同收口；≠ 整套UAT PASS；≠ 可上线。 |
@@ -1569,19 +1595,46 @@ v1.0。Codex CLI终稿确权及代码终审通过；增量开发授权已获得�
 - 状态：**S5｜v1.0。功能合同已收口（2026-11-22）。SC-01–SC-15＋实现 CR PASS；全仓 MIG 另授权。本条收口不表示可上线。**
 - 授权边界：开发授权已获得（2026-11-22）；落地范围限伞 Spec §8 白名单；阶段全仓迁移（MIG）另授权。
 
-## REQ-030-111：Schema Manifest 按表追加与覆盖门禁逃生修复
+## REQ-030-112：语义层 overlay 发布通道冲突护栏与生命周期修复
 
-- **来源**：2026-11-25 客户现场 Bug 报告 [`inbox/Lucy语义层新表接入_覆盖门禁死锁_Bug报告.md`](../../inbox/Lucy语义层新表接入_覆盖门禁死锁_Bug报告.md)（平台 v0.25.0，`sql_server`／`BIDW` 已有 100 表，新增 `v_token_income_unified` 一表：publish overlay 落盘但 catalog 不扫、import `SOURCE_NOT_FOUND` 循环依赖、enabled-tables `TABLE_NOT_SCANNED`、manifest publish 被覆盖门禁阻断且 plans 报 `VALIDATION_SNAPSHOT_NOT_FOUND`，最终只能 SSH 改服务器文件）；当日逐条代码核查确认四项产品缺陷与一项报告存疑点（`confirmOverwrite` 自 v0.25.0 已被路由与门禁分支识别，「参数被忽略」列 OQ-5 待取证）。
+- **来源**：2026-11-25 客户修正版报告 [`inbox/Lucy新表接入_overlay与schema冲突_问题报告.md`](../../inbox/Lucy新表接入_overlay与schema冲突_问题报告.md)（平台 v0.25.0，`sql_server`／`BIDW`：`POST /api/semantic-assets/validate + publish` 发出的 per-table 文件 `table: BIDW.v_token_income_unified`（两段名）在上游 KTX 按 standalone 整体替换 manifest 三段名定义，`lucy_query` 报 `Invalid object name` 而 `lucy_explain_query` 显示三段名 `allowed: true`，DELETE 端点 404、publish 覆盖被 409 拦、`assets/upload` 不收 semanticSource，最终 SSH 删除文件恢复）；当日对 Lucy 与上游 `@kaelio/ktx@0.16.0` npm 包的逐条代码核查确认：overlay 分类强制两段名（`semantic-assets.ts:482`／`:760-774`）、KTX standalone 替换 manifest 仅 warn 日志（`local-sl.js`／`semantic-layer.service.js:249-253`）、validate／publish 无同名冲突检查、`qualifiedName` 补救因上游 strict schema 不可能生效、WebUI 表编辑器写的是无 `table:` 的安全合并形态（`overlay.ts:49-53`）而 publish 通道无法产出。同日前序报告的死锁链路（覆盖门禁确认链、plans 错误码、正确接入通道）已由 REQ-030-111（P1-90）承接，本条不重复承诺。
 - **期望**：
-  - 新增 create-only 按表追加端点 `POST /api/schema-manifests/:conn/:schema/tables`：按表 key 合并（不整文件替换、既有表零影响）、dryRun diff 预览、schema 名大小写归一化（无匹配 404、多义 409）、column `expr`／`role` 等 overlay-only 键显式拒绝、写盘复用 L25-16 锁＋发布窗口＋恢复日志＋审计、写后 catalog reload 使新表对 catalog／Agent 可见；
-  - import 对未登记表返回 `SOURCE_NOT_FOUND` 时携带追加端点指引；schema 归一化与端点共用；Manifest 缺失返回 404 而非 500；
-  - publish 覆盖门禁阻断（未写盘）不再删除 validation snapshot，同一 validationId 可 `confirmOverwrite:true` 重试成交；
-  - plans 对「snapshot 存在但非 batch」返回 `PLAN_PREVIEW_NOT_AVAILABLE`（409），与 404 `VALIDATION_SNAPSHOT_NOT_FOUND` 区分；
-  - `03-api-spec.md` 与 `docs/SYSTEM_HANDBOOK.md` 补「追加／import 更新／upload 整文件替换」分工。
-- **范围**：`webui/server/semantic-layer.ts`、`webui/server/semantic-assets.ts`、`webui/server/semantic-batch-routes.ts`、`webui/server/index.ts`、新增 `webui/server/schema-manifest-append.ts`、`webui/docs/03-api-spec.md`、`docs/SYSTEM_HANDBOOK.md`；不改 KTX 源码；不改 WebUI 运行导航；不改维护包 Manifest readonly 语义与 publish 文件级替换语义；物理新表自动发现另案（Spec 190 非目标）。
+  - overlay `table:` 物理名契约修复（方案待 OQ-4 裁定，草案放开为两段或三段、原样落盘），杜绝「validate 通过但产物必然不可查询」；两段名既有行为不变；共享 `parseTableRef` 语义不污染；
+  - manifest 同名冲突护栏：validate 响应携带冲突信号；publish 窗口内复验未确认 → `409 OVERLAY_MANIFEST_CONFLICT` 不落盘、`data.nextSteps` 指向正确通道；显式确认参数放行并附 shadow 警示；
+  - overlay 删除端点（形态待 OQ-6，草案 `DELETE /api/semantic-assets/overlay/:conn/:sourceName`）：仅 per-table 文件、禁 `_schema/` 与路径穿越、dryRun、L25-16 写管线＋审计，删除后读取回落 Schema Manifest 定义；
+  - `03-api-spec.md` 与 `docs/SYSTEM_HANDBOOK.md` 登记物理名规则、冲突语义、删除端点，与 P1-90 分工段交叉引用（publish overlay＝发布独立命名 source，不是新表接收入口）。
+- **范围**：`webui/server/semantic-assets.ts`、`webui/server/index.ts`、提案新增 `webui/server/semantic-overlay-lifecycle.ts`、`webui/docs/03-api-spec.md`、`docs/SYSTEM_HANDBOOK.md`；不改 KTX 源码；不改 WebUI 运行导航；不触碰 `webui/server/proxy/**`（explain 冲突可见性 OQ-3 另案）；存量冲突文件自动处置另案（OQ-2）。
 - **优先级**：P1 治理主路径可用性／事故修复；不入核心分母。
-- **状态**：S1｜v0.1-draft。登记立项（2026-11-25）；终稿未确权（OQ-1 端点形态／OQ-2 snapshot 清理／OQ-3 错误码状态待裁定）；开发未授权；测试台 not_registered；≠ 功能合同收口；≠ 可上线。
+- **状态**：S1｜v0.2-draft。登记立项并完成跨 Spec MECE 优化（独占 `semantic-assets` 通道，承接原 REQ-030-111 的 publish 覆盖门禁保留 snapshot 与 plans 409 区分，新增双 409 组合确认、只读列表与业务 overlay 防误删）；终稿未确权（OQ-1～OQ-6 待裁定）；开发未授权；测试台 not_registered；≠ 功能合同收口；≠ 可上线。
+- **挂接**：[总账 P1-91](lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [Spec](../specs/lucy-20261125-overlay-publish-guard-spec.md) · [Plan](lucy-20261125-overlay-publish-guard-plan.md)。
+
+## REQ-030-111：Schema Manifest 按表追加与路径归一化
+
+- **来源**：2026-11-25 客户现场 Bug 报告 [`inbox/Lucy语义层新表接入_覆盖门禁死锁_Bug报告.md`](../../inbox/Lucy语义层新表接入_覆盖门禁死锁_Bug报告.md)（平台 v0.25.0，`sql_server`／`BIDW` 已有 100 表，新增 `v_token_income_unified` 一表四路径死锁）；v0.2 将 `semantic-assets/publish` 覆盖门禁保留 snapshot 与 `plans` 409 区分整体归口至 REQ-030-112（P1-91）。
+- **期望**：
+  - 新增 create-only 按表追加端点 `POST /api/schema-manifests/:conn/:schema/tables`：兼容 1/2/3 段物理表名（按末尾段匹配）、按表 key 合并（不整文件替换、既有表零影响）、dryRun diff 预览、column `expr`／`role` 等 overlay-only 键显式拒绝、反向 standalone shadow 检测告警（`EXISTING_STANDALONE_SHADOW`）、写盘复用 L25-16 管线＋catalog reload＋审计；
+  - `resolveSchemaManifestPath` 大小写归一化覆盖 `GET`/`PUT`/`import`/`tables` 四路径（无匹配 404、多义 409）；
+  - import 对未登记表返回 `SOURCE_NOT_FOUND` 时携带 `data.nextSteps` 追加端点指引；
+  - `03-api-spec.md` 与 `docs/SYSTEM_HANDBOOK.md` 补「追加／import 更新／upload 整文件替换」分工。
+- **范围**：`webui/server/semantic-layer.ts`、`webui/server/index.ts`、新增 `webui/server/schema-manifest-append.ts`、`webui/docs/03-api-spec.md`、`docs/SYSTEM_HANDBOOK.md`；不触碰 `semantic-assets.ts`；不改 KTX 源码；不改 WebUI 运行导航。
+- **优先级**：P1 治理主路径可用性／事故修复；不入核心分母。
+- **状态**：S1｜v0.2-draft。登记立项并完成跨 Spec MECE 优化（原 F-b/F-c 归口 REQ-030-112）；终稿未确权（OQ-1～OQ-3 待裁定）；开发未授权；测试台 not_registered；≠ 功能合同收口；≠ 可上线。
 - **挂接**：[总账 P1-90](lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [Spec](../specs/lucy-20261125-schema-manifest-table-append-spec.md) · [Plan](lucy-20261125-schema-manifest-table-append-plan.md)。
+
+## REQ-030-110：语义层 source 写接口诚实响应与描述写入陷阱修复
+
+- **来源**：2026-11-25 用户反馈报告 [`inbox/Lucy语义层source描述无法通过API修改_问题反馈.md`](../../inbox/Lucy语义层source描述无法通过API修改_问题反馈.md)（现场 `kc-starrocks`／`dwd` 经 API 改单表 `descriptions.human` 多次「返回成功但未落库」，仅 WebUI 生效）；当日逐条代码核查结论：能力存在（WebUI 即经 `PUT patch.tableDescription` 写入），用户失败主因是请求体不符合同，但查实四项产品缺陷。
+- **期望**：
+  - PUT／import 零文件写入时返回 `written: false`＋`noChanges: true`，不产生版本快照／`changedSources`／显示缓存失效等副作用（消除假成功）；
+  - 合同外请求字段（PUT 收 `yaml`／`model`、import 收 `patch`／`confirmOverwrite` 等）显式 400 并指明正确字段与 `data.nextSteps`；
+  - import 业务 source 分流（2026-08-25 P0）丢弃 `descriptions`／`columns`／`joins` 时输出 `IMPORT_SCHEMA_KEYS_IGNORED` 告警；表级 `descriptions` 是否豁免合并（D3a／D3b）待终稿确权；
+  - 响应新增 `writtenFiles`（本请求实际写入清单），dryRun 新增 `noChanges`，确立 D8 语义层写接口统一信封供 P1-90／P1-91 复用；`changedFiles` 语义文档注记；
+  - WebUI 表编辑器无变更保存提示「内容无变更，未写入」；
+  - `03-api-spec.md` 补 P0/P1 分流规则、D8 统一信封与 `TablePatch` 字段表、Spec 114 补 Changelog。
+- **范围**：`webui/server/index.ts`、`webui/server/semantic-layer.ts`、`webui/src/pages/TableEditor.tsx`、`webui/docs/03-api-spec.md`、`webui/docs/114-table-editor-overlay-safe-yaml-import-spec.md`；不改 KTX 源码；不改 `semantic-assets` 发布路径契约；不新增单表描述专用接口。
+- **优先级**：P1 API 主路径诚实性／事故修复；不入核心分母。
+- **状态**：S1｜v0.2-draft。登记立项并完成跨 Spec MECE 优化；终稿未确权；开发未授权；测试台 not_registered；≠ 功能合同收口；≠ 可上线。
+- **挂接**：[总账 P1-89](lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [Spec](../specs/lucy-20261125-source-write-api-honesty-spec.md) · [Plan](lucy-20261125-source-write-api-honesty-plan.md)。
 
 ## REQ-030-109：敏感元数据工具可见性对齐与拒绝修复引导
 
@@ -1589,8 +1642,63 @@ v1.0。Codex CLI终稿确权及代码终审通过；增量开发授权已获得�
 - **期望**：`tools/list` 与 `initialize` 阶段 `visibleTools` 对 `policy.sensitiveMetadataTools` 执行与 `authorizeAndRewrite()`（`acl.ts:3436`）一致的 fail-closed 门禁；`sensitive_metadata_forbidden:*` 拒绝修复载荷区分「全局搜索受限 vs 已授权来源可查」、按 `allowedToolNames` 过滤 `nextTools`、保留 B15 闭环、零来源无死路文案、来源列表不重复拼接。
 - **范围**：仅 `webui/server/proxy/acl.ts` 与 `webui/server/proxy/mcp-proxy.ts`；不改 KTX 源码、不改第三方客户端、不改 Tool `inputSchema`（OQ-1 剥离待取证）。
 - **优先级**：P1 纯 MCP 主路径可用性；不入核心分母。
-- **状态**：S2｜v1.0。终稿已确权（委托人 2026-11-25 明示「审阅通过……授权定稿」）；开发未授权；测试台 NOT RUN；≠ 功能合同收口；≠ 可上线。
+- **状态**：S4｜v1.1。终稿已确权（委托人 2026-11-25 明示「审阅通过……授权定稿」）；开发授权已获得（委托人 2026-11-26 明示「授权进入开发」）；实现已落地；测试台 PASS（[跑次](../qa/uat/suites/mcp-client-compat-sensitive-meta/runs/2026-11-26-claude-p1-88-mcp-client-compat.md)）；待委托人验收；≠ 功能合同收口；≠ 可上线。
 - **挂接**：[总账 P1-88](lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [Spec](../specs/lucy-20261125-mcp-client-compat-and-sensitive-meta-visibility-spec.md) · [Plan](lucy-20261125-mcp-client-compat-and-sensitive-meta-visibility-plan.md) · [UAT](../qa/uat/suites/mcp-client-compat-sensitive-meta/suite.md)。
+
+## REQ-030-108：门禁速赢四项
+
+- **来源**：[门禁现状审阅](../reviews/2026-11-24-image-candidate-gate-review.md) §2.2、§2.3、§2.6、§5.1。
+- **期望**：
+  - Q1：`.github/workflows/lucy-ci.yml` push 触发分支由 `lucy-v0.25` 改为 `lucy-v0.30`，并增加每日定时运行。已核实 `lucy-v0.30` push 运行为 0 次，最近两次 PR 运行（#65、#64）`ci-required` 均失败；接通后须先跑绿。
+  - Q2：正式性能基线从被忽略的 `inbox/perf-baselines/formal/` 迁到受 git 跟踪的目录；`perf:release-baseline --previous` 默认指向它。
+  - Q3：`upgrade-lucy.sh` 升级后的 MCP 兼容钩子默认开启，显式设为 `0` 才跳过。
+  - Q4：升级保护校验改为语义快照：SQLite 各表行数与 `max(rowid)`（先 WAL checkpoint）；纳入 `.ktx-ui/security.sqlite`、`wiki/`、`semantic-layer/`、`skills/`；升级前签发的 Token 升级后可完成一次 MCP 调用。
+- **范围**：仅 CI 工作流、性能基线存放位置、升级脚本；不改产品运行代码。四项互相独立，可逐项授权。
+- **优先级**：P1 门禁缺口快修；不入核心分母。
+- **状态**：S3｜Q1 开发授权已获得（委托人 2026-11-24「go on」）；Q1 工作树落地未提交，定时触发移出（`schedule` 只在默认分支运行）；Q2–Q4 未授权；测试台 not_registered；≠ 功能合同收口；≠ 可上线。
+- **挂接**：[总账 P1-87](lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [审阅](../reviews/2026-11-24-image-candidate-gate-review.md)。
+
+## REQ-030-107：镜像候选门禁
+
+- **问题**：真实出包路径只强制打包正确性门禁（G1–G8）；性能、审计、平滑升级、兼容性测试大多按事故逐个建设、按需手动执行，不绑定镜像摘要、不在必经路径。2026-11-13 至 11-23 错题本有 15 条 `gate-gap`，多数为规模、冷读、读写同窗或真实客户端下未复验。
+- **期望**：以镜像摘要为单位的三层门禁，环境对齐本机 Docker，规模夹具默认开启：
+  - L0（PR／推送）：单测、审计登记表覆盖、MCP 工具面快照、浏览器冒烟；不调模型。
+  - L1（每个镜像必跑）：平滑升级语义快照；WebUI 真实浏览器全页面与典型操作（计时到数据可见）；≥2 个真实 Agent 客户端问数与追问（数据对金标准、分段耗时）；读写同窗；审计按请求对账与 schema 校验；MySQL／PG 真实引擎；全程事件循环延迟与 503 计数断言。
+  - L2（每晚／每周）：soak、StarRocks／Doris／Hive 外部目录、完整客户端池、现场版本升级起点与回滚。
+  - 判定 JSON 绑定镜像摘要；无判定不得出包；豁免须委托人具名、限时、不晋级基线。
+- **范围**：测试基建与门禁；引用 P1-13／53／54／75／78／79 已有口径，不重写；P1-67 拟收拢（待裁）。客户 K8s 拓扑门禁不在本条（归 P1-83 等）。
+- **优先级**：P1 发布底线／测试基建；是否提级 P0 待委托人裁定；不入核心分母。
+- **状态**：S1｜登记。Spec 待写；终稿未确权；开发未授权；测试台 not_registered；≠ 发布取证收口；≠ 可上线。
+- **待裁**：见审阅 §8（优先级、P1-67 收拢、两个必跑客户端、参考机规格、L1 判定是否作为出包必要条件、Q1–Q4 授权）。
+- **挂接**：[总账 P1-86](lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [审阅](../reviews/2026-11-24-image-candidate-gate-review.md)。
+
+## REQ-030-106：Chart 停止宽限与 P1-63 预算对齐
+
+- **来源**：P1-83 评审 OQ-7（委托人 2026-11-24 裁定另立）。核实：`deploy/k8s/helm/lucy/templates/deployment.yaml` 未设 `terminationGracePeriodSeconds`（K8s 默认 30 秒）；P1-63 要求外部停止宽限 ≥45 秒（`process-drain.ts` `EXTERNAL_STOP_GRACE_S=45`，排空总预算 40 秒）；`deploy/compose/docker-compose.demo.yml` 已设 `stop_grace_period: 45s`。P1-63 SC-06 仅覆盖 Docker demo compose，Chart 未落地。
+- **期望**：Chart 显式设置 `terminationGracePeriodSeconds`＝60（45 秒预算加 15 秒余量；门禁断言 ≥45）并有渲染结构化门禁（含 `strategy.type: Recreate` 断言）；升级、回滚、`kubectl delete pod` 时不因宽限不足被强杀而破坏审计守恒。
+- **范围**：仅 Chart 宽限与门禁；不含自愈逻辑（归 P1-83）。**不并入 `preStop`**，是否加待 P1-83 SC-09 停机失败请求数证据。**时序**：须在 P1-83 步骤 1⑥ 取现状证据之后才落到台上。
+- **优先级**：P1 事故修复／快修；若 K8s 台取得强杀或审计丢失的证据，再议提 P0。
+- **状态**：S1｜v0.1-draft。委托人 2026-11-24 授权起草 Spec／Plan／UAT；终稿未确权；开发未授权；测试台 NOT RUN；OQ-1（旧 Chart 首升编排归属）待裁定；P1-83 步骤 1⑥ 改前基线须先于候选 Chart 落台；不入核心分母；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。
+- **挂接**：[总账 P1-85](lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [Spec](../specs/lucy-20261124-k8s-stop-grace-spec.md) · [Plan](lucy-20261124-k8s-stop-grace-plan.md) · [UAT](../qa/uat/suites/k8s-stop-grace/suite.md) · [P1-83 Spec §6 D-1](../specs/lucy-20261124-k8s-self-healing-spec.md)。
+
+## REQ-030-105：公共首页与静态公开接口隔离
+
+- **问题**：混压下公共入口可被同进程工作饿死；P1-82 排除分进程并要求另立 Spec。诊断 Gate（2026-11-24）升格：同步饥饿下入口与 `livez` 同滞；「探针绿入口死」仍待混压复证。
+- **范围**：Docker 单实例；路径分 A／B／C；**OQ-2＝A（同进程让出）**；合法登录必成；对照臂；至少一臂主路径成功成交。不扩白名单；不分进程。
+- **出口**：Spec SC-01–SC-08；`UAT-PES-R0／01–08`；SC-09＝OQ-6 可选。
+- **状态**：S2｜v1.0。终稿已确权；诊断 Gate 完成；OQ-2＝A；OQ-1／OQ-7 冻结；开发未授权；测试台 NOT RUN。
+- **挂接**：[总账 P1-84](lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [Spec](../specs/lucy-20261124-public-entry-static-isolation-spec.md) · [Plan](lucy-20261124-public-entry-static-isolation-plan.md) · [UAT](../qa/uat/suites/public-entry-static/suite.md) · [对抗评审](../reviews/2026-11-24-p1-84-public-entry-static-isolation-adversarial-review.md) · [Gate](../../inbox/p184-diag-20261124/REPORT.md)。
+
+## REQ-030-104：客户 K8s 下的假活自愈
+
+- **来源**：2026-11-24 委托人核实请求。核实：`webui/server/index.ts` 的 `/api/livez` 为常量 `{ok:true}`（有意，见 2026-11-13 liveness 误杀错题）；`self-heal.ts` 唯一重启出口是排空后 `process.exit(75)`；`readyz` 转 503 在 K8s 只摘端点不重启；P1-81 Spec 闭口层级、§2、§6 排除客户 K8s 探针与 Helm，UAT 套件只证明本机 Docker 单实例；Chart 无自愈配置，`k8s-acceptance.sh`／`helm-lucy-gate.sh` 只断言 `livez` 为 `ok:true`。
+- **期望**：客户 K8s 下假活要么同实例恢复，要么被 kubelet 自动替换，全程无人工；不得出现「`readyz` 永久 503、`livez` 永久 200、集群侧无可读信号」的终态；不得重现 liveness 误杀；恢复窗口有界且已测；自愈证据与断路器计数跨容器重启保留；自愈相关配置进入 Chart、`K8S_CONTRACT.md` 与渲染门禁。
+- **范围**：K8s（Helm Chart 形态）下的探针语义、断路器抑制态处置（OQ-1＝C：K8s 委托模式）、B 层合同台取证、Chart 与交付契约。不重写 P1-81 判定逻辑；不含多副本、外部编排、Helm 之外的交付方式、客户现场验收。**明示例外**：`AGENTS.md`「Docker 对齐」默认不谈客户拓扑，本条由委托人明示按客户 K8s 立项。
+- **结论口径**：核实后为「未规约、未验证」，非「已知不工作」；kubelet 重启依据来自 K8s 语义推断，尚无集群取证。
+- **评审修订（v0.2-draft）**：期望拆为「自愈合同」（整容器重启可清除的故障须在委托人冻结的预算内自动恢复，人工不得替代）与「可观测合同」（持续外部故障只承诺有界重试、NotReady、可读原因，不宣称自愈）；Chart 停止宽限作为依赖。
+- **决策记录（v0.3-draft，委托人 2026-11-24「批准修正，升级文档」）**：OQ-1＝C（K8s 委托模式，不抑制、仍退出 75，由 kubelet 退避兜底；须实测两种退避情形，去掉进程内上限后 SC-04 为唯一防线）；OQ-4 关闭自愈为受支持运维逃生配置；OQ-6 fail-open＋显式降级且 `readyz` 不转红；OQ-7 Chart 停止宽限另立 [P1-85／REQ-030-106](#req-030-106chart-停止宽限与-p1-63-预算对齐)（P1-63 的 45 秒预算在 K8s Chart 未落地）；OQ-3 口径已定、红线数值待裁；D-2 方向＝单节点 K3s、amd64 原生、QEMU 无效，台建设授权与机器待裁。
+- **状态**：S1｜v0.5-draft。委托人 2026-11-24 明示批准起草并提级 P0；已裁 OQ-1＝C、OQ-4、OQ-6、OQ-7（D-1 另立 P1-85）、OQ-3 流程与口径、D-2 方向（单节点 K3s、amd64 原生），OQ-3 红线预裁定 ≤360 秒、N＝3（改前基线后、开发授权前冻结）；amd64 机器来源暂定不了，B 层台建设与步骤 0／1b／1 测程授权暂缓；已完成 v0.4 复审及整改（[复审记录](../reviews/2026-11-24-p1-83-v0-4-final-review.md)），Codex CLI 因账号用量上限未能执行，本轮不构成终稿确权；终稿未确权（待 Codex CLI 或委托人明示）；开发未授权；测试台 `not_registered`（未立套件）；不入核心分母；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。
+- **挂接**：[总账 P1-83](lucy-20261107-lucy-0-30-feature-inventory-pool.md) · [Spec](../specs/lucy-20261124-k8s-self-healing-spec.md) · [Plan](lucy-20261124-k8s-self-healing-plan.md) · 前序 [P1-81](lucy-20261124-stuck-state-self-healing-plan.md)。
 
 ## REQ-030-103：MCP 数据面执行舱壁与跨 Agent 故障隔离
 
