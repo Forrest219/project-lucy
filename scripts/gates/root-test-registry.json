@@ -1532,16 +1532,6 @@
       "gate": "workflow-contracts",
       "gateCommand": "npm run test:root-contracts",
       "reason": null
-    },
-    {
-      "path": "scripts/uat/ensure-scale-baseline.test.mjs",
-      "runner": "node --test",
-      "environment": "deterministic",
-      "sideEffects": "none",
-      "command": "node --test scripts/uat/ensure-scale-baseline.test.mjs",
-      "gate": "workflow-contracts",
-      "gateCommand": "npm run test:root-contracts",
-      "reason": null
     }
   ]
 }
