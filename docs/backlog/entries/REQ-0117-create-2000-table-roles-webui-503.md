@@ -30,6 +30,11 @@
 
 - 仅作已复现缺陷入池登记，尚未立项或修改运行代码；修复须另走 Spec → Plan → 终稿确权 → 开发授权。
 
+## 在途记录
+
+- 2026-11-27（AWW-08 浏览器阶段 UAT 发现，委托人同日明示授权修复）：`RoleDetail` 在 409 版本冲突／503 写窗繁忙错误分支渲染 `AccessWriteRecoveryPanel` 时未关闭权限审阅抽屉，Radix modal 遮罩＋背景 aria-hidden 使用户看不到「配置已变化／有变更正在保存」提示与三方比对／重试入口。修复：两个恢复面板分支进入时 `setReview(null)`（草稿保留，`finishSave` 路径不受影响），抽屉确认按钮补 `data-testid="role-review-confirm"`，`role-detail.test.tsx` 补冲突分支关抽屉断言。同轮修 UAT 跑器（非产品缺陷）：E4 按文案「确认保存」定位在 pending 文案切「保存中…」后失配改走 testid；详情首屏 30s 超时贴线放宽至 60s 并补在途写收敛等待；E4 重叠写断言对齐 Spec E4/E10「成交或可重试提示」双分支（夹具规模写窗超 15s 等待上限时诚实 503 为合规分支）。证据：`runs/2026-11-27-claude-aww-final.md`、`runs/2026-11-27-kimi-aww-closure.md`。
+- 2026-11-27（环境教训）：`stack up` 重建容器后必须按规程同步 `fixture.mjs clean && up` 完整重播（含 manifest 上传）；否则出现「物理表/文件在但新角色 selector 解析 0 source」的半状态（存量 v2 物理名角色不受影响），并会以 `PREVIEW_INPUT_CHANGED` 409 形式污染冲突类用例。复位后阶段 1/2 复测待跑（委托人指示本轮止步于代码修正）。
+
 ## 关联
 
 - 常青需求池：[docs/backlog/README.md](../README.md)

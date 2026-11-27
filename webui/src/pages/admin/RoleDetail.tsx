@@ -717,6 +717,8 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
     const classified = classifyRolesAgentWriteError(error);
     const inflight = writeInflightOperationIdRef.current;
     if (inflight && classified.kind === "transport_uncertain") {
+      // 恢复面板渲染在主页面：先关审阅抽屉，否则 modal 遮罩会挡住面板（草稿保留）
+      setReview(null);
       setWriteRecoveryError(classified);
       setPendingOperation({ operationId: inflight, checking: true });
       void pollAccessWriteStatusBounded(inflight).then((status) => {
@@ -744,6 +746,8 @@ export function RoleDetail({ mode: initialMode }: { mode?: "create" } = {}) {
       }
       return;
     }
+    // 恢复面板渲染在主页面：先关审阅抽屉，否则 modal 遮罩会挡住面板（草稿保留）
+    setReview(null);
     setWriteRecoveryError(classified);
     if (shouldOfferThreeWayCompare(classified.kind)) {
       void refreshCurrentValueForCompare();

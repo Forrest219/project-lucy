@@ -123,7 +123,7 @@ export function RolePermissionReviewDrawer({
 
           <footer className="pl-drawer-footer pl-drawer-footer-border-t">
             <Dialog.Close className="pl-btn pl-btn--ghost" disabled={pending}>取消</Dialog.Close>
-            <button type="button" className={`pl-btn ${deleteMode ? "pl-btn--danger" : "pl-btn--primary"}`} onClick={onConfirm} disabled={pending}>
+            <button type="button" data-testid="role-review-confirm" className={`pl-btn ${deleteMode ? "pl-btn--danger" : "pl-btn--primary"}`} onClick={onConfirm} disabled={pending}>
               {pending ? "保存中…" : deleteMode ? "确认删除" : "确认保存"}
             </button>
           </footer>

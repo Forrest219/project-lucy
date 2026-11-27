@@ -1,0 +1,77 @@
+{
+  "phase": "normal",
+  "startedAt": "2026-11-27T02:50:16.042Z",
+  "webui": "http://127.0.0.1:55386",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "cases": [
+    {
+      "name": "E1-E5-roles-list-load",
+      "status": "PASS",
+      "ms": 2046
+    },
+    {
+      "name": "E3-roles-list-read-your-write",
+      "status": "PASS",
+      "ms": 24603
+    },
+    {
+      "name": "E4-E12-roles-ui-edit-save-overlap",
+      "status": "FAIL",
+      "error": "Error: API 重叠写未成交：503",
+      "ms": 62043
+    },
+    {
+      "name": "E8b-version-conflict-hint",
+      "status": "FAIL",
+      "error": "Error: API 抢改失败 409",
+      "ms": 87006
+    },
+    {
+      "name": "E13-E17-agents-list-load",
+      "status": "PASS",
+      "ms": 5143
+    },
+    {
+      "name": "E18-agents-no-error-terminal-during-write",
+      "status": "PASS",
+      "ms": 7126
+    }
+  ],
+  "browserTimings": [
+    {
+      "kind": "roles-list-primaryReady",
+      "ms": 1986,
+      "visible": "visible",
+      "focus": true
+    },
+    {
+      "kind": "roles-list-readYourWrite",
+      "apiWriteMs": 18384,
+      "frontMs": 1383
+    },
+    {
+      "kind": "save-submit-state",
+      "text": "保存中…"
+    },
+    {
+      "kind": "ui-save-frontMs",
+      "ms": 22964,
+      "overlapApiStatus": 503,
+      "overlapApiMs": 16644
+    },
+    {
+      "kind": "agents-roster-primaryReady",
+      "ms": 4222,
+      "visible": "visible",
+      "focus": true
+    }
+  ],
+  "failures": [
+    "E4-E12-roles-ui-edit-save-overlap",
+    "E8b-version-conflict-hint"
+  ],
+  "browser": "158.0.8127.37"
+}

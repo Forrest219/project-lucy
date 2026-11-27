@@ -755,9 +755,45 @@ describe("P1-59 RoleDetail concurrent edit", () => {
     fireEvent.click(screen.getByRole("button", { name: "保存权限配置" }));
     const drawer = await screen.findByTestId("role-permission-review-drawer");
     fireEvent.click(within(drawer).getByRole("button", { name: "确认保存" }));
+    // 审阅抽屉必须关闭，否则 modal 遮罩会挡住主页面上的恢复面板
+    await waitFor(() => expect(screen.queryByTestId("role-permission-review-drawer")).not.toBeInTheDocument());
     const panel = await screen.findByTestId("access-write-recovery-panel");
     expect(panel).toHaveTextContent("有变更正在保存，请稍后重试");
     expect(screen.getByLabelText("说明")).toHaveValue("并发占用测试");
+  });
+
+  it("closes the review drawer on version conflict so the recovery panel is reachable", async () => {
+    installFetch(makeRole({ baseObjectVersion: "role/analyst@deadbeef" }), (url, init) => {
+      if (url === "/api/admin/roles/analyst" && init?.method === "PATCH") {
+        const body = JSON.parse(String(init.body));
+        if (body.dryRun) {
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              data: {
+                diff: "+ change",
+                proposedYaml: "roles: {}",
+                baseObjectVersion: "role/analyst@deadbeef",
+                previewToken: "racs-preview-token"
+              }
+            })
+          );
+        }
+        return new Response(
+          JSON.stringify({ ok: false, error: { code: "VERSION_CONFLICT", message: "stale", detail: { conflictKind: "object_version" } } }),
+          { status: 409 }
+        );
+      }
+    });
+    renderAt("/admin/roles/analyst");
+    fireEvent.change(await screen.findByLabelText("说明"), { target: { value: "冲突草稿" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存权限配置" }));
+    const drawer = await screen.findByTestId("role-permission-review-drawer");
+    fireEvent.click(within(drawer).getByRole("button", { name: "确认保存" }));
+    await waitFor(() => expect(screen.queryByTestId("role-permission-review-drawer")).not.toBeInTheDocument());
+    const panel = await screen.findByTestId("access-write-recovery-panel");
+    expect(panel).toHaveTextContent("配置已变化");
+    expect(screen.getByLabelText("说明")).toHaveValue("冲突草稿");
   });
 
   it("sends RACS fields on confirm when dryRun returned previewToken", async () => {
