@@ -35,7 +35,7 @@
 
 This feature follows `webui/docs/00-product-terminology-standard.md`.
 
-New terms（实现 PR 同批登记，门禁 N1）：
+New terms:（登记时点＝实现 PR 同批，门禁 N1）
 
 | 术语 | UI 主术语 | 禁止混称 |
 |---|---|---|
@@ -70,6 +70,11 @@ New terms（实现 PR 同批登记，门禁 N1）：
 
 - 设计系统尚无「分层图画布」章节；本 Spec 定产品合同。可参考访问关系图只读绘制经验，**术语与入口不得合并**。
 
+### Follow-up Needed
+
+- New terms 登记进 `webui/docs/00-product-terminology-standard.md`（N1：实现 PR 同批）。
+- G1 现网 joins 抽样取证产出后，方可对外使用「已验证」措辞（见 §5）。
+
 ## 交互合同
 
 - 路由：/semantic-map（提案；IA 未确认前允许深链／临时入口验收，不得默认真路径挂主导航）
@@ -103,6 +108,8 @@ New terms（实现 PR 同批登记，门禁 N1）：
 
 ## 受影响画像
 
+> 事实源：[`docs/governance/user-personas.md`](../governance/user-personas.md)。4 画像逐行判定；不得写「所有用户」。
+
 | 画像 | 变更前体验 | 变更后体验 | 判定 | 依据 | 负向补偿 |
 |---|---|---|---|---|---|
 | P1 问数方 | MCP 问数主路径 | 不变 | ＝ | 本条无 MCP／ACL 写变更；SC-16 | — |
@@ -120,6 +127,8 @@ New terms（实现 PR 同批登记，门禁 N1）：
 | 4 | 是否避免宿主缺席 BLOCKED？ | 是。WebUI＋demo／scale 夹具即可；规模项用 customer-stability 档 |
 
 ## 1. 需求摘要
+
+> 伪代码豁免：本条为只读可视化与边集／解析合同，无算法主流程；渲染与筛选的步骤分解由配对 Plan 承载。
 
 1. **只读语义地图页**：连接 → Schema 岛 → formal-join 连通团／孤立区 → 表侧栏 → 打开工作台／查看合成表 YAML。
 2. **边集合同**：Manifest∪overlay formal joins 并集；candidate 不入边；冲突并列标注；共享 overlay 出边归属全部共享节点。

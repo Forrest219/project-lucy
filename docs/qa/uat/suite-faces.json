@@ -3,7 +3,7 @@
   "purpose": "验收面登记表（CONVENTIONS.md「升级验收底线（强制）」机检 SOT）。faces＝该套件主张收口必须覆盖的验证面：webui（真实前台浏览器）、mcp（MCP 面，PASS 时须 mip 关联或显式豁免）、api。tier＝strict（0.35 起新套件，违规即 FAIL）／legacy（0.30 及以前存量套件，违规只告警，待整改翻 strict）。维护规则：新套件登记 INDEX 时必须同步登记本表；faces 升级（如补浏览器臂）后同步改本表并把 tier 定为 strict。",
   "owner": "docs/qa/uat/CONVENTIONS.md「升级验收底线（强制）」",
   "suites": {
-    "UAT-SUITE-ACCESS-WRITE-WINDOW": { "dir": "access-write-window", "faces": ["webui", "mcp"], "tier": "strict" },
+    "UAT-SUITE-ACCESS-WRITE-WINDOW": { "dir": "access-write-window", "faces": ["webui", "mcp"], "tier": "strict", "mip": { "status": "exempt", "reason": "大目录写窗韧性与展示读恢复语义，非问询热路径；性能归 UAT-MIP 专属档判定" } },
     "UAT-SUITE-OVERLAY-PUBLISH-GUARD": { "dir": "overlay-publish-guard", "faces": ["api", "mcp"], "tier": "strict", "mip": { "status": "exempt", "reason": "纯写路径与发布护栏语义，未触 MCP 读热路径；待 P1-78 主档建立后重新评估" } },
     "UAT-SUITE-SCHEMA-TABLE-APPEND": { "dir": "schema-table-append", "faces": ["api", "mcp"], "tier": "strict", "mip": { "status": "exempt", "reason": "Schema Manifest 写路径与追加语义，未触 MCP 读热路径；待 P1-78 主档建立后重新评估" } },
     "UAT-SUITE-SOURCE-WRITE-HONESTY": { "dir": "source-write-honesty", "faces": ["webui", "api"], "tier": "strict" },
@@ -15,6 +15,10 @@
     "UAT-SUITE-ENABLED-TABLES-LOAD-STATE": { "dir": "enabled-tables-load-state", "faces": ["webui"], "tier": "strict" },
     "UAT-SUITE-MCP-INQUIRY-PERF": { "dir": "mcp-inquiry-performance", "faces": ["mcp", "api"], "tier": "strict", "mip": { "status": "linked" } },
     "UAT-SUITE-INTERACTIVE-READ-RESILIENCE": { "dir": "interactive-read-resilience", "faces": ["webui", "mcp"], "tier": "strict" },
+    "UAT-SUITE-SEMANTIC-MAP": { "dir": "semantic-map", "faces": ["webui"], "tier": "strict" },
+    "UAT-SUITE-INTEGRATION-MCP-CAP": { "dir": "integration-mcp-capacity", "faces": ["mcp", "api"], "tier": "strict", "mip": { "status": "exempt", "reason": "容量准入与流式背压语义验证；问询热路径时延基线归 UAT-MIP 专属档判定（interactive p95 仅作混压护栏，OQ-A3）" } },
+    "UAT-SUITE-ASSET-LIST-ZOOM": { "dir": "asset-list-zoom", "faces": ["webui"], "tier": "strict" },
+    "UAT-SUITE-BUDGET-ANALYST-UX": { "dir": "budget-analyst-ux", "faces": ["mcp"], "tier": "strict", "mip": { "status": "exempt", "reason": "预算分层／并发／超时语义验证，非问询热路径时延基线；慢源档位为受控夹具，性能归 UAT-MIP 专属档判定" } },
 
     "UAT-SUITE-ROW-POLICY-AUTO": { "dir": "row-policy-automatic-enforcement", "faces": ["mcp", "api"], "tier": "legacy" },
     "UAT-SUITE-STORAGE-READINESS": { "dir": "storage-readiness", "faces": ["api"], "tier": "legacy" },
