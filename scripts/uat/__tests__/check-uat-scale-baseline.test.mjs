@@ -57,7 +57,14 @@ function greenConfig() {
   }
   for (let i = 1; i <= 50; i++) {
     const id = `uat_perf_${String(i).padStart(3, "0")}`;
-    const role = i <= 2 ? "lucy_admin" : i <= 26 ? "uat_role_001" : "uat_role_002";
+    // 与 seed-scale-mcp-perf-identities 一致：2×admin + 24/23 受限组 + 末位 lucy_ops_reader
+    const role = i <= 2
+      ? "lucy_admin"
+      : i <= 26
+        ? "uat_role_001"
+        : i < 50
+          ? "uat_role_002"
+          : "lucy_ops_reader";
     users.push({
       id,
       name: `UAT Perf ${i}`,
@@ -71,7 +78,13 @@ function greenConfig() {
 
 const roleOfPerf = (id) => {
   const n = Number(id.slice("uat_perf_".length));
-  return n <= 2 ? "lucy_admin" : n <= 26 ? "uat_role_001" : "uat_role_002";
+  return n <= 2
+    ? "lucy_admin"
+    : n <= 26
+      ? "uat_role_001"
+      : n < 50
+        ? "uat_role_002"
+        : "lucy_ops_reader";
 };
 
 function greenWindowDist() {
@@ -169,7 +182,9 @@ function greenDeps(overrides = {}) {
           ? ["demo-mysql", "lucy-ops"]
           : role === "uat_role_002"
             ? ["demo-mysql", "lucy-ops"]
-            : ["demo-mysql"];
+            : role === "lucy_ops_reader"
+              ? ["lucy-ops"]
+              : ["demo-mysql"];
         return { status: 200, isError: false, data: { connections }, text: JSON.stringify({ connections }) };
       }
       if (name === "wiki_search") {
@@ -220,6 +235,8 @@ test("parseArgs：默认／strict／两种 profile 写法／未知参数与未�
   assert.deepEqual(parseArgs(["--strict"]), { strict: true, profile: null });
   assert.deepEqual(parseArgs(["--profile", "mcp-perf"]), { strict: false, profile: "mcp-perf" });
   assert.deepEqual(parseArgs(["--profile=mcp-perf"]), { strict: false, profile: "mcp-perf" });
+  assert.deepEqual(parseArgs(["--profile", "customer-stability"]), { strict: false, profile: "customer-stability" });
+  assert.deepEqual(parseArgs(["--profile=customer-stability"]), { strict: false, profile: "customer-stability" });
   assert.ok(parseArgs(["--profile", "bogus"]).error);
   assert.ok(parseArgs(["--bogus"]).error);
   assert.ok(parseArgs(["--profile"]).error);

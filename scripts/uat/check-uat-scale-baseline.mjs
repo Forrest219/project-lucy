@@ -10,13 +10,17 @@
  * Wiki 页数、Skill 数、superstore 业务种子、审计调用行（WARN）。
  * 不带 --profile 时断言项、判定口径与退出码与既有版本一致。
  *
- * 专项档：`--profile mcp-perf`（或 `--profile=mcp-perf`）追加 §1.1 MCP-PERF
- * profile 断言（P1-78 前置，委托人 2026-11-26 授权测试基建）。除 COUNT 外还含
- * 运行时核验：50 压测身份真实 Public MCP 调用对账（不同 Token→不同 user_id、
- * 审计 role_ids∋配置角色、连接可见性）、wiki_search 真实命中合成标记、
- * lucy_skill_read 真实读到指定 Skill、lucy_admin 全局 Source 集合与跨连接
- * oracle 查询。全部为只读调用，不写库。§1.1 的「持续压力到达模型」与
- * 「长链实例」两行不是库内计数，按 SOT 约定由 P1-78 判定器读取，本脚本不断言。
+ * 专项档：
+ *   - `--profile mcp-perf`：追加 §1.1 MCP-PERF profile 断言（P1-78 前置，
+ *     委托人 2026-11-26 授权测试基建）。除 COUNT 外还含运行时核验：50 压测
+ *     身份真实 Public MCP 调用对账（不同 Token→不同 user_id、审计
+ *     role_ids∋配置角色、连接可见性）、wiki_search 真实命中合成标记、
+ *     lucy_skill_read 真实读到指定 Skill、lucy_admin 全局 Source 集合与跨连接
+ *     oracle 查询。全部为只读调用，不写库。§1.1 的「持续压力到达模型」与
+ *     「长链实例」两行不是库内计数，按 SOT 约定由 P1-78 判定器读取，本脚本不断言。
+ *   - `--profile customer-stability`：追加 §1.2 客户超标稳定性基线（连接／
+ *     Schema／跨源表／容器 CPU·内存上限）。常规伴随哨兵门禁由
+ *     `stability-sentinel.mjs --mode=gate` 单独执行，本脚本不内嵌。
  *
  * profile 身份口径：access.yaml 中 id 以 UAT_MCP_PERF_AGENT_PREFIX（默认
  * uat_perf_）开头的 Agent。运行时凭据从仓外 0600 JSON 文件注入
@@ -34,7 +38,16 @@ import { pathToFileURL } from "node:url";
 
 // ---- 参数与环境 -------------------------------------------------------------
 
-const PROFILES = new Set(["mcp-perf"]);
+const PROFILES = new Set(["mcp-perf", "customer-stability"]);
+
+/** §1.2 customer-stability 下限／红线（与 scale-baseline.md 同步，不得降低）。 */
+const CUST_STAB = Object.freeze({
+  minConnections: 10,
+  minSchemas: 30,
+  minTables: 3500,
+  maxMemoryBytes: 2 * 1024 * 1024 * 1024,
+  maxNanoCpus: 2 * 1e9,
+});
 
 const LUCY = process.env.UAT_LUCY_CONTAINER || "compose-lucy-1";
 const DB = process.env.UAT_DEMO_DB_CONTAINER || "compose-demo-db-1";
@@ -53,10 +66,10 @@ export function parseArgs(argv) {
     if (a === "--strict") strict = true;
     else if (a === "--profile") profile = argv[++i] ?? "";
     else if (a.startsWith("--profile=")) profile = a.slice("--profile=".length);
-    else return { error: `未知参数：${a}（支持 --strict、--profile mcp-perf）` };
+    else return { error: `未知参数：${a}（支持 --strict、--profile mcp-perf|customer-stability）` };
   }
   if (profile !== null && !PROFILES.has(profile)) {
-    return { error: `未知 profile：${profile || "(空)"}（可选：mcp-perf）` };
+    return { error: `未知 profile：${profile || "(空)"}（可选：mcp-perf、customer-stability）` };
   }
   return { strict, profile };
 }
@@ -253,6 +266,44 @@ function createRealDeps(env = process.env) {
         "console.log(JSON.stringify(Object.keys((c&&c.connections)||{})));",
       ].join("");
       return JSON.parse(lucyNode(js));
+    },
+    /**
+     * §1.2 Schema 数：与 semantic-layer 真实加载口径一致——
+     * `semantic-layer/<conn>/_schema/*.yaml` 文件计数（config 优先，兼容旧根）。
+     */
+    countConfiguredSchemas() {
+      const js = [
+        'const fs=require("fs"),path=require("path");',
+        'const roots=["/data/lucy/config/semantic-layer","/data/lucy/semantic-layer"];',
+        "let root=null;for(const r of roots){if(fs.existsSync(r)){root=r;break;}}",
+        "let n=0;if(!root){console.log(0);}else{",
+        "for(const c of fs.readdirSync(root,{withFileTypes:true})){",
+        "if(!c.isDirectory()||c.name.startsWith('.'))continue;",
+        'const sdir=path.join(root,c.name,"_schema");',
+        "if(!fs.existsSync(sdir))continue;",
+        "for(const f of fs.readdirSync(sdir,{withFileTypes:true})){",
+        "if(f.isFile()&&/\\.ya?ml$/i.test(f.name)&&!f.name.startsWith('.'))n++;",
+        "}}",
+        "console.log(n);}",
+      ].join("");
+      return Number(lucyNode(js));
+    },
+    /** §1.2 容器资源上限：Docker HostConfig.Memory / NanoCpus（0＝未限制）。 */
+    containerResourceLimits() {
+      try {
+        const out = dockerOut([
+          "inspect", "-f",
+          "{{.HostConfig.Memory}} {{.HostConfig.NanoCpus}}",
+          LUCY,
+        ]);
+        const [mem, cpu] = out.trim().split(/\s+/);
+        return {
+          memoryBytes: Number(mem) || 0,
+          nanoCpus: Number(cpu) || 0,
+        };
+      } catch {
+        return { memoryBytes: 0, nanoCpus: 0 };
+      }
     },
     /** 读取 Wiki 页 frontmatter（如 global/uat-wiki-001.md）；不存在返回 null。 */
     readWikiPageFrontmatter(key) {
@@ -833,6 +884,74 @@ export function evaluateRuntime(probe, identities, roles, o) {
   return results;
 }
 
+/**
+ * §1.2 customer-stability：连接／Schema／跨源表／容器资源上限。
+ * 跨源表在本档不得以 Hive SKIPPED 放行——MySQL+Hive（及扩展）合计须 ≥3500。
+ * 容器 Memory／NanoCpus 为 0 视为未限制（FAIL）；超出 2Gi／2 核亦 FAIL。
+ */
+export function collectCustomerStabilityResults(deps, ctx, floors = CUST_STAB) {
+  const results = [];
+  const record = (dim, floor, actual, status, note) => {
+    results.push({ dim, floor, actual, status, note: note || "" });
+  };
+
+  const connections = deps.readKtxConnectionIds?.() ?? [];
+  const connN = Array.isArray(connections) ? connections.length : 0;
+  record(
+    "CUST-STAB 数据连接数",
+    `>=${floors.minConnections}`,
+    connN,
+    connN >= floors.minConnections ? "PASS" : "FAIL",
+    "ktx.yaml connections 键数",
+  );
+
+  const schemaN = Number(deps.countConfiguredSchemas?.() ?? 0);
+  record(
+    "CUST-STAB Schema 数",
+    `>=${floors.minSchemas}`,
+    schemaN,
+    schemaN >= floors.minSchemas ? "PASS" : "FAIL",
+    "semantic-layer/<conn>/_schema/*.yaml",
+  );
+
+  const mysql = Number.isFinite(ctx.mysqlTables) ? ctx.mysqlTables : 0;
+  const hive = ctx.hiveTables;
+  const hiveOk = Number.isFinite(hive);
+  const tableTotal = mysql + (hiveOk ? hive : 0);
+  const tableNote = hiveOk
+    ? `MySQL ${mysql} + Hive ${hive}`
+    : `MySQL ${mysql} + Hive 不可得（本档不得 SKIPPED）`;
+  record(
+    "CUST-STAB 跨源表合计",
+    `>=${floors.minTables}`,
+    hiveOk ? tableTotal : `${mysql}+Hive N/A`,
+    hiveOk && tableTotal >= floors.minTables ? "PASS" : "FAIL",
+    tableNote,
+  );
+
+  const limits = deps.containerResourceLimits?.() ?? { memoryBytes: 0, nanoCpus: 0 };
+  const mem = Number(limits.memoryBytes) || 0;
+  const cpu = Number(limits.nanoCpus) || 0;
+  const memOk = mem > 0 && mem <= floors.maxMemoryBytes;
+  const cpuOk = cpu > 0 && cpu <= floors.maxNanoCpus;
+  record(
+    "CUST-STAB 容器内存上限",
+    `<=${floors.maxMemoryBytes}（2Gi）且已限制`,
+    mem,
+    memOk ? "PASS" : "FAIL",
+    mem === 0 ? "HostConfig.Memory=0（未限制）" : "Docker HostConfig.Memory",
+  );
+  record(
+    "CUST-STAB 容器 CPU 上限",
+    `<=${floors.maxNanoCpus}（2 核）且已限制`,
+    cpu,
+    cpuOk ? "PASS" : "FAIL",
+    cpu === 0 ? "HostConfig.NanoCpus=0（未限制）" : "Docker HostConfig.NanoCpus",
+  );
+
+  return results;
+}
+
 /** §1.1 表合计行：§2 既有 per-库下限已在默认档 FAIL 兜底，本行只做合计观察（WARN 不卡退出码）。 */
 export function evaluateTableTotal(ctx, o) {
   const mysql = ctx.mysqlTables;
@@ -1182,6 +1301,8 @@ export async function main(argv, deps, io = { log: console.log, error: console.e
       return 2;
     }
     results.push(...await collectMcpPerfResults(deps, o, ctx));
+  } else if (args.profile === "customer-stability") {
+    results.push(...collectCustomerStabilityResults(deps, ctx));
   }
   return summarize(results, { strict: args.strict }, io);
 }
