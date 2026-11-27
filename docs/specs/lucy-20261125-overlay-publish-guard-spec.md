@@ -3,21 +3,22 @@
 | 元数据 | 内容 |
 |---|---|
 | 文档名称 | 语义层 overlay 发布通道冲突护栏与生命周期修复 Spec |
-| 文档类型 / 版本 | Spec（纯 API 功能合同）／**v1.1** |
+| 文档类型 / 版本 | Spec（纯 API 功能合同）／**v1.2** |
 | 日期 / 目标版本 | 2026-11-25／产品线 `0.35.0`（`lucy-v0.35`；总账与需求池暂挂 `0.30` 池） |
 | 功能编号 / 优先级 | **P1-91**／REQ-030-112／**P1（治理主路径可用性／事故修复）**。**不入核心分母** |
 | 台账号 | 无。挂现行 `0.30` 执行总账（P1-91） |
-| 阶段 | S4 |
-| 状态 | S4｜v1.1。**终稿已确权**（委托人 2026-11-26 明示「对剩余开放裁定项逐项拍板，完成终稿确权（S1 → S2）」；OQ-1～OQ-6 已裁；见 [确权材料](../reviews/2026-11-26-p1-89-90-91-ratification-brief.md)；无 Codex CLI 复审，额度恢复后可补审）；**开发授权已获得**（2026-11-26，Task 0 实证通过后落地）；**实现已落地，待验收**（单测/类型检查绿；UAT 待跑）；测试台 registered（[UAT-SUITE-OVERLAY-PUBLISH-GUARD](../qa/uat/suites/overlay-publish-guard/suite.md)／UAT-OPG-01–08）；不入核心分母；≠ 功能合同收口；≠ UAT PASS；≠ 可上线 |
+| 阶段 | S5 |
+| 状态 | S5｜v1.2。**功能合同已收口**（2026-11-28，[收口记录](../reviews/2026-11-28-p191-s5-closure-record.md)：SC-01–SC-09 全部关闭；测试台 `UAT-SUITE-OVERLAY-PUBLISH-GUARD` **PASS**——R0／OPG-01–08 全绿，GAP-OPG-08-BATCH 于 2026-11-27 补跑关闭，GAP-OPG-02-ENGINE 于 2026-11-28 隔离栈＋Doris 引擎补验关闭（`lucy_query` 三段名全链路 `rows=[[142.5, 142.5]]`，委托人 2026-11-27 亦明示接受 Task 0 实证口径））；终稿已确权（委托人 2026-11-26，OQ-1～OQ-6 已裁）；开发授权已获得（2026-11-26）；不入核心分母；≠ 可上线 |
 | 需求来源 | 2026-11-25 客户现场报告 [`inbox/Lucy新表接入_overlay与schema冲突_问题报告.md`](../../inbox/Lucy新表接入_overlay与schema冲突_问题报告.md)（平台 v0.25.0，`sql_server`／`BIDW`：publish 发出的 per-table 文件两段名顶掉 manifest 三段名定义，`lucy_query` 报 `Invalid object name`，API 无法删除，SSH 清理后恢复）及同日前序报告 [`inbox/Lucy语义层新表接入_覆盖门禁死锁_Bug报告.md`](../../inbox/Lucy语义层新表接入_覆盖门禁死锁_Bug报告.md) 的 `semantic-assets/publish` 覆盖门禁删除 snapshot 与 `plans` 错误码误导部分（v0.2 从 P1-90 归口至本条）＋ 本仓库与上游 `@kaelio/ktx@0.16.0` npm 包逐条代码核查 |
 | 实施主体 | Lucy 服务端（`webui/server/semantic-assets.ts`、`webui/server/semantic-batch-routes.ts`、`webui/server/index.ts`，提案新增 `webui/server/semantic-overlay-lifecycle.ts`）、`webui/docs/03-api-spec.md`、`docs/SYSTEM_HANDBOOK.md`；不改 KTX 源码；不改 WebUI 运行导航；不触碰 `webui/server/proxy/**`（OQ-3 另案） |
 | 配对计划 | [`docs/plans/lucy-20261125-overlay-publish-guard-plan.md`](../plans/lucy-20261125-overlay-publish-guard-plan.md) |
-| 测试台 | registered（[UAT-SUITE-OVERLAY-PUBLISH-GUARD](../qa/uat/suites/overlay-publish-guard/suite.md)／用例 `UAT-OPG-01`–`08`，尚无跑次） |
+| 测试台 | PASS（[UAT-SUITE-OVERLAY-PUBLISH-GUARD](../qa/uat/suites/overlay-publish-guard/suite.md)／`UAT-OPG-01`–`08`；[主跑次](../qa/uat/suites/overlay-publish-guard/runs/2026-11-26-claude-p19x-isolated.md)＋[batch 收口](../qa/uat/suites/overlay-publish-guard/runs/2026-11-27-claude-opg08-batch.md)＋[引擎面补验](../qa/uat/suites/overlay-publish-guard/runs/2026-11-28-claude-opg02-engine-doris.md)） |
 
 ### Changelog
 
 | 版本 | 变更 |
 |---|---|
+| v1.2 | 2026-11-28 **功能合同收口（S4 → S5）**：SC-01–SC-09 全部关闭（[收口记录](../reviews/2026-11-28-p191-s5-closure-record.md)）；测试台套件 PASS——GAP-OPG-08-BATCH 于 2026-11-27 补跑关闭，GAP-OPG-02-ENGINE 于 2026-11-28 隔离栈＋Doris 引擎补验关闭（`lucy_query` 三段名 `internal.p191eng.t_orders` 全链路 `rows=[[142.5, 142.5]]`；委托人 2026-11-27 亦明示接受 Task 0 实证口径）。≠ 可上线。 |
 | v1.1 | 2026-11-26 Task 0 引擎实证通过（方案 A 成立，记录 [`inbox/p191-task0/RECORD.md`](../../inbox/p191-task0/RECORD.md)）；委托人明示开发授权（P1-89 → P1-90 → P1-91 串行落地）；测试台套件 `UAT-SUITE-OVERLAY-PUBLISH-GUARD`（`UAT-OPG-01`–`08`）建立并挂勾连；状态行更新。≠ 功能合同收口；≠ UAT PASS；≠ 可上线。 |
 | v1.0 | 2026-11-26 **终稿确权**（委托人明示「逐项拍板，完成终稿确权（S1 → S2）」）：OQ-1＝设计冻结方案 A，Task 0 改挂开发授权前置；OQ-2＝列表 API 为主；OQ-3＝explain 冲突另案；OQ-4＝方案 A；OQ-5＝validate warnings＋`allowManifestShadow`＋batch 不硬阻断；OQ-6＝路径参数 DELETE＋既有 prune。阶段 S2；开发未授权；测试台 not_registered；≠ 功能合同收口；≠ UAT PASS；≠ 可上线。材料：[确权材料](../reviews/2026-11-26-p1-89-90-91-ratification-brief.md)。 |
 | v0.2-draft | 2026-11-25 委托人授权跨 Spec（P1-89／P1-90／P1-91）MECE 边界优化：1) **独占 `semantic-assets` 通道收口**：整体承接原 P1-90 F-b（publish 覆盖门禁 409 阻断不删 validation snapshot）与 F-c（`plans/:validationId` 非 batch 快照返回 `409 PLAN_PREVIEW_NOT_AVAILABLE`），消除两份 Spec 双头改 `semantic-assets.ts`；2) **定义双 409 门禁组合确认语义**：同一次 publish 同时命中覆盖门禁与同名 shadow 冲突时返回 `data.pendingConfirmations` 列表，支持一次带齐 `confirmOverwrite:true`＋`allowManifestShadow:true` 重试成交；3) **修复 DELETE 误删安全合并型 overlay 风险**：按文件内容区分 standalone（含 `table:`/`sql:`）与业务合并型 overlay（不含 `table:`/`sql:`），默认仅允许直接删 standalone，删业务合并型 overlay 需显式 `confirmBusinessOverlayDelete=true`；补齐 `withDisplayWriteBarrier(["D"])` 与 `reloadCatalog`；4) **补齐只读可发现性端点**：新增 `GET /api/semantic-assets/overlays?conn=` 消除盲删缺口；5) **对齐 P1-89 D8 写接口信封**：补齐 `deleted`/`noChanges`/`deletedFiles`、未知参数 400 与 `data.nextSteps` 数组；SC 扩至 SC-01–SC-09。仍 S1、终稿未确权、开发未授权。 |
