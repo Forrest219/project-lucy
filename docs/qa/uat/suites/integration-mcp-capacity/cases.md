@@ -9,12 +9,13 @@
 | UAT-IMC-04 | borrow 满时 interactive 仍成交 | 是 | SC-04 | 独立 SQL 正确 |
 | UAT-IMC-05 | 大明细流式触顶 | 是 | SC-05／06 | 不完整缓冲；interactive 仍成交 |
 | UAT-IMC-06 | 上游出口全普查封闭 | 是 | SC-06 | 清单含 readUpstreamBody＋pipeResponse／passthrough；与 Task 0 grep 模式 diff 空；抽测 initialize＋原 pipe 路径触顶 |
-| UAT-IMC-07 | 容量拒绝 vs 预算 | 是 | SC-07 | 未启动上游的容量拒绝不扣预算 calls |
+| UAT-IMC-07 | 预算：容量拒绝 vs 豁免 | 是 | SC-07 | 容量拒绝不扣 calls；integration 豁免预算＋影子计数；SC-06 中止按 OQ-3(a) 结算 |
 | UAT-IMC-08 | T2 混压预注册通过线 | 是 | SC-08 | 成功率＋p95 分母 |
 | UAT-IMC-09 | Agent 编辑枚举 | 是（N/A） | SC-01 | **本轮裁定不做 WebUI 枚举** → 固定 **N/A**，以 IMC-01 OpenAPI 为据 |
 | UAT-IMC-10 | T4 hold 宽限后回落 | 是 | SC-09 | wait≥hold+5s；capacity 回落 |
-| UAT-IMC-11 | 观测＋指引诚实性 | 是 | SC-10／11／12 | health 聚合；指引含非官方声明；sentinel 持续越线定义 |
+| UAT-IMC-11 | 观测＋指引诚实性 | 是 | SC-10／11／12 | health 聚合＋agentId Top-N＋用量聚合＋影子计数；指引含非官方声明与最低契约；sentinel 持续越线定义 |
 | UAT-IMC-12 | 延长 soak | 否 | 稳健 | 不改必做判定 |
+| UAT-IMC-13 | integration 握手轻量路径 | 是 | SC-13 | 静态指引；不占 instructionsWork 槽位；`tools/list` 同构 |
 
 ---
 
@@ -118,17 +119,19 @@
 
 ---
 
-## UAT-IMC-07 — 预算
+## UAT-IMC-07 — 预算：容量拒绝 vs 豁免
 
 ### 步骤
 
 1. 记录 Token 预算 counters。
 2. 触发纯容量拒绝（未上游）→ calls／busy **不**因该拒绝增加。
-3. 触发 SC-06 中止（上游已开始）→ counters 按既有 upstream 失败规则结算（不重复扣减、无负计数）；不与 `question_budget_exhausted` 混淆。
+3. Agent-I 单会话连续执行**远超单问询上限**（≥ 60 次）的 `lucy_query`：全程**不**出现 `question_budget_exhausted`、无续问要求；同时影子计数随调用累计并可在 health 摘要读出。
+4. （可选开关臂）将豁免 env 关回重启后重复步骤 3 前若干次调用 → 恢复预算拦截；恢复默认后 `interactive`（Agent-E）行为始终不变。
+5. 触发 SC-06 中止（上游已开始）→ counters 按既有 upstream 失败规则结算（不重复扣减、无负计数）；不与 `question_budget_exhausted` 混淆。
 
 ### 期望
 
-- 两步分别取证；缺一步 → **FAIL**。
+- 步骤 2／3／5 分别取证，缺一步 → **FAIL**；豁免生效期间出现 `question_budget_exhausted` → **FAIL**；Agent-E 行为发生变化 → **FAIL**。
 
 ---
 
@@ -177,9 +180,26 @@
 ### 步骤
 
 1. 读 `/api/health`（或约定摘要）含 workload／integration 拒绝聚合，以及 **interactive 高并发／大响应触顶** 代理计数（可在压测后非零或有字段）。
-2. 打开开发者指引：含 Python＋Java、水位表（含最坏回收时延含 hold）、**非官方 SDK** 显著声明、退避说明。
-3. 确认 sentinel 阈值与 fixtures 冻结表一致（默认 p99=250ms／连续 3／max=1000ms）。
+2. 摘要含**脱敏 `agentId` 有界 Top-N**（无 Token／查询正文）、**每 agent 用量聚合**（调用次数／累计耗时／峰值并发／SC-06 触顶次数）、**预算影子计数**（SC-10 增强）。
+3. 打开开发者指引：含 Python＋Java、水位表（含最坏回收时延含 hold）、**非官方 SDK** 显著声明、退避说明；并核对 SC-11 最低契约——`measures`／limit／分片说明、打标 SOP `curl`、机读错误处理（`retryAfterMs` 退避、`response_too_large` 禁无节流重打、`404` 重建会话、非预期严格抛错）、示例标注对应 lucy 版本。
+4. 确认 sentinel 阈值与 fixtures 冻结表一致（默认 p99=250ms／连续 3／max=1000ms）。
 
 ### 期望
 
-- SC-10／11／12；指引暗示官方包 → **FAIL**。
+- SC-10／11／12；指引暗示官方包 → **FAIL**；摘要含 Token／查询正文 → **FAIL**；SC-11 最低契约缺项 → **FAIL**。
+
+---
+
+## UAT-IMC-13 — integration 握手轻量路径
+
+### 步骤
+
+1. Agent-I 发起 `initialize`：响应走静态极简指引路径（服务端日志／观测证实未进入 `decideInitializeInstructions` 动态构建、未占 instructionsWork 槽位、无目录／Skill 扫描）。
+2. 对照 Agent-E `initialize`：行为与既有路径一致（回归确认）。
+3. 双方各自 `tools/list`，比对可见工具集。
+
+### 期望
+
+- Agent-I 不占用动态构建槽位（批量建连时 instructionsWork 并发不为 integration 打满）；
+- **两条路径 `tools/list` 可见集同构**——可见集不一致 → **FAIL**（SC-13 不变量）；
+- Agent-E 握手行为变化 → **FAIL**。

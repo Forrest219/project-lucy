@@ -33,6 +33,7 @@
 - Spec：[docs/specs/lucy-20261127-integration-mcp-capacity-backpressure-spec.md](../../specs/lucy-20261127-integration-mcp-capacity-backpressure-spec.md)
 - Plan：[docs/plans/lucy-20261127-integration-mcp-capacity-backpressure-plan.md](../../plans/lucy-20261127-integration-mcp-capacity-backpressure-plan.md)
 - UAT：[docs/qa/uat/suites/integration-mcp-capacity/suite.md](../../qa/uat/suites/integration-mcp-capacity/suite.md)
-- 设计稿：[docs/plans/lucy-20261127-integration-mcp-capacity-backpressure-design.md](../../plans/lucy-20261127-integration-mcp-capacity-backpressure-design.md)
+- 设计稿：[docs/design/design-2026-11-27-integration-mcp-capacity-backpressure.md](../../design/design-2026-11-27-integration-mcp-capacity-backpressure.md)
 - 上游：[P1-82／REQ-030-103](../../specs/lucy-20261124-mcp-data-plane-isolation-ha-spec.md)（SC-06 改由本条验收）· [P1-78／REQ-030-099](../../specs/lucy-20261123-mcp-inquiry-performance-baseline-spec.md)
+- 跨 Spec 基线（2026-11-27 r4）：[REQ-0122](../../specs/lucy-20261126-question-budget-analyst-workflow-revision-spec.md)（P0 先落地；本条四层默认随其 D2 档 8/16/32/48，borrowMax 解耦初始 12，Task 0 后校准）
 - 常青需求池：[docs/backlog/README.md](../README.md)
