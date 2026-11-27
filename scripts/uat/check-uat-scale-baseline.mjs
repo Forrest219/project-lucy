@@ -38,7 +38,7 @@ const PROFILES = new Set(["mcp-perf"]);
 
 const LUCY = process.env.UAT_LUCY_CONTAINER || "compose-lucy-1";
 const DB = process.env.UAT_DEMO_DB_CONTAINER || "compose-demo-db-1";
-const HS2 = process.env.UAT_SCALE_HS2_CONTAINER || "lucy-uat-hs2";
+const HS2 = process.env.UAT_SCALE_HS2_CONTAINER || "lucy-uat-hive-hs2";
 const MYSQL_DB = process.env.UAT_MYSQL_DB || "uat_scale_mysql";
 const HIVE_DB = process.env.UAT_HIVE_DB || "uat_scale_hive";
 const MYSQL_ROOT_PW = process.env.UAT_DEMO_DB_ROOT_PASSWORD || "lucy_demo_root";

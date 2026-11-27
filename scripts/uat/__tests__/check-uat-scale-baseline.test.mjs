@@ -95,7 +95,7 @@ function greenDeps(overrides = {}) {
     env: { UAT_MCP_PERF_TOKEN_FILE: "/fake/tokens.json", UAT_MCP_PERF_AUDIT_SETTLE_MS: "300" },
     calls,
     dockerOk: () => true,
-    running: (name) => name !== "lucy-uat-hs2",
+    running: (name) => name !== "lucy-uat-hive-hs2",
     mysql: (sql) => {
       if (sql.includes("information_schema.tables")) return "1200";
       if (sql.includes("information_schema.columns")) return "1000";
