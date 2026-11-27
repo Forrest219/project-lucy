@@ -1,0 +1,67 @@
+{
+  "phase": "normal",
+  "startedAt": "2026-11-27T01:55:54.572Z",
+  "webui": "http://127.0.0.1:55386",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "cases": [
+    {
+      "name": "E1-E5-roles-list-load",
+      "status": "PASS",
+      "ms": 7710
+    },
+    {
+      "name": "E3-roles-list-read-your-write",
+      "status": "PASS",
+      "ms": 71469
+    },
+    {
+      "name": "E4-E12-roles-ui-edit-save-overlap",
+      "status": "FAIL",
+      "error": "Error: expect(locator).toBeDisabled() failed\n\nLocator: getByRole('button', { name: '确认保存' })\nExpected: disabled\nTimeout: 8000ms\nError: element(s) not found\n\nCall log:\n  - Expect \"to.be.disabled\" with timeout 8000ms\n  - waiting for getByRole('button', { name: '确认保存' })\n",
+      "ms": 65814
+    },
+    {
+      "name": "E8b-version-conflict-hint",
+      "status": "FAIL",
+      "error": "Error: expect(locator).toBeVisible() failed\n\nLocator: locator('#role-description-input')\nExpected: visible\nTimeout: 30000ms\nError: element(s) not found\n\nCall log:\n  - Expect \"to.be.visible\" with timeout 30000ms\n  - waiting for locator('#role-description-input')\n",
+      "ms": 35769
+    },
+    {
+      "name": "E13-E17-agents-list-load",
+      "status": "PASS",
+      "ms": 17817
+    },
+    {
+      "name": "E18-agents-no-error-terminal-during-write",
+      "status": "PASS",
+      "ms": 14233
+    }
+  ],
+  "browserTimings": [
+    {
+      "kind": "roles-list-primaryReady",
+      "ms": 7669,
+      "visible": "visible",
+      "focus": true
+    },
+    {
+      "kind": "roles-list-readYourWrite",
+      "apiWriteMs": 44913,
+      "frontMs": 4483
+    },
+    {
+      "kind": "agents-roster-primaryReady",
+      "ms": 10960,
+      "visible": "visible",
+      "focus": true
+    }
+  ],
+  "failures": [
+    "E4-E12-roles-ui-edit-save-overlap",
+    "E8b-version-conflict-hint"
+  ],
+  "browser": "158.0.8127.37"
+}
