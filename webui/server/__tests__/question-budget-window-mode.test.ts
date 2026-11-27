@@ -181,7 +181,11 @@ describe("question budget window", () => {
     for (let i = 0; i < QUESTION_BUDGET_MAX_CALLS - 1; i += 1) await scoped(budget, 4_000);
     const secondStop = await scoped(budget, 4_000);
     expect(secondStop.action).toBe("stop");
-    expect(await budget.declareContinuation(scopeKey, stopped.continueToken)).toMatchObject({ ok: false, reason: "no_credit" });
+    // 旧窗凭证跨代拒绝（mismatch）；active 默认仍有续查档时不得误报 no_credit
+    expect(await budget.declareContinuation(scopeKey, stopped.continueToken)).toMatchObject({ ok: false, reason: "mismatch" });
+    if (secondStop.action === "stop") {
+      expect(await budget.declareContinuation(scopeKey, secondStop.continueToken)).toMatchObject({ ok: true, declared: true });
+    }
 
     const headerBudget = new QuestionBudget();
     await headerBudget.beginQuestion({ identityKey: IDENTITY, sessionId: SESSION, turnId: "turn-b", now: 1_000 });

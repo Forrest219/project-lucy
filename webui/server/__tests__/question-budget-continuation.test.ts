@@ -24,6 +24,7 @@ import {
   QuestionBudget,
   budgetIdentityKey,
   budgetScopeKey,
+  questionBudgetActiveMaxContinuations,
   type BudgetAllow,
   type BudgetDecision,
   type BudgetPersistence,
@@ -279,23 +280,33 @@ describe("question budget continuation", () => {
     const scopeKey = budgetScopeKey(IDENTITY, SESSION);
     const budget = new QuestionBudget();
     await budget.beginQuestion({ identityKey: IDENTITY, sessionId: SESSION, turnId: TURN, now: 0 });
-    const stopped = await exhaustByCalls(budget, 1_000);
-    expect(stopped.action).toBe("stop");
-    if (stopped.action !== "stop") return;
+    const activeMax = questionBudgetActiveMaxContinuations();
+    let lastStop = await exhaustByCalls(budget, 1_000);
+    expect(lastStop.action).toBe("stop");
+    if (lastStop.action !== "stop") return;
 
-    expect(await budget.declareContinuation(scopeKey, stopped.continueToken, 2_000)).toMatchObject({ ok: true, declared: true });
-    const continued = expectAllow(await admit(budget, 3_000));
-    expect(continued.continued).toBe(true);
+    // REQ-0122 D6：active 默认 3 档；用尽全部续查档后再声明才 no_credit。
+    for (let i = 0; i < activeMax; i += 1) {
+      expect(await budget.declareContinuation(scopeKey, lastStop.continueToken, 2_000 + i)).toMatchObject({
+        ok: true,
+        declared: true
+      });
+      expectAllow(await admit(budget, 3_000 + i));
+      lastStop = await exhaustByCalls(budget, 4_000 + i);
+      expect(lastStop.action).toBe("stop");
+      if (lastStop.action !== "stop") return;
+    }
+
     const before = budget.snapshotScope(scopeKey);
-    expect(before?.continuations).toBe(1);
+    expect(before?.continuations).toBe(activeMax);
 
     // 额度已用尽 ⇒ 拒绝
-    const again = await budget.declareContinuation(scopeKey, stopped.continueToken, 4_000);
+    const again = await budget.declareContinuation(scopeKey, lastStop.continueToken, 10_000);
     expect(again).toEqual({ ok: false, reason: "no_credit" });
 
     // 不得重置窗口
     const after = budget.snapshotScope(scopeKey);
-    expect(after?.continuations).toBe(1);
+    expect(after?.continuations).toBe(activeMax);
     expect(after?.windowId).toBe(before?.windowId);
     expect(after?.calls).toBe(before?.calls);
     expect(after?.busyMs).toBe(before?.busyMs);
@@ -393,9 +404,10 @@ describe("question budget continuation", () => {
         budget.declareContinuation(scopeKey, stopped.continueToken, 2_000)
       ]);
       expect(expectAllow(headerDecision).continued).toBe(true);
-      // 声明要么先落地，要么被额度闸拒绝；不得出现第二条 pending
+      // 声明要么先落地，要么因已换窗／未耗尽被拒；不得出现第二条 pending。
+      // REQ-0122 D6：active 多档时，换窗后主桶未触顶 → not_exhausted（而非立刻 no_credit）。
       if (declared.ok) expect(declared.declared).toBe(true);
-      else expect(declared.reason).toBe("no_credit");
+      else expect(["no_credit", "not_exhausted"]).toContain(declared.reason);
       const state = budget.snapshotScope(scopeKey);
       expect(state?.continuations).toBe(1);
       expect(state?.windowId).toBe(windowBefore + 1);
@@ -538,14 +550,26 @@ describe("question budget continuation", () => {
     expect(first.continuationCreditLeft).toBe(true);
     expect(first.canContinueByCapability).toBe(true);
 
-    // 用掉唯一的续查额度
-    expect(await budget.declareContinuation(scopeKey, first.continueToken, 2_000)).toMatchObject({ ok: true, declared: true });
-    const continued = expectAllow(await admit(budget, 3_000));
-    expect(continued.continued).toBe(true);
+    // REQ-0122 D6：用尽 active 全部续查档（默认 3）
+    const activeMax = questionBudgetActiveMaxContinuations();
+    let stopToken = first.continueToken;
+    for (let i = 0; i < activeMax; i += 1) {
+      expect(await budget.declareContinuation(scopeKey, stopToken, 2_000 + i)).toMatchObject({
+        ok: true,
+        declared: true
+      });
+      expectAllow(await admit(budget, 3_000 + i));
+      if (i < activeMax - 1) {
+        const mid = await exhaustByCalls(budget, 4_000 + i);
+        expect(mid.action).toBe("stop");
+        if (mid.action !== "stop") return;
+        stopToken = mid.continueToken;
+      }
+    }
 
-    // 第二次停机：调用者回传了有效凭证但额度已用尽 ⇒ 呈现为 true、匹配为 true、额度为 false
-    for (let i = 0; i < QUESTION_BUDGET_MAX_CALLS; i += 1) await admit(budget, 4_000);
-    const second = await admit(budget, 4_000, { turnId: TURN, header: TURN });
+    // 档尽后停机：调用者回传了可信头部（活跃 turnId）但额度已用尽 ⇒ 呈现／匹配 true、额度 false
+    for (let i = 0; i < QUESTION_BUDGET_MAX_CALLS; i += 1) await admit(budget, 10_000);
+    const second = await admit(budget, 10_000, { turnId: TURN, header: TURN });
     expect(second.action).toBe("stop");
     if (second.action !== "stop") return;
     expect(second.continuationPresented).toBe(true);
@@ -553,6 +577,7 @@ describe("question budget continuation", () => {
     expect(second.continuationCreditLeft).toBe(false);
     expect(second.canContinueByCapability).toBe(true);
     expect(second.continuable).toBe(false);
+    void stopToken;
   });
 
   it("SC-30 续查声明与续查生效是两条可区分事实，且生效可关联到对应数据调用", async () => {

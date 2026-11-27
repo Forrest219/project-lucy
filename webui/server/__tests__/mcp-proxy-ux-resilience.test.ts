@@ -102,14 +102,15 @@ function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
-type Seen = { rpcMethod?: string; toolName?: string };
+type Seen = { rpcMethod?: string; toolName?: string; args?: unknown };
 
 async function startProxy(seen: Seen[] = []): Promise<{ close: () => Promise<void>; port: number }> {
   const upstream: Server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     const raw = await readBody(req);
     let body: Record<string, unknown> | undefined;
     try { body = JSON.parse(raw) as Record<string, unknown>; } catch { body = undefined; }
-    seen.push({ rpcMethod: body?.method as string | undefined, toolName: (body?.params as { name?: string } | undefined)?.name });
+    const params = body?.params as { name?: string; arguments?: unknown } | undefined;
+    seen.push({ rpcMethod: body?.method as string | undefined, toolName: params?.name, args: params?.arguments });
     if (body?.method === "initialize") {
       res.writeHead(200, { "content-type": "application/json", "mcp-session-id": "ktx-s1" });
       res.end(JSON.stringify({ jsonrpc: "2.0", id: body.id, result: { protocolVersion: "2024-11-05", serverInfo: { name: "ktx", version: "0" }, capabilities: { tools: {} } } }));
@@ -185,15 +186,14 @@ const VALID_QUERY = {
 };
 
 describe("SC-05 必然被拒的形状在转发前返回", () => {
-  it("缺 measures：Lucy 工具名＋示例，不含 sl_query，不访问上游，审计为 client_schema_failure", async () => {
+  it("无成形拉数要素且缺 measures：Lucy 工具名＋示例，不含 sl_query，不访问上游", async () => {
     const seen: Seen[] = [];
     const proxy = await startProxy(seen);
     try {
+      // P1-89 §2.4：仅「无 dimensions/filters/segments」的缺 measures 仍硬拒；
+      // dims-only／measures-empty+dims 走拉数逃生，见下一用例。
       const shapes: Array<[string, unknown]> = [
-        ["dims-only", { connectionId: "mysql-aliyun", dimensions: [{ field: "superstore_orders.region" }] }],
         ["source-only", { connectionId: "mysql-aliyun", sourceName: "superstore_orders" }],
-        ["measures-empty", { connectionId: "mysql-aliyun", measures: [], dimensions: [{ field: "superstore_orders.region" }] }],
-        // Spec 步骤 1：无其他要素的两个形状先被既有 query_shape_required 拦下，文案同样必须带示例（UAT-MCPX-05 实测补洞）
         ["bare-connection", { connectionId: "mysql-aliyun" }],
         ["bare-empty-measures", { connectionId: "mysql-aliyun", measures: [] }]
       ];
@@ -201,7 +201,6 @@ describe("SC-05 必然被拒的形状在转发前返回", () => {
         const out = await call(proxy.port, TOKEN_A, `s05-${id}`, "lucy_query", args);
         expect(out.text).toContain("lucy_query");
         expect(out.text).toContain("measures");
-        expect(out.text).toContain("\"measures\":[");
         expect(out.text).not.toContain("sl_query");
         const row = await auditRow(`s05-${id}`);
         expect(row.error_category).toBe("client_schema_failure");
@@ -209,6 +208,58 @@ describe("SC-05 必然被拒的形状在转发前返回", () => {
       expect(seen.filter((s) => s.toolName === "sl_query")).toHaveLength(0);
     } finally {
       await proxy.close();
+    }
+  });
+
+  it("P1-89 拉数逃生：dims-only／空 measures+dims 注入技术性 count 后转发上游", async () => {
+    const seen: Seen[] = [];
+    const proxy = await startProxy(seen);
+    try {
+      const shapes: Array<[string, unknown]> = [
+        ["dims-only", { connectionId: "mysql-aliyun", dimensions: [{ field: "superstore_orders.region" }] }],
+        ["measures-empty", { connectionId: "mysql-aliyun", measures: [], dimensions: [{ field: "superstore_orders.region" }] }]
+      ];
+      for (const [id, args] of shapes) {
+        const out = await call(proxy.port, TOKEN_A, `s05-detail-${id}`, "lucy_query", args);
+        expect(out.text).not.toContain("measures_required");
+        expect(out.text).not.toContain("Invalid arguments");
+      }
+      const upstream = seen.filter((s) => s.toolName === "sl_query");
+      expect(upstream.length).toBe(2);
+      for (const callSeen of upstream) {
+        const measures = (callSeen.args as { measures?: unknown[] } | undefined)?.measures;
+        expect(Array.isArray(measures) && measures.length).toBeTruthy();
+        const first = measures![0] as { expr?: string; name?: string };
+        expect(first.name).toBe("_lucy_detail_count");
+        expect(String(first.expr)).toContain("count(superstore_orders.region)");
+      }
+    } finally {
+      await proxy.close();
+    }
+  });
+
+  it("P1-89 D11 回退：REQUIRE_BUSINESS_MEASURES 开启时 dims-only 仍拒", async () => {
+    const prev = process.env.LUCY_QUERY_REQUIRE_BUSINESS_MEASURES;
+    process.env.LUCY_QUERY_REQUIRE_BUSINESS_MEASURES = "1";
+    const seen: Seen[] = [];
+    const proxy = await startProxy(seen);
+    try {
+      const out = await call(
+        proxy.port,
+        TOKEN_A,
+        "s05-require-measures",
+        "lucy_query",
+        { connectionId: "mysql-aliyun", dimensions: [{ field: "superstore_orders.region" }] }
+      );
+      expect(out.text).toContain("measures");
+      expect(out.text).not.toContain("sl_query");
+      expect(seen.filter((s) => s.toolName === "sl_query")).toHaveLength(0);
+      const row = await auditRow("s05-require-measures");
+      expect(row.error_category).toBe("client_schema_failure");
+    } finally {
+      await proxy.close();
+      if (prev === undefined) delete process.env.LUCY_QUERY_REQUIRE_BUSINESS_MEASURES;
+      else process.env.LUCY_QUERY_REQUIRE_BUSINESS_MEASURES = prev;
     }
   });
 
@@ -269,17 +320,20 @@ describe("SC-06 重复被拒与指纹", () => {
   it("同身份同会话原样重提：第二次带「请勿原样重试」；键序／别名变化仍视为相同；语义不同或他人不提示", async () => {
     const proxy = await startProxy();
     try {
-      const base = { connectionId: "mysql-aliyun", dimensions: [{ field: "superstore_orders.region" }] };
+      // 须用仍会 client_schema_failure 的形状（无 dimensions/filters/segments 的空 measures）；
+      // dims-only 已按 P1-89 拉数逃生成交，不能再作拒绝指纹夹具。
+      const base = { connectionId: "mysql-aliyun", measures: [] as unknown[] };
       const first = await call(proxy.port, TOKEN_A, "s06-1", "lucy_query", base);
       expect(first.text).not.toMatch(/rejected/i);
+      expect(first.text).toContain("measures");
       await auditRow("s06-1");
 
       const second = await call(proxy.port, TOKEN_A, "s06-2", "lucy_query", base);
       expect(second.text).toMatch(/Do not retry it unchanged/);
 
-      // 键序不同、dimensions 内键序不同 → 同一指纹。
+      // 键序不同 → 同一指纹。
       const reordered = await call(proxy.port, TOKEN_A, "s06-3", "lucy_query", {
-        dimensions: [{ field: "superstore_orders.region" }], connectionId: "mysql-aliyun"
+        measures: [], connectionId: "mysql-aliyun"
       });
       expect(reordered.text).toMatch(/Do not retry it unchanged/);
 

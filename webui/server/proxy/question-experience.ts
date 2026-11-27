@@ -6,19 +6,56 @@
 
 import { randomUUID } from "node:crypto";
 
-/** Defaults: Spec lucy-20261111 threshold relax (was 20 / 120_000). */
+/** Defaults: REQ-0122 analyst workflow revision (was P1-12 60／300s／4；P1-74 active=1). */
 export const QUESTION_BUDGET_MAX_CALLS = 60;
 export const QUESTION_BUDGET_MAX_WALL_MS = 300_000;
-export const QUESTION_BUDGET_MAX_BUSY_MS = 300_000;
-export const QUESTION_BUDGET_MAX_INFLIGHT = 4;
+/** D3 默认 900s；可用 `QUESTION_BUDGET_MAX_BUSY_MS` 覆盖。 */
+export const QUESTION_BUDGET_MAX_BUSY_MS = 900_000;
+/** D2 默认 8；可用 `QUESTION_BUDGET_MAX_INFLIGHT` 覆盖。 */
+export const QUESTION_BUDGET_MAX_INFLIGHT = 8;
 export const QUESTION_BUDGET_ABS_EXEC_MS = 120_000;
+/** D4／OQ-4：失败／超时单次 busy 封顶默认 30s。 */
+export const QUESTION_BUDGET_FAILED_CALL_CAP_MS = 30_000;
+/** D1：轻工具独立窗上限。 */
+export const QUESTION_BUDGET_MAX_META_CALLS = 200;
 
 /**
- * P1-74 / D2 —— begin active 的续查档数保持窗口 Spec 原合同（1 档）；
- * begin inactive／不可用时默认 5 档（初始窗＋5 次续查＝至多 6 窗，见 Spec §5.1）。
- * 环境变量名见 Spec OQ-1；合同默认 5。
+ * P1-74／REQ-0122 D6 —— begin active 默认 3 档（可用
+ * `QUESTION_BUDGET_MAX_CONTINUATIONS_WHEN_BEGIN_ACTIVE` 覆盖）；
+ * begin inactive／不可用时默认 5 档（初始窗＋5 次续查＝至多 6 窗）。
  */
+export const QUESTION_BUDGET_ACTIVE_MAX_CONTINUATIONS = 3;
 export const QUESTION_BUDGET_INACTIVE_MAX_CONTINUATIONS = 5;
+
+export function questionBudgetMaxBusyMs(): number {
+  const configured = Number(process.env.QUESTION_BUDGET_MAX_BUSY_MS);
+  if (!Number.isFinite(configured) || configured <= 0) return QUESTION_BUDGET_MAX_BUSY_MS;
+  return Math.floor(configured);
+}
+
+export function questionBudgetMaxInflight(): number {
+  const configured = Number(process.env.QUESTION_BUDGET_MAX_INFLIGHT);
+  if (!Number.isFinite(configured) || configured <= 0) return QUESTION_BUDGET_MAX_INFLIGHT;
+  return Math.floor(configured);
+}
+
+export function questionBudgetFailedCallCapMs(): number {
+  const configured = Number(process.env.QUESTION_BUDGET_FAILED_CALL_CAP_MS);
+  if (!Number.isFinite(configured) || configured < 0) return QUESTION_BUDGET_FAILED_CALL_CAP_MS;
+  return Math.floor(configured);
+}
+
+export function questionBudgetMaxMetaCalls(): number {
+  const configured = Number(process.env.QUESTION_BUDGET_MAX_META_CALLS);
+  if (!Number.isFinite(configured) || configured <= 0) return QUESTION_BUDGET_MAX_META_CALLS;
+  return Math.floor(configured);
+}
+
+export function questionBudgetActiveMaxContinuations(): number {
+  const configured = Number(process.env.QUESTION_BUDGET_MAX_CONTINUATIONS_WHEN_BEGIN_ACTIVE);
+  if (!Number.isFinite(configured) || configured < 0) return QUESTION_BUDGET_ACTIVE_MAX_CONTINUATIONS;
+  return Math.floor(configured);
+}
 
 export function questionBudgetInactiveMaxContinuations(): number {
   const configured = Number(process.env.QUESTION_BUDGET_MAX_CONTINUATIONS_WHEN_BEGIN_INACTIVE);
@@ -60,14 +97,37 @@ export function budgetScopeKey(identityKey: string, sessionId?: string | null): 
   return `bq:${identityKey}:${session}`;
 }
 
-const DATA_TOOLS = new Set([
+/** D1：重查询主桶（次数／busy／query inflight）。 */
+const QUERY_TIER_TOOLS = new Set([
   "lucy_query",
+  "lucy_certified_route",
+  "lucy_report_template",
+]);
+
+/** D1：轻元数据／Wiki 独立窗计数（不占 calls／busy／query inflight）。 */
+const METADATA_TIER_TOOLS = new Set([
   "lucy_read_source",
   "lucy_freshness",
   "lucy_explain_query",
   "wiki_search",
   "wiki_read",
 ]);
+
+/**
+ * 走通用 `tools/call` 预算闸的工具（lucy_query ∪ metadata）。
+ * `lucy_certified_route`／`lucy_report_template` 仍属 query-tier，但只由旁路入口计费，
+ * 不得再进本集合，否则会与旁路 double-charge（SC-36／SC-46）。
+ */
+const DATA_TOOLS = new Set(["lucy_query", ...METADATA_TIER_TOOLS]);
+
+export type BudgetToolTier = "query" | "metadata" | "none";
+
+export function classifyBudgetTier(toolName: string | undefined): BudgetToolTier {
+  if (!toolName) return "none";
+  if (QUERY_TIER_TOOLS.has(toolName)) return "query";
+  if (METADATA_TIER_TOOLS.has(toolName)) return "metadata";
+  return "none";
+}
 
 const ACL_REASONS = new Set([
   "sensitive_metadata_forbidden",
@@ -87,7 +147,8 @@ export type PublishedVersion = {
   valueKind: "实际" | "预测";
 };
 
-export type BudgetExhaustedBy = "calls" | "busy" | "wall" | "both";
+/** `meta`＝D1 轻工具窗触顶（停机 reason 仍为 question_budget_exhausted；OQ-6＝A）。 */
+export type BudgetExhaustedBy = "calls" | "busy" | "wall" | "both" | "meta";
 export type BudgetSnapshotEventKind = "budget_stop" | "continuation_rollover";
 
 /** REQ-030-035／P1-14 — retrospective audit snapshot (args_summary.budgetSnapshot). */
@@ -125,9 +186,63 @@ export type BudgetStop = {
   budgetSnapshot?: BudgetSnapshot;
 };
 
+export type BudgetConcurrencyNextStep = {
+  action: "reduce_concurrency_and_retry";
+  max_inflight: number;
+};
+
+/** REQ-0122 D2：预算层查询并发超限信封（可重试）。 */
 export type BudgetConcurrencyReject = {
   action: "reject";
   reason: "question_budget_concurrency_exceeded";
+  retryable: true;
+  retryAfterMs: number;
+  nextStep: BudgetConcurrencyNextStep;
+};
+
+export function budgetConcurrencyReject(
+  maxInflight = questionBudgetMaxInflight(),
+  retryAfterMs = 1_000
+): BudgetConcurrencyReject {
+  return {
+    action: "reject",
+    reason: "question_budget_concurrency_exceeded",
+    retryable: true,
+    retryAfterMs,
+    nextStep: { action: "reduce_concurrency_and_retry", max_inflight: maxInflight }
+  };
+}
+
+/** REQ-0122 D4／OQ-4：窄失败封顶集合；`no_data` 不封顶。 */
+export type BudgetFailedKind =
+  | "timed_out"
+  | "upstream_disconnect"
+  | "tool_is_error"
+  | "no_data";
+
+const FAILED_KIND_CAP_ELIGIBLE = new Set<BudgetFailedKind>([
+  "timed_out",
+  "upstream_disconnect",
+  "tool_is_error",
+]);
+
+export function isFailedKindCapEligible(kind: BudgetFailedKind | null | undefined): boolean {
+  return Boolean(kind && FAILED_KIND_CAP_ELIGIBLE.has(kind));
+}
+
+export type BudgetSettleFlags = {
+  timeoutUnconfirmed?: boolean;
+  clientDisconnected?: boolean;
+  failedKind?: BudgetFailedKind;
+};
+
+export type BudgetSettlementResult = {
+  settled: boolean;
+  timeoutUnconfirmed?: boolean;
+  clientDisconnected?: boolean;
+  rawDeltaMs?: number;
+  billedBusyMs?: number;
+  failedKind?: BudgetFailedKind;
 };
 
 export type BudgetTicket = {
@@ -137,6 +252,8 @@ export type BudgetTicket = {
   requestId: string;
   startMonoMs: number;
   settled: boolean;
+  /** 代理在结算前可写入；settle 优先读 flags.failedKind，其次本字段。 */
+  failedKind?: BudgetFailedKind;
 };
 
 export type BudgetAllow = {
@@ -153,18 +270,21 @@ export type BudgetDecision = BudgetAllow | BudgetStop | BudgetConcurrencyReject;
 
 /**
  * Classify which budget dimension(s) are exhausted at `now`.
- * Same predicates as `QuestionBudget.isExhausted` (calls ∪ time).
+ * Query predicates match `isQueryExhausted`；仅轻工具触顶时返回 `meta`。
  */
 export function classifyExhaustion(state: BudgetState, now: number): BudgetExhaustedBy | null {
   const wallMode = questionBudgetWallMode();
   const callsExhausted = (state.calls ?? 0) >= QUESTION_BUDGET_MAX_CALLS;
   const timeExhausted = wallMode === "elapsed"
     ? now - state.startedAt >= QUESTION_BUDGET_MAX_WALL_MS
-    : (state.busyMs ?? 0) >= QUESTION_BUDGET_MAX_BUSY_MS;
-  if (!callsExhausted && !timeExhausted) return null;
-  if (callsExhausted && timeExhausted) return "both";
-  if (callsExhausted) return "calls";
-  return wallMode === "elapsed" ? "wall" : "busy";
+    : (state.busyMs ?? 0) >= questionBudgetMaxBusyMs();
+  if (callsExhausted || timeExhausted) {
+    if (callsExhausted && timeExhausted) return "both";
+    if (callsExhausted) return "calls";
+    return wallMode === "elapsed" ? "wall" : "busy";
+  }
+  if ((state.metaCalls ?? 0) >= questionBudgetMaxMetaCalls()) return "meta";
+  return null;
 }
 
 /** Build a desensitized retrospective snapshot. Throws if state is not exhausted. */
@@ -188,7 +308,7 @@ export function buildBudgetSnapshot(input: {
     elapsedMs: wallMode === "elapsed" ? Math.max(0, input.now - input.state.startedAt) : null,
     attempts: input.state.attempts ?? 0,
     maxCalls: QUESTION_BUDGET_MAX_CALLS,
-    maxBusyMs: QUESTION_BUDGET_MAX_BUSY_MS,
+    maxBusyMs: questionBudgetMaxBusyMs(),
     maxWallMs: QUESTION_BUDGET_MAX_WALL_MS,
     wallMode,
     windowId: input.state.windowId ?? 0,
@@ -261,6 +381,8 @@ export type BudgetState = {
   windowId?: number;
   busyMs?: number;
   inflight?: number;
+  /** D1：轻工具本窗计数；缺省／旧行视为 0。换窗与 begin 同步清零。 */
+  metaCalls?: number;
   pendingToken?: string | null;
   presentedToken?: string | null;
   /**
@@ -436,20 +558,27 @@ export class QuestionBudget {
       canContinue?: boolean;
       /** P1-74：该身份是否可调用 `lucy_begin_question`（active 硬停的 next_step 指向 begin）。 */
       canBegin?: boolean;
+      /** REQ-0122 D1：工具分层；缺省按 query（旁路入口／旧调用方）。 */
+      toolName?: string;
     }
   ): Promise<BudgetDecision> {
     const scopeKey = this.resolveScopeKey(turnId, fallbackScope, options);
+    const tier = classifyBudgetTier(options?.toolName ?? "lucy_query");
+    if (tier === "none") {
+      return { action: "allow" };
+    }
     return this.withScopeSerialization(scopeKey, async () => {
       const state = await this.loadState(scopeKey, now);
       if (state.processUnavailable) return this.unavailableStop(state);
-      if ((state.inflight ?? 0) >= QUESTION_BUDGET_MAX_INFLIGHT) {
-        return { action: "reject", reason: "question_budget_concurrency_exceeded" };
+      // 查询并发只约束 query-tier；轻工具不占 query inflight。
+      if (tier === "query" && (state.inflight ?? 0) >= questionBudgetMaxInflight()) {
+        return budgetConcurrencyReject();
       }
       const canContinue = options?.canContinue ?? true;
       const canBegin = options?.canBegin ?? false;
-      const decision = this.decideConsume(state, now, continueToken, turnId, canContinue, canBegin);
+      const decision = this.decideConsume(state, now, continueToken, turnId, canContinue, canBegin, tier);
       if (decision.kind === "reject") {
-        return { action: "reject", reason: "question_budget_concurrency_exceeded" };
+        return budgetConcurrencyReject();
       }
       const committed = await this.commit(scopeKey, decision.candidate, decision.idempotencyKey, now);
       if (!committed) return this.unavailableStop(state);
@@ -462,6 +591,14 @@ export class QuestionBudget {
           decision.matched,
           decision.exhaustionSnapshot
         );
+      }
+      if (decision.kind === "allow-meta") {
+        return {
+          action: "allow",
+          continued: decision.continued,
+          reopened: decision.reopened,
+          ...(decision.exhaustionSnapshot ? { budgetSnapshot: decision.exhaustionSnapshot } : {})
+        };
       }
       const ticket: BudgetTicket = {
         scopeKey,
@@ -580,7 +717,7 @@ export class QuestionBudget {
       const candidate = this.cloneState(state);
       // Spec 162 §6.5：`state.turnId != null` 判空（空串也是「有旧轮次」），
       // 与伪代码一致，避免空串 turnId 让轮次不推进。
-      if (state.turnId != null || (state.calls ?? 0) > 0 || (state.busyMs ?? 0) > 0) {
+      if (state.turnId != null || (state.calls ?? 0) > 0 || (state.busyMs ?? 0) > 0 || (state.metaCalls ?? 0) > 0) {
         this.addArchived(candidate, state.round ?? 0, state.windowId ?? 0, state.busyMs ?? 0);
       }
       if (state.turnId != null) candidate.round = (state.round ?? 0) + 1;
@@ -589,6 +726,7 @@ export class QuestionBudget {
       candidate.turnId = input.turnId;
       candidate.calls = 0;
       candidate.busyMs = 0;
+      candidate.metaCalls = 0;
       candidate.windowId = (state.windowId ?? 0) + 1;
       candidate.continuations = 0;
       candidate.pendingToken = null;
@@ -609,31 +747,49 @@ export class QuestionBudget {
   async settle(
     ticket: BudgetTicket,
     endMonoMs: number,
-    flags?: { timeoutUnconfirmed?: boolean; clientDisconnected?: boolean }
-  ): Promise<{ settled: boolean; timeoutUnconfirmed?: boolean; clientDisconnected?: boolean }> {
+    flags?: BudgetSettleFlags
+  ): Promise<BudgetSettlementResult> {
     if (ticket.settled) return { settled: true };
     return this.withScopeSerialization(ticket.scopeKey, async () => {
       if (ticket.settled) return { settled: true };
       const state = await this.loadState(ticket.scopeKey, Date.now());
       if (state.commitUnverified || state.processUnavailable) return { settled: false };
-      const delta = Math.min(
+      const rawDelta = Math.min(
         QUESTION_BUDGET_ABS_EXEC_MS,
         Math.max(0, endMonoMs - ticket.startMonoMs)
       );
+      const failedKind = flags?.failedKind ?? ticket.failedKind;
+      const billedDelta = isFailedKindCapEligible(failedKind)
+        ? Math.min(rawDelta, questionBudgetFailedCallCapMs())
+        : rawDelta;
       const candidate = this.cloneState(state);
       if ((state.round ?? 0) === ticket.round && (state.windowId ?? 0) === ticket.windowId) {
-        candidate.busyMs = (candidate.busyMs ?? 0) + delta;
+        candidate.busyMs = (candidate.busyMs ?? 0) + billedDelta;
       } else {
-        this.addArchived(candidate, ticket.round, ticket.windowId, delta);
+        this.addArchived(candidate, ticket.round, ticket.windowId, billedDelta);
       }
       candidate.inflight = Math.max(0, (candidate.inflight ?? 0) - 1);
       candidate.currentConcurrency = Math.max(0, (candidate.currentConcurrency ?? 0) - 1);
       const committed = await this.commit(ticket.scopeKey, candidate, `settle:${ticket.requestId}`, Date.now());
       if (!committed) {
-        return { settled: false, timeoutUnconfirmed: flags?.timeoutUnconfirmed, clientDisconnected: flags?.clientDisconnected };
+        return {
+          settled: false,
+          timeoutUnconfirmed: flags?.timeoutUnconfirmed,
+          clientDisconnected: flags?.clientDisconnected,
+          rawDeltaMs: rawDelta,
+          billedBusyMs: billedDelta,
+          ...(failedKind ? { failedKind } : {})
+        };
       }
       ticket.settled = true;
-      return { settled: true, timeoutUnconfirmed: flags?.timeoutUnconfirmed, clientDisconnected: flags?.clientDisconnected };
+      return {
+        settled: true,
+        timeoutUnconfirmed: flags?.timeoutUnconfirmed,
+        clientDisconnected: flags?.clientDisconnected,
+        rawDeltaMs: rawDelta,
+        billedBusyMs: billedDelta,
+        ...(failedKind ? { failedKind } : {})
+      };
     });
   }
 
@@ -644,16 +800,25 @@ export class QuestionBudget {
     continueToken: string | undefined,
     turnId: string | undefined,
     canContinue: boolean,
-    canBegin: boolean
+    canBegin: boolean,
+    tier: BudgetToolTier = "query"
   ): BudgetDecision {
-    const decided = this.decideConsume(state, now, continueToken, turnId, canContinue, canBegin);
+    const decided = this.decideConsume(state, now, continueToken, turnId, canContinue, canBegin, tier);
     if (decided.kind === "reject") {
-      return { action: "reject", reason: "question_budget_concurrency_exceeded" };
+      return budgetConcurrencyReject();
     }
     Object.assign(state, decided.candidate);
     this.turns.set(scopeKey, state);
     if (decided.kind === "stop") {
       return this.stopFrom(state, canContinue, canBegin, decided.presented, decided.matched, decided.exhaustionSnapshot);
+    }
+    if (decided.kind === "allow-meta") {
+      return {
+        action: "allow",
+        continued: decided.continued,
+        reopened: decided.reopened,
+        ...(decided.exhaustionSnapshot ? { budgetSnapshot: decided.exhaustionSnapshot } : {})
+      };
     }
     return {
       action: "allow",
@@ -725,6 +890,7 @@ export class QuestionBudget {
       windowId: 0,
       calls: 0,
       busyMs: 0,
+      metaCalls: 0,
       inflight: 0,
       attempts: 0,
       peakConcurrency: 0,
@@ -759,18 +925,32 @@ export class QuestionBudget {
     state.archivedBusyMsByWindow = archived;
   }
 
-  private isExhausted(state: BudgetState, now: number): boolean {
+  /** 重查询主桶耗尽（calls／busy／elapsed wall）。不含 meta。 */
+  private isQueryExhausted(state: BudgetState, now: number): boolean {
     const callsExhausted = (state.calls ?? 0) >= QUESTION_BUDGET_MAX_CALLS;
     const timeExhausted = questionBudgetWallMode() === "elapsed"
       ? now - state.startedAt >= QUESTION_BUDGET_MAX_WALL_MS
-      : (state.busyMs ?? 0) >= QUESTION_BUDGET_MAX_BUSY_MS;
+      : (state.busyMs ?? 0) >= questionBudgetMaxBusyMs();
     return callsExhausted || timeExhausted;
   }
 
-  /** P1-74 / D2：续查档数按**快照**的参与态分支（active=1，inactive=默认 5）。 */
+  /** D1：轻工具本窗触顶。 */
+  private isMetaExhausted(state: BudgetState): boolean {
+    return (state.metaCalls ?? 0) >= questionBudgetMaxMetaCalls();
+  }
+
+  /**
+   * 可声明续查／重开的耗尽条件：主桶或轻工具任一触顶（SC-02b）。
+   * 查询准入仍只看主桶；轻工具准入只看 meta。
+   */
+  private isExhausted(state: BudgetState, now: number): boolean {
+    return this.isQueryExhausted(state, now) || this.isMetaExhausted(state);
+  }
+
+  /** P1-74／REQ-0122 D6：续查档数按快照参与态分支（active=默认 3，inactive=默认 5）。 */
   private maxContinuationsFor(state: BudgetState): number {
     return state.continuationPolicy === "active"
-      ? 1
+      ? questionBudgetActiveMaxContinuations()
       : questionBudgetInactiveMaxContinuations();
   }
 
@@ -790,11 +970,12 @@ export class QuestionBudget {
     continueToken: string | undefined,
     turnId: string | undefined,
     canContinue: boolean,
-    canBegin: boolean
+    canBegin: boolean,
+    tier: BudgetToolTier = "query"
   ):
     | { kind: "reject" }
     | {
-        kind: "stop" | "allow";
+        kind: "stop" | "allow" | "allow-meta";
         candidate: BudgetState;
         idempotencyKey: string;
         requestId: string;
@@ -813,8 +994,9 @@ export class QuestionBudget {
       || (state.turnId != null && continueToken === state.turnId)
     );
     const toolTrusted = state.pendingToken != null;
+    // SC-02b：主桶或轻工具触顶均可兑现续查／重开（换窗同步清零 metaCalls）。
     const exhausted = this.isExhausted(state, now);
-    // P1-74 / D2：续查档数按快照策略（active=1，inactive=默认 5）。
+    // P1-74 / D2：续查档数按快照策略（active=默认 3，inactive=默认 5）。
     const maxContinuations = this.maxContinuationsFor(state);
     // P1-74 / Task 2：reopen 声明优先兑现；与续查声明互斥（两类 pending 不共存）。
     const pendingReopen = state.pendingReopen;
@@ -844,6 +1026,7 @@ export class QuestionBudget {
       candidate.generation = (candidate.generation ?? 0) + 1;
       candidate.calls = 0;
       candidate.busyMs = 0;
+      candidate.metaCalls = 0;
       candidate.continuations = 0;
       candidate.turnId = null;
       candidate.continuationPolicy = "inactive";
@@ -862,6 +1045,7 @@ export class QuestionBudget {
       this.addArchived(candidate, candidate.round ?? 0, candidate.windowId ?? 0, candidate.busyMs ?? 0);
       candidate.calls = 0;
       candidate.busyMs = 0;
+      candidate.metaCalls = 0;
       candidate.startedAt = now;
       candidate.windowId = (candidate.windowId ?? 0) + 1;
       candidate.generation = (candidate.generation ?? 0) + 1;
@@ -873,7 +1057,50 @@ export class QuestionBudget {
     }
     const presented = headerPresented || toolTrusted;
     const matched = Boolean(useContinuation || useReopen);
-    if (this.isExhausted(candidate, now)) {
+
+    // D1：轻工具分支 —— 不占 calls／busy／query inflight；仅独立 metaCalls 上限。
+    if (tier === "metadata") {
+      if (this.isMetaExhausted(candidate)) {
+        if (!candidate.presentedToken) {
+          candidate.presentedToken = this.presentToken(candidate, turnId ?? state.turnId ?? undefined);
+        }
+        const token = candidate.presentedToken;
+        return {
+          kind: "stop",
+          candidate,
+          idempotencyKey: `stop-meta:${candidate.round ?? 0}:${candidate.windowId ?? 0}:${candidate.generation ?? 0}:${token}`,
+          requestId: "",
+          continued: false,
+          reopened: false,
+          presented,
+          matched: headerPresented ? Boolean(headerTrusted) : false,
+          exhaustionSnapshot: buildBudgetSnapshot({
+            eventKind: "budget_stop",
+            state: candidate,
+            now
+          })
+        };
+      }
+      const requestId = randomUUID();
+      candidate.metaCalls = (candidate.metaCalls ?? 0) + 1;
+      candidate.attempts = (candidate.attempts ?? 0) + 1;
+      void canContinue;
+      void canBegin;
+      return {
+        kind: "allow-meta",
+        candidate,
+        idempotencyKey: `admit-meta:${requestId}`,
+        requestId,
+        continued: useContinuation,
+        reopened: useReopen,
+        presented,
+        matched,
+        ...(rolloverSnapshot ? { exhaustionSnapshot: rolloverSnapshot } : {})
+      };
+    }
+
+    // 重查询分支：主桶耗尽才停机（meta 触顶不挡查数）。
+    if (this.isQueryExhausted(candidate, now)) {
       if (!candidate.presentedToken) candidate.presentedToken = this.presentToken(candidate, turnId ?? state.turnId ?? undefined);
       const token = candidate.presentedToken;
       const stopSource = useContinuation || useReopen ? state : candidate;

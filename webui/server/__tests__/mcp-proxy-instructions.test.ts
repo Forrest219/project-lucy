@@ -213,9 +213,9 @@ describe("MCP proxy initialize instructions injection", () => {
       expect(body.result.instructions).toContain("Never substitute forecast");
       expect(body.result.instructions).toContain("labeled hybrid");
       expect(body.result.instructions).toContain("realized unit price");
-      // Spec lucy-20261111 SC-T4：有可见 catalog 的 role-aware 路径也必须是 60／300，不得残留旧 12／120s／8 分钟。
-      expect(body.result.instructions).toContain(`${QUESTION_BUDGET_MAX_CALLS} data-tool calls`);
-      expect(body.result.instructions).toContain(`${QUESTION_BUDGET_MAX_BUSY_MS / 1000} seconds of settled data-processing time`);
+      // REQ-0122／原 SC-T4：有可见 catalog 的 role-aware 路径也必须是 60／900 query-tier，不得残留旧 12／120s／8 分钟。
+      expect(body.result.instructions).toContain(`${QUESTION_BUDGET_MAX_CALLS} query-tier tool calls`);
+      expect(body.result.instructions).toContain(`${QUESTION_BUDGET_MAX_BUSY_MS / 1000} seconds of settled query-tier processing time`);
       expect(body.result.instructions).not.toContain("at most 12 business tool calls");
       expect(body.result.instructions).not.toContain("within 120 seconds");
       expect(body.result.instructions).not.toContain("within 8 minutes");
@@ -722,7 +722,7 @@ describe("P1-75 §2.2 握手指引：截止、容量、取消与撤权", () => {
       expect(Date.now() - startedAt).toBeLessThan(1500);
       expect(basic).toContain("Tool Discovery");
       expect(basic).toContain("answerability dependency matrix");
-      expect(basic).toContain(`${QUESTION_BUDGET_MAX_CALLS} data-tool calls`);
+      expect(basic).toContain(`${QUESTION_BUDGET_MAX_CALLS} query-tier tool calls`);
       expect(basic).not.toContain(SOURCE_LINE);
       expect(basic).not.toContain("## Visible Scope");
       expect(basic).not.toContain("## Governed Domain Skills");

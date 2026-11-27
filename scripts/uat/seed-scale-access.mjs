@@ -149,14 +149,25 @@ function topUpBaseTokens(text) {
   const out = [];
   let curUser = null;
   let curTokens = 0;
+  let sawEmptyTokensArray = false;
   for (const line of lines) {
     const m = /^  - id: (\S+)\s*$/.exec(line);
     if (m) {
       curUser = m[1];
       curTokens = 0;
+      sawEmptyTokensArray = false;
+    }
+    if (curUser && /^    tokens:\s*\[\s*\]\s*$/.test(line)) {
+      // `tokens: []` + 后续 block sequence 非法 YAML；改成块映射头再补 hash。
+      sawEmptyTokensArray = true;
+      out.push(`    tokens:`);
+      continue;
     }
     if (curUser && /^      - hash: /.test(line)) curTokens++;
     if (curUser && /^    role: /.test(line)) {
+      if (curTokens === 0 && !sawEmptyTokensArray) {
+        out.push(`    tokens:`);
+      }
       while (curTokens < TOKENS_PER_AGENT) {
         curTokens++;
         out.push(`      - hash: ${tokenHash(curUser, "tk" + curTokens)}`);
@@ -164,6 +175,7 @@ function topUpBaseTokens(text) {
         out.push(`        created: 2026-11-23`);
       }
       curUser = null;
+      sawEmptyTokensArray = false;
     }
     out.push(line);
   }

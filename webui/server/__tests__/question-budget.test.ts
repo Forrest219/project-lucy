@@ -8,7 +8,9 @@ import { identifyRequestDetailed, invalidateAccessConfigCache } from "../proxy/i
 import {
   QUESTION_BUDGET_MAX_CALLS,
   QUESTION_BUDGET_MAX_WALL_MS,
+  QUESTION_BUDGET_MAX_INFLIGHT,
   QuestionBudget,
+  questionBudgetMaxInflight,
   actorFromToken,
   classifyFailure,
   isQuestionDataTool,
@@ -268,11 +270,14 @@ describe("D-24 concurrent first consume must not exceed the hard cap", () => {
 
   it("并发消费受在途上限约束，落库次数等于实际放行次数", async () => {
     const { budget, saved } = makeBudget(0);
+    const maxInflight = questionBudgetMaxInflight();
+    expect(maxInflight).toBe(QUESTION_BUDGET_MAX_INFLIGHT);
+    const total = maxInflight + 21;
     const results = await Promise.all(
-      Array.from({ length: 25 }, () => budget.consumePersisted("d24", 1_000))
+      Array.from({ length: total }, () => budget.consumePersisted("d24", 1_000))
     );
     const allowed = results.filter((r) => r.action === "allow").length;
-    expect(allowed).toBe(4);
+    expect(allowed).toBe(maxInflight);
     expect(results.filter((r) => r.action === "reject").length).toBe(21);
     expect(saved[saved.length - 1]).toBe(allowed);
   });

@@ -12,10 +12,10 @@ describe("data QA fallback instructions contract", () => {
     expect(text).toContain("标记为 `hybrid`");
     expect(text).toContain("只能称为“实现单价”");
     expect(text).toContain("同一指纹最多做一次");
-    // WO-202610-12 T3: the 8-minute wording became the proxy budget
-    // (20 data-tool calls / 120s wall clock, with one continuation).
+    // REQ-0122 D1／D7：重查询主桶 60／900s；轻元数据独立高额度。
     // Spec 162 修订（D8 / SC-40）：口径改为「已结算数据处理时长」，不含思考时间。
-    expect(text).toContain("同一问询最多 60 次数据工具调用，或累计 300 秒数据处理时长（不含思考时间）");
+    expect(text).toContain("同一问询最多 60 次**重查询**工具调用");
+    expect(text).toContain("或累计 900 秒重查询数据处理时长（不含思考时间）");
     // 防漂移：md 里的数字必须等于代理实际执行的预算常量（initialize role-aware 路径同样取这两个常量）。
     expect(text).toContain(`同一问询最多 ${QUESTION_BUDGET_MAX_CALLS} 次`);
     expect(text).toContain(`累计 ${QUESTION_BUDGET_MAX_BUSY_MS / 1000} 秒`);
@@ -24,22 +24,24 @@ describe("data QA fallback instructions contract", () => {
     expect(text).toContain("`ok` / `no_data` / `unavailable` / `partial`");
   });
 
-  // Spec 162 修订 / D8 / SC-40 —— 指导文本按 `continuable` 分支处置，
-  // 且不得宽于代理预算（次数上限现行 60，续查只能一次）。
-  it("routes the budget stop by continuable and keeps the guidance within the proxy budget", async () => {    const text = await readFile(path.join(process.cwd(), "config", "data-qa-instructions.md"), "utf8");
+  // Spec 162 修订 / D8 / SC-40 + REQ-0122 D7 —— 指导文本按 `continuable` 分支处置，
+  // 静默逃生优先；不得宽于代理预算。
+  it("routes the budget stop by continuable and keeps the guidance within the proxy budget", async () => {
+    const text = await readFile(path.join(process.cwd(), "config", "data-qa-instructions.md"), "utf8");
 
-    expect(text).toContain("若 `continuable` 为 true，调用 `lucy_continue_question`");
-    expect(text).toContain("传入返回的 `continueToken`");
-    // P1-74：continuable=false 时按 next_step（begin／new_question／hard_budget_stop）处置，
-    // 不再写「直接交付部分结果」的旧口径。
+    expect(text).toContain("若 `continuable` 为 true，或 `next_step` 指向 `mode=new_question`，优先**静默**完成 `lucy_continue_question`");
+    expect(text).toContain("问询预算限制，不是权限拒绝");
+    // P1-74／D7：continuable=false 时按 next_step（begin／new_question／hard_budget_stop）处置。
     expect(text).toContain("若 `continuable` 为 false（续查档数用尽），按返回的结构化 `next_step` 执行");
-    expect(text).toContain("只有 `next_step` 为 `hard_budget_stop` 时，才交付已验证的部分结果并说明缺口");
+    expect(text).toContain("只有 `next_step` 为 `hard_budget_stop`，或陷入无效循环时，才停机交付已验证的部分结果并说明缺口");
     // 协议工具不占数据额度：声明与续查本身不计次数。
     expect(text).toContain("`lucy_begin_question` 与 `lucy_continue_question`）不占这个预算");
     // 指导不得宽于代理预算：不得出现比代理更宽松的上限表述。
     expect(text).not.toContain("墙钟 120 秒");
-    // 续查档数已扩到 5（非「只能继续一次」）。
+    // 续查档数已扩到 5（非「只能继续一次」）；begin active 默认可续查 3 次。
     expect(text).toContain("默认可继续至多 5 次");
+    expect(text).toContain("`begin active` 默认可续查 3 次");
+    expect(text).toContain("单作用域重查询并发默认上限为 8");
   });
 
   // Spec 162 修订 / SC-41 —— 术语标准的三条**既有**词条按新口径修订

@@ -5,7 +5,7 @@
 | UAT-IMC-R0 | 环境／身份／故障命中门禁 | 是 | SC-01／02 | 双 class Agent、独立 SQL、大响应与慢查询可命中；通过线已预注册 |
 | UAT-IMC-01 | workloadClass 持久化与 OpenAPI | 是 | SC-01 | 读写／缺省 interactive／审计 |
 | UAT-IMC-02 | 系统间必须 integration 打标 | 是 | SC-02 | 夹具与 SOP；未打标不得充当本套件 integration 臂 |
-| UAT-IMC-03 | 多 integration Agent 打满 borrow | 是 | SC-03 | `capacityScope=workload`（或等价）；无新上游 |
+| UAT-IMC-03 | 多 integration Agent 打满 borrow（含轻／重混合） | 是 | SC-03 | `capacityScope=workload`（或等价）；无新上游；**轻元数据＋重查询混合**计入 `integrationActive`（REQ-0122 §10.3／SC-03 跨 Spec） |
 | UAT-IMC-04 | borrow 满时 interactive 仍成交 | 是 | SC-04 | 独立 SQL 正确 |
 | UAT-IMC-05 | 大明细流式触顶 | 是 | SC-05／06 | 不完整缓冲；interactive 仍成交 |
 | UAT-IMC-06 | 上游出口全普查封闭 | 是 | SC-06 | 清单含 readUpstreamBody＋pipeResponse／passthrough；与 Task 0 grep 模式 diff 空；抽测 initialize＋原 pipe 路径触顶 |
@@ -61,21 +61,27 @@
 
 ---
 
-## UAT-IMC-03 — 多 Agent 打满 borrow
+## UAT-IMC-03 — 多 Agent 打满 borrow（含轻／重混合）
 
 ### 步骤
 
 1. 记录 `global`、`R`、`borrowMax`。
-2. ≥2 个 integration Agent 合计占满 borrowMax（慢查询保活）。
-3. 再发 integration 查询；记录 scope／是否新上游（DB 在途）。
+2. **重查询臂（原口径）**：≥2 个 integration Agent 合计占满 borrowMax（慢查询保活）。
+3. 再发 integration 重查询；记录 scope／是否新上游（DB 在途）。
+4. **轻／重混合臂（REQ-0122 §10.3 必做）**：在可复现的饱和或逼近饱和条件下，≥2 个 integration Agent **混合**发起轻元数据工具（至少含 `lucy_read_source`）与重查询；确认轻工具调用同样计入 `integrationActive`（不得因元数据独立池而不计 workload）。
+5. 混合臂触达 `borrowMax` 后再发轻或重 integration 调用；核对拒绝与上游计数。
+6. **interactive 正臂**：同窗用 interactive Agent 发元数据／小查询，证明不因 integration 饱和而误杀员工主路径（与 IMC-04 可合并取证，但本臂须显式记录轻工具成交）。
 
 ### 期望
 
-- 立即 `query_concurrency_exceeded`＋workload 机读；上游计数不增。
+- 重查询臂：立即 workload 拒绝（如 `query_concurrency_exceeded`）＋机读 scope；上游计数不增。
+- 混合臂：轻工具计入 `integrationActive`；触顶拒绝且**无新上游**；不得出现「只跑重查询才绿、轻工具绕过 borrowMax」的假绿。
+- interactive 正臂：元数据／小查询仍可成交。
 
 ### 反例
 
 - 仅单 Agent 墙拦住、多 Agent 穿透 → **FAIL**。
+- 轻工具不增 `integrationActive` 或绕过 `borrowMax` 而两套件仍绿 → **FAIL**（REQ-0122 SC-03 组合证据失败）。
 
 ---
 

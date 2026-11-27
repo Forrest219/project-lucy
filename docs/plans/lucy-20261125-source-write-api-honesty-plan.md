@@ -4,8 +4,8 @@
 |---|---|
 | 文档类型 / 版本 | 分阶段实施计划 / **v1.1** |
 | 日期 / 功能编号 | 2026-11-25／**P1-89**／REQ-030-110 |
-| 状态 | S4｜v1.1。**终稿已确权**（委托人 2026-11-26 明示「逐项拍板，完成终稿确权（S1 → S2）」；D3＝D3a；见 [确权材料](../reviews/2026-11-26-p1-89-90-91-ratification-brief.md)）；**开发授权已获得**（2026-11-26）；**实现已落地，待验收**（单测/浏览器验证通过；code review PASS WITH WARN；UAT 待跑）；测试台 registered（[UAT-SUITE-SOURCE-WRITE-HONESTY](../qa/uat/suites/source-write-honesty/suite.md)／UAT-SWH-01–06）；≠ 功能合同收口；≠ UAT PASS；≠ 可上线 |
-| 授权边界 | **终稿已确权**；开发授权已获得（2026-11-26），可修改 `webui/server/` 与 `webui/src/` 运行代码 |
+| 状态 | S4｜写诚实＋形状 UAT PASS。Spec **v1.4-r5**：压力基准 [`UAT-SUITE-QUERY-DETAIL-STRESS`](../qa/uat/suites/query-detail-stress/suite.md)／**QDE-STRESS-B** 已登记可演进／**NOT RUN**。OQ-3 仍待重裁；SC-09／10 证据缺口仍在；**≠ 压力已验 ≠ 功能合同收口**；≠ 可上线 |
+| 授权边界 | **写诚实**：终稿已确权；开发授权已获得（2026-11-26）。**增量 §2.4**：D9–D12 已确权；开发授权已获得（2026-11-27）；实现已落地；允许改 Proxy 查数形状 |
 | 验收 | Spec SC-01–SC-10；测试台套件 [UAT-SUITE-SOURCE-WRITE-HONESTY](../qa/uat/suites/source-write-honesty/suite.md)（`UAT-SWH-01`–`06`）；浏览器验证 E1–E4（真实前台＋计时） |
 | 关联 | [Spec](../specs/lucy-20261125-source-write-api-honesty-spec.md) · [P1-90 Spec](../specs/lucy-20261125-schema-manifest-table-append-spec.md) · [P1-91 Spec](../specs/lucy-20261125-overlay-publish-guard-spec.md) |
 

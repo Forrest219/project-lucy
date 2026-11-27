@@ -16,7 +16,8 @@ export type CapacityScopeName = "token" | "agent" | "connection" | "global";
 
 export type CapacityLimits = Record<CapacityScopeName, number>;
 
-export const DEFAULT_CAPACITY_LIMITS: CapacityLimits = { token: 4, agent: 8, connection: 16, global: 24 };
+/** REQ-0122 D2／REQ-0119 共同基线：重查询默认 8/16/32/48（可用环境变量回退旧档）。 */
+export const DEFAULT_CAPACITY_LIMITS: CapacityLimits = { token: 8, agent: 16, connection: 32, global: 48 };
 
 /** Retry guidance returned to clients; they add jitter and must not auto-replay indeterminate work. */
 const RETRY_AFTER_MS: CapacityLimits = { token: 1_000, agent: 1_000, connection: 2_000, global: 3_000 };
@@ -215,4 +216,113 @@ if (resolved.repaired.length > 0) {
 export function setMcpExecutionCapacityForTests(limits?: CapacityLimits): McpExecutionCapacity {
   singleton = new McpExecutionCapacity(limits ?? resolveCapacityLimits().limits);
   return singleton;
+}
+
+// ─── REQ-0122 D2：轻元数据独立并发池（lucy_read_source）─────────────────────
+
+export type MetaCapacityLimits = { token: number; global: number };
+
+/** 默认 token 16 / global 64；环境变量可回退。 */
+export const DEFAULT_META_CAPACITY_LIMITS: MetaCapacityLimits = { token: 16, global: 64 };
+
+export function resolveMetaCapacityLimits(env: NodeJS.ProcessEnv = process.env): MetaCapacityLimits {
+  const token = positiveInt(env.LUCY_MCP_META_TOKEN_MAX_INFLIGHT, DEFAULT_META_CAPACITY_LIMITS.token);
+  let global = positiveInt(env.LUCY_MCP_META_GLOBAL_MAX_INFLIGHT, DEFAULT_META_CAPACITY_LIMITS.global);
+  if (global < token) global = token;
+  return { token, global };
+}
+
+export type MetaCapacityRequest = {
+  tokenKey: string;
+};
+
+export type MetaCapacityDecision =
+  | { allowed: true; lease: CapacityLease }
+  | { allowed: false; scope: "token" | "global"; active: number; max: number; retryAfterMs: number };
+
+/**
+ * 独立于重查询主池；不计入 token/agent/connection/global 主计数。
+ * `lucy_read_source` 仍留在 UPSTREAM_SEMANTIC_TOOLS 以维持 Strat-B DRAIN。
+ */
+export class McpMetaExecutionCapacity {
+  private readonly tokens: Counters = new Map();
+  private globalActive = 0;
+  private nextId = 1;
+  private acquired = 0;
+  private released = 0;
+
+  constructor(private limits: MetaCapacityLimits) {
+    if (!(this.limits.token >= 1 && this.limits.global >= this.limits.token)) {
+      throw new Error(`meta capacity must satisfy global >= token >= 1 (got ${this.limits.token}/${this.limits.global})`);
+    }
+  }
+
+  getLimits(): MetaCapacityLimits {
+    return { ...this.limits };
+  }
+
+  configure(limits: MetaCapacityLimits): void {
+    if (!(limits.token >= 1 && limits.global >= limits.token)) {
+      throw new Error(`meta capacity must satisfy global >= token >= 1 (got ${limits.token}/${limits.global})`);
+    }
+    this.limits = limits;
+  }
+
+  tryAcquire(request: MetaCapacityRequest): MetaCapacityDecision {
+    const tokenActive = this.tokens.get(request.tokenKey) ?? 0;
+    if (tokenActive >= this.limits.token) {
+      return { allowed: false, scope: "token", active: tokenActive, max: this.limits.token, retryAfterMs: 1_000 };
+    }
+    if (this.globalActive >= this.limits.global) {
+      return { allowed: false, scope: "global", active: this.globalActive, max: this.limits.global, retryAfterMs: 2_000 };
+    }
+    bump(this.tokens, request.tokenKey, 1);
+    this.globalActive += 1;
+    this.acquired += 1;
+    let done = false;
+    const id = this.nextId++;
+    const tokenKey = request.tokenKey;
+    return {
+      allowed: true,
+      lease: {
+        id,
+        release: () => {
+          if (done) return;
+          done = true;
+          bump(this.tokens, tokenKey, -1);
+          this.globalActive -= 1;
+          this.released += 1;
+        }
+      }
+    };
+  }
+
+  snapshot() {
+    return {
+      limits: { ...this.limits },
+      globalActive: this.globalActive,
+      activeTokens: this.tokens.size,
+      acquired: this.acquired,
+      released: this.released
+    };
+  }
+
+  resetForTests(): void {
+    this.tokens.clear();
+    this.globalActive = 0;
+    this.acquired = 0;
+    this.released = 0;
+  }
+}
+
+const metaResolved = resolveMetaCapacityLimits();
+let metaSingleton = new McpMetaExecutionCapacity(metaResolved);
+
+export function getMcpMetaExecutionCapacity(): McpMetaExecutionCapacity {
+  return metaSingleton;
+}
+
+export function setMcpMetaExecutionCapacityForTests(limits?: MetaCapacityLimits): McpMetaExecutionCapacity {
+  metaSingleton = new McpMetaExecutionCapacity(limits ?? resolveMetaCapacityLimits());
+  return metaSingleton;
 }

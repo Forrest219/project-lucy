@@ -108,7 +108,7 @@ describe("McpExecutionCapacity (P1-82)", () => {
     } as NodeJS.ProcessEnv);
     expect(resolved).toEqual({ token: 10, agent: 12, connection: 13, global: 13 });
     expect(repaired).toHaveLength(2);
-    expect(resolveCapacityLimits({} as NodeJS.ProcessEnv).limits).toEqual({ token: 4, agent: 8, connection: 16, global: 24 });
+    expect(resolveCapacityLimits({} as NodeJS.ProcessEnv).limits).toEqual({ token: 8, agent: 16, connection: 32, global: 48 });
   });
 });
 

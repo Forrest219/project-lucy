@@ -150,6 +150,7 @@ describe("SC-13 and SC-09 over the proxy", () => {
         - dataforai.superstore_orders
       tools:
         - lucy_read_source
+        - lucy_query
         - lucy_catalog
         - lucy_skill_search
         - resources/list
@@ -275,13 +276,18 @@ defaults:
       budget.budgetIdentityKey("closure_agent", tokenHash(TOKEN).slice(0, 19)),
       SESSION
     );
+    // REQ-0122 D1：查询并发／calls 仅计重查询；用 lucy_query 覆盖 SC-13 在途语义。
     const body = JSON.stringify({
       jsonrpc: "2.0",
-      id: "read-abort",
+      id: "query-abort",
       method: "tools/call",
       params: {
-        name: "lucy_read_source",
-        arguments: { connectionId: "mysql-aliyun", sourceName: "superstore_orders" }
+        name: "lucy_query",
+        arguments: {
+          connectionId: "mysql-aliyun",
+          measures: ["superstore_orders.sales"],
+          limit: 1
+        }
       }
     });
     try {
@@ -340,14 +346,17 @@ defaults:
       });
       expect(denied).toContain("Access denied");
       expect(budget.questionBudget.snapshotScope(scopeKey)?.calls ?? 0).toBe(0);
+      expect(budget.questionBudget.snapshotScope(scopeKey)?.metaCalls ?? 0).toBe(0);
       expect(budget.questionBudget.snapshotScope(scopeKey)?.busyMs ?? 0).toBe(0);
 
+      // REQ-0122 D1：lucy_read_source 走 metaCalls，不占重查询 calls／busy。
       await post(proxy.port, "tools/call", {
         name: "lucy_read_source",
         arguments: { connectionId: "mysql-aliyun", sourceName: "superstore_orders" }
       });
       const opened = budget.questionBudget.snapshotScope(scopeKey);
-      expect(opened?.calls).toBe(1);
+      expect(opened?.calls ?? 0).toBe(0);
+      expect(opened?.metaCalls).toBe(1);
       const windowId = opened?.windowId;
       const round = opened?.round;
 
@@ -360,14 +369,16 @@ defaults:
         arguments: { connectionId: "mysql-aliyun", sourceName: "superstore_orders" }
       });
       const beforeDeny = budget.questionBudget.snapshotScope(scopeKey);
-      expect(beforeDeny?.calls).toBe(3);
+      expect(beforeDeny?.metaCalls).toBe(3);
+      expect(beforeDeny?.calls ?? 0).toBe(0);
 
       await post(proxy.port, "tools/call", {
         name: "lucy_read_source",
         arguments: { connectionId: "mysql-aliyun", sourceName: "superstore_people" }
       });
       const afterDeny = budget.questionBudget.snapshotScope(scopeKey);
-      expect(afterDeny?.calls).toBe(3);
+      expect(afterDeny?.metaCalls).toBe(3);
+      expect(afterDeny?.calls ?? 0).toBe(0);
       expect(afterDeny?.windowId).toBe(windowId);
       expect(afterDeny?.round).toBe(round);
       expect(afterDeny?.busyMs).toBe(beforeDeny?.busyMs);

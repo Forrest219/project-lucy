@@ -576,11 +576,13 @@ caliber:
       const secondBegin = JSON.parse(await callTool(first.port, "lucy_begin_question", { intentSummary: "第二轮" }, "begin-2"));
       expect(firstBegin.result.isError).not.toBe(true);
       expect(secondBegin.result.isError).not.toBe(true);
+      // REQ-0122 D1：lucy_read_source 计入 metaCalls；用 lucy_query 覆盖 calls 持久化／重启恢复。
       for (let i = 0; i < 18; i += 1) {
-        await callTool(first.port, "lucy_read_source", {
+        await callTool(first.port, "lucy_query", {
           connectionId: "mysql-aliyun",
-          sourceName: "superstore_orders"
-        }, `read-${i}`);
+          measures: ["superstore_orders.order_count"],
+          limit: 1
+        }, `query-${i}`);
       }
       const beforeRestart = await import("../proxy/question-experience.js");
       const scopeKey = beforeRestart.budgetScopeKey(
@@ -598,10 +600,11 @@ caliber:
       vi.resetModules();
       const second = await startProxy();
       try {
-        await callTool(second.port, "lucy_read_source", {
+        await callTool(second.port, "lucy_query", {
           connectionId: "mysql-aliyun",
-          sourceName: "superstore_orders"
-        }, "read-after-restart");
+          measures: ["superstore_orders.order_count"],
+          limit: 1
+        }, "query-after-restart");
 
         const afterRestart = await import("../proxy/question-experience.js");
         const stateAfter = afterRestart.questionBudget.snapshotScope(scopeKey);

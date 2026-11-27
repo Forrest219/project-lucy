@@ -2,7 +2,12 @@ import { createHash, randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { createServer, request as httpRequest, type ClientRequest, type IncomingMessage, type ServerResponse } from "node:http";
 import { admitMcpProcessWork, mcpReloadAdmissionError, onMcpWorkSettled, trackMcpResponseCommit, trackMcpUpstreamWork } from "../runtime/mcp-process-work.js";
-import { getMcpExecutionCapacity, resolveCapacityLimits } from "../runtime/mcp-execution-capacity.js";
+import {
+  getMcpExecutionCapacity,
+  getMcpMetaExecutionCapacity,
+  resolveCapacityLimits,
+  resolveMetaCapacityLimits
+} from "../runtime/mcp-execution-capacity.js";
 import { markUpstreamToolCallResponded } from "../runtime/upstream-liveness.js";
 import { getProcessLifecyclePhase, SERVICE_DRAINING, SERVICE_DRAINING_MESSAGE } from "../runtime/process-drain.js";
 import path from "node:path";
@@ -134,6 +139,8 @@ import {
   QUESTION_BUDGET_MAX_BUSY_MS,
   QUESTION_BUDGET_MAX_CALLS,
   QUESTION_BUDGET_MAX_WALL_MS,
+  questionBudgetMaxBusyMs,
+  questionBudgetMaxInflight,
   questionBudgetWallMode,
   installBudgetPersistence,
   type BudgetPersistence,
@@ -233,26 +240,27 @@ const LUCY_SKILLS_PORT = Number(process.env.LUCY_PROXY_LUCY_SKILLS_PORT ?? 7881)
 // passthrough stays disabled unless explicitly enabled for local development
 // (`LUCY_DEPLOYMENT_MODE=development`); customer mode refuses to start with it on.
 const MAX_BODY_BYTES = Number(process.env.LUCY_PROXY_MAX_BODY_BYTES ?? 1_048_576);
-const UPSTREAM_TIMEOUT_MS = Number(process.env.LUCY_PROXY_UPSTREAM_TIMEOUT_MS ?? 30_000);
+/** REQ-0122 D3：socket 空闲超时默认 90s（原 30s）。 */
+const UPSTREAM_TIMEOUT_MS = Number(process.env.LUCY_PROXY_UPSTREAM_TIMEOUT_MS ?? 90_000);
 /**
- * P1-82：单次上游调用的总时长硬上限。`UPSTREAM_TIMEOUT_MS` 只是 socket 空闲超时，上游持续滴水或事件循环被占时
- * 可能远超它；容量名额要等上游真实结束才释放，没有这条硬上限，几条死查询就能占满连接／全局名额。
- * 默认 90 秒，低于问数预算的绝对执行时限（120 秒），后者保留为预算记账边界。
+ * P1-82／REQ-0122 D3：单次上游调用总时长硬上限。
+ * 默认 120s，与 `QUESTION_BUDGET_ABS_EXEC_MS` 对齐（原 90s）。
  */
-/** P1-82：客户端中途离开后，名额在上游 close 之后额外保留的时长（取消未获数据库确认）。0 = 不保留。 */
+/** P1-82／REQ-0122 D5：取消未确认名额冻结默认 5s（原 30s）。0 = 不保留。 */
 const CANCEL_UNCONFIRMED_HOLD_MS = (() => {
   const raw = process.env.LUCY_MCP_CANCEL_HOLD_MS;
   const parsed = raw === undefined ? NaN : Number(raw);
-  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 30_000;
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 5_000;
 })();
 const UPSTREAM_HARD_DEADLINE_MS = (() => {
   const parsed = Number(process.env.LUCY_PROXY_UPSTREAM_HARD_DEADLINE_MS);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 90_000;
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 120_000;
 })();
 const QUERY_KEY_RE = /^(?:sql|query)$/i;
 const LUCY_QUERY_DEFAULT_LIMIT = Number(process.env.LUCY_QUERY_DEFAULT_LIMIT ?? 100);
 const LUCY_QUERY_MAX_LIMIT = Number(process.env.LUCY_QUERY_MAX_LIMIT ?? 1000);
-const LUCY_QUERY_MAX_INFLIGHT = Number(process.env.LUCY_QUERY_MAX_INFLIGHT ?? 4);
+/** 与容量层 token 默认对齐（REQ-0122 D2＝8）；`resolveCapacityLimits` 仍以 env 为准。 */
+const LUCY_QUERY_MAX_INFLIGHT = Number(process.env.LUCY_QUERY_MAX_INFLIGHT ?? 8);
 const UPSTREAM_PROTOCOL_VERSION = process.env.LUCY_PROXY_UPSTREAM_PROTOCOL_VERSION ?? "2024-11-05";
 const UPSTREAM_HANDSHAKE_CLIENT_VERSION = "1.0";
 
@@ -1792,12 +1800,136 @@ function invalidLucyQueryShapeReason(toolName: string, record: Record<string, un
 const LUCY_QUERY_MEASURES_HINT =
   "lucy_query requires a non-empty \"measures\" array, for example {\"connectionId\":\"<connection>\",\"measures\":[\"<source>.<measure>\"],\"dimensions\":[{\"field\":\"<source>.<dimension>\"}]}";
 
-/** P1-37 U2：`measures` 缺失或为空数组＝KTX 必然拒绝的形状（见 O6 取证）。 */
-function lucyQueryMeasuresRequiredReason(args: unknown): string | undefined {
-  if (!args || typeof args !== "object" || Array.isArray(args)) return undefined;
+const LUCY_QUERY_DETAIL_OR_MEASURES_HINT =
+  "For metric analysis, pass non-empty business \"measures\". For row/detail retrieval, pass dimensions and/or filters/segments (business measures optional; Lucy may inject a technical count projection). Example detail: {\"connectionId\":\"<connection>\",\"dimensions\":[{\"field\":\"<source>.<dimension>\"}],\"limit\":100}";
+
+const LUCY_DETAIL_COUNT_MEASURE_NAME = "_lucy_detail_count";
+
+type LucyDetailQueryAdaptation = {
+  mode: "technical_projection";
+  injectedMeasure: { expr: string; name: string };
+  anchorField: string;
+  reason: "ktx_requires_non_empty_measures";
+};
+
+/** D11：`LUCY_QUERY_REQUIRE_BUSINESS_MEASURES=1|true|on` 回退到强制业务 measures 旧门禁。默认关闭＝拉数逃生开启。 */
+function lucyDetailQueryEscapeEnabled(): boolean {
+  const raw = String(process.env.LUCY_QUERY_REQUIRE_BUSINESS_MEASURES ?? "").trim().toLowerCase();
+  return !(raw === "1" || raw === "true" || raw === "on" || raw === "yes");
+}
+
+function hasNonEmptyLucyMeasures(args: unknown): boolean {
+  if (!args || typeof args !== "object" || Array.isArray(args)) return false;
   const measures = (args as Record<string, unknown>).measures;
-  if (Array.isArray(measures) && measures.length > 0) return undefined;
-  return "invalid_arguments:lucy_query:measures_required";
+  return Array.isArray(measures) && measures.length > 0;
+}
+
+function isFormedLucyDetailQuery(record: Record<string, unknown>): boolean {
+  return hasNonEmptyArrayField(record, ["dimensions", "filters", "segments"]);
+}
+
+function semanticFieldRefParts(field: string): { source: string; column: string } | null {
+  const trimmed = field.trim();
+  const dot = trimmed.lastIndexOf(".");
+  if (dot <= 0 || dot >= trimmed.length - 1) return null;
+  const source = trimmed.slice(0, dot).trim();
+  const column = trimmed.slice(dot + 1).trim();
+  if (!source || !column) return null;
+  return { source, column };
+}
+
+function firstDetailAnchorField(record: Record<string, unknown>): string | null {
+  if (Array.isArray(record.dimensions)) {
+    for (const item of record.dimensions) {
+      if (isPlainRecord(item) && hasNonEmptyStringValue(item.field)) {
+        return String(item.field).trim();
+      }
+    }
+  }
+  if (record.filters !== undefined) {
+    const items = Array.isArray(record.filters) ? record.filters : [record.filters];
+    for (const item of items) {
+      if (isPlainRecord(item) && hasNonEmptyStringValue(item.field)) {
+        return String(item.field).trim();
+      }
+    }
+  }
+  if (Array.isArray(record.segments)) {
+    for (const item of record.segments) {
+      if (hasNonEmptyStringValue(item) && String(item).includes(".")) {
+        return String(item).trim();
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * P1-89 §2.4 D9(a)／PRE-Q1（KTX 0.16.0）：上游 `sl_query` 仍硬要非空 measures。
+ * 成形拉数（dimensions／filters／segments）在无业务 measures 时注入技术性
+ * `count(source.anchor)`，名 `_lucy_detail_count`，并披露 detailMode。
+ */
+function prepareLucyQueryForUpstream(args: unknown): {
+  args: unknown;
+  adaptation?: LucyDetailQueryAdaptation;
+  denyReason?: string;
+  hint?: string;
+} {
+  if (hasNonEmptyLucyMeasures(args)) {
+    return { args };
+  }
+  if (!lucyDetailQueryEscapeEnabled()) {
+    return {
+      args,
+      denyReason: "invalid_arguments:lucy_query:measures_required",
+      hint: LUCY_QUERY_MEASURES_HINT
+    };
+  }
+  if (!args || typeof args !== "object" || Array.isArray(args)) {
+    return {
+      args,
+      denyReason: "invalid_arguments:lucy_query:measures_required",
+      hint: LUCY_QUERY_DETAIL_OR_MEASURES_HINT
+    };
+  }
+  const record = args as Record<string, unknown>;
+  if (!isFormedLucyDetailQuery(record)) {
+    return {
+      args,
+      denyReason: "invalid_arguments:lucy_query:measures_required",
+      hint: LUCY_QUERY_DETAIL_OR_MEASURES_HINT
+    };
+  }
+  const anchor = firstDetailAnchorField(record);
+  const parts = anchor ? semanticFieldRefParts(anchor) : null;
+  if (!parts) {
+    return {
+      args,
+      denyReason: "invalid_arguments:lucy_query:detail_anchor_unresolved",
+      hint: LUCY_QUERY_DETAIL_OR_MEASURES_HINT
+    };
+  }
+  const injectedMeasure = {
+    expr: `count(${parts.source}.${parts.column})`,
+    name: LUCY_DETAIL_COUNT_MEASURE_NAME
+  };
+  return {
+    args: {
+      ...record,
+      measures: [injectedMeasure]
+    },
+    adaptation: {
+      mode: "technical_projection",
+      injectedMeasure,
+      anchorField: `${parts.source}.${parts.column}`,
+      reason: "ktx_requires_non_empty_measures"
+    }
+  };
+}
+
+/** @deprecated Prefer prepareLucyQueryForUpstream — kept for narrow call sites／测试别名。 */
+function lucyQueryMeasuresRequiredReason(args: unknown): string | undefined {
+  return prepareLucyQueryForUpstream(args).denyReason;
 }
 
 function validateLucyToolArgs(toolName: string, args: unknown): string | undefined {
@@ -2211,16 +2343,16 @@ function questionReportingLinesFor(visibleTools: ReadonlySet<string>): string[] 
     : [];
 }
 
-// P1-74 / D5：与 md「问询预算」同一处置口径 —— 预算终止不是权限拒绝；
-// 按 continuable／next_step 分支：续查多档（无 begin 时默认至多 5 档），
-// 硬停后按 next_step 重试。inactive 模式不得点名 begin（P1-60 工具隐藏合同）。
+// P1-74／REQ-0122 D7：与 md「问询预算」同一处置口径 —— 预算终止不是权限拒绝；
+// 可逃生时优先静默续查／重开；仅 hard_budget_stop 或无效循环时停机。
+// inactive 模式不得点名 begin（P1-60 工具隐藏合同）。
 function budgetExhaustedLineFor(visibleTools: ReadonlySet<string>, hideBegin: boolean): string {
   if (!visibleTools.has("lucy_continue_question")) {
-    return "- When a data tool returns `question_budget_exhausted`, stop looping. This is a question budget limit, not a permission denial; deliver the verified partial results, state the gaps, and do not retry.";
+    return "- When a data tool returns `question_budget_exhausted`, this is a question budget limit, not a permission denial. Only when `next_step` is `hard_budget_stop` (or you are stuck in a non-productive loop) deliver the verified partial results, state the gaps, and do not retry.";
   }
   return hideBegin
-    ? "- When a data tool returns `question_budget_exhausted`, stop looping. This is a question budget limit, not a permission denial. If `continuable` is true, call `lucy_continue_question` once with the returned `continueToken` (default mode `continue`) and then retry the data tool; a question can be continued up to 5 times. If `continuable` is false, call `lucy_continue_question` with `mode=new_question` and the `continueToken` to reopen the budget for a new question on the same token, then retry the data tool. Deliver verified partial results only when no such path is available."
-    : "- When a data tool returns `question_budget_exhausted`, stop looping. This is a question budget limit, not a permission denial. If `continuable` is true, call `lucy_continue_question` once with the returned `continueToken` (default mode `continue`) and then retry the data tool; a question can be continued up to 5 times. If `continuable` is false, follow the structured `next_step`: `lucy_begin_question` starts a new question where begin is available; `lucy_continue_question` with `mode=new_question` and the `continueToken` reopens the budget with the same token where begin is not available, then retry the data tool. Deliver verified partial results only when no such path is available.";
+    ? `- When a data tool returns \`question_budget_exhausted\`, this is a question budget limit, not a permission denial. If \`continuable\` is true, silently call \`lucy_continue_question\` once with the returned \`continueToken\` (default mode \`continue\`) and then retry the data tool; inactive questions can be continued up to 5 times. If \`continuable\` is false, silently call \`lucy_continue_question\` with \`mode=new_question\` and the \`continueToken\` to reopen the budget for a new question on the same token, then retry. Only stop and deliver partial results when \`next_step\` is \`hard_budget_stop\` or you are stuck in a non-productive loop. Concurrent query-tier limit defaults to ${questionBudgetMaxInflight()}; on \`question_budget_concurrency_exceeded\` with \`retryable:true\`, reduce concurrency per \`next_step.max_inflight\` and retry.`
+    : `- When a data tool returns \`question_budget_exhausted\`, this is a question budget limit, not a permission denial. If \`continuable\` is true, silently call \`lucy_continue_question\` once with the returned \`continueToken\` (default mode \`continue\`) and then retry the data tool; begin-active questions can be continued up to 3 times, inactive up to 5. If \`continuable\` is false, follow structured \`next_step\`: \`lucy_begin_question\` where begin is available; otherwise \`lucy_continue_question\` with \`mode=new_question\` and the \`continueToken\`, then retry. Only stop and deliver partial results when \`next_step\` is \`hard_budget_stop\` or you are stuck in a non-productive loop. Concurrent query-tier limit defaults to ${questionBudgetMaxInflight()}; on \`question_budget_concurrency_exceeded\` with \`retryable:true\`, reduce concurrency per \`next_step.max_inflight\` and retry.`;
 }
 
 /**
@@ -2271,12 +2403,13 @@ export function staticCoreRuleLines(options: {
     "- Distinguish no fact row, NULL/blank source field, and values inferred from cumulative deltas. Do not collapse all three states into `—`.",
     "- If a key data tool call fails, the final answer must say whether a retry succeeded, whether the failure affects the conclusion, and which values remain uncertain. Do not give numeric conclusions when no successful fact data was returned.",
     "- Fingerprint failures by tool, source, normalized reason, and relevant argument shape. Retry the same fingerprint at most once and only with an information-gaining correction; cycling among eq, =, and in is not a correction.",
-    // Spec lucy-20261111 SC-T4：数字取自代理实际执行的预算常量，避免与 md／运行时分叉。
-    `- Per question, use at most ${QUESTION_BUDGET_MAX_CALLS} data-tool calls or ${QUESTION_BUDGET_MAX_BUSY_MS / 1000} seconds of settled data-processing time (thinking time excluded), whichever comes first. Repeat the same input at most once, do not re-read a successful source, and retry only transient errors once. Protocol methods (question declaration and continuation) do not count toward this budget.`,
+    // REQ-0122／原 SC-T4：数字取自代理实际执行的预算解析值，避免与 md／运行时分叉。
+    `- Per question, use at most ${QUESTION_BUDGET_MAX_CALLS} query-tier tool calls (\`lucy_query\` / \`lucy_certified_route\` / \`lucy_report_template\`) or ${questionBudgetMaxBusyMs() / 1000} seconds of settled query-tier processing time (thinking time excluded), whichever comes first. Metadata/Wiki tools use a separate higher limit and do not consume the query-tier call/busy budget. Repeat the same input at most once, do not re-read a successful source, and retry only transient errors once. Protocol methods (question declaration and continuation) do not count toward this budget.`,
     budgetExhaustedLine,
     "- Partial evidence still requires a final response. Give each subquestion an ok, no_data, unavailable, or partial status, plus period, batch/version, scenario, failure impact, and provenance.",
     "- When rows are missing, fields are NULL, a tool failed, or a value is inferred, qualify the answer with phrases such as 基于当前可查询数据 or 按累计差额推算; do not claim the data is complete or fully reconciled.",
     "- For `lucy_query`, use source-qualified semantic keys such as `source.measure`, `source.dimension`, and `source.segment`. Do not shorten them after an error; unqualified keys may be rejected by ACL before reaching the semantic layer.",
+    "- For detail/row retrieval, `lucy_query` may omit business measures when `dimensions` and/or `filters`/`segments` are present; Lucy may inject a technical `count(source.field)` named `_lucy_detail_count` and disclose `_meta.lucy.detailMode` (not a business caliber). For metric analysis, pass real business measures.",
     "- In `lucy_query.measures`, use string semantic measure keys when the measure exists. Use `{expr,name}` objects only for ad hoc aggregate expressions.",
     "- In `lucy_query.dimensions` and `lucy_query.order_by`, use object entries such as `{field:\"source.field\"}`; do not use bare string arrays.",
     "- `lucy_query.filters` supports string filters and structured filters such as `{field:\"source.field\",op:\"contains\",value:\"<entity keyword>\"}`. Prefer semantic segments such as `source.segment` for common filters when available.",
@@ -3773,7 +3906,8 @@ function withLucyResultMeta(
   visibleTools: readonly string[] = [],
   originalUserFilters: unknown = undefined,
   scopeIntersectionEmpty = false,
-  upstreamHttpStatus: number
+  upstreamHttpStatus: number,
+  detailAdaptation?: LucyDetailQueryAdaptation
 ): unknown {
   const enveloped = ensureJsonRpcEnvelope(payload, requestId);
   if (!enveloped || typeof enveloped !== "object" || Array.isArray(enveloped)) return enveloped;
@@ -3929,6 +4063,18 @@ function withLucyResultMeta(
           ...(lucyNextStep ? { next_step: lucyNextStep } : {}),
           ...(nextStepSkippedReason ? { next_step_skipped_reason: nextStepSkippedReason } : {}),
           ...(appliedLucyVersion(toolName, argsRecord, sourceRefs) ?? {}),
+          ...(detailAdaptation
+            ? {
+                detailMode: {
+                  adapted: true,
+                  mode: detailAdaptation.mode,
+                  reason: detailAdaptation.reason,
+                  anchorField: detailAdaptation.anchorField,
+                  injectedMeasure: detailAdaptation.injectedMeasure,
+                  note: "Technical projection for detail retrieval; not a business measure."
+                }
+              }
+            : {}),
           provenance
         }
       }
@@ -4060,6 +4206,8 @@ async function writeLucySemanticResponse(
     requestPinnedCaliber?: RequestPinnedCaliberEvidence;
     sourceSelection?: SourceSelectionDisclosure;
     forcedFilters?: unknown;
+    detailAdaptation?: LucyDetailQueryAdaptation;
+    budgetTicket?: BudgetTicket;
   } = {}
 ): Promise<void> {
   const originalBody = upstreamBody;
@@ -4128,12 +4276,13 @@ async function writeLucySemanticResponse(
         payload,
         requestId,
         toolName,
-        toolArgs,
+        options.argsBeforeRewrite ?? toolArgs,
         sourceRefs,
         visibleTools,
         options.originalUserFilters,
         options.scopeIntersectionEmpty === true,
-        upstreamHttpStatus
+        upstreamHttpStatus,
+        options.detailAdaptation
       );
     };
 
@@ -4373,6 +4522,15 @@ async function writeLucySemanticResponse(
   // Spec 162 §8 / SC-20 — the new slow mark and the empty-result flag are
   // decided at write time so every consumer reads the same verdict.
   const slowVerdict = isSlowCall({ tool: toolName, durationMs: Date.now() - start });
+  const resultEmpty = isEmptyResult({ outcome, responseRowCount: responseMeta.responseRowCount ?? null });
+  // REQ-0122 D4／OQ-4：在结算前机读写 ticket.failedKind（成功有数 → 不写，全额 busy）。
+  if (options.budgetTicket && !options.budgetTicket.failedKind) {
+    if (outcome !== "ok" || Boolean(compilerReason)) {
+      options.budgetTicket.failedKind = "tool_is_error";
+    } else if (resultEmpty) {
+      options.budgetTicket.failedKind = "no_data";
+    }
+  }
   const baseEntry: Parameters<typeof writeLog>[0] = {
     ts: new Date().toISOString(),
     userId: identity.userId,
@@ -4389,7 +4547,7 @@ async function writeLucySemanticResponse(
     executionEvidence: upstreamExecutionEvidence,
     isSlowCall: slowVerdict.slow,
     slowBasis: slowVerdict.basis ?? undefined,
-    resultEmpty: isEmptyResult({ outcome, responseRowCount: responseMeta.responseRowCount ?? null }),
+    resultEmpty,
     appliedVersion: applied?.appliedVersion,
     appliedBusinessDate: applied?.businessDate,
     appliedValueKind: applied?.valueKind,
@@ -4789,6 +4947,8 @@ async function handlePostTraced(
   // P1-35 v0.4 D13：门闩档②放行披露，随请求携带到 lucy_query 成功投影。
   let sourceSelectionForAv: SourceSelectionDisclosure | undefined;
   let forcedFiltersForAv: unknown;
+  /** P1-89 §2.4：拉数技术性投影披露（仅 lucy_query）。 */
+  let detailQueryAdaptation: LucyDetailQueryAdaptation | undefined;
   let requestId: string | number = "";
   let argsSummary: Record<string, unknown> | undefined;
   let queryMeta: Partial<Parameters<typeof writeLog>[0]> = {};
@@ -4800,6 +4960,8 @@ async function handlePostTraced(
   // 结算发生在取消确认（上游 close）或绝对执行时限，不发生在 res.close。
   let upstreamRequestHandle: ClientRequest | null = null;
   let cancelUpstreamOnCapture = false;
+  /** REQ-0122 D4：问询预算票据；响应落成时写入 failedKind 供 settle 封顶。 */
+  let activeBudgetTicket: BudgetTicket | undefined;
   const captureUpstreamRequest = (request: ClientRequest): void => {
     upstreamRequestHandle = request;
     const stopping = ["DRAINING", "STOPPING", "STOPPED"].includes(getProcessLifecyclePhase());
@@ -5414,7 +5576,8 @@ async function writeCertifiedRouteResponse(
         identityKey: budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
         sessionId: requestMeta.lucySessionId,
         canContinue,
-        canBegin
+        canBegin,
+        toolName
       }
     );
     if (budgetDecision.action !== "allow") {
@@ -5448,17 +5611,22 @@ async function writeCertifiedRouteResponse(
           } catch {
             // 上游句柄可能已关闭；忽略。
           }
+          ticket.failedKind = "timed_out";
           void questionBudget.settle(ticket, ticket.startMonoMs + QUESTION_BUDGET_ABS_EXEC_MS, {
-            timeoutUnconfirmed: true
+            timeoutUnconfirmed: true,
+            failedKind: "timed_out"
           });
         }, QUESTION_BUDGET_ABS_EXEC_MS)
       : null;
     deadlineTimer?.unref();
+    let bypassFailedKind: "tool_is_error" | undefined;
     try {
       const execution = await forwardAuthorizedLucyQuery(identity, gate.query, (request) => {
         upstreamHandle = request;
       });
       if (!execution.ok) {
+        bypassFailedKind = "tool_is_error";
+        if (ticket) ticket.failedKind = "tool_is_error";
         await respond(
           { error: execution.reason, routeId: gate.routeId, source: gate.source },
           true,
@@ -5480,7 +5648,13 @@ async function writeCertifiedRouteResponse(
     } finally {
       if (deadlineTimer) clearTimeout(deadlineTimer);
       // 成功、异常和提前退出都结算**同一张票据**（Spec §6.6）。
-      if (ticket) await questionBudget.settle(ticket, questionBudget.monoNow());
+      if (ticket) {
+        await questionBudget.settle(ticket, questionBudget.monoNow(), {
+          ...(bypassFailedKind || ticket.failedKind
+            ? { failedKind: bypassFailedKind ?? ticket.failedKind }
+            : {})
+        });
+      }
     }
     return;
   }
@@ -6186,13 +6360,18 @@ async function buildDenialRepairPayload(
           identityKey: budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""),
           sessionId: requestMeta.lucySessionId,
           canContinue,
-          canBegin
+          canBegin,
+          toolName
         }
       );
       if (budgetDecision.action === "reject") {
+        // REQ-0122 D2：结构化缩并发重试信封。
         const responseBody = jsonRpcToolResult(requestId, JSON.stringify({
           reason: budgetDecision.reason,
-          partial: true
+          partial: true,
+          retryable: budgetDecision.retryable,
+          retryAfterMs: budgetDecision.retryAfterMs,
+          next_step: budgetDecision.nextStep
         }), { isError: true });
         res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
         res.end(responseBody);
@@ -6362,6 +6541,7 @@ async function buildDenialRepairPayload(
       }
       if (budgetDecision.ticket) {
         const ticket = budgetDecision.ticket;
+        activeBudgetTicket = ticket;
         tightenSemanticReadBudget(readWait, ticket, questionBudget.snapshotScope(ticket.scopeKey));
         // Spec 162 §6.2 / SC-13：res.close 只取消上游。结算等上游 close（取消确认），
         // 或绝对执行时限。断开本身不清定时器，也不按断开时刻少计。
@@ -6372,11 +6552,30 @@ async function buildDenialRepairPayload(
           startMonoMs: ticket.startMonoMs,
           absMs: QUESTION_BUDGET_ABS_EXEC_MS,
           settle: (endMonoMs, flags) => {
-            void questionBudget.settle(ticket, endMonoMs, flags);
+            // REQ-0122 D4／OQ-4：超时／断连窄封顶；工具级 failedKind 可由 ticket 预写。
+            const failedKind =
+              flags?.failedKind
+              ?? (flags?.timeoutUnconfirmed ? "timed_out" as const : undefined)
+              ?? (flags?.clientDisconnected ? "upstream_disconnect" as const : undefined)
+              ?? ticket.failedKind;
+            void questionBudget.settle(ticket, endMonoMs, {
+              ...flags,
+              ...(failedKind ? { failedKind } : {})
+            }).then((result) => {
+              if (!result.settled) return;
+              noteBudgetSettlement({
+                rawDeltaMs: result.rawDeltaMs,
+                billedBusyMs: result.billedBusyMs,
+                ...(result.failedKind ? { failedKind: result.failedKind } : {}),
+                ...(result.timeoutUnconfirmed ? { timeoutUnconfirmed: true } : {}),
+                ...(result.clientDisconnected ? { clientDisconnected: true } : {})
+              });
+            });
           },
           onDisconnected: () => {
             cancelUpstreamOnCapture = true;
-            noteBudgetSettlement({ clientDisconnected: true });
+            ticket.failedKind = ticket.failedKind ?? "upstream_disconnect";
+            noteBudgetSettlement({ clientDisconnected: true, failedKind: "upstream_disconnect" });
           },
           onDeadline: (upstream) => {
             try {
@@ -6384,9 +6583,11 @@ async function buildDenialRepairPayload(
             } catch {
               // 上游句柄可能已经关闭；忽略，记账照常进行。
             }
+            ticket.failedKind = "timed_out";
             noteBudgetSettlement({
               absoluteExecutionDeadlineMs: QUESTION_BUDGET_ABS_EXEC_MS,
-              timeoutUnconfirmed: true
+              timeoutUnconfirmed: true,
+              failedKind: "timed_out"
             });
           }
         });
@@ -7766,18 +7967,22 @@ async function buildDenialRepairPayload(
     }
   }
 
-  // P1-82：所有上游语义执行工具共用一套 Agent／Token／连接／全局容量；超额立即繁忙，不启动上游工作。
+  // P1-82／REQ-0122 D2：上游语义工具走容量舱壁；lucy_read_source 走独立元数据池（仍留在 UPSTREAM_SEMANTIC_TOOLS）。
   if (rpcMethod === "tools/call" && typeof toolName === "string" && requestWouldHitUpstreamSemanticExecution(toolName)) {
     const argsRecord = toolArgs && typeof toolArgs === "object" && !Array.isArray(toolArgs) ? toolArgs as Record<string, unknown> : {};
-    const slot = getMcpExecutionCapacity().tryAcquire({
-      agentId: identity.userId,
-      tokenKey: identity.tokenHashPrefix,
-      connectionId: typeof argsRecord.connectionId === "string" ? argsRecord.connectionId.trim() : "",
-      enforceToken: true
-    });
+    const useMetaPool = toolName === "lucy_read_source";
+    const slot = useMetaPool
+      ? getMcpMetaExecutionCapacity().tryAcquire({ tokenKey: identity.tokenHashPrefix })
+      : getMcpExecutionCapacity().tryAcquire({
+          agentId: identity.userId,
+          tokenKey: identity.tokenHashPrefix,
+          connectionId: typeof argsRecord.connectionId === "string" ? argsRecord.connectionId.trim() : "",
+          enforceToken: true
+        });
     if (!slot.allowed) {
-      const reason = "query_concurrency_exceeded";
+      const reason = useMetaPool ? "meta_concurrency_exceeded" : "query_concurrency_exceeded";
       const capacityDetail = `scope=${slot.scope}; retry_after_ms=${slot.retryAfterMs}`;
+      const maxInflight = slot.max;
       const responseBody = JSON.stringify({
         jsonrpc: "2.0",
         id: requestId,
@@ -7787,7 +7992,21 @@ async function buildDenialRepairPayload(
             type: "text",
             text: `Access denied: ${reason}; active=${slot.active}; max=${slot.max}; ${capacityDetail}`
           }],
-          _meta: { lucy: { capacityScope: slot.scope, retryAfterMs: slot.retryAfterMs } }
+          // REQ-0122 D2：与预算层同形的可执行缩并发信封。
+          data: {
+            reason,
+            retryable: true,
+            retryAfterMs: slot.retryAfterMs,
+            next_step: { action: "reduce_concurrency_and_retry", max_inflight: maxInflight }
+          },
+          _meta: {
+            lucy: {
+              capacityScope: slot.scope,
+              retryAfterMs: slot.retryAfterMs,
+              retryable: true,
+              next_step: { action: "reduce_concurrency_and_retry", max_inflight: maxInflight }
+            }
+          }
         }
       });
       res.writeHead(200, { "content-type": "application/json", "content-length": Buffer.byteLength(responseBody) });
@@ -7872,15 +8091,16 @@ async function buildDenialRepairPayload(
     if (hiveHandled) return;
   }
 
-  // P1-37 U2（O6 取证，KTX 0.16.0）：`sl_query` 要求 `measures` 为非空数组，与其他入参无关；
-  // 缺失或为空时上游必然拒绝，且其错误文案会泄露内部工具名 `sl_query`。这里只复制该必然拒绝的条件，
-  // 在转发前以 Lucy 工具名＋示例返回；放在 Hive 分流之后，只影响真正要转发给 KTX 的请求。
+  // P1-89 §2.4 D9(a)／PRE-Q1：KTX `sl_query` 仍硬要非空 measures。成形拉数（无业务 measures）
+  // 由 Proxy 注入技术性 count 投影；非成形请求仍以 Lucy 工具名拒绝，避免泄露 `sl_query`。
   if (rpcMethod === "tools/call" && toolName === "lucy_query") {
-    const measuresReason = lucyQueryMeasuresRequiredReason(toolArgs);
-    if (measuresReason) {
-      await respondInvalidArguments(measuresReason, LUCY_QUERY_MEASURES_HINT);
+    const prepared = prepareLucyQueryForUpstream(toolArgs);
+    if (prepared.denyReason) {
+      await respondInvalidArguments(prepared.denyReason, prepared.hint ?? LUCY_QUERY_MEASURES_HINT);
       return;
     }
+    toolArgs = prepared.args;
+    detailQueryAdaptation = prepared.adaptation;
   }
 
   let outboundBody = body;
@@ -8365,7 +8585,9 @@ async function buildDenialRepairPayload(
         argsBeforeRewrite,
         requestPinnedCaliber,
         sourceSelection: sourceSelectionForAv,
-        forcedFilters: forcedFiltersForAv
+        forcedFilters: forcedFiltersForAv,
+        detailAdaptation: detailQueryAdaptation,
+        budgetTicket: activeBudgetTicket
       }
     );
     return;
@@ -8816,8 +9038,9 @@ async function handleSourceAmbiguityHostConfirm(
 
 export function buildProxy(options: BuildProxyOptions = {}) {
   assertSkillsPassthroughPolicy();
-  // P1-82：容量上限按本次启动的环境装配（计数保留）；顺序非法时修正并告警，不让进程起不来。
+  // P1-82／REQ-0122 D2：重查询主池＋轻元数据独立池按本次启动环境装配。
   getMcpExecutionCapacity().configure(resolveCapacityLimits().limits);
+  getMcpMetaExecutionCapacity().configure(resolveMetaCapacityLimits());
   buildBasicInstructions(); // 预热进程级基础指引：降级路径只同步取值。
   const ledger = options.ledger ?? new ReleaseLedger();
   const skillsPassthroughEnabled = skillsPassthroughRequested();

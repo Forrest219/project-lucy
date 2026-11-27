@@ -6,7 +6,7 @@
  * - 硬停机载荷：continuable=false、next_step 结构化、非 ACL ——SC-E4
  * - mode=new_question：声明→下一计费工具兑现（同事务）、旧 turn 归属解除 ——SC-E9
  * - 持久化／恢复／幂等：policy 推导、generation、pendingReopen 跨实例恢复 ——SC-E9b
- * - active 生命周期回归：续查仍 1 档、硬停走 begin、new_question 被拒 ——SC-E7
+ * - active 生命周期回归：续查默认 3 档（REQ-0122 D6）、硬停走 begin、new_question 被拒 ——SC-E7
  *
  * 约定与 question-budget-continuation.test.ts 同源：内存持久层夹具、合成身份、
  * 每个用例自建 QuestionBudget 实例。
@@ -343,28 +343,30 @@ describe("question budget main-path escape (P1-74)", () => {
       .toMatchObject({ ok: true, declared: true, reopen: true });
   });
 
-  it("SC-E7 active 回归：续查仍 1 档，active 硬停 next_step 指向 begin", async () => {
+  it("SC-E7 active 回归：续查默认 3 档（REQ-0122 D6），第 4 次硬停 next_step 指向 begin", async () => {
     enableSettledStable();
     const scopeKey = budgetScopeKey(IDENTITY, SESSION);
     const budget = new QuestionBudget();
     await budget.beginQuestion({ identityKey: IDENTITY, sessionId: SESSION, turnId: TURN, now: 0 });
-    const stopped = await exhaustByCalls(budget, 1_000);
+    let stopped = await exhaustByCalls(budget, 1_000);
     if (stopped.action !== "stop") throw new Error("expected stop");
     expect(stopped.continuable).toBe(true);
 
-    await budget.declareContinuation(scopeKey, stopped.continueToken, 2_000);
-    expectAllow(await admit(budget, 3_000, { turnId: TURN }));
+    // active 默认 3 档续查均可成交
+    for (let c = 0; c < 3; c += 1) {
+      await budget.declareContinuation(scopeKey, stopCredential(stopped), 2_000 + c);
+      expectAllow(await admit(budget, 3_000 + c, { turnId: TURN }));
+      for (let i = 0; i < QUESTION_BUDGET_MAX_CALLS; i += 1) await admit(budget, 4_000 + c, { turnId: TURN });
+      stopped = await admit(budget, 4_000 + c, { turnId: TURN, canBegin: true });
+      if (stopped.action !== "stop") throw new Error("expected stop");
+      if (c < 2) expect(stopped.continuable).toBe(true);
+    }
 
-    // 第二次声明：no_credit（active 仅 1 档）
-    for (let i = 0; i < QUESTION_BUDGET_MAX_CALLS; i += 1) await admit(budget, 4_000, { turnId: TURN });
-    const secondStop = await admit(budget, 4_000, { turnId: TURN, canBegin: true });
-    expect(secondStop.action).toBe("stop");
-    if (secondStop.action !== "stop") return;
-    expect(secondStop.continuable).toBe(false);
-    expect(secondStop.continuationCreditLeft).toBe(false);
-    // active 硬停：next_step 指向 begin，不得指向 new_question
-    expect(secondStop.nextStep).toEqual({ action: "lucy_begin_question", then: "retry_data_tool" });
-    expect(await budget.declareContinuation(scopeKey, secondStop.continueToken, 5_000))
+    // 第 4 次：no_credit；active 硬停 next_step 指向 begin
+    expect(stopped.continuable).toBe(false);
+    expect(stopped.continuationCreditLeft).toBe(false);
+    expect(stopped.nextStep).toEqual({ action: "lucy_begin_question", then: "retry_data_tool" });
+    expect(await budget.declareContinuation(scopeKey, stopped.continueToken, 9_000))
       .toEqual({ ok: false, reason: "no_credit" });
   });
 
@@ -402,7 +404,7 @@ describe("question budget main-path escape (P1-74)", () => {
     expect(state?.turnId).toBeNull();
   });
 
-  it("SC-E9b 旧行缺 policy 仅按持久 turnId 推导一次：有 turn=active（1 档），无 turn=inactive（5 档）", async () => {
+  it("SC-E9b 旧行缺 policy 仅按持久 turnId 推导一次：有 turn=active（默认 3 档），无 turn=inactive（5 档）", async () => {
     enableSettledStable();
     // 旧行：无 continuationPolicy / generation / pendingReopen 字段
     const legacyActive: BudgetState = {
@@ -417,10 +419,15 @@ describe("question budget main-path escape (P1-74)", () => {
     activeBudget.setPersistence(seededActive.persistence);
     let stopped = await exhaustByCalls(activeBudget, 1_000);
     if (stopped.action !== "stop") throw new Error("expected stop");
-    await activeBudget.declareContinuation(budgetScopeKey(IDENTITY, SESSION), stopped.continueToken, 2_000);
-    expectAllow(await admit(activeBudget, 3_000, { turnId: TURN }));
-    // 仅 1 档 ⇒ 第二次声明 no_credit；且推导值已落库
-    expect(await activeBudget.declareContinuation(budgetScopeKey(IDENTITY, SESSION), stopped.continueToken, 4_000))
+    // active 默认 3 档：用满后第 4 次声明 no_credit；推导值已落库
+    for (let c = 0; c < 3; c += 1) {
+      await activeBudget.declareContinuation(budgetScopeKey(IDENTITY, SESSION), stopCredential(stopped), 2_000 + c);
+      expectAllow(await admit(activeBudget, 3_000 + c, { turnId: TURN }));
+      for (let i = 0; i < QUESTION_BUDGET_MAX_CALLS; i += 1) await admit(activeBudget, 4_000 + c, { turnId: TURN });
+      stopped = await admit(activeBudget, 4_000 + c, { turnId: TURN, canBegin: true });
+      if (stopped.action !== "stop") throw new Error("expected stop");
+    }
+    expect(await activeBudget.declareContinuation(budgetScopeKey(IDENTITY, SESSION), stopped.continueToken, 9_000))
       .toEqual({ ok: false, reason: "no_credit" });
     expect(seededActive.rows.get(budgetScopeKey(IDENTITY, SESSION))?.continuationPolicy).toBe("active");
 

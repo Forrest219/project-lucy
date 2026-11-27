@@ -2,13 +2,13 @@
 
 | 元数据 | 内容 |
 |---|---|
-| 文档类型 / 版本 | 功能修订 Spec（问询预算分析师工作流与慢数仓体验）／**v1.0** |
-| 日期 | 2026-11-26（v0.2-draft）／2026-11-27（v1.0 定稿） |
+| 文档类型 / 版本 | 功能修订 Spec（问询预算分析师工作流与慢数仓体验）／**v1.0-r8** |
+| 日期 | 2026-11-26（v0.2-draft）／2026-11-27（v1.0 定稿；r8＝开发授权） |
 | 功能编号 / 优先级 | **REQ-0122**／**P0／主路径体验严重缺陷修复**；修订 Spec 162 §7.2、窗口优化 Spec、P1-12、P1-74 与 P1-82 默认并发／超时耦合 |
-| 阶段 | S2 |
-| 状态 | S2｜v1.0-r1。终稿已确权（委托人 2026-11-27 明示确权，D1–D8 全案采纳推荐案 (a)）；**r1（2026-11-27，委托人授权）与 [REQ-0119](lucy-20261127-integration-mcp-capacity-backpressure-spec.md) 完成跨 Spec 冲突消解**：本条 D2 四层默认成为两 Spec 共同基线（REQ-0119 C1 案 A——其 OQ-global 冻结解除、borrowMax 与 global×0.5 解耦初始 12、Task 0 于本条落地后校准）；明确本条 D2 轻工具元数据并发池仍受 REQ-0119 workload 门覆盖；D7 文案范围显式限定 interactive；决策 D1–D8 不变，验收 SC-01–SC-12 不变；**开发授权未获得**；实现未落地；开工前置门禁 PRE-01（Claude Code `mcp-session-id` 抓包）未执行；配对 Plan 待 PRE-01 后补齐；测试台 [`UAT-SUITE-BUDGET-ANALYST-UX`](../qa/uat/suites/budget-analyst-ux/suite.md)（已登记，NOT RUN）；≠ 功能合同收口；≠ UAT PASS；≠ 可上线 |
+| 阶段 | S3 |
+| 状态 | S3｜v1.0-r8。终稿已确权（D1–D8／OQ-4／OQ-6）；PRE-01／§10.3 UAT 设计已闭合；**开发授权已获得（委托人 2026-11-27 明示「授权开发」）**；配对 [Plan](../plans/lucy-20261127-question-budget-analyst-workflow-revision-plan.md)；**Tasks 0–4 运行代码／单测已落地**（Task 5 定向 vitest 绿；demo 镜像重建本机 BuildKit 挂起未完成）；测试台 NOT RUN；≠ 功能合同收口；≠ UAT PASS；≠ 可上线 |
 | 台账号 | 挂常青需求池 `REQ-0122` |
-| 决策来源 | 2026-11-26 委托人审阅反馈：当前预算规格上线会频繁干扰重度使用 Claude Code ＋ Lucy MCP 的数据分析师，且客户强依赖 `hive-jd`，定性为严重用户体验 Bug，指示起草正式预算规格修订 Spec。2026-11-27 委托人裁定：D1–D8 全案采纳推荐案 (a)，并明示确权本 Spec 终稿 |
+| 决策来源 | 2026-11-26 委托人审阅反馈：当前预算规格上线会频繁干扰重度使用 Claude Code ＋ Lucy MCP 的数据分析师，且客户强依赖 `hive-jd`，定性为严重用户体验 Bug，指示起草正式预算规格修订 Spec。2026-11-27 委托人裁定：D1–D8 全案采纳推荐案 (a)，并明示确权本 Spec 终稿；同日重裁 OQ-4／OQ-6＝A、闭合 PRE-01／§10.3；同日明示 **开发授权** |
 | 与既有 Spec 的关系 | **修订** [`webui/docs/162-customer-query-experience-and-usage-evidence-spec.md`](../../webui/docs/162-customer-query-experience-and-usage-evidence-spec.md) §7.2、[`lucy-20261029-question-budget-window-optimization-spec.md`](lucy-20261029-question-budget-window-optimization-spec.md)（并发与计费工具集）、[`lucy-20261111-question-budget-threshold-relax-spec.md`](lucy-20261111-question-budget-threshold-relax-spec.md)（忙时上限与可配置性）、[`lucy-20261122-question-budget-mainpath-escape-spec.md`](lucy-20261122-question-budget-mainpath-escape-spec.md)（active 续查档数与停机引导），并**协同调整** P1-82 执行容量默认档位（`webui/server/runtime/mcp-execution-capacity.ts`）与代理上游超时／取消冻结默认值（`webui/server/proxy/mcp-proxy.ts`）。**保留** runaway 防火墙、settled busy 口径、稳定作用域键、两段式续查／`mode=new_question` 逃生、软信封与 ACL 边界；**r1 跨 Spec 基线（对照 [REQ-0119](lucy-20261127-integration-mcp-capacity-backpressure-spec.md)）**：本条 D2 四层默认（8/16/32/48）为两 Spec 共同基线（REQ-0119 OQ-global 冻结解除、borrowMax 与 global×0.5 解耦初始 12）；本条 D2 轻工具元数据独立并发池仍受 REQ-0119 workload 门覆盖（integration 身份全部调用计入 `integrationActive`，不得借独立池绕过 `borrowMax`）；D7 文案面向 interactive，integration 静态极简指引归 REQ-0119 OQ-7／SC-11、不随本条更新；**排期：本条（P0）先落地，REQ-0119（P1）压测校准随后** |
 | 实施主体 | Lucy（Proxy 问询预算层 + 执行容量层 + 上游超时配置 + `initialize` 指导）；不修改 KTX 源码 |
 | 部署实况 | **纯 MCP**（以 Claude Code 为典型代表，兼容 Cursor／Codex 等经 Bearer 接入的客户端），重点覆盖**慢分析型外部目录**（如 SelectDB／Doris 外部 Hive Catalog `hive-jd`）与零绑定（begin 隐藏）／有绑定（begin 可用）两种实况 |
@@ -17,7 +17,7 @@
 
 - 层级：功能合同
 - 本条承诺：在保留 runaway Agent 问询预算防火墙的前提下，重度使用 Claude Code ＋ Lucy MCP 并在慢分析型外部目录（如 `hive-jd`）上进行并发探索、多轮下钻与中断重试的数据分析师，不再被 4 路硬并发、轻元数据同桶计费、30 秒空闲超时叠加忙时耗尽、取消后 30 秒槽位冻结或保守停机文案频繁打断主路径。
-- 本条出口：SC-01–SC-12（必须同时覆盖「防火墙仍有效拦住 runaway」与「并发 6–8 路探索／慢查询多轮下钻／中断重问／长会话逃生在纯 MCP 下端到端成交」）。
+- 本条出口：SC-01–SC-12＋SC-07b＋SC-02b（必须同时覆盖「防火墙仍有效拦住 runaway」与「并发 6–8 路探索／慢查询多轮下钻／中断重问／长会话逃生在纯 MCP 下端到端成交」；SC-07b＝OQ-4 持续失败有界；SC-02b＝OQ-6 轻工具跨窗有界）。
 - 不在本条出口：客户环境现场交付、离线镜像发布取证、跨副本分布式限流、修改 KTX 源码、取消问询预算防火墙。
 - 上线关系：本条收口不表示可上线
 
@@ -97,17 +97,17 @@ New terms:
 
 ---
 
-## 5. 决策表（待委托人裁定）
+## 5. 已裁定决策表（D1–D8）
 
 | 编号 | 决策项 | 选项 | 推荐 | 状态 |
 |---|---|---|---|---|
-| **D1** | 工具计费分层 | (a) **轻重分层**：主预算桶（60 次／忙时／查询并发槽）仅计重查询工具（`lucy_query`、`lucy_certified_route`、`lucy_report_template`）；轻工具（`lucy_read_source`、`lucy_freshness`、`lucy_explain_query`、`wiki_search`、`wiki_read`）走独立轻量计数上限（默认 **200 次／窗**，不占 `busyMs` 与查询并发槽）<br>(b) 维持全部 6 类工具同桶，仅把总次数放到 150 | **(a)** | **已裁定（采纳 a，2026-11-27）** |
+| **D1** | 工具计费分层 | (a) **轻重分层**：主预算桶（60 次／忙时／查询并发槽）仅计重查询工具（`lucy_query`、`lucy_certified_route`、`lucy_report_template`）；轻工具（`lucy_read_source`、`lucy_freshness`、`lucy_explain_query`、`wiki_search`、`wiki_read`）走独立轻量计数上限（默认 **200 次／窗**，不占 `busyMs` 与查询并发槽）<br>(b) 维持全部 6 类工具同桶，仅把总次数放到 150 | **(a)** | **已裁定（采纳 a，2026-11-27）**；**跨窗总界见 OQ-6＝A（2026-11-27）** |
 | **D2** | 并发上限、轻工具容量池与超限语义 | (a) **重查询**：预算层 `QUESTION_BUDGET_MAX_INFLIGHT` 默认 **4 → 8**（环境变量可配）；容量层 `DEFAULT_CAPACITY_LIMITS` 默认调整为 **`token: 8 / agent: 16 / connection: 32 / global: 48`**。<br>**轻元数据工具（闭合 G1）**：`lucy_read_source` 保留在 `UPSTREAM_SEMANTIC_TOOLS`（不破坏 Strat-B DRAIN 排空语义），但从重查询容量池拆出、接入独立的**元数据并发池**（默认 **`token: 16 / global: 64`**，环境变量 `LUCY_MCP_META_TOKEN_MAX_INFLIGHT`／`LUCY_MCP_META_GLOBAL_MAX_INFLIGHT` 可配），不裸奔绕过容量层。<br>**超限载荷**：增加 `retryable: true`、`retryAfterMs` 与结构化 `next_step: { action: "reduce_concurrency_and_retry", max_inflight }`（仍保持结构化可识别）<br>(b) 仅放宽到 8，轻工具仍与重查询共享 8 路槽且不补结构化重试指引 | **(a)** | **已裁定（采纳 a，2026-11-27）** |
 | **D3** | 慢数仓 `busyMs` 与上游超时对齐 | (a) 单窗 `QUESTION_BUDGET_MAX_BUSY_MS` 默认 **300s → 900s**（环境变量可配）；`LUCY_PROXY_UPSTREAM_TIMEOUT_MS`（socket 空闲超时）默认 **30s → 90s**；`LUCY_PROXY_UPSTREAM_HARD_DEADLINE_MS` 默认 **90s → 120s**（与 `QUESTION_BUDGET_ABS_EXEC_MS = 120s` 对齐）<br>(b) 维持 300s／30s，仅在客户现场手动配环境变量 | **(a)** | **已裁定（采纳 a，2026-11-27）** |
-| **D4** | 失败／超时调用的 `busyMs` 记账口径 | (a) **失败封顶记账**：上游超时、断连或未返回事实数据的错误调用，结算计入 `busyMs` 时单次封顶 `QUESTION_BUDGET_FAILED_CALL_CAP_MS`（默认 **30_000ms**），原始耗时仍如实记入 `budgetSettlement` 审计字段；成功调用仍全额结算<br>(b) 失败调用完全不计 `busyMs`（易被故意发慢错查询绕过忙时）<br>(c) 维持全额计入 | **(a)** | **已裁定（采纳 a，2026-11-27）** |
+| **D4** | 失败／超时调用的 `busyMs` 记账口径 | (a) **失败封顶记账**：上游超时、断连或未返回事实数据的错误调用，结算计入 `busyMs` 时单次封顶 `QUESTION_BUDGET_FAILED_CALL_CAP_MS`（默认 **30_000ms**），原始耗时仍如实记入 `budgetSettlement` 审计字段；成功调用仍全额结算<br>(b) 失败调用完全不计 `busyMs`（易被故意发慢错查询绕过忙时）<br>(c) 维持全额计入 | **(a)** | **已裁定（采纳 a，2026-11-27）**；**精确 outcome／持续失败边界见 OQ-4（2026-11-27 重裁闭合）** |
 | **D5** | 取消未确认的名额冻结时长 | (a) `LUCY_MCP_CANCEL_HOLD_MS` 默认 **30s → 5s**（可配置，设 0 为不保留），避免 Claude Code 按 `Esc` 中断慢查询后立刻重问时槽位锁死 30 秒<br>(b) 维持 30s | **(a)** | **已裁定（采纳 a，2026-11-27）** |
 | **D6** | `begin active` 续查档数 | (a) `begin active` 下 `maxContinuations` 默认 **1 → 3**（环境变量 `QUESTION_BUDGET_MAX_CONTINUATIONS_WHEN_BEGIN_ACTIVE` 可配）；`begin inactive` 保持 **5 档** ＋ 硬停 `mode=new_question`<br>(b) 维持 `active = 1` | **(a)** | **已裁定（采纳 a，2026-11-27）** |
-| **D7** | `initialize` 停机与并发引导文案 | (a) 修订 `webui/config/data-qa-instructions.md` 与 `mcp-proxy.ts` 动态指引：① 移除首句易诱发提前放弃的 `"stop looping"`，改为优先指导模型在 `continuable=true` 或 `mode=new_question` 时**静默完成逃生并重试继续分析**，仅在 `hard_budget_stop` 或陷入无效循环时停机交付部分结果；② 明确写入单作用域并发上限与 `question_budget_concurrency_exceeded` 缩并发重试规则<br>(b) 保持现有文案不变 | **(a)** | **已裁定（采纳 a，2026-11-27）** |
+| **D7** | `initialize` 停机与并发引导文案 | (a) 修订 `webui/config/data-qa-instructions.md` 与 `mcp-proxy.ts` 的 **interactive 动态／降级指引**：① 移除首句易诱发提前放弃的 `"stop looping"`，改为优先指导模型在 `continuable=true` 或 `mode=new_question` 时静默完成逃生并重试继续分析，仅在 `hard_budget_stop` 或陷入无效循环时停机交付部分结果；② 明确写入单作用域并发上限与 `question_budget_concurrency_exceeded` 缩并发重试规则。**不修改 integration 静态极简指引**，后者以 REQ-0119 OQ-7／SC-11／13 为事实源<br>(b) 保持现有文案不变 | **(a)** | **已裁定（采纳 a，2026-11-27）；r3 仅把 r1 已授权的 interactive 边界回填到本行，不改裁定** |
 | **D8** | 兼容与回退开关 | (a) 所有新默认值均可由环境变量覆盖；旧环境变量（`LUCY_QUESTION_BUDGET=off`、`WALL_MODE`、`SCOPE`、`BYPASS`）语义不变；协议原因码不变<br>(b) 仅改常量不加环境变量 | **(a)** | **已裁定（采纳 a，2026-11-27）** |
 
 ### §5.1 资源上界披露（修订前后对照）
@@ -180,14 +180,22 @@ function consumePersisted(scopeKey, toolName, now, options):
     return ALLOW(ticket)
   })
 
-# ── 3. 结算（D4：失败／超时单次封顶记账）────────────────────────
+# ── 3. 结算（D4 + OQ-4：窄失败封顶）──────────────────────────
+# failedKind ∈ { timed_out, upstream_disconnect, tool_is_error } → 可封顶
+# failedKind = no_data（合法空结果）→ 不走失败封顶
 function settle(ticket, endMonoMs, outcomeFlags):
   withScopeSerialization(ticket.scopeKey, async () => {
     rawDelta = min(ABS_EXEC_MS, max(0, endMonoMs - ticket.startMonoMs))
-    billedDelta = outcomeFlags.failedOrTimedOut
+    capEligible = outcomeFlags.failedKind in ("timed_out", "upstream_disconnect", "tool_is_error")
+    billedDelta = capEligible
       ? min(rawDelta, FAILED_CALL_BUSY_CAP_MS)           # 默认 30_000ms（D4）
       : rawDelta
-    recordBudgetSettlementAudit({ rawDeltaMs: rawDelta, billedBusyMs: billedDelta, ...outcomeFlags })
+    recordBudgetSettlementAudit({
+      rawDeltaMs: rawDelta,
+      billedBusyMs: billedDelta,
+      failedKind: outcomeFlags.failedKind,              # OQ-4：机读可诊断
+      ...outcomeFlags
+    })
     addBusyMsToTicketWindow(ticket, billedDelta)
     decrementInflight(ticket.scopeKey)
     commit(ticket.scopeKey, candidate, "settle:" + ticket.requestId)
@@ -206,8 +214,10 @@ function settle(ticket, endMonoMs, outcomeFlags):
 
 1. 换窗（`mode=continue`、`mode=new_question` 或 `lucy_begin_question`）在清零 `calls` 与 `busyMs` 时同步清零 `metaCalls`，避免轻工具计数跨窗粘连。
 2. `lucy_read_source` 保留在 `UPSTREAM_SEMANTIC_TOOLS` 中以维持 Strat-B DRAIN 排空不变式，但在容量舱壁层路由至独立的元数据并发池（默认 `token: 16 / global: 64`），既不阻塞也不被阻塞于重查询并发槽，且上游并发压力仍有界可控（闭合 G1）。**跨 Spec 不变式（r1）**：元数据池不免除 REQ-0119 workload 判定——`workloadClass=integration` 的轻工具调用同样计入 `integrationActive`（borrowMax 前置闸对全部工具类的 integration 调用生效，元数据池不构成绕过路径）。
-3. 失败封顶只改变计入 `busyMs` 的增量，**不得**掩盖真实 `durationMs` 与 `rawDeltaMs` 审计记录。
+3. 失败封顶只改变计入 `busyMs` 的增量，**不得**掩盖真实 `durationMs` 与 `rawDeltaMs` 审计记录；settlement 必须机读写出 `failedKind`（OQ-4）。合法空结果（`no_data`）**不得**冒充失败封顶。
 4. `UPSTREAM_HARD_DEADLINE_MS` 不得超过 `QUESTION_BUDGET_ABS_EXEC_MS`（默认同为 120s），保证容量舱壁与预算记账边界一致。
+5. **OQ-4**：不另设「连续失败 N 次」硬停 reason；单窗持续失败仅由 `calls≤60`／`busyMs≤900s` 截停，停机语义仍为 `question_budget_exhausted`。跨窗失败有界沿用既有续查／`mode=new_question` 总档（D6／P1-74），失败类不另开跨窗配额。
+6. **OQ-6＝A**：单窗 `metaCalls=200` 硬顶保留（D1）；换窗仍清零窗内 `metaCalls`；跨窗 runaway 总界＝与重查询**共用**既有续查／`mode=new_question` 总档（D6／P1-74）。**不**另设 `metaCallsLifetime`、**不**另设轻工具速率护栏、**不**新增独立停机 reason——档尽硬停语义与查数路径一致（`question_budget_exhausted`／既有硬停再开）。
 
 ---
 
@@ -217,16 +227,18 @@ function settle(ticket, endMonoMs, outcomeFlags):
 |---|---|---|---|---|---|
 | SC-01 | 全新作用域 | 单窗连续发起 61 次 `lucy_query`（忙时未超） | settled | 第 61 次准入时 | 返回 `question_budget_exhausted`（防火墙仍生效），`outcome=budget_stop` |
 | SC-02 | 全新作用域 | 轻工具（`lucy_read_source`／`wiki_search`）连续调用 201 次 | settled | 第 201 次准入时 | 独立轻工具防死循环上限生效，返回 `question_budget_exhausted`；前 200 次均放行且 `calls=0`、`busyMs=0` |
-| SC-03 | 全新作用域 | 同时并发提交 8 次 `lucy_read_source` ＋ 8 次 `lucy_query`；另测单 Token 并发 17 次 `lucy_read_source` | settled | 准入与响应时 | 8 次 `lucy_read_source` 与 8 次 `lucy_query` 全部互不干扰放行；第 9 次并发 `lucy_query` 返回 `question_budget_concurrency_exceeded`，含 `retryable: true`、`retryAfterMs` 与 `next_step.max_inflight=8` 且不扣 `calls`/`busyMs`；第 17 次并发 `lucy_read_source` 被独立元数据并发池（`token: 16`）拒绝并返回 `retryAfterMs` |
+| SC-02b | 同 SC-02 轻工具夹具（OQ-6＝A） | 单窗触顶 200 后 `continue`／`new_question` 换窗清零并再刷；循环直至续查总档尽 | settled | 跨窗循环与档尽硬停时 | 敌对臂：换窗可恢复窗内 200 额度，但总档尽后硬停（与查数共用档，无 `metaCallsLifetime`／速率 reason）；正臂：合法换窗后继续 `lucy_read_source` 成交 |
+| SC-03 | 全新作用域 | 同时并发提交 8 次 `lucy_read_source` ＋ 8 次 `lucy_query`；另测单 Token 并发 17 次 `lucy_read_source` | settled | 准入与响应时 | 8 次 `lucy_read_source` 与 8 次 `lucy_query` 全部互不干扰放行；第 9 次并发 `lucy_query` 返回 `question_budget_concurrency_exceeded`，含 `retryable: true`、`retryAfterMs` 与 `next_step.max_inflight=8` 且不扣 `calls`/`busyMs`；第 17 次并发 `lucy_read_source` 被独立元数据并发池（`token: 16`）拒绝并返回同等可执行重试信号。**跨 Spec 必做回归**：REQ-0119 SC-03／UAT-IMC 对多 integration Agent 的轻元数据调用验证合计计入 `integrationActive` 并在 `borrowMax` 触顶，作为本条元数据池不绕过 workload 的组合证据 |
 | SC-04 | 已有 8 路在途 `lucy_query` | 再发起第 9 路被拒后，待部分请求完成、客户端缩并发重发 | settled | 重试完成时 | 合法重试成功出数（主路径双覆盖：既验拦住，也验缩并发成交） |
 | SC-05 | 模拟慢源（单次查询 45 秒首字节） | 发起 `lucy_query` | settled | 上游响应时 | 不会在 30 秒被 `UPSTREAM_TIMEOUT_MS` 掐断，45 秒正常返回事实数据并结算 `busyMs=45000` |
 | SC-06 | 模拟慢源（单次 60 秒） | 连续成功执行 14 次 `lucy_query`（累计 840s < 900s），再执行第 15、16 次 | settled | 第 16 次准入时 | 前 15 次（累计达 900s）全放行；第 16 次触发 `question_budget_exhausted`；经 `lucy_continue_question` 换窗后第 16 次重试成交 |
-| SC-07 | 模拟上游超时／失败（每次耗时 90s 超时失败） | 连续 4 次超时失败后发起第 5 次正常查询 | settled | 第 5 次准入与审计时 | 每次失败计入 `busyMs` 封顶 30s（4 次合计 120s < 900s），第 5 次正常查询放行成交；审计 `budgetSettlement` 同时记录 `rawDeltaMs≈90000` 与 `billedBusyMs=30000` |
+| SC-07 | 模拟上游超时／失败（每次耗时 90s 超时失败） | 连续 4 次超时失败后发起第 5 次正常查询 | settled | 第 5 次准入与审计时 | 每次失败计入 `busyMs` 封顶 30s（4 次合计 120s < 900s），第 5 次正常查询放行成交；审计 `budgetSettlement` 同时记录 `failedKind=timed_out`、`rawDeltaMs≈90000` 与 `billedBusyMs=30000`。对照臂：合法空结果须标 `failedKind=no_data`（或不走失败封顶路径），不得按 30s 封顶 |
+| SC-07b | 同 SC-07 超时夹具（OQ-4 敌对臂） | 单窗持续超时失败直至触顶；换窗后继续失败直至续查档尽 | settled | 单窗触顶与跨窗硬停时 | 单窗最终以 `question_budget_exhausted` 停机（靠 `calls`／`busyMs` 上界，**无**独立连败 N reason）；跨窗仍受 D6／P1-74 续查总档约束后硬停；全程结算可区分 `failedKind` 与 raw／billed |
 | SC-08 | 8 路慢查询在途 | 客户端主动断开模拟 `Esc` 中断，等待 5.5 秒后发起新 `lucy_query` | settled | 新查询准入时 | 不再锁死 30 秒；5s 冻结期满后新查询正常准入成交 |
-| SC-09 | 容量舱壁默认配置 | 4 个不同 Token 同时各自并发 8 路访问同一连接（如 `hive-jd`，合计 32 路） | settled | 准入时 | 32 路全部放行（不撞旧 `connection: 16` 上限）；第 33 路按 `connection` 维度拒绝并返回 `retryAfterMs` |
+| SC-09 | 容量舱壁默认配置 | 4 个不同 Token 同时各自并发 8 路访问同一连接（如 `hive-jd`，合计 32 路） | settled | 准入与重试完成时 | 32 路全部放行（不撞旧 `connection: 16` 上限）；第 33 路按 `connection` 维度拒绝，并与 D2 已裁信封一致地返回 `retryable:true`、`retryAfterMs`、`next_step.action=reduce_concurrency_and_retry` 与可执行 `max_inflight`；待槽位释放后缩并发重试成交且匹配 oracle。若实现需要改变 D2 已裁 reason／字段语义，必须升 OQ 重裁 |
 | SC-10 | `begin active` 实况 | 连续耗尽 3 档续查 | settled | 第 1–3 次续查与第 4 次触顶时 | 前 3 次 `lucy_continue_question` 均成功换窗并成交；第 4 次续查前硬停，`next_step` 指向 `lucy_begin_question`，预算终止不计入四类失败维度 |
 | SC-11 | 环境变量覆盖旧值（闭合 G2） | 同时设置 `QUESTION_BUDGET_MAX_INFLIGHT=4`、`QUESTION_BUDGET_MAX_BUSY_MS=300000`、`QUESTION_BUDGET_MAX_CONTINUATIONS_WHEN_BEGIN_ACTIVE=1`、`LUCY_QUERY_MAX_INFLIGHT=4`、`LUCY_MCP_AGENT_MAX_INFLIGHT=8`、`LUCY_MCP_CONNECTION_MAX_INFLIGHT=16`、`LUCY_MCP_GLOBAL_MAX_INFLIGHT=24`、`LUCY_MCP_CANCEL_HOLD_MS=30000`、`LUCY_PROXY_UPSTREAM_TIMEOUT_MS=30000`、`LUCY_PROXY_UPSTREAM_HARD_DEADLINE_MS=90000` | settled | 准入、容量快照与超时时 | `resolveCapacityLimits()` 精确回到 `4/8/16/24`，预算并发／忙时／active 续查／超时／取消冻结全部行为精确回退至修订前口径 |
-| SC-12 | 真实纯 MCP Agent（Claude Code）＋ 慢查询夹具 | 触发一次预算触顶与一次并发超限的端到端多轮分析任务 | settled | 最终答复与轨迹 | Claude Code 按新 `initialize` 指导自动缩并发重试、在 `continuable=true` 时静默调 `lucy_continue_question` 并完成全部子问题，不因 `"stop looping"` 提前放弃，结果与 oracle 一致 |
+| SC-12 | 真实纯 MCP Agent（Claude Code）＋ 慢查询夹具 | 分两臂触发预算触顶与并发超限：A＝begin 可见／`continuable=true`；B＝begin 不可见／续查档耗尽后 `mode=new_question` | settled | 最终答复与轨迹 | A 臂静默调 `lucy_continue_question` 后继续成交；B 臂按结构化 `next_step` 以同一 `continueToken`＋`mode=new_question` 重开预算后继续成交；两臂均自动缩并发重试、完成全部子问题、不因 `"stop looping"` 提前放弃，结果与 oracle 一致。integration 静态极简指引不参与本条 D7 文案验收 |
 
 ---
 
@@ -243,13 +255,13 @@ function settle(ticket, endMonoMs, outcomeFlags):
 |---|---|---|
 | 1 | 路径／文件名 | `docs/specs/lucy-20261126-question-budget-analyst-workflow-revision-spec.md`（合规） |
 | 2 | 伪代码 | §6（已含） |
-| 3 | 元数据与阶段码 | 头部表含「文档类型 / 版本」「阶段: S1」「状态（纯中文状态词）」 |
+| 3 | 元数据与阶段码 | 头部表含「文档类型 / 版本」「阶段: S2」「状态」 |
 | 5 | Terminology Compliance | §3（已含） |
 | 7 | 索引登记 | 已随 v0.2-draft 提交同批登记进 `docs/README.md`（lint index 规则要求文件被跟踪即登记，故先于确权执行）；终稿确权后同批更新索引行状态 |
 | 11 | 闭口层级 | 头部下方（层级＝功能合同，含五要素） |
 | 13 | 交互合同 | §8 显式豁免（非 WebUI） |
 | 14 | 常青需求池入账 | 已入账 **REQ-0122**（P0，2026-11-27，随 v1.0 定稿同批登记 [`docs/backlog/README.md`](../backlog/README.md) 与 `entries/REQ-0122-question-budget-analyst-workflow-ux.md`；入池 ≠ 开发授权） |
-| 15 | 测试台 | 已新建并登记 [`UAT-SUITE-BUDGET-ANALYST-UX`](../qa/uat/suites/budget-analyst-ux/suite.md)（v1.0，NOT RUN；含真实 Claude Code ＋ 慢源用例，同时补齐 BESC-07／10A 回归臂） |
+| 15 | 测试台 | [`UAT-SUITE-BUDGET-ANALYST-UX`](../qa/uat/suites/budget-analyst-ux/suite.md) **v1.1**（§10.3 六项已同步；NOT RUN；含 SC-02b／07b／12 双臂；勾连 IMC-03 混合臂；BESC-07／10A 回归臂） |
 | 16 | 主路径可用性优先 | §1、§7（SC-03/04/06/07/08/12 双覆盖约束与成交） |
 | 17 | 受影响画像 | §4（4 画像逐行判定＋子面复合判定＋P3 负向补偿路径） |
 
@@ -259,7 +271,7 @@ function settle(ticket, endMonoMs, outcomeFlags):
 
 ### 10.1 开发开工前置门禁（原 OQ-2 升级，闭合 G4）
 
-- **PRE-01（Claude Code `mcp-session-id` 实测抓包）**：在配对 Plan 中列为**开工前置阻塞门禁**（非普通开放问题）。改代码前须用真实 Claude Code 在「单窗口主会话」「多终端并行」「Subagent 派发」三种模式下抓包核实代理收到的 `mcp-session-id` 透传情况。若确认存在退化落入无会话桶 `-` 的模式导致多窗口分摊 8 路并发，须在实现前补充桶隔离策略或显式客户端提示。
+- **PRE-01（Claude Code `mcp-session-id` 实测抓包）**：**已闭合（2026-11-27）**。证据见 [`inbox/pre01-2026-11-27/PRE-01-EVIDENCE.md`](../../inbox/pre01-2026-11-27/PRE-01-EVIDENCE.md)。三种真实 Claude Code 模式（单窗口／多终端并行／Subagent）均未出现请求侧 literal `-`，post-init 的 `tools/list`／`tools/call` 均携带稳定 UUID；多终端为**两个不同** session（未合并进一桶）。**OQ-5 未触发**。客户端披露（不改 D2）：Subagent 复用父会话 `mcp-session-id`（同预算并发桶）——属同会话协作语义，不是多窗口 `-` 退化。正式 UAT R0 只引用本证据；§10.3 已同步（v1.0-r7）。
 
 ### 10.2 开放问题
 
@@ -267,6 +279,24 @@ function settle(ticket, endMonoMs, outcomeFlags):
 |---|---|---|
 | OQ-1 | 是否需要支持**按连接维度**单独覆盖 `UPSTREAM_TIMEOUT_MS`／`MAX_BUSY_MS`（例如仅为 `hive-jd` 配 120s／900s，MySQL 保持 30s／300s）？ | 本期先通过全局默认放宽＋全局环境变量快速止血（接受 G3 中快源挂起多等 60s 的权衡）；若现场存在异构库强隔离诉求，在二期引入 per-connection 配置 |
 | OQ-3 | `lucy_explain_query` 归轻工具还是重工具？ | **已闭合（随 D1(a) 裁定，2026-11-27）**：`lucy_explain_query` 不执行上游数仓查询（仅编译＋门禁诊断），归入轻工具集合；若未来出现编译耗时过长，可纳入独立元数据并发池约束 |
+| OQ-4 | D4 失败封顶允许哪些精确 outcome；“未返回事实数据”如何机读判定；持续失败是否必须在单窗由 calls／busy 上界最终截停，续查总档数如何保持有界？ | **已闭合（委托人 2026-11-27 重裁）**：（1）**窄封顶**——仅 `failedKind ∈ {timed_out, upstream_disconnect, tool_is_error}` 可走 30s 封顶；合法空结果标 `no_data`，**不**走失败封顶；（2）settlement 机读写出 `failedKind`＋`rawDeltaMs`＋`billedBusyMs`；（3）持续失败＝**方案 A**：单窗只靠 `calls≤60`／`busyMs≤900s` 截停，**不**另加连败 N 硬停；（4）跨窗有界＝沿用既有续查／`new_question` 总档，失败不另开跨窗配额。验收：SC-07／SC-07b；UAT **BA-07／BA-07b**（v1.1 已同步） |
+| OQ-5 | PRE-01 若发现无 session 桶 `-`，是否需要改变作用域键／桶隔离／D2 并发语义？ | **已关闭（未触发，2026-11-27）**：PRE-01 三模式均无 `-` 桶退化；多终端独立 session。仅回填客户端披露（Subagent 复用父 session），**不**改变作用域键／D2 |
+| OQ-6 | 轻工具 `metaCalls=200/窗` 在 `continue`／`mode=new_question` 清零后，runaway 是否可无限跨窗重置；跨窗总界应采用续查总档数、作用域生命周期还是速率护栏？ | **已闭合（委托人 2026-11-27 重裁＝方案 A）**：跨窗总界与重查询共用既有续查／`mode=new_question` 总档；单窗 `metaCalls=200` 硬顶保留；不另设 `metaCallsLifetime`／速率护栏／独立停机 reason。验收：SC-02／SC-02b；UAT **BA-02／BA-02b**（v1.1 已同步） |
+
+### 10.3 测试台同步门禁（R2）
+
+**已同步（2026-11-27）** → [`UAT-SUITE-BUDGET-ANALYST-UX` v1.1](../qa/uat/suites/budget-analyst-ux/suite.md)（取代 v1.0 旧映射；v1.0 **不得**再执行或判 PASS）。勾连 [`UAT-IMC-03`](../qa/uat/suites/integration-mcp-capacity/cases.md) 轻／重混合臂（integration-mcp-capacity v1.0-r4）。
+
+| # | 门禁项 | 落位 |
+|---|---|---|
+| 1 | OQ-4／BA-07 | `UAT-BA-07`＋`UAT-BA-07b` |
+| 2 | IMC-03 轻／重混合 | `UAT-IMC-03` 扩写＋本套件勾连 |
+| 3 | BA-09 全信封＋释放成交 | `UAT-BA-09` |
+| 4 | BA-12 begin 双臂 | `UAT-BA-12A`／`UAT-BA-12B` |
+| 5 | PRE-01 移出执行链 | `UAT-BA-R0` 只引用 [`inbox/pre01-2026-11-27/PRE-01-EVIDENCE.md`](../../inbox/pre01-2026-11-27/PRE-01-EVIDENCE.md) |
+| 6 | OQ-6／SC-02b | `UAT-BA-02b` |
+
+测试台仍 **NOT RUN**（实现未落地）。本节关闭 ≠ 开发授权 ≠ UAT PASS。
 
 ---
 
@@ -279,3 +309,10 @@ function settle(ticket, endMonoMs, outcomeFlags):
 | v0.2-draft（补订） | 2026-11-26 | 复核 N1 修订：§4 P2 行依据改为不含字面 WebUI 源码目录路径的等价表述，消除 lint:spec-docs 交互合同门禁误触发（本条不触达 WebUI 用户可见面，§8 豁免口径不变）；§9 第 7 项随本次 git 提交更新为已登记 `docs/README.md`；版本与状态不变 |
 | v1.0 | 2026-11-27 | 定稿确权：委托人裁定 **D1–D8 全案采纳推荐案 (a)** 并明示确权终稿；§5 决策表 8 项状态改为「已裁定」，OQ-3 随 D1(a) 闭合（OQ-1 留二期）；入账常青需求池 REQ-0122（P0）；§9 第 14／15 项更新；新建测试台 `UAT-SUITE-BUDGET-ANALYST-UX`（v1.0，NOT RUN）。阶段 S1→S2；**开发授权未获得**，PRE-01 抓包仍为开工前置门禁 |
 | v1.0-r1 | 2026-11-27 | 跨 Spec 冲突消解（委托人授权，对照 [REQ-0119](lucy-20261127-integration-mcp-capacity-backpressure-spec.md)，两 Spec 同日 v1.0 终稿互不引用）：① 明确本条 D2 四层默认（8/16/32/48）为两 Spec 共同基线——REQ-0119 OQ-global 冻结解除（C1 案 A），其 borrowMax 与 global×0.5 解耦（初始 12）、Task 0／T1–T5 于本条落地后基线校准；② §6 不变式 2 增补：轻工具元数据独立并发池仍受 REQ-0119 workload 门覆盖（integration 全部调用计入 integrationActive）；③ D7 文案修订范围显式限定 interactive 身份（integration 静态极简指引归 REQ-0119 OQ-7／SC-11，不随本条更新）。决策 D1–D8 不变，验收 SC-01–SC-12 不变。开发授权未获得，PRE-01 仍为开工前置门禁 |
+| v1.0-r2 | 2026-11-27 | Codex CLI 三轮对抗过程评审 R1 修订：不改变 D1–D8；补强 SC-03 跨 Spec workload 回归、SC-09 全信封＋释放后成交、SC-12 begin 可见／不可见双臂；PRE-01 前移为 Plan 前门禁；D4 持续失败 runaway 边界升 OQ-4 待委托人重裁，PRE-01 触发语义变化时升 OQ-5。开发未授权；NOT RUN；≠ 功能合同收口／UAT PASS／可上线 |
+| v1.0-r3 | 2026-11-27 | Codex CLI 对抗 R2 修订：D7 本行回填 interactive／integration 边界；轻工具跨窗重置风险升 OQ-6；登记测试台同步门禁，明确当前 UAT v1.0 旧映射不可执行／不可判 PASS；修正阶段自检 S1→S2。不改变 D1–D8；开发未授权 |
+| v1.0-r4 | 2026-11-27 | 委托人重裁 **OQ-4 闭合**：窄 `failedKind` 封顶；`no_data` 不封顶；单窗靠 calls／busy 截停（无连败 N）；跨窗沿用既有续查档；补 SC-07b／伪代码／不变式 5。**OQ-6 仍待裁**；PRE-01 未执行；开发未授权；UAT 仍不可执行／不可 PASS |
+| v1.0-r5 | 2026-11-27 | 委托人重裁 **OQ-6＝A 闭合**：轻工具跨窗总界＝共用既有续查／`new_question` 档；单窗 200 保留；无终身／速率护栏；补 SC-02b／不变式 6。OQ-4／OQ-6 均闭合；**下一阻塞＝PRE-01**；开发未授权；UAT 仍不可执行／不可 PASS |
+| v1.0-r6 | 2026-11-27 | **PRE-01 闭合**：真实 Claude Code 三模式抓包（[证据](../../inbox/pre01-2026-11-27/PRE-01-EVIDENCE.md)）；无 `-` 桶退化；多终端独立 session；Subagent 复用父 session（客户端披露，不改 D2）。**OQ-5 未触发已关闭**。下一阻塞＝§10.3 UAT 升版；开发未授权 |
+| v1.0-r7 | 2026-11-27 | **§10.3 UAT 设计六项同步**：`UAT-SUITE-BUDGET-ANALYST-UX` → v1.1（BA-02b／07／07b／09／12A／12B；R0 只引 PRE-01）；IMC-03 轻／重混合臂（v1.0-r4）。测试台仍 NOT RUN。**下一阻塞＝开发授权／Plan**；≠ UAT PASS／功能合同收口／可上线 |
+| v1.0-r8 | 2026-11-27 | **开发授权已获得**（委托人明示「授权开发」）；阶段 S2→S3；配对 Plan；开始改运行代码。≠ 功能合同收口／UAT PASS／可上线 |

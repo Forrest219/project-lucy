@@ -1381,7 +1381,9 @@ const BUDGET_STATE_COLUMNS = [
   // P1-74 / SC-E9b：续查档数快照、代次与 new_question 声明随状态行同事务恢复。
   ["continuation_policy", "TEXT"],
   ["generation", "INTEGER NOT NULL DEFAULT 0"],
-  ["pending_reopen_json", "TEXT"]
+  ["pending_reopen_json", "TEXT"],
+  // REQ-0122 D1：轻工具本窗计数；旧行缺省 0。
+  ["meta_calls", "INTEGER NOT NULL DEFAULT 0"]
 ] as const;
 
 const BUDGET_IDEMPOTENCY_TABLE = `
@@ -1414,6 +1416,8 @@ export type PersistedBudgetState = {
   generation?: number;
   /** P1-74：mode=new_question 声明（与 pendingToken 互斥）。 */
   pendingReopen?: { token: string; round: number; windowId: number; generation: number } | null;
+  /** REQ-0122 D1：轻工具本窗计数。 */
+  metaCalls?: number;
 };
 
 let budgetTableReady = false;
@@ -1439,7 +1443,7 @@ export async function loadBudgetState(
       `SELECT started_at, origin_started_at, calls, continuations, attempts,
               peak_concurrency, current_concurrency, busy_ms, round, turn_id,
               window_id, pending_token, presented_token, archived_busy_json,
-              continuation_policy, generation, pending_reopen_json
+              continuation_policy, generation, pending_reopen_json, meta_calls
          FROM question_budget_state WHERE scope_key = ?`
     )
     .get(scopeKey) as
@@ -1461,6 +1465,7 @@ export async function loadBudgetState(
         continuation_policy: string | null;
         generation: number | null;
         pending_reopen_json: string | null;
+        meta_calls: number | null;
       }
     | undefined;
   if (!row) return null;
@@ -1516,6 +1521,7 @@ export async function loadBudgetState(
         : undefined,
       generation: row.generation ?? 0,
       pendingReopen,
+      metaCalls: row.meta_calls ?? 0,
       scopeKey
     },
     appliedKeys: keys.map((entry) => entry.idempotency_key)
@@ -1545,8 +1551,8 @@ export async function saveBudgetState(
            (scope_key, started_at, origin_started_at, calls, continuations, attempts,
             peak_concurrency, current_concurrency, updated_at, busy_ms, round, turn_id,
             window_id, pending_token, presented_token, archived_busy_json,
-            continuation_policy, generation, pending_reopen_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            continuation_policy, generation, pending_reopen_json, meta_calls)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(scope_key) DO UPDATE SET
            started_at = excluded.started_at,
            origin_started_at = excluded.origin_started_at,
@@ -1565,7 +1571,8 @@ export async function saveBudgetState(
            archived_busy_json = excluded.archived_busy_json,
            continuation_policy = excluded.continuation_policy,
            generation = excluded.generation,
-           pending_reopen_json = excluded.pending_reopen_json`
+           pending_reopen_json = excluded.pending_reopen_json,
+           meta_calls = excluded.meta_calls`
       )
       .run(
         scopeKey,
@@ -1586,7 +1593,8 @@ export async function saveBudgetState(
         JSON.stringify(state.archivedBusyMsByWindow ?? {}),
         state.continuationPolicy ?? null,
         state.generation ?? 0,
-        state.pendingReopen ? JSON.stringify(state.pendingReopen) : null
+        state.pendingReopen ? JSON.stringify(state.pendingReopen) : null,
+        state.metaCalls ?? 0
       );
     if (idempotencyKey) {
       database

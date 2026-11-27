@@ -76,13 +76,16 @@
 ## 失败预算与交付时限
 
 - 对失败建立错误指纹（tool + source + normalized reason + relevant argument shape）。同一指纹最多做一次有信息增益的修正重试；只在 `eq` / `=` / `in` 之间循环不算修正。
-- 同一问询最多 60 次数据工具调用，或累计 300 秒数据处理时长（不含思考时间），以先到者为准。同一输入最多重复 1 次；已成功读取的 source 不重复读取，只有瞬时错误可额外重试一次。协议方法（含 `lucy_begin_question` 与 `lucy_continue_question`）不占这个预算。
-- 问询预算用尽时停止循环。代理返回 `question_budget_exhausted`——这是**问询预算限制，不是权限拒绝**。若 `continuable` 为 true，调用 `lucy_continue_question`，传入返回的 `continueToken`（默认 `mode=continue`），然后重试同一数据工具；未使用 `lucy_begin_question` 的问询默认可继续至多 5 次（初始窗＋5 次续查＝至多 6 窗，调用上界约 360 次，非无限）。若 `continuable` 为 false（续查档数用尽），按返回的结构化 `next_step` 执行：`lucy_begin_question` 可见时用它开启新问询；begin 不可见时，以 `mode=new_question` 加同一 `continueToken` 调用 `lucy_continue_question` 重开预算（不换 Token、不需要新 session），然后重试数据工具。只有 `next_step` 为 `hard_budget_stop` 时，才交付已验证的部分结果并说明缺口，不要重试。
+- 同一问询最多 60 次**重查询**工具调用（`lucy_query`／`lucy_certified_route`／`lucy_report_template`），或累计 900 秒重查询数据处理时长（不含思考时间），以先到者为准。轻元数据／Wiki 工具（`lucy_read_source`／`lucy_freshness`／`lucy_explain_query`／`wiki_search`／`wiki_read`）走独立高额度，不占上述主桶次数与忙时。同一输入最多重复 1 次；已成功读取的 source 不重复读取，只有瞬时错误可额外重试一次。协议方法（含 `lucy_begin_question` 与 `lucy_continue_question`）不占这个预算。
+- 问询预算用尽时：若 `continuable` 为 true，或 `next_step` 指向 `mode=new_question`，优先**静默**完成 `lucy_continue_question`／重开并重试数据工具继续分析，不要首句停下来向用户二次确认。代理返回 `question_budget_exhausted`——这是**问询预算限制，不是权限拒绝**。未使用 `lucy_begin_question` 的问询默认可继续至多 5 次（初始窗＋5 次续查＝至多 6 窗）；`begin active` 默认可续查 3 次。若 `continuable` 为 false（续查档数用尽），按返回的结构化 `next_step` 执行：`lucy_begin_question` 可见时用它开启新问询；begin 不可见时，以 `mode=new_question` 加同一 `continueToken` 调用 `lucy_continue_question` 重开预算（不换 Token、不需要新 session），然后重试数据工具。只有 `next_step` 为 `hard_budget_stop`，或陷入无效循环时，才停机交付已验证的部分结果并说明缺口。
+- 单作用域重查询并发默认上限为 8。若收到 `question_budget_concurrency_exceeded`（含 `retryable: true` 与 `next_step.action=reduce_concurrency_and_retry`），按 `max_inflight` 缩并发后重试，不要把并发拒绝当成缺数或权限错误。
 - 部分可回答时仍必须回复：逐项给出 `ok` / `no_data` / `unavailable` / `partial`，说明期间、版本/批次、情景、失败影响与 provenance。不得因一个子问题失败而丢弃整轮已取得的结果。
 
 ## `lucy_query` 参数形态
 
-- `measures` 使用 source-qualified 字符串，例如 `source.measure`。
+- **拉数 vs 指标分析**：只要拿到表／维度数据，传 `dimensions` 和／或 `filters`／`segments` 即可，**不必**先编造业务 `measures`。Proxy 可能注入技术性 `count(source.field)`（名 `_lucy_detail_count`）并在 `_meta.lucy.detailMode` 披露——这不是业务口径。做指标分析时再传真实业务 `measures`。
+- 回退旧门禁（强制非空业务 measures）：环境变量 `LUCY_QUERY_REQUIRE_BUSINESS_MEASURES=1`。
+- `measures`（分析路径）使用 source-qualified 字符串，例如 `source.measure`；也可用 `{expr,name}` 临时聚合。
 - `dimensions` / `order_by` 使用对象数组，例如 `[{ "field": "source.field" }]`，不要传字符串数组。
 - `filters` 可以使用字符串数组，也可以使用结构化对象数组，例如 `{ "field": "source.field", "op": "contains", "value": "<公司简称或关键词>" }`；Lucy Proxy 会把结构化对象转换为上游语义层可执行的 filter string。
 - 少数客户端可能把整个 `filters` 数组序列化成 JSON 字符串；Proxy 会严格恢复。不要主动生成这种形态；JSON 损坏会 fail closed。

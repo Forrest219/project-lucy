@@ -6,9 +6,9 @@
 | 稳定 ID | `REQ-0122` |
 | 类型 | `需求`（主路径体验严重缺陷修复） |
 | 优先级 | `P0` |
-| 阶段 | `S2`（Spec v1.0 终稿已确权 2026-11-27，D1–D8 全案采纳推荐案 (a)；UAT 套件已登记；**开发未授权**，PRE-01 抓包为开工前置门禁） |
+| 阶段 | `S3`（Spec v1.0-r8；**开发授权已获得 2026-11-27**；Plan 已配对；实现进行中；UAT v1.1 NOT RUN） |
 | 目标版本 | `—`（P0，建议候选 `v0.35.0`，待委托人挑入范围单） |
-| 授权边界 | **入池 ≠ 立项 ≠ 终稿确权 ≠ 开发授权**。进入开发前须：PRE-01（Claude Code `mcp-session-id` 三模式抓包）→ 配对 Plan → 委托人另发开发授权 |
+| 授权边界 | **开发授权已获得（2026-11-27）**。允许改运行代码／单测／demo；未授权 push／发布／客户出包／`--fresh`（除非另授）。PRE-01：`inbox/pre01-2026-11-27/PRE-01-EVIDENCE.md`；UAT v1.1；Plan：`docs/plans/lucy-20261127-question-budget-analyst-workflow-revision-plan.md` |
 
 ## 来源与背景
 
@@ -17,10 +17,10 @@
 
 ## 已裁定方向（2026-11-27，D1–D8 全案采纳 (a)）
 
-- **D1** 轻重分层：主预算桶仅计重查询工具（`lucy_query`／`lucy_certified_route`／`lucy_report_template`）；轻工具（`lucy_read_source`／`lucy_freshness`／`lucy_explain_query`／`wiki_search`／`wiki_read`）独立 200 次／窗，不占 busyMs 与查询并发槽。
+- **D1** 轻重分层：主预算桶仅计重查询工具（`lucy_query`／`lucy_certified_route`／`lucy_report_template`）；轻工具（`lucy_read_source`／`lucy_freshness`／`lucy_explain_query`／`wiki_search`／`wiki_read`）独立 200 次／窗，不占 busyMs 与查询并发槽。**OQ-6＝A（2026-11-27）**：跨窗总界与重查询共用既有续查／`new_question` 档；不另设终身／速率护栏。
 - **D2** 并发：预算层 `MAX_INFLIGHT` 4→8；容量层默认 `token 8 / agent 16 / connection 32 / global 48`；`lucy_read_source` 接独立元数据并发池（`token 16 / global 64`），保留 `UPSTREAM_SEMANTIC_TOOLS` 不破 Strat-B DRAIN；超限返回 `retryable: true`＋`retryAfterMs`＋`next_step.reduce_concurrency_and_retry`。
 - **D3** 忙时与超时：`busyMs` 300s→900s（可配）；上游空闲超时 30s→90s、硬时限 90s→120s（与预算绝对执行时限对齐）。
-- **D4** 失败封顶记账：超时／失败调用计入 `busyMs` 单次封顶 30s，原始耗时全量审计。
+- **D4** 失败封顶记账：超时／失败调用计入 `busyMs` 单次封顶 30s，原始耗时全量审计。**OQ-4（2026-11-27）**：窄 `failedKind`（`timed_out`／`upstream_disconnect`／`tool_is_error`）可封顶；`no_data` 不封顶；单窗靠 calls／busy 截停；跨窗沿用既有续查档。
 - **D5** 取消未确认冻结 30s→5s（可配，0 为不保留）。
 - **D6** `begin active` 续查档数 1→3（`inactive` 保持 5）。
 - **D7** 修订 `initialize` 指导与 `data-qa-instructions.md`：移除首句 `"stop looping"`，改为静默逃生引导＋并发规则披露。

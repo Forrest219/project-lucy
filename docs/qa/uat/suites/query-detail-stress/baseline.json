@@ -1,0 +1,171 @@
+{
+  "schemaVersion": 1,
+  "baselineId": "QDE-STRESS-B",
+  "baselineLabel": "P1-89 拉数／多形态 MCP 压力基准线（案 B）",
+  "frozenAt": "2026-11-27",
+  "ownerSuite": "UAT-SUITE-QUERY-DETAIL-STRESS",
+  "evolution": {
+    "howToBumpVolume": "Increment volumes.* and bump baselineRevision; add Changelog row in fixtures.md; do not edit historical runs.",
+    "howToAddScenario": "Append to scenarios[] with new id; keep retired scenarios in retiredScenarios[]; cases.md only references ids.",
+    "compat": "Runners MUST load this file; hard-coded quotas in scripts are FAIL."
+  },
+  "baselineRevision": 1,
+  "environment": {
+    "profile": "scale",
+    "requireScaleBaselineExit0": true,
+    "requireHive": true,
+    "hiveEnvFlag": "UAT_SCALE_INCLUDE_HIVE=1",
+    "hiveSkippedMeans": "BLOCKED",
+    "suggestedResourceCap": { "cpus": 2, "memoryGi": 2 },
+    "resourceCapEnforcement": "recommended"
+  },
+  "timing": {
+    "baselineWarmupSec": 120,
+    "steadySec": 900,
+    "baselineCooldownoffSec": 120,
+    "probeIntervalSec": 5,
+    "holdExtraSec": 5
+  },
+  "concurrency": {
+    "targetInFlight": 16,
+    "slotPlan": {
+      "mysqlFastMorphMix": 4,
+      "analysis": 2,
+      "exploreChain": 2,
+      "shortSession": 2,
+      "longSession": 2,
+      "hiveSlow": 2,
+      "hiveMeta": 1,
+      "interactiveProbe": 1
+    }
+  },
+  "volumes": {
+    "minSuperstoreOrdersRows": 1000,
+    "minScaleTables": 2000,
+    "minHiveTablesWhenRequired": 600,
+    "perCallLimitMax": 1000,
+    "detailArmCumulativeRowsMin": 50000,
+    "maxSingleMorphologyShare": 0.4,
+    "minCallsPerActiveScenario": 20,
+    "minSharePerActiveScenario": 0.05
+  },
+  "passLines": {
+    "ST-01": "detail morphologies M1/M2/M3 measures_required rate == 0; detailMode sample ok",
+    "ST-02": "cumulative detail rows >= volumes.detailArmCumulativeRowsMin",
+    "ST-03": "probe success >= 0.95; p95 <= 1.5x warmup p95 under hive-slow co-pressure",
+    "ST-04": "analysis M5/M6 success >= 0.95",
+    "ST-05": "hive-slow: >=10 samples first-byte >= 3s or PROCESSLIST evidence",
+    "ST-06": "scenario coverage + maxSingleMorphologyShare",
+    "ST-07": "short-session initialize not collapsed; errors bucketed",
+    "ST-08": "no unhealthy / MCP down > 60s",
+    "ST-09": "capacity trips machine-readable; no blind retry storm"
+  },
+  "gaps": {
+    "GAP-ST-SC06-PENDING": "streaming body backpressure not claimed; owned by REQ-0119"
+  },
+  "scenarios": [
+    {
+      "id": "M1",
+      "tool": "lucy_query",
+      "shape": "omit_measures_plus_dimensions",
+      "intent": "detail_escape",
+      "active": true
+    },
+    {
+      "id": "M2",
+      "tool": "lucy_query",
+      "shape": "empty_measures_array_plus_dimensions",
+      "intent": "detail_escape",
+      "active": true
+    },
+    {
+      "id": "M3",
+      "tool": "lucy_query",
+      "shape": "omit_measures_plus_filters",
+      "intent": "filtered_pull",
+      "active": true
+    },
+    {
+      "id": "M4",
+      "tool": "lucy_query",
+      "shape": "omit_measures_plus_segments",
+      "intent": "segment_pull",
+      "active": true,
+      "skipIfNoSegment": true
+    },
+    {
+      "id": "M5",
+      "tool": "lucy_query",
+      "shape": "business_measure_strings",
+      "intent": "analysis",
+      "active": true
+    },
+    {
+      "id": "M6",
+      "tool": "lucy_query",
+      "shape": "adhoc_expr_measure",
+      "intent": "analysis",
+      "active": true
+    },
+    {
+      "id": "M7",
+      "tool": "lucy_query",
+      "shape": "limit_1000_sharded_windows",
+      "intent": "volume_accumulate",
+      "active": true
+    },
+    {
+      "id": "M8",
+      "tool": "chain",
+      "shape": "lucy_catalog_then_read_source_then_query",
+      "intent": "explore",
+      "active": true
+    },
+    {
+      "id": "M9",
+      "tool": "lucy_read_source",
+      "shape": "metadata_burst",
+      "intent": "explore",
+      "active": true
+    },
+    {
+      "id": "M10",
+      "tool": "session",
+      "shape": "new_initialize_per_call",
+      "intent": "stateless_client",
+      "active": true
+    },
+    {
+      "id": "M11",
+      "tool": "session",
+      "shape": "long_lived_session_ge_100_calls",
+      "intent": "resident_worker",
+      "active": true
+    },
+    {
+      "id": "M12",
+      "tool": "lucy_query",
+      "shape": "bare_connection_negative",
+      "intent": "gate_still_on",
+      "active": true,
+      "expect": "measures_required"
+    },
+    {
+      "id": "H1",
+      "tool": "lucy_query",
+      "shape": "hive_slow_detail_or_aggregate",
+      "intent": "hive_slow",
+      "active": true,
+      "connectionClass": "hive"
+    },
+    {
+      "id": "H2",
+      "tool": "chain",
+      "shape": "hive_catalog_or_read_source",
+      "intent": "hive_meta",
+      "active": true,
+      "connectionClass": "hive"
+    }
+  ],
+  "retiredScenarios": []
+}

@@ -1,8 +1,16 @@
 import type { ClientRequest, ServerResponse } from "node:http";
 
+export type BudgetFailedKind =
+  | "timed_out"
+  | "upstream_disconnect"
+  | "tool_is_error"
+  | "no_data";
+
 export type BudgetSettleFlags = {
   timeoutUnconfirmed?: boolean;
   clientDisconnected?: boolean;
+  /** REQ-0122 D4／OQ-4：窄失败封顶机读分类；缺省＝成功全额。 */
+  failedKind?: BudgetFailedKind;
 };
 
 type BudgetResponse = Pick<ServerResponse, "once">;
