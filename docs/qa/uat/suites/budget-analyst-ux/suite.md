@@ -8,7 +8,7 @@
 | 目标 | 证明在保留 runaway 防火墙的前提下，Claude Code 并行探索、轻工具批量读表、慢数仓（`hive-jd` 类）多轮下钻、Esc 中断重问、长会话静默逃生在纯 MCP 下端到端成交；同时验「防火墙仍拦得住 runaway」与「合法高频工作流成交」双覆盖（含 OQ-4／OQ-6 敌对臂） |
 | 运行环境 | 本机 demo Docker＋真实 KTX／只读数据连接＋真实 Claude Code 纯 MCP＋慢源夹具（`v_sleep` 视图，45–90s 首字节可调）＋多 Token／多 Agent 身份；**无浏览器臂**（非 WebUI，Spec §8 豁免）；`hive-jd` 实况可在客户环境补跑，本机以 MySQL 慢源夹具等价模拟慢引擎 |
 | 剧本 | [用例](cases.md) · [夹具](fixtures.md) · [跑次槽](runs/README.md) |
-| 判定 | [INDEX](../../INDEX.md) 为唯一结果事实源。当前 **NOT RUN／设计已同步**（Spec §10.3 六项已写入 v1.1；**开发未授权**、实现未落地；正式跑次须开发授权后执行。≠ 功能合同收口；≠ UAT PASS；≠ 可上线） |
+| 判定 | [INDEX](../../INDEX.md) 为唯一结果事实源。当前 **PASS WITH FINDINGS**（2026-11-28 [跑次](runs/2026-11-28-kscc-budget-analyst-ux.md)：15 臂全 PASS＋并发补充臂 PARTIAL；F1／F2／F3 均已修复并回归验证关闭（SC-03 预算层闸、不扣 calls、reason 命名三子点闭合）；mcp-proxy-smoke 3 个 P1-82 失败为存量（基线一致）。≠ 功能合同收口；≠ 可上线） |
 
 ## 来源与定位
 

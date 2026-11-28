@@ -14,7 +14,7 @@
 | 主 Spec | [lucy-20261126-question-budget-analyst-workflow-revision-spec.md](../specs/lucy-20261126-question-budget-analyst-workflow-revision-spec.md)（**v1.0-r8**） |
 | 编号 | **REQ-0122** |
 | 阶段 | S3 |
-| 状态 | S3｜**开发授权已获得（2026-11-27）**；Tasks 0–4 已落地；Task 5 定向 vitest 全绿；demo 镜像重建因本机 Docker Hub `dockerfile:1.7` config resolve 挂起未完成（容器仍为旧档 capacity 4/8/16/24）；UAT v1.1 NOT RUN；≠ 功能合同收口；≠ UAT PASS；≠ 可上线 |
+| 状态 | S4｜**实现已落地＋UAT 已执行**：Tasks 0–5 全部完成（demo 镜像 2026-11-27 23:39 重建成功，health＋MCP catalog/query 冒烟通过，新档位 8/16/32/48 生效）；UAT-SUITE-BUDGET-ANALYST-UX v1.1 跑次 **PASS WITH FINDINGS**（2026-11-28，[跑次](../qa/uat/suites/budget-analyst-ux/runs/2026-11-28-kscc-budget-analyst-ux.md)）；F1–F3 待裁定；≠ 功能合同收口；≠ 可上线 |
 | 授权边界 | 允许改运行代码／单测／demo 验证；**未授权** push／发布／客户出包／`--fresh` 除非另授 |
 | 验收 | Spec SC-01–SC-12＋SC-02b＋SC-07b ↔ UAT-SUITE-BUDGET-ANALYST-UX v1.1；跨 Spec IMC-03 混合臂 |
 | 实施主体 | Lucy；不改 KTX |
@@ -76,7 +76,7 @@
 ## Task 5 — 组装回归与 demo 冒烟
 
 - [x] 定向跑 question-budget／capacity／instructions 相关单测
-- [ ] `npm run demo:upgrade`（平滑，保留 volume）冒烟：health＋一次 MCP catalog／query — **阻塞**：本机 BuildKit 解析 `docker/dockerfile:1.7` 挂起；现网 demo 健康但镜像未含本批改动
+- [x] `npm run demo:upgrade`（平滑，保留 volume）冒烟：health＋一次 MCP catalog／query — **已完成（2026-11-27 23:43）**：`docker/dockerfile:1.7` 前端镜像补拉后重建成功，health ok＋catalog/query 成交＋新档位生效
 - [x] 回写 Spec／Plan 状态（实现进度）；**不**主张 UAT PASS；不申请发布
 
 ## 非目标（本 Plan）
@@ -84,3 +84,30 @@
 - 不跑完整 UAT-SUITE-BUDGET-ANALYST-UX（须另授跑次）
 - 不改 REQ-0119 实现主线（仅保持 D2 基线一致；IMC-03 混合臂随 0119 开发）
 - 不 push／出包
+
+## 开工前置
+
+- 开发授权：委托人 2026-11-27 明示「授权开发」（Spec v1.0-r8 状态行同句）。
+- 依赖闭合：PRE-01 证据已落盘（`inbox/pre01-2026-11-27/PRE-01-EVIDENCE.md`）；Spec §10.3 六项已同步进 UAT v1.1；OQ-4／OQ-6 已裁定。
+- 环境前提：本机 Docker Desktop 可用；demo 栈 volume 保留（平滑升级，禁 `--fresh`）。
+- 跨 Spec 基线：REQ-0119 r1 已确认 D2 四层默认（8/16/32/48）为两 Spec 共同基线，本条先落地。
+
+## 验收
+
+- 验收合同：Spec SC-01–SC-12＋SC-02b＋SC-07b ↔ UAT-SUITE-BUDGET-ANALYST-UX v1.1 全用例；跨 Spec IMC-03 混合臂勾连。
+- 双覆盖：每条约束臂（防火墙拦得住 runaway）与成交臂（合法高频工作流端到端）同时覆盖；BA-12A／12B 须真实 Claude Code 轨迹。
+- 实跑结果：2026-11-28 跑次 **PASS WITH FINDINGS**（R0／01–12B 全 PASS；发现 F1–F3 待裁定，见跑次报告）；F1／F2／F3 均已修复＋实机回归闭合（SC-03 全子点闭合）。
+
+## 完成定义
+
+- Tasks 0–5 全勾：常量／分层／封顶／分池／指引落地，定向单测绿，demo 镜像重建＋冒烟通过（2026-11-27 23:43）。
+- UAT 跑次落盘并入 INDEX／需求池镜像／e2e 台账，机检（`lint:spec-docs` 增量、`check-e2e-ledger`）通过。
+- 终态：F1–F3 裁定闭环且 SC 全关后，Spec 才可推进 S5（功能合同已收口）；本 Plan 不代替该裁定。
+
+## 风险
+
+- F1（并发拒绝不退账）：高频撞并发场景加速预算耗尽；修复需在 capacity 拒绝路径补 refund 或调整 consume 顺序，须回归 question-budget／capacity 单测与 BA-03／09 拒绝臂。
+- F2（预算层 inflight 并发记账失真）：并发下预算层闸门可能失效退化为 capacity 层单层防护；容量防火墙仍有效（capacity 层拦得住），但 reason 语义与 Spec 伪码分层不一致。
+- F3（reason 码命名偏差）：客户端可见协议字面变化须谨慎；若裁定改实现 reason 码，需同步 instructions 文案与单测断言；若修订 Spec，需在 D2 登记双层命名。
+- BA-12 agent 臂的并发信封触发依赖时序（快查询可能整批穿过 8 路闸），复跑不保证复现；缩并发语义以 harness 臂＋单测为准。
+- UAT-IMC-03 混合臂未执行：REQ-0119 套件落地前，本条 SC-03 的跨 Spec 组合证据保持开口。

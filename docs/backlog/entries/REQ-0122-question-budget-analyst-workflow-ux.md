@@ -6,7 +6,7 @@
 | 稳定 ID | `REQ-0122` |
 | 类型 | `需求`（主路径体验严重缺陷修复） |
 | 优先级 | `P0` |
-| 阶段 | `S3`（Spec v1.0-r8；**开发授权已获得 2026-11-27**；Plan 已配对；实现进行中；UAT v1.1 NOT RUN） |
+| 阶段 | `S4`（实现已落地＋UAT 跑次 PASS WITH FINDINGS 2026-11-28；F1／F2／F3 均已修复＋回归验证；Spec 现值为准） |
 | 目标版本 | `—`（P0，建议候选 `v0.35.0`，待委托人挑入范围单） |
 | 授权边界 | **开发授权已获得（2026-11-27）**。允许改运行代码／单测／demo；未授权 push／发布／客户出包／`--fresh`（除非另授）。PRE-01：`inbox/pre01-2026-11-27/PRE-01-EVIDENCE.md`；UAT v1.1；Plan：`docs/plans/lucy-20261127-question-budget-analyst-workflow-revision-plan.md` |
 

@@ -70,7 +70,7 @@ import {
 
 export interface AclDecision {
   allowed: boolean;
-  reason?: string; // 'tool_forbidden' | 'table_forbidden:<table>' | 'tool_forbidden_global' | 'tool_absolute_deny:<tool>' | 'tool_unclassified:<tool>' | 'agent_disabled' | 'raw_query_forbidden' | 'query_concurrency_exceeded' | 'explicit_table_required:<table>' | 'sensitive_metadata_forbidden:kx' | 'unknown_or_forbidden_connection:<connection>' | 'role_resolution_failed:<role>' | 'source_map_compile_failed:<detail>' | 'policy_degraded_deny' | 'row_policy_*'
+  reason?: string; // 'tool_forbidden' | 'table_forbidden:<table>' | 'tool_forbidden_global' | 'tool_absolute_deny:<tool>' | 'tool_unclassified:<tool>' | 'agent_disabled' | 'raw_query_forbidden' | 'question_budget_concurrency_exceeded' | 'query_concurrency_exceeded'(历史) | 'explicit_table_required:<table>' | 'sensitive_metadata_forbidden:kx' | 'unknown_or_forbidden_connection:<connection>' | 'role_resolution_failed:<role>' | 'source_map_compile_failed:<detail>' | 'policy_degraded_deny' | 'row_policy_*'
   /** AC-P1 — set when lucy_query is allowed against a protected (scoped) source. */
   forcedFilters?: ForcedFiltersPayload;
 }

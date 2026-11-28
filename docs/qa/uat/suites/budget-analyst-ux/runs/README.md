@@ -2,7 +2,7 @@
 
 | 日期 | 档位 | 范围 | 结果 | 记录 |
 |---|---|---|---|---|
-| — | — | — | 尚无跑次（NOT RUN；设计 v1.1 已同步 §10.3；正式跑次须开发授权后执行） | — |
+| 2026-11-28 | lean（本机 demo Docker） | R0／01–12B＋12 并发补充臂＋勾连指针（IMC-03 未执行） | **PASS WITH FINDINGS**（F1／F2／F3 待裁定） | [2026-11-28-kscc-budget-analyst-ux](2026-11-28-kscc-budget-analyst-ux.md)（套件设计 **v1.1**；慢源标定 45s 档全链路 45.4s／oracle 569.85；身份集 15 新建零态身份＋`ba_uat_orders_count` published 绑定；PRE-01 引用 [`inbox/pre01-2026-11-27/PRE-01-EVIDENCE.md`](../../../../../../inbox/pre01-2026-11-27/PRE-01-EVIDENCE.md) 未重抓；UAT-IMC-03 仅登记指针） |
 
 跑次记录约定见 [`../../CONVENTIONS.md`](../../CONVENTIONS.md)；文件名 `YYYY-MM-DD-<执行方>-<范围>.md`。每次跑次须写明：
 

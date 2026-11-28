@@ -793,6 +793,55 @@ export class QuestionBudget {
     });
   }
 
+  /**
+   * REQ-0122／UAT F1 修复：容量舱壁拒绝后的对称退账（query 桶）。
+   *
+   * 预算层 consume 先于 capacity tryAcquire；capacity 拒绝时该次调用不会产生
+   * settle，若不退账则 calls／inflight 各泄漏 1（审计铁证：8 成交＋1 拒绝 ⇒
+   * calls=9）。本方法按 ticket 幂等退回 admit 的全部计数；窗口已滚动或已
+   * settle 时不退（避免跨窗误退／双退）。
+   */
+  async refundQueryAdmission(ticket: BudgetTicket): Promise<{ refunded: boolean }> {
+    if (ticket.settled) return { refunded: false };
+    return this.withScopeSerialization(ticket.scopeKey, async () => {
+      if (ticket.settled) return { refunded: false };
+      const state = await this.loadState(ticket.scopeKey, Date.now());
+      if (state.processUnavailable || state.commitUnverified) return { refunded: false };
+      if ((state.round ?? 0) !== ticket.round || (state.windowId ?? 0) !== ticket.windowId) {
+        return { refunded: false };
+      }
+      const candidate = this.cloneState(state);
+      candidate.calls = Math.max(0, (candidate.calls ?? 0) - 1);
+      candidate.attempts = Math.max(0, (candidate.attempts ?? 0) - 1);
+      candidate.inflight = Math.max(0, (candidate.inflight ?? 0) - 1);
+      candidate.currentConcurrency = Math.max(0, (candidate.currentConcurrency ?? 0) - 1);
+      const committed = await this.commit(ticket.scopeKey, candidate, `refund:${ticket.requestId}`, Date.now());
+      if (!committed) return { refunded: false };
+      ticket.settled = true;
+      return { refunded: true };
+    });
+  }
+
+  /**
+   * REQ-0122／UAT F1 修复：容量舱壁（元数据池）拒绝后的对称退账（meta 桶）。
+   * allow-meta 路径不产生 ticket（其内部 requestId 不上浮），退账键用独立
+   * 随机 UUID：单次请求内拒绝路径只走一次，键唯一即可；崩溃恢复语义由
+   * appliedKeys 幂等落库承担。
+   */
+  async refundMetaAdmission(scopeKey: string): Promise<{ refunded: boolean }> {
+    return this.withScopeSerialization(scopeKey, async () => {
+      const state = await this.loadState(scopeKey, Date.now());
+      if (state.processUnavailable || state.commitUnverified) return { refunded: false };
+      const candidate = this.cloneState(state);
+      const before = candidate.metaCalls ?? 0;
+      if (before <= 0) return { refunded: false };
+      candidate.metaCalls = before - 1;
+      candidate.attempts = Math.max(0, (candidate.attempts ?? 0) - 1);
+      const committed = await this.commit(scopeKey, candidate, `refund-meta:${randomUUID()}`, Date.now());
+      return { refunded: Boolean(committed) };
+    });
+  }
+
   private applyConsume(
     scopeKey: string,
     state: BudgetState,
@@ -1310,6 +1359,15 @@ export class QuestionBudget {
       const saved = await this.persistence.save(scopeKey, candidate, idempotencyKey);
       const row = saved && typeof saved === "object" && "row" in saved ? saved.row : candidate;
       row.scopeKey = scopeKey;
+      // REQ-0122／UAT F2：inflight／currentConcurrency 是进程本地并发占用计数，
+      // 持久化表不含 `inflight` 列（currentConcurrency 虽有列但语义同为进程本地）。
+      // 生产 save 返回 DB 回读行，二者会在此丢失——缓存被无 inflight 的行覆盖后，
+      // 预算层并发闸（`inflight >= MAX_INFLIGHT`）永远读到 0，从不在 capacity 层之前
+      // 触发（UAT 铁证：8 成交＋1 capacity 拒绝 ⇒ calls=9 且预算层 reason 缺席）。
+      // 这里从 candidate 补回，保证本进程内的并发闸精确；跨进程重启仍由
+      // loadState 归零（并发占用不跨进程存活）。
+      row.inflight = candidate.inflight ?? 0;
+      row.currentConcurrency = candidate.currentConcurrency ?? 0;
       if (saved && typeof saved === "object" && "appliedKeys" in saved) {
         this.memoryKeys.set(scopeKey, new Set(saved.appliedKeys));
       } else {

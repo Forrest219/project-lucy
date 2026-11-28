@@ -7980,9 +7980,26 @@ async function buildDenialRepairPayload(
           enforceToken: true
         });
     if (!slot.allowed) {
-      const reason = useMetaPool ? "meta_concurrency_exceeded" : "query_concurrency_exceeded";
+      // REQ-0122／UAT F3：query 池拒绝 reason 与 Spec D2／D7 指引统一为
+      // question_budget_concurrency_exceeded（meta 池保留专名，SC-03 对其只要求
+      // 「同等可执行重试信号」）。信封语义不变。
+      const reason = useMetaPool ? "meta_concurrency_exceeded" : "question_budget_concurrency_exceeded";
       const capacityDetail = `scope=${slot.scope}; retry_after_ms=${slot.retryAfterMs}`;
       const maxInflight = slot.max;
+      // REQ-0122／UAT F1：预算层 consume 先于本容量闸；拒绝时对称退账，
+      // 保证「拒绝不扣 calls／busyMs」（busyMs 本就不结算，calls/metaCalls 在此退回）。
+      // 退账提交完成后再响应，客户端立即重试时读到的是已退账状态。
+      if (useMetaPool) {
+        if (questionBudgetEnabled() && isQuestionDataTool(toolName)) {
+          await questionBudget
+            .refundMetaAdmission(
+              budgetScopeKey(budgetIdentityKey(identity.userId, identity.tokenHashPrefix ?? ""), requestMeta.lucySessionId)
+            )
+            .catch(() => undefined);
+        }
+      } else if (activeBudgetTicket) {
+        await questionBudget.refundQueryAdmission(activeBudgetTicket).catch(() => undefined);
+      }
       const responseBody = JSON.stringify({
         jsonrpc: "2.0",
         id: requestId,

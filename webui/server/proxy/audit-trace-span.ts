@@ -178,7 +178,10 @@ export function redactReasonParam(raw: string | null | undefined): string | null
 
 function matchReasonCode(reason: string, outcome: string, errorDetail: string): ReasonCode | null {
   if (reason === "upstream_session_recovered") return "upstream_session_recovered";
-  if (outcome === "budget_stop" || BUDGET_REASONS.has(reason)) return "budget_stopped";
+  // REQ-0122／F3：capacity 层并发拒绝（outcome=denied）也用
+  // question_budget_concurrency_exceeded 命名；budget_stopped 语义只属于
+  // 预算终止（outcome=budget_stop），denied 行须落到下方 timeout 桶。
+  if (outcome === "budget_stop" || (BUDGET_REASONS.has(reason) && outcome !== "denied")) return "budget_stopped";
   if (CONTINUATION_DECLARATION_REJECTIONS.has(reason)) return "continuation_rejected";
   if (reason === "cancelled" || reason === "execution_cancelled") return "cancelled";
   if (reason === "timeout" || reason === "query_concurrency_exceeded" || errorDetail.includes("Timeout")) return "timeout";
