@@ -152,7 +152,7 @@ describe("trace/evidence — append-only semantics", () => {
       status: "denied",
       policyDecision: {
         allowed: false,
-        reason: "query_concurrency_exceeded",
+        reason: "question_budget_concurrency_exceeded",
         toolName: "lucy_query",
         source: "rate_limit"
       }

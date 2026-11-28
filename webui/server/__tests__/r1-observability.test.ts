@@ -159,14 +159,14 @@ describe("GET /api/r1/observability", () => {
       tool: "lucy_query",
       tables: ["mart.ceo_metric_snapshot"],
       outcome: "denied",
-      errorDetail: "query_concurrency_exceeded:active=1;max=1",
+      errorDetail: "question_budget_concurrency_exceeded:active=1;max=1",
       durationMs: 10,
       queryOperation: "select",
       queryPreview: "select * from mart.ceo_metric_snapshot limit ?",
       requestId: "query-concurrency-denied",
       roleIds: ["ceo_readonly"],
       matchedRoleId: "ceo_readonly",
-      decisionReason: "query_concurrency_exceeded"
+      decisionReason: "question_budget_concurrency_exceeded"
     });
     await writeAccessLogSources(deniedLogId, new Date().toISOString(), "workhorse", "lucy_query", [{
       connectionId: "doris-r1",
@@ -209,7 +209,7 @@ describe("GET /api/r1/observability", () => {
         deniedRate: 2 / 3
       });
       expect(res.body.data.audit.denials).toContainEqual({ reason: "table_denied", count: 1 });
-      expect(res.body.data.audit.denials).toContainEqual({ reason: "query_concurrency_exceeded", count: 1 });
+      expect(res.body.data.audit.denials).toContainEqual({ reason: "question_budget_concurrency_exceeded", count: 1 });
       expect(res.body.data.audit.latency.slowCalls).toBe(1);
       expect(res.body.data.audit.latency.slowQueries[0]).toMatchObject({ requestId: "query-denied", durationMs: 50_000 });
       expect(res.body.data.audit.sourceErrors[0]).toMatchObject({

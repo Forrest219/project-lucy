@@ -17,6 +17,9 @@ export function decisionReasonLabel(code: string | null | undefined): string {
   if (code === "raw_query_forbidden") return "禁止原始 SQL 查询";
   if (code === "scope_intersection_empty") return "行范围与用户筛选无交集";
   if (code === "row_policy_upstream_unproven") return "上游行策略契约未证明";
+  // REQ-0122／F3：query 池并发拒绝统一为 question_budget_concurrency_exceeded；
+  // 旧码保留映射（历史审计行回放）。
+  if (code === "question_budget_concurrency_exceeded") return "查询并发超限";
   if (code === "query_concurrency_exceeded") return "查询并发超限";
   if (code === "execution_config_stale") return "MCP 执行层配置未加载";
   if (code === "execution_connection_not_loaded") return "MCP 执行层未加载该连接";

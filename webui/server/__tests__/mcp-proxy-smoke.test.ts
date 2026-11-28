@@ -1544,14 +1544,14 @@ describe("MCP proxy smoke", () => {
       expect(deniedRes.status).toBe(200);
       const deniedBody = await deniedRes.json() as { result: { isError?: boolean; content?: Array<{ text: string }> } };
       expect(deniedBody.result.isError).toBe(true);
-      expect(deniedBody.result.content?.[0]?.text).toContain("query_concurrency_exceeded");
+      expect(deniedBody.result.content?.[0]?.text).toContain("question_budget_concurrency_exceeded");
       expect(upstreamSeen).toHaveLength(1);
 
       const deniedAudit = await waitForAuditRow("lucy-query-concurrent-denied");
       expect(deniedAudit.tool).toBe("lucy_query");
       expect(deniedAudit.outcome).toBe("denied");
-      expect(deniedAudit.decision_reason).toBe("query_concurrency_exceeded");
-      expect(String(deniedAudit.error_detail)).toContain("query_concurrency_exceeded");
+      expect(deniedAudit.decision_reason).toBe("question_budget_concurrency_exceeded");
+      expect(String(deniedAudit.error_detail)).toContain("question_budget_concurrency_exceeded");
 
       releaseFirst?.();
       const firstRes = await first;
@@ -1738,7 +1738,7 @@ describe("MCP proxy smoke", () => {
       const deniedMs = performance.now() - startedAt;
       const deniedBody = await denied.json() as { result: { isError?: boolean; content?: Array<{ text: string }>; _meta?: { lucy?: { capacityScope?: string; retryAfterMs?: number } } } };
       expect(deniedBody.result.isError).toBe(true);
-      expect(deniedBody.result.content?.[0]?.text).toContain("query_concurrency_exceeded");
+      expect(deniedBody.result.content?.[0]?.text).toContain("question_budget_concurrency_exceeded");
       expect(deniedBody.result._meta?.lucy).toMatchObject({ capacityScope: "agent", retryAfterMs: 1000 });
       expect(deniedMs).toBeLessThan(1000);
       expect(upstreamSeen).toHaveLength(1); // refused before any upstream work

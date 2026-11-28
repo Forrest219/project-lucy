@@ -61,7 +61,7 @@ const SAMPLING: Case[] = [
   },
   {
     name: "concurrency limit",
-    input: { outcome: "error", decisionReason: "query_concurrency_exceeded" },
+    input: { outcome: "error", decisionReason: "question_budget_concurrency_exceeded" },
     expected: "引擎超时与并发"
   },
   {
