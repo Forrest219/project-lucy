@@ -7,6 +7,7 @@
 | revision | 日期 | 变更 |
 |---:|---|---|
 | 1 | 2026-11-27 | 初版：案 B 升格为可复用基准线；含 Hive 慢臂＋形态 M1–M12／H1–H2 |
+| 2 | 2026-11-28 | **降级授权（委托人 2026-11-28 明示）**：H1 真 Hive MCP 慢臂退役（Lucy 无真实 HS2 JDBC worker，`webui/server/hive/jdbc-worker.ts` 仅 synthetic／unconfigured，数据库支持状态 planned；scale Hive 夹具 metadata-only 无数据文件）；慢臂改 `coPressure.S1`＝MySQL `slow_gauge`（`v_sleep` 45s 首字节，复用 budget-analyst-ux 夹具与 `slow-mysql` 连接）经 `lucy_query` 真实占用 MCP 执行面；ST-05 改读慢臂在途样本；slotPlan `hiveSlow`→`slowCoPressure`。真 Hive 臂待 JDBC worker 立项后恢复 |
 
 ## 环境构造
 

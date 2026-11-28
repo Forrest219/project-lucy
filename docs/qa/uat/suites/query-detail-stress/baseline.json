@@ -9,7 +9,7 @@
     "howToAddScenario": "Append to scenarios[] with new id; keep retired scenarios in retiredScenarios[]; cases.md only references ids.",
     "compat": "Runners MUST load this file; hard-coded quotas in scripts are FAIL."
   },
-  "baselineRevision": 1,
+  "baselineRevision": 2,
   "environment": {
     "profile": "scale",
     "requireScaleBaselineExit0": true,
@@ -34,10 +34,19 @@
       "exploreChain": 2,
       "shortSession": 2,
       "longSession": 2,
-      "hiveSlow": 2,
+      "slowCoPressure": 2,
       "hiveMeta": 1,
       "interactiveProbe": 1
     }
+  },
+  "coPressure": {
+    "id": "S1",
+    "tool": "lucy_query",
+    "source": "slow_gauge",
+    "connectionClass": "mysql",
+    "shape": "v_sleep_first_byte_slow",
+    "firstByteSecMin": 45,
+    "note": "r2 降级授权（委托人 2026-11-28）：H1 真 Hive MCP 慢臂因 Lucy 无真实 HS2 JDBC worker（webui/server/hive/jdbc-worker.ts 仅 synthetic/unconfigured；数据库支持状态 planned）且 scale Hive 夹具 metadata-only 无数据文件而不可行；慢臂改由 MySQL slow_gauge（v_sleep 45s 首字节）经 lucy_query 真实占用 MCP 执行面。真 Hive 臂待 JDBC worker 立项后恢复。"
   },
   "volumes": {
     "minSuperstoreOrdersRows": 1000,
@@ -52,9 +61,9 @@
   "passLines": {
     "ST-01": "detail morphologies M1/M2/M3 measures_required rate == 0; detailMode sample ok",
     "ST-02": "cumulative detail rows >= volumes.detailArmCumulativeRowsMin",
-    "ST-03": "probe success >= 0.95; p95 <= 1.5x warmup p95 under hive-slow co-pressure",
+    "ST-03": "probe success >= 0.95; p95 <= 1.5x warmup p95 under slow-arm co-pressure",
     "ST-04": "analysis M5/M6 success >= 0.95",
-    "ST-05": "hive-slow: >=10 samples first-byte >= 3s or PROCESSLIST evidence",
+    "ST-05": "slow-arm co-pressure: >=10 in-flight samples first-byte >= 3s (r2: slow_gauge v_sleep via lucy_query; real Hive arm deferred, see coPressure.note)",
     "ST-06": "scenario coverage + maxSingleMorphologyShare",
     "ST-07": "short-session initialize not collapsed; errors bucketed",
     "ST-08": "no unhealthy / MCP down > 60s",
@@ -155,7 +164,7 @@
       "tool": "lucy_query",
       "shape": "hive_slow_detail_or_aggregate",
       "intent": "hive_slow",
-      "active": true,
+      "active": false,
       "connectionClass": "hive"
     },
     {
@@ -167,5 +176,11 @@
       "connectionClass": "hive"
     }
   ],
-  "retiredScenarios": []
+  "retiredScenarios": [
+    {
+      "id": "H1",
+      "retiredAtRevision": 2,
+      "reason": "真 Hive MCP 慢臂不可行：Lucy 无真实 HS2 JDBC worker（仅 synthetic/unconfigured；数据库支持状态 planned），scale Hive 夹具 metadata-only 无数据文件。慢臂语义由 coPressure.S1（slow_gauge v_sleep）承载（委托人降级授权 2026-11-28）。恢复条件：Hive JDBC worker 立项落地。"
+    }
+  ]
 }
