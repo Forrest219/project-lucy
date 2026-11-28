@@ -78,8 +78,24 @@ describe("ui usage catalog", () => {
     expect(JSON.stringify(classified)).not.toContain("secret_orders");
   });
 
+  it("maps every navGroups canonical route to its menu and group", () => {
+    for (const group of navGroups) {
+      for (const item of group.items) {
+        const classified = classifyUsagePathname(item.to);
+        expect(classified, `route ${item.to} should classify as a page`).toEqual({
+          kind: "page",
+          page: expect.objectContaining({
+            menuId: item.id,
+            groupId: group.id
+          })
+        });
+      }
+    }
+  });
+
   it("treats redirect paths as redirects", () => {
     expect(classifyUsagePathname("/admin/governance").kind).toBe("redirect");
+    expect(classifyUsagePathname("/admin/admins").kind).toBe("redirect");
     expect(classifyUsagePathname("/sources/mysql/dataforai/secret_orders").kind).toBe("redirect");
   });
 });

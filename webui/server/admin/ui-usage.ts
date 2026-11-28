@@ -221,7 +221,7 @@ const EXACT_PAGES = new Map<string, UiPageDefinition>([
   ["/admin/mcp-playground", PAGE.playground],
   ["/admin/config-audit", PAGE.configAudit],
   ["/admin/branding", PAGE.branding],
-  ["/admin/admins", PAGE.admins],
+  ["/admin/accounts", PAGE.admins],
   ["/admin/version", PAGE.version],
   ["/help", PAGE.help]
 ]);
@@ -230,6 +230,7 @@ const REDIRECT_EXACT = new Set([
   "/",
   "/onboarding",
   "/admin/governance",
+  "/admin/admins",
   "/review",
   "/connections/whitelist",
   "/admin/audit-sources",
