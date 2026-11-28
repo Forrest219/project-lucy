@@ -1,0 +1,82 @@
+{
+  "phase": "normal",
+  "startedAt": "2026-11-27T18:58:44.264Z",
+  "webui": "http://127.0.0.1:55386",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "cases": [
+    {
+      "name": "E1-E5-roles-list-load",
+      "status": "PASS",
+      "ms": 905
+    },
+    {
+      "name": "E3-roles-list-read-your-write",
+      "status": "PASS",
+      "ms": 10530
+    },
+    {
+      "name": "E4-E12-roles-ui-edit-save-overlap",
+      "status": "PASS",
+      "ms": 47759
+    },
+    {
+      "name": "E8b-version-conflict-hint",
+      "status": "PASS",
+      "ms": 97905
+    },
+    {
+      "name": "E13-E17-agents-list-load",
+      "status": "PASS",
+      "ms": 7097
+    },
+    {
+      "name": "E18-agents-no-error-terminal-during-write",
+      "status": "PASS",
+      "ms": 67707
+    }
+  ],
+  "browserTimings": [
+    {
+      "kind": "roles-list-primaryReady",
+      "ms": 867,
+      "visible": "visible",
+      "focus": true
+    },
+    {
+      "kind": "roles-list-readYourWrite",
+      "apiWriteMs": 6093,
+      "frontMs": 1343
+    },
+    {
+      "kind": "save-submit-state",
+      "text": "保存中…"
+    },
+    {
+      "kind": "ui-save-frontMs",
+      "ms": 20570,
+      "overlapApiStatus": 503,
+      "overlapApiMs": 17416
+    },
+    {
+      "kind": "overlap-outcome",
+      "branch": "honest-refusal",
+      "retryAfter": "5",
+      "holder": "role_policy_save"
+    },
+    {
+      "kind": "version-conflict-draft-kept",
+      "draftKept": true
+    },
+    {
+      "kind": "agents-roster-primaryReady",
+      "ms": 4064,
+      "visible": "visible",
+      "focus": true
+    }
+  ],
+  "failures": [],
+  "browser": "158.0.8127.37"
+}

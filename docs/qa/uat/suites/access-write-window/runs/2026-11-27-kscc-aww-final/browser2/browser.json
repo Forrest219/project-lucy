@@ -1,0 +1,72 @@
+{
+  "phase": "normal",
+  "startedAt": "2026-11-27T15:50:19.801Z",
+  "webui": "http://127.0.0.1:55386",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "cases": [
+    {
+      "name": "E1-E5-roles-list-load",
+      "status": "PASS",
+      "ms": 1139
+    },
+    {
+      "name": "E3-roles-list-read-your-write",
+      "status": "PASS",
+      "ms": 9970
+    },
+    {
+      "name": "E4-E12-roles-ui-edit-save-overlap",
+      "status": "FAIL",
+      "error": "Error: 重叠写 dryRun 失败 400 {\"code\":\"INVALID_ROLE\",\"message\":\"role resolves to 0 source\"}",
+      "ms": 22927
+    },
+    {
+      "name": "E8b-version-conflict-hint",
+      "status": "FAIL",
+      "error": "Error: API 抢改失败 409 {\"code\":\"PREVIEW_TOKEN_REQUIRED\",\"message\":\"previewToken is required for object-version saves\"}",
+      "ms": 200854
+    },
+    {
+      "name": "E13-E17-agents-list-load",
+      "status": "PASS",
+      "ms": 5020
+    },
+    {
+      "name": "E18-agents-no-error-terminal-during-write",
+      "status": "PASS",
+      "ms": 7459
+    }
+  ],
+  "browserTimings": [
+    {
+      "kind": "roles-list-primaryReady",
+      "ms": 885,
+      "visible": "visible",
+      "focus": true
+    },
+    {
+      "kind": "roles-list-readYourWrite",
+      "apiWriteMs": 5493,
+      "frontMs": 1348
+    },
+    {
+      "kind": "role-write-settle-timeout",
+      "roleId": "aww08_api_mwz5r19w",
+      "waitedMs": 125005
+    },
+    {
+      "kind": "agents-roster-primaryReady",
+      "ms": 3926,
+      "visible": "visible",
+      "focus": true
+    }
+  ],
+  "failures": [
+    "E4-E12-roles-ui-edit-save-overlap",
+    "E8b-version-conflict-hint"
+  ],
+  "browser": "158.0.8127.37"
+}

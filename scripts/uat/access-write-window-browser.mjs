@@ -154,7 +154,9 @@ if (phase === "normal") {
     await expect(confirm).toBeVisible({ timeout: 90000 });
     // API 重叠写：确认瞬间在另一 roleId 上创建（有界等待后成交）
     const overlapId = `aww08_ovl_${tag}`;
-    const ovlDef = { description: "overlap", allow: { connections: ["demo-mysql"], tableSelectors: [{ connection: "demo-mysql", schema: "dataforai", names: ["superstore_orders"] }], tools: ["lucy_catalog"] } };
+    // META-only（仅 lucy_catalog）＋selectors 的角色按 Spec 182 口径解析为 0 capability，
+    // dryRun 会 400「resolves to 0 source」——重叠写须含 data-plane 工具才是可成交角色。
+    const ovlDef = { description: "overlap", allow: { connections: ["demo-mysql"], tableSelectors: [{ connection: "demo-mysql", schema: "dataforai", names: ["superstore_orders"] }], tools: ["lucy_catalog", "lucy_query"] } };
     const dryB = await api("/api/admin/roles", "POST", { dryRun: true, roleId: overlapId, role: ovlDef });
     if (dryB.s !== 200) throw new Error(`重叠写 dryRun 失败 ${dryB.s} ${JSON.stringify(dryB.j?.error ?? {})}`);
     const pB = dryB.j?.data ?? {};
@@ -200,11 +202,14 @@ if (phase === "normal") {
     const confirm = page.getByTestId("role-permission-review-drawer").getByTestId("role-review-confirm");
     await expect(confirm).toBeVisible({ timeout: 90000 });
     // UI dryRun 完成后、确认前：API 以当前版本抢改同一角色（推进 object version）
+    // PATCH dryRun 必须带 baseObjectVersion，服务端才签发 racs 绑定（previewToken＋baseObjectVersion）。
     const cur = await api(`/api/admin/roles/${apiRoleId}`);
     const curBase = cur.j?.data?.baseObjectVersion;
-    const dry2 = await api(`/api/admin/roles/${apiRoleId}`, "PATCH", { dryRun: true, patch: { description: `确认前抢改 ${tag}` } });
+    const dry2 = await api(`/api/admin/roles/${apiRoleId}`, "PATCH", { dryRun: true, patch: { description: `确认前抢改 ${tag}` }, baseObjectVersion: curBase });
     if (dry2.s !== 200) throw new Error(`抢改 dryRun 失败 ${dry2.s} ${JSON.stringify(dry2.j?.error ?? {})}`);
-    const grab = await api(`/api/admin/roles/${apiRoleId}`, "PATCH", { dryRun: false, patch: { description: `确认前抢改 ${tag}` }, baseObjectVersion: curBase, previewToken: dry2.j?.data?.previewToken, operationId: crypto.randomUUID() });
+    const binding = dry2.j?.data ?? {};
+    if (!binding.previewToken || !binding.baseObjectVersion) throw new Error(`抢改 dryRun 未签发 racs 绑定：${JSON.stringify({ keys: Object.keys(binding) })}`);
+    const grab = await api(`/api/admin/roles/${apiRoleId}`, "PATCH", { dryRun: false, patch: { description: `确认前抢改 ${tag}` }, baseObjectVersion: binding.baseObjectVersion, previewToken: binding.previewToken, operationId: crypto.randomUUID() });
     if (grab.s !== 200) throw new Error(`API 抢改失败 ${grab.s} ${JSON.stringify(grab.j?.error ?? {})}`);
     await confirm.click();
     // 期望：409 族 → 审阅抽屉关闭，主页面「配置已变化」恢复面板可见；草稿仍在
@@ -231,11 +236,14 @@ if (phase === "normal") {
     await waitForRolesSettled();
     const names = [...Array(2000)].map((_, i) => `req0117.t${String(i + 1).padStart(4, "0")}`);
     const idA = `aww08_agents_${tag}`;
-    const roleDef = { description: "aww08", allow: { connections: ["demo-mysql"], tableSelectors: [{ connection: "demo-mysql", schema: "req0117", names }], tools: ["lucy_catalog"] } };
+    // 同 E4：仅 lucy_catalog 为 META-only，解析 0 source 会被 dryRun 拒绝；补 lucy_query 才是真实在途写。
+    const roleDef = { description: "aww08", allow: { connections: ["demo-mysql"], tableSelectors: [{ connection: "demo-mysql", schema: "req0117", names }], tools: ["lucy_catalog", "lucy_query"] } };
     const dryA = await api("/api/admin/roles", "POST", { dryRun: true, roleId: idA, role: roleDef });
+    if (dryA.s !== 200) throw new Error(`dryRun 失败 ${dryA.s} ${JSON.stringify(dryA.j?.error ?? {})}`);
     const pA = dryA.j?.data ?? {};
     const navPromise = page.goto(`${WEB}/admin/agents`, { waitUntil: "commit" });
-    await api("/api/admin/roles", "POST", { dryRun: false, roleId: idA, role: roleDef, baseObjectVersion: pA.baseObjectVersion, previewToken: pA.previewToken, operationId: crypto.randomUUID() });
+    const writeA = await api("/api/admin/roles", "POST", { dryRun: false, roleId: idA, role: roleDef, baseObjectVersion: pA.baseObjectVersion, previewToken: pA.previewToken, operationId: crypto.randomUUID() });
+    if (writeA.s !== 200 && !(writeA.s === 503 && writeA.j?.error?.code === "PUBLISH_COORDINATOR_BUSY")) throw new Error(`写窗写未成交且非诚实拒绝 ${writeA.s} ${JSON.stringify(writeA.j?.error ?? {})}`);
     await navPromise;
     await expect(page.getByText("uat_agent_").first()).toBeVisible({ timeout: 45000 });
     const errorCount = await page.getByText("服务暂不可用").or(page.getByText("读取失败")).count();
@@ -265,18 +273,24 @@ if (phase === "refuse") {
     await page.getByRole("button", { name: "保存权限配置" }).click();
     const confirm = page.getByTestId("role-permission-review-drawer").getByTestId("role-review-confirm");
     await expect(confirm).toBeVisible({ timeout: 90000 });
-    // API 持窗（2000 表创建），UI 确认 → 200ms 等待超限 → 503 诚实拒绝
+    // API 持窗（2000 表创建）：先于 UI 确认发出并在途持有协调器（其编译远超 200ms 预算），
+    // 再点确认 → UI 写等待 200ms 超限 → 503 诚实拒绝。若在 confirm 之后才发持窗写，
+    // UI 写可能先抢到协调器，持窗写反被 503（时序竞争，跑器首轮 refuse 实测）。
     const holdDef = { dryRun: true, roleId: `aww08_hold_${tag}`, role: roleDef };
     const dryHold = await api("/api/admin/roles", "POST", holdDef);
+    if (dryHold.s !== 200) throw new Error(`持窗 dryRun 失败 ${dryHold.s} ${JSON.stringify(dryHold.j?.error ?? {})}`);
     const pH = dryHold.j?.data ?? {};
+    const holdPromise = api("/api/admin/roles", "POST", { ...holdDef, dryRun: false, baseObjectVersion: pH.baseObjectVersion, previewToken: pH.previewToken, operationId: crypto.randomUUID() });
+    // 等持窗写确实进入在途（拿到 previewToken 的写请求已发出）再点确认
+    await new Promise((resolve) => setTimeout(resolve, 1000));
     await confirm.click();
-    const hold = await api("/api/admin/roles", "POST", { ...holdDef, dryRun: false, baseObjectVersion: pH.baseObjectVersion, previewToken: pH.previewToken, operationId: crypto.randomUUID() });
-    if (hold.s !== 200) throw new Error(`持窗写失败 ${hold.s}`);
     // 期望：可重试提示可见（审阅抽屉关闭、恢复面板不被遮挡）；草稿保留
     await expect(page.getByTestId("role-permission-review-drawer")).toBeHidden({ timeout: 30000 });
     await expect(page.getByText("有变更正在保存，请稍后重试").first()).toBeVisible({ timeout: 30000 });
     const draftKept = (await desc.inputValue()).includes(`UI 拒绝草稿 ${tag}`);
-    report.browserTimings.push({ kind: "busy-refusal-draft-kept", draftKept });
+    const hold = await holdPromise;
+    report.browserTimings.push({ kind: "busy-refusal-draft-kept", draftKept, holdStatus: hold.s, holdMs: hold.ms });
+    if (hold.s !== 200) throw new Error(`持窗写失败 ${hold.s} ${JSON.stringify(hold.j?.error ?? {})}`);
     if (!draftKept) throw new Error("拒绝后编辑内容丢失");
     await api(`/api/admin/roles/${apiRoleId}`, "DELETE", {});
   });

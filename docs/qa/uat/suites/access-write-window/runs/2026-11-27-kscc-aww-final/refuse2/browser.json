@@ -1,0 +1,26 @@
+{
+  "phase": "refuse",
+  "startedAt": "2026-11-27T19:07:32.854Z",
+  "webui": "http://127.0.0.1:55386",
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "cases": [
+    {
+      "name": "E2-E8a-busy-refusal-hint",
+      "status": "PASS",
+      "ms": 125237
+    }
+  ],
+  "browserTimings": [
+    {
+      "kind": "busy-refusal-draft-kept",
+      "draftKept": true,
+      "holdStatus": 200,
+      "holdMs": 26678
+    }
+  ],
+  "failures": [],
+  "browser": "158.0.8127.37"
+}
